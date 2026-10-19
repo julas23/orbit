@@ -15,6 +15,7 @@ start:
 end:
   - clock
   - calendar
+  - tray
   - brightness
   - volume
   - workspaces

@@ -163,6 +163,7 @@ Cada etapa termina com medição de CPU e memória e com print comparando ao eww
 | | *já pronto (19/10)* | *módulo `session` (3 botões de 40×30 px) com confirmação nativa sobre a tela desfocada (`confirm.rs`) e passo "antes de sair" configurável — clique ainda não testado* |
 | | *já pronto (19/10)* | *módulos `volume` (PulseAudio nativo, por evento) e `brightness` (backlight via poll do kernel + logind; DDC/CI via ddcutil, não testado). Meia largura, lado a lado: cartões de 65×45 px. Primeira versão do layout "módulos lado a lado" (meia largura)* |
 | | *já pronto (19/10)* | *módulo `windows`: lista de janelas igual à do eww, em ordem geométrica (área → monitor em posição física → janela, de cima para baixo e da esquerda para a direita; minimizadas por último). Arrastar para reordenar saiu. Clique e menu ainda não testados* |
+| | *já pronto (19/10)* | *módulo `tray`: StatusNotifierItem via D-Bus do GIO (watcher próprio, ou host do watcher existente — hoje o do eww), menus dbusmenu convertidos para menu GTK. Cliques ainda não testados. Na troca (etapa 6): subir o painel ANTES do blueman-applet* |
 | 1 | Módulos sem serviço | `menu`, `clock`, `calendar`, `session` |
 | 2 | Clima | `weather` e `forecast` (HTTP, cache, ícones) |
 | 3 | Módulos por evento | `volume`, `brightness`, `battery`, `network`, `keyboard` |

@@ -1,0 +1,4 @@
+# System tray — ~/.config/orbit/modules/tray.yaml
+
+icon_size: 20   # px
+per_line: 5     # icons per line in a vertical panel (5 x 20 + 4 x 5 = 120 of 130 px)

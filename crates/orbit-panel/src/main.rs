@@ -9,11 +9,14 @@ mod calendar;
 mod clock;
 mod confirm;
 mod control;
+mod dbusmenu;
 mod maintenance;
 mod menu;
 mod pulse;
 mod session;
+mod sni;
 mod sway;
+mod tray;
 mod volume;
 mod windows;
 mod workspaces;
@@ -143,6 +146,7 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
         "brightness" => dir
             .module("brightness")
             .map(|c| brightness::new(&c, vertical)),
+        "tray" => dir.module("tray").map(|c| tray::new(&c, vertical)),
         "windows" => dir.module("windows").map(|c| windows::new(&c, vertical)),
         "workspaces" => dir
             .module("workspaces")

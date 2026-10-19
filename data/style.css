@@ -227,6 +227,14 @@ window.confirm            { background: transparent; }
 .windows .window.focused   { font-weight: bold; color: @orbit_fg; background-color: rgba(255, 255, 255, 0.08); }
 .windows .window.minimized { opacity: 0.5; font-style: italic; }
 
+/* System tray (tray.rs): a card with a faint fill; 20 px icons, 5 per line
+ * with 5 px between them (5 × 20 + 4 × 5 = 120 of 130 px). Lines grow the
+ * card downwards: 5 + 20 + 5 = 30 px for one line, +25 per extra line. */
+.tray.card { background-color: rgba(255, 255, 255, 0.04); }
+.tray flowbox, .tray flowboxchild { padding: 0; margin: 0; min-height: 20px; }
+.tray .tray-item { padding: 0; min-width: 20px; min-height: 20px; border-radius: 5px; }
+.tray .tray-item:hover { background-color: rgba(255, 255, 255, 0.15); }
+
 /* ------------------------------------------------------------------- dock */
 .dock {
   padding: 2px 6px;
