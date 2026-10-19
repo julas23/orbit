@@ -10,6 +10,13 @@
 @define-color orbit_accent  #4682b4;
 @define-color orbit_border  rgba(76, 86, 106, 0.55);
 
+/* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
+ * (see docs/PLANO-PAINEL.md). Borders count toward a box's size in GTK, so a
+ * 1 px border always pairs with 4 px of padding: the content then starts
+ * exactly 5 px in. Font sizes are free; a text line gets a min-height on the
+ * grid so the box around it still lands on a multiple of 5.
+ * `maintenance: true` draws the grid behind the panel to check this. */
+
 /* The windows themselves are transparent; the visible shape is drawn by
  * .panel and .dock so it can have rounded corners and translucency. */
 window.orbit {
@@ -29,14 +36,15 @@ window.orbit button {
 .panel {
   background-color: @orbit_bg;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 10px 8px;
+  border-radius: 10px;
+  padding: 4px;            /* + 1 px border = 5 */
 }
 
+/* 30 px icon + 5 + 5 = 40 px: one column. */
 .panel .menu {
   color: @orbit_accent;
-  padding: 4px;
-  border-radius: 6px;
+  padding: 5px;
+  border-radius: 5px;
 }
 .panel .menu:hover {
   background-color: alpha(@orbit_accent, 0.25);
@@ -45,15 +53,16 @@ window.orbit button {
 .card {
   border: 1px solid @orbit_border;
   border-radius: 5px;
+  padding: 4px;            /* + 1 px border = 5 */
 }
 
-.clock {
-  padding: 4px 2px;
-  margin: 2px 0;
-}
-.clock .time    { font-size: 36px; font-weight: bold; }
-.clock .seconds { font-size: 16px; font-weight: bold; color: @orbit_muted; padding-bottom: 6px; }
-.clock .date    { font-size: 20px; color: @orbit_muted; }
+/* Line heights on the grid: 5 + 50 + 30 + 5 = 90 px card. A min-height only
+ * works when it is at least the natural height: in Adwaita Sans the time at
+ * 36 px is 50 px tall and the date at 20 px is 28 px. Another font may need
+ * other values; maintenance mode shows it. */
+.clock .time    { font-size: 36px; font-weight: bold; min-height: 50px; }
+.clock .seconds { font-size: 16px; font-weight: bold; color: @orbit_muted; padding-bottom: 5px; }
+.clock .date    { font-size: 20px; color: @orbit_muted; min-height: 30px; }
 
 /* ------------------------------------------------------------------- dock */
 .dock {

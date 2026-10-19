@@ -39,12 +39,13 @@ fn window(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
         gtk::Orientation::Horizontal
     };
 
-    let start = gtk::Box::new(orientation, 8);
+    // 5 px between modules: the panel grid step.
+    let start = gtk::Box::new(orientation, 5);
     if let Some(menu) = &config.menu {
         start.append(&menu_button(menu));
     }
 
-    let end = gtk::Box::new(orientation, 4);
+    let end = gtk::Box::new(orientation, 5);
     end.append(&clock::new());
 
     let root = gtk::CenterBox::builder()
@@ -70,7 +71,8 @@ fn window(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
 fn menu_button(menu: &MenuConfig) -> gtk::Button {
     let button = gtk::Button::builder().css_classes(["menu"]).build();
     match &menu.icon {
-        Some(icon) => button.set_child(Some(&orbit_app::icon(icon, 26))),
+        // 30 px + 5 px padding each side = 40 px, one column of the grid.
+        Some(icon) => button.set_child(Some(&orbit_app::icon(icon, 30))),
         None => button.set_label("Apps"),
     }
     button.set_tooltip_text(menu.tooltip.as_deref());

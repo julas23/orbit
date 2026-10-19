@@ -11,7 +11,7 @@ pub fn new() -> gtk::Box {
     let date = gtk::Label::builder().css_classes(["date"]).build();
 
     let row = gtk::Box::builder()
-        .spacing(2)
+        .spacing(5)
         .halign(gtk::Align::Center)
         .build();
     row.append(&time);

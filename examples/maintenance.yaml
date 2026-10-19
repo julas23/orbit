@@ -9,6 +9,10 @@ panel:
   size: 150
   monitor: HDMI-A-1   # output name (see `swaymsg -t get_outputs`) or an index
   maintenance: true
+  menu:
+    command: rofi -show drun
+    icon: /usr/share/pixmaps/debian-logo.png
+    tooltip: Applications
 
 dock:
   enabled: false
