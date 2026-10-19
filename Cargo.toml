@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/julas23/orbit_panel"
+repository = "https://github.com/julas23/orbit"
 authors = ["Juliano <julianoas@gmail.com>"]
 
 [workspace.dependencies]
