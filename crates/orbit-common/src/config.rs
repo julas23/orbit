@@ -24,6 +24,22 @@ impl Edge {
     }
 }
 
+/// Which monitor a surface goes on: an index (`1`) or an output name
+/// (`HDMI-A-1`). Names are stable across reboots and hotplug; indices follow
+/// whatever order the display server reports.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+pub enum MonitorSpec {
+    Index(usize),
+    Name(String),
+}
+
+impl Default for MonitorSpec {
+    fn default() -> Self {
+        MonitorSpec::Index(0)
+    }
+}
+
 /// Alignment of the content along the surface's long axis.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -60,9 +76,11 @@ pub struct PanelConfig {
     pub edge: Edge,
     /// Thickness in logical pixels (width for a vertical panel).
     pub size: i32,
-    pub monitor: usize,
+    pub monitor: MonitorSpec,
     /// Reserve screen space so tiled windows do not overlap the panel.
     pub reserve: bool,
+    /// Draws the 5 px layout grid behind the panel, for checking alignment.
+    pub maintenance: bool,
     pub menu: Option<MenuConfig>,
 }
 
@@ -72,8 +90,9 @@ impl Default for PanelConfig {
             enabled: true,
             edge: Edge::Left,
             size: 150,
-            monitor: 0,
+            monitor: MonitorSpec::default(),
             reserve: true,
+            maintenance: false,
             menu: None,
         }
     }
@@ -95,7 +114,7 @@ pub struct DockConfig {
     pub enabled: bool,
     pub edge: Edge,
     pub size: i32,
-    pub monitor: usize,
+    pub monitor: MonitorSpec,
     pub reserve: bool,
     pub align: Align,
     pub icon_size: i32,
@@ -108,7 +127,7 @@ impl Default for DockConfig {
             enabled: true,
             edge: Edge::Top,
             size: 36,
-            monitor: 0,
+            monitor: MonitorSpec::default(),
             reserve: true,
             align: Align::End,
             icon_size: 24,

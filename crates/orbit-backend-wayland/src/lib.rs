@@ -23,7 +23,7 @@ impl Backend for WaylandBackend {
     }
 
     fn attach(&self, window: &gtk::Window, placement: Placement) -> anyhow::Result<()> {
-        let monitor = monitor(&WidgetExt::display(window), placement.monitor)?;
+        let monitor = monitor(&WidgetExt::display(window), &placement.monitor)?;
 
         window.init_layer_shell();
         window.set_layer(Layer::Top);

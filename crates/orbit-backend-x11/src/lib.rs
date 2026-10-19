@@ -59,7 +59,7 @@ impl Backend for X11Backend {
     }
 
     fn attach(&self, window: &gtk::Window, placement: Placement) -> anyhow::Result<()> {
-        let monitor = monitor(&WidgetExt::display(window), placement.monitor)?;
+        let monitor = monitor(&WidgetExt::display(window), &placement.monitor)?;
         let rect = placement.rect(&monitor.geometry());
 
         window.set_decorated(false);
@@ -76,7 +76,7 @@ impl Backend for X11Backend {
                 log::error!("window has no X11 surface; is GDK_BACKEND set to x11?");
                 return;
             };
-            if let Err(err) = inner.dock(xid, placement, rect, scale) {
+            if let Err(err) = inner.dock(xid, &placement, rect, scale) {
                 log::error!("setting dock hints: {err:#}");
             }
         });
@@ -104,7 +104,7 @@ impl Inner {
     fn dock(
         &self,
         xid: u32,
-        placement: Placement,
+        placement: &Placement,
         rect: gdk::Rectangle,
         scale: i32,
     ) -> anyhow::Result<()> {

@@ -6,15 +6,15 @@
 
 use gtk::{gdk, prelude::*};
 
-use crate::Edge;
+use crate::{Edge, config::MonitorSpec};
 
 /// Where and how a surface sits on screen.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Placement {
     pub edge: Edge,
     /// Thickness in logical pixels, perpendicular to `edge`.
     pub size: i32,
-    pub monitor: usize,
+    pub monitor: MonitorSpec,
     /// Reserve the space so other windows are laid out around the surface.
     pub reserve: bool,
     /// Identifies the surface to the compositor (the layer-shell namespace on
@@ -48,17 +48,23 @@ pub trait Backend {
     fn attach(&self, window: &gtk::Window, placement: Placement) -> anyhow::Result<()>;
 }
 
-/// Looks up monitor number `index`, falling back to the first one.
-pub fn monitor(display: &gdk::Display, index: usize) -> anyhow::Result<gdk::Monitor> {
+/// Looks up a monitor by index or output name, falling back to the first one.
+pub fn monitor(display: &gdk::Display, spec: &MonitorSpec) -> anyhow::Result<gdk::Monitor> {
     let monitors = display.monitors();
-    let pick = |i: usize| {
+    let pick = |i: u32| {
         monitors
-            .item(i as u32)
+            .item(i)
             .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
     };
-    if let Some(monitor) = pick(index) {
+    let found = match spec {
+        MonitorSpec::Index(index) => pick(*index as u32),
+        MonitorSpec::Name(name) => (0..monitors.n_items())
+            .filter_map(pick)
+            .find(|m| m.connector().as_deref() == Some(name.as_str())),
+    };
+    if let Some(monitor) = found {
         return Ok(monitor);
     }
-    log::warn!("monitor {index} not found, using monitor 0");
+    log::warn!("monitor {spec:?} not found, using monitor 0");
     pick(0).ok_or_else(|| anyhow::anyhow!("no monitors found"))
 }

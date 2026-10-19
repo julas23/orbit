@@ -23,7 +23,7 @@ fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placem
     let placement = Placement {
         edge: dock.edge,
         size: dock.size,
-        monitor: dock.monitor,
+        monitor: dock.monitor.clone(),
         reserve: dock.reserve,
         namespace: "orbit-dock",
     };

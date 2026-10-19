@@ -1,6 +1,7 @@
 //! Orbit-Panel: app menu at the start, status widgets at the end.
 
 mod clock;
+mod maintenance;
 
 use gtk::{glib, prelude::*};
 use orbit_common::{
@@ -24,7 +25,7 @@ fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placem
     let placement = Placement {
         edge: panel.edge,
         size: panel.size,
-        monitor: panel.monitor,
+        monitor: panel.monitor.clone(),
         reserve: panel.reserve,
         namespace: "orbit-panel",
     };
@@ -53,13 +54,17 @@ fn window(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
         .end_widget(&end)
         .build();
 
-    gtk::ApplicationWindow::builder()
+    let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Orbit-Panel")
         .css_classes(["orbit", "orbit-panel"])
-        .child(&root)
-        .build()
-        .upcast()
+        .build();
+    if config.maintenance {
+        window.set_child(Some(&maintenance::wrap(&root)));
+    } else {
+        window.set_child(Some(&root));
+    }
+    window.upcast()
 }
 
 fn menu_button(menu: &MenuConfig) -> gtk::Button {

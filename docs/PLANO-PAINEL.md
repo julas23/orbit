@@ -35,16 +35,22 @@ Dois eixos, tratados de forma diferente:
 **Grade de 5 px:** toda medida do painel é múltipla de 5 — tamanhos, vãos, paddings,
 posições. Os 4 px do eww (vão entre cartões e padding) passam a **5 px**.
 
-A espessura do painel vertical fecha a conta `3 colunas + 2 vãos + 2 paddings`:
+**Decidido (2026-10-19): painel vertical de 150 px**, que fecha a conta
+`3 colunas + 2 vãos entre colunas + 2 paddings` com tudo múltiplo de 5:
 
-| Coluna | Vão | Padding | Painel vertical | Painel horizontal |
-|---|---|---|---|---|
-| 40 | 5 | 5 | 140 px | 40 px |
-| **45** | **5** | **5** | **155 px** | **45 px** |
-| 50 | 5 | 5 | 170 px | 50 px |
+| Medida | Valor |
+|---|---|
+| Coluna (conteúdo) | **40 px** |
+| Vão entre colunas (módulos lado a lado) | **10 px** |
+| Vão entre linhas (um cartão e o de baixo) | **5 px** |
+| Padding do painel | **5 px** |
+| **Painel vertical** | 3×40 + 2×10 + 2×5 = **150 px** |
+| **Painel horizontal** | 40 + 2×5 = **50 px** |
 
-**Decidido (2026-10-19): coluna de 45 px** → painel vertical de 155 px, horizontal de
-45 px. Continua configurável (`column:`).
+O vão de 10 px só aparece onde módulos de 1 ou 2 colunas dividem uma linha (rede,
+teclado, bateria). Tudo configurável (`column:`, `gap:`, `padding:`).
+Antes valia coluna de 45 px / painel de 155 px; foi trocado para manter os 150 px
+do eww.
 
 Modos de cada módulo, escolhidos pela borda:
 
@@ -92,8 +98,11 @@ omitir um módulo = desligá-lo.
 ```yaml
 panel:
   edge: left          # left | right | top | bottom
-  column: 45          # px; vertical = 3 colunas (155 px), horizontal = 1 (45 px)
+  column: 40          # px de conteúdo por coluna
+  gap: 10             # entre colunas; entre linhas é sempre 5
+  padding: 5          # vertical = 3×40 + 2×10 + 2×5 = 150 px; horizontal = 50 px
   grid: 5             # toda medida é múltipla disto
+  maintenance: false  # true desenha a grade de 5 px atrás do painel
   monitor: 0
   reserve: true
   start:              # topo (vertical) ou esquerda (horizontal)
@@ -141,6 +150,7 @@ Cada etapa termina com medição de CPU e memória e com print comparando ao eww
 | # | Etapa | Entrega |
 |---|---|---|
 | 0 | Fundação | trait `Module`, layout em colunas + passo de 5 px, config em lista, escolha do modo pela borda, tema base. Testado nas 4 bordas. |
+| | *já pronto (19/10)* | *modo manutenção (grade de 5 px, `maintenance: true`); monitor por nome da saída (`monitor: HDMI-A-1`); desenvolvimento no monitor secundário com `examples/maintenance.yaml`* |
 | 1 | Módulos sem serviço | `menu`, `clock`, `calendar`, `session` |
 | 2 | Clima | `weather` e `forecast` (HTTP, cache, ícones) |
 | 3 | Módulos por evento | `volume`, `brightness`, `battery`, `network`, `keyboard` |
