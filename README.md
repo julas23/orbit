@@ -1,5 +1,7 @@
 # Orbit Panel
 
+![Orbit: the core, panel, dock and applications of the shell](orbit.png)
+
 **Orbit-Panel** and **Orbit-Dock**: a desktop panel and an application dock for Linux, written in **Rust** with **GTK4** and fully themeable through **CSS**. They are the panel and dock of the Orbit shell, part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 Orbit Panel is a ground-up rewrite of an existing panel/dock setup built on [EWW](https://github.com/elkowar/eww). The goal is to keep the flexibility of CSS-based styling while gaining the performance, type safety, and maintainability of a native Rust application.
