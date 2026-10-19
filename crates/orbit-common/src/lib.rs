@@ -6,4 +6,4 @@ pub mod config;
 pub mod style;
 
 pub use backend::{Backend, Placement};
-pub use config::{Config, Edge};
+pub use config::{ConfigDir, Edge};

@@ -14,3 +14,4 @@ orbit-common.workspace = true
 gtk.workspace = true
 gio-unix.workspace = true
 log.workspace = true
+anyhow.workspace = true

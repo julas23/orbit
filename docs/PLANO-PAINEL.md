@@ -92,41 +92,47 @@ regra do clima, aeroportos, grade do calendário) estão no `status.md` e no
 
 ## 4. Configuração
 
-Uma lista ordenada em três trechos. A ordem no arquivo é a ordem na tela;
-omitir um módulo = desligá-lo.
+Implementado em 2026-10-19. Tudo em `~/.config/orbit/`, um arquivo por parte:
+
+```text
+~/.config/orbit/
+├── panel.yaml        posição, medidas, monitor, manutenção e a LISTA de módulos
+├── dock.yaml         o dock
+├── style.css         tema do usuário
+└── modules/
+    └── <módulo>.yaml opções de cada módulo (clock.yaml, menu.yaml, ...)
+```
+
+- Ligar um módulo = listá-lo no `panel.yaml`, em `start`, `center` ou `end`; a ordem
+  da lista é a ordem na tela. Desligar = tirar da lista.
+- O arquivo do módulo é opcional; sem ele, valem os padrões.
+- Módulo desconhecido ou com erro no arquivo fica de fora com mensagem no log; o
+  resto do painel sobe.
 
 ```yaml
-panel:
-  edge: left          # left | right | top | bottom
-  column: 40          # px de conteúdo por coluna
-  gap: 10             # entre colunas; entre linhas é sempre 5
-  padding: 5          # vertical = 3×40 + 2×10 + 2×5 = 150 px; horizontal = 50 px
-  grid: 5             # toda medida é múltipla disto
-  maintenance: false  # true desenha a grade de 5 px atrás do painel
-  monitor: 0
-  reserve: true
-  start:              # topo (vertical) ou esquerda (horizontal)
-    - menu
-    - windows
-  center: []
-  end:                # base (vertical) ou direita (horizontal)
-    - clock:
-        cities: [LAX, JFK, LHR, CDG]
-        rotate: 5s
-    - calendar
-    - weather:
-        model: icon_seamless
-    - forecast:
-        days: 4
-    - tray
-    - volume
-    - brightness
-    - workspaces
-    - network
-    - keyboard
-    - battery
-    - session
+# panel.yaml
+edge: left          # left | right | top | bottom
+size: 150
+monitor: HDMI-A-1   # índice ou nome da saída
+maintenance: false
+start: [menu, windows]
+center: []
+end: [clock, calendar, weather, forecast, tray, volume, brightness,
+      workspaces, network, keyboard, battery, session]
 ```
+
+```yaml
+# modules/clock.yaml — até 4 fusos, um por vez
+world:
+  - { code: LAX, name: Los Angeles, tz: America/Los_Angeles }
+  - { code: JFK, name: Nova York,   tz: America/New_York }
+  - { code: LHR, name: Londres,     tz: Europe/London }
+  - { code: CDG, name: Paris,       tz: Europe/Paris }
+rotate: 5
+```
+
+Medidas da grade (`column`, `gap`, `padding`, `grid`) entram no `panel.yaml` quando
+o layout em colunas for implementado.
 
 ## 5. Arquitetura
 
@@ -150,7 +156,8 @@ Cada etapa termina com medição de CPU e memória e com print comparando ao eww
 | # | Etapa | Entrega |
 |---|---|---|
 | 0 | Fundação | trait `Module`, layout em colunas + passo de 5 px, config em lista, escolha do modo pela borda, tema base. Testado nas 4 bordas. |
-| | *já pronto (19/10)* | *modo manutenção (grade de 5 px, `maintenance: true`); monitor por nome da saída (`monitor: HDMI-A-1`); desenvolvimento no monitor secundário com `examples/maintenance.yaml`* |
+| | *já pronto (19/10)* | *modo manutenção (grade de 5 px, `maintenance: true`); monitor por nome da saída (`monitor: HDMI-A-1`); config em diretório (`panel.yaml`, `dock.yaml`, `modules/*.yaml`); desenvolvimento no monitor secundário com `--config examples/maintenance`* |
+| | *já pronto (19/10)* | *módulo `clock` completo (modos bloco e linha, até 4 fusos, ampulheta alinhada aos algarismos)* |
 | 1 | Módulos sem serviço | `menu`, `clock`, `calendar`, `session` |
 | 2 | Clima | `weather` e `forecast` (HTTP, cache, ícones) |
 | 3 | Módulos por evento | `volume`, `brightness`, `battery`, `network`, `keyboard` |

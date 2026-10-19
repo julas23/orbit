@@ -67,13 +67,40 @@ separately.
 
 ## Configuration
 
-Both binaries read `~/.config/orbit/config.yaml` (or the path given with
-`--config`): the panel uses its `panel:` section, the dock its `dock:` section.
-Every key is optional; see [`examples/config.yaml`](examples/config.yaml) for
-all of them.
+Everything lives in `~/.config/orbit/` (or the directory given with
+`--config DIR`), one file per part:
 
-Styling goes in `~/.config/orbit/style.css`, which is applied on top of the
-[built-in theme](data/style.css) and reloaded automatically when saved.
+```text
+~/.config/orbit/
+├── panel.yaml        position, size, monitor, and the list of modules
+├── dock.yaml         the dock
+├── style.css         user stylesheet
+└── modules/
+    ├── menu.yaml     options of each panel module
+    └── clock.yaml
+```
+
+Every file and every key is optional. A panel module is turned on by listing
+it in `panel.yaml` (under `start`, `center` or `end`, in display order); its
+file under `modules/` only holds its options. A module that is unknown or
+whose file has an error is left out with a message in the log; the rest of
+the panel still starts. See [`examples/orbit/`](examples/orbit) for all keys.
+
+The old single `config.yaml` is no longer read; the binaries warn if they find
+one without a `panel.yaml` next to it.
+
+`style.css` is applied on top of the [built-in theme](data/style.css) and
+reloaded automatically when saved.
+
+### Maintenance mode
+
+`maintenance: true` in `panel.yaml` draws the 5 px layout grid behind the
+panel, to check that every size lands on it. To try it on a second monitor
+without touching your own config:
+
+```sh
+./target/release/orbit-panel --config examples/maintenance
+```
 
 On X11 the panel and dock reserve their space through `_NET_WM_STRUT_PARTIAL`,
 so window-manager padding such as bspwm's `left_padding`/`top_padding` is not

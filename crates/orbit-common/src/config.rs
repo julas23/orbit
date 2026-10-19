@@ -1,12 +1,88 @@
 //! YAML configuration.
 //!
-//! The file lives at `$XDG_CONFIG_HOME/orbit/config.yaml` by default. Every
-//! field is optional; anything left out falls back to the defaults below.
+//! Everything lives in one directory, `$XDG_CONFIG_HOME/orbit` by default:
+//!
+//! ```text
+//! ~/.config/orbit/
+//! ├── panel.yaml        position, size, monitor and the list of modules
+//! ├── dock.yaml         the dock
+//! ├── style.css         user stylesheet, on top of the built-in theme
+//! └── modules/
+//!     └── <module>.yaml one file per panel module, e.g. clock.yaml
+//! ```
+//!
+//! Every file and every field is optional; anything left out falls back to
+//! the defaults below. A module is turned on by listing it in `panel.yaml`;
+//! its own file only holds its options.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
+
+/// The configuration directory.
+#[derive(Debug, Clone)]
+pub struct ConfigDir {
+    path: PathBuf,
+}
+
+impl ConfigDir {
+    /// `$XDG_CONFIG_HOME/orbit`, falling back to `~/.config/orbit`.
+    pub fn default_path() -> PathBuf {
+        gtk::glib::user_config_dir().join("orbit")
+    }
+
+    pub fn new(path: &Path) -> Self {
+        let dir = Self {
+            path: expand_home(path),
+        };
+        if dir.path.join("config.yaml").exists() && !dir.path.join("panel.yaml").exists() {
+            log::warn!(
+                "{} is no longer read: the config is now split into panel.yaml, \
+                 dock.yaml and modules/*.yaml (see examples/ in the repository)",
+                dir.path.join("config.yaml").display()
+            );
+        }
+        dir
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn style_path(&self) -> PathBuf {
+        self.path.join("style.css")
+    }
+
+    pub fn panel(&self) -> anyhow::Result<PanelConfig> {
+        self.load(&self.path.join("panel.yaml"))
+    }
+
+    pub fn dock(&self) -> anyhow::Result<DockConfig> {
+        self.load(&self.path.join("dock.yaml"))
+    }
+
+    /// The options of panel module `name`, from `modules/<name>.yaml`.
+    pub fn module<T: DeserializeOwned + Default>(&self, name: &str) -> anyhow::Result<T> {
+        self.load(&self.path.join("modules").join(format!("{name}.yaml")))
+    }
+
+    /// Loads one file. A missing (or empty) file yields the defaults.
+    fn load<T: DeserializeOwned + Default>(&self, path: &Path) -> anyhow::Result<T> {
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                log::info!("no {}, using defaults", path.display());
+                return Ok(T::default());
+            }
+            Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
+        };
+        if text.trim().is_empty() {
+            return Ok(T::default());
+        }
+        serde_yaml_ng::from_str(&text).with_context(|| format!("parsing {}", path.display()))
+    }
+}
 
 /// Screen edge a surface is attached to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -50,25 +126,7 @@ pub enum Align {
     End,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Config {
-    /// User stylesheet, relative to the config directory unless absolute.
-    pub style: PathBuf,
-    pub panel: PanelConfig,
-    pub dock: DockConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            style: PathBuf::from("style.css"),
-            panel: PanelConfig::default(),
-            dock: DockConfig::default(),
-        }
-    }
-}
-
+/// `panel.yaml`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PanelConfig {
@@ -81,7 +139,12 @@ pub struct PanelConfig {
     pub reserve: bool,
     /// Draws the 5 px layout grid behind the panel, for checking alignment.
     pub maintenance: bool,
-    pub menu: Option<MenuConfig>,
+    /// Modules at the start (top of a vertical panel, left of a horizontal
+    /// one), in order. Listing a module turns it on.
+    pub start: Vec<String>,
+    pub center: Vec<String>,
+    /// Modules at the end (bottom / right), in order.
+    pub end: Vec<String>,
 }
 
 impl Default for PanelConfig {
@@ -93,21 +156,14 @@ impl Default for PanelConfig {
             monitor: MonitorSpec::default(),
             reserve: true,
             maintenance: false,
-            menu: None,
+            start: vec!["menu".into()],
+            center: Vec::new(),
+            end: vec!["clock".into()],
         }
     }
 }
 
-/// The application-menu button at the start of the panel.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct MenuConfig {
-    pub command: String,
-    /// Icon name from the theme, or a path to an image file.
-    pub icon: Option<String>,
-    pub tooltip: Option<String>,
-}
-
+/// `dock.yaml`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DockConfig {
@@ -156,36 +212,6 @@ pub struct DockApp {
 
 fn default_true() -> bool {
     true
-}
-
-impl Config {
-    /// `$XDG_CONFIG_HOME/orbit`, falling back to `~/.config/orbit`.
-    pub fn dir() -> PathBuf {
-        gtk::glib::user_config_dir().join("orbit")
-    }
-
-    pub fn default_path() -> PathBuf {
-        Self::dir().join("config.yaml")
-    }
-
-    /// Loads the config at `path`. A missing file yields the defaults.
-    pub fn load(path: &Path) -> anyhow::Result<Self> {
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                log::info!("no config at {}, using defaults", path.display());
-                return Ok(Self::default());
-            }
-            Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
-        };
-        serde_yaml_ng::from_str(&text).with_context(|| format!("parsing {}", path.display()))
-    }
-
-    /// The stylesheet path, resolved against the directory of the config file.
-    pub fn style_path(&self, config_path: &Path) -> PathBuf {
-        let base = config_path.parent().unwrap_or(Path::new("."));
-        expand_home(&base.join(&self.style))
-    }
 }
 
 /// Expands a leading `~/` to the home directory.

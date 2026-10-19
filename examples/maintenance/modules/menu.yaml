@@ -1,0 +1,5 @@
+# Menu module — ~/.config/orbit/modules/menu.yaml
+
+command: rofi -show drun
+icon: /usr/share/pixmaps/debian-logo.png
+tooltip: Applications

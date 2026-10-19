@@ -3,7 +3,7 @@
 use gio_unix::prelude::*;
 use gtk::{gio, glib, prelude::*};
 use orbit_common::{
-    Config, Placement,
+    ConfigDir, Placement,
     config::{Align, DockApp, DockConfig, expand_home},
 };
 
@@ -15,10 +15,11 @@ fn main() -> glib::ExitCode {
     })
 }
 
-fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placement)> {
-    let dock = &config.dock;
+/// Reads `dock.yaml` and builds the dock.
+fn build(app: &gtk::Application, dir: &ConfigDir) -> orbit_app::Built {
+    let dock = dir.dock()?;
     if !dock.enabled {
-        return None;
+        return Ok(None);
     }
     let placement = Placement {
         edge: dock.edge,
@@ -27,7 +28,7 @@ fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placem
         reserve: dock.reserve,
         namespace: "orbit-dock",
     };
-    Some((window(app, dock), placement))
+    Ok(Some((window(app, &dock), placement)))
 }
 
 fn window(app: &gtk::Application, config: &DockConfig) -> gtk::Window {

@@ -12,4 +12,7 @@ authors.workspace = true
 orbit-app.workspace = true
 orbit-common.workspace = true
 gtk.workspace = true
+glib.workspace = true
 log.workspace = true
+anyhow.workspace = true
+serde.workspace = true

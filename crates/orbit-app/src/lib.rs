@@ -1,7 +1,7 @@
 //! Startup shared by the `orbit-panel` and `orbit-dock` binaries.
 //!
 //! Each surface runs as its own process, so a crash in one does not take the
-//! other down. Both read the same `config.yaml` and stylesheet; this crate
+//! other down. Both read the same config directory and stylesheet; this crate
 //! does the common work (arguments, logging, config, CSS, display backend)
 //! and hands each binary a ready window to fill.
 
@@ -12,9 +12,13 @@ use std::{
 
 use anyhow::Context;
 use gtk::{gdk, glib, prelude::*};
-use orbit_common::{Backend, Config, Placement, config::expand_home, style::Style};
+use orbit_common::{Backend, ConfigDir, Placement, config::expand_home, style::Style};
 
 const BUILTIN_CSS: &str = include_str!("../../../data/style.css");
+
+/// What a binary's `build` returns: its window and where it goes, or `None`
+/// when the surface is disabled in its config.
+pub type Built = anyhow::Result<Option<(gtk::Window, Placement)>>;
 
 /// What a binary contributes: its identity and how to build its surface.
 pub struct Surface {
@@ -22,16 +26,16 @@ pub struct Surface {
     pub name: &'static str,
     /// GTK application id; distinct per binary so both can run at once.
     pub app_id: &'static str,
-    /// Builds the window from the config, or `None` when the surface is
-    /// disabled there.
-    pub build: fn(&gtk::Application, &Config) -> Option<(gtk::Window, Placement)>,
+    /// Builds the window from the config directory (each binary reads its own
+    /// file there), or `None` when the surface is disabled.
+    pub build: fn(&gtk::Application, &ConfigDir) -> Built,
 }
 
 /// Runs `surface` until its window is closed.
 pub fn run(surface: Surface) -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let config_path = match parse_args(surface.name) {
+    let config_dir = match parse_args(surface.name) {
         Ok(path) => path,
         Err(err) => {
             eprintln!("{}: {err}", surface.name);
@@ -49,7 +53,7 @@ pub fn run(surface: Surface) -> glib::ExitCode {
         if !app.windows().is_empty() {
             return;
         }
-        match start(app, &config_path, &surface) {
+        match start(app, &config_dir, &surface) {
             Ok(s) => *style.borrow_mut() = s,
             Err(err) => {
                 log::error!("{err:#}");
@@ -67,26 +71,28 @@ fn parse_args(name: &str) -> anyhow::Result<PathBuf> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => {
-                config = Some(PathBuf::from(args.next().context("--config needs a path")?));
+                config = Some(PathBuf::from(
+                    args.next().context("--config needs a directory")?,
+                ));
             }
             "-h" | "--help" => {
-                println!("Usage: {name} [-c|--config PATH]");
+                println!("Usage: {name} [-c|--config DIR]  (default: ~/.config/orbit)");
                 std::process::exit(0);
             }
             other => anyhow::bail!("unknown argument: {other}"),
         }
     }
-    Ok(config.unwrap_or_else(Config::default_path))
+    Ok(config.unwrap_or_else(ConfigDir::default_path))
 }
 
 fn start(
     app: &gtk::Application,
-    config_path: &Path,
+    config_dir: &Path,
     surface: &Surface,
 ) -> anyhow::Result<Option<Style>> {
-    let config = Config::load(config_path)?;
+    let dir = ConfigDir::new(config_dir);
 
-    let Some((window, placement)) = (surface.build)(app, &config) else {
+    let Some((window, placement)) = (surface.build)(app, &dir)? else {
         log::info!("{} is disabled in the config, exiting", surface.name);
         app.quit();
         return Ok(None);
@@ -96,7 +102,7 @@ fn start(
     let backend = backend_for(&display)?;
     log::info!("using the {} backend", backend.name());
 
-    let style = Style::install(&display, BUILTIN_CSS, &config.style_path(config_path));
+    let style = Style::install(&display, BUILTIN_CSS, &dir.style_path());
     backend.attach(&window, placement)?;
     window.present();
     Ok(Some(style))

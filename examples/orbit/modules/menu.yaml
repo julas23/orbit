@@ -1,0 +1,5 @@
+# Menu module — ~/.config/orbit/modules/menu.yaml
+
+command: rofi -show drun
+icon: start-here    # icon name or path to an image
+tooltip: Applications

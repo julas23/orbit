@@ -1,0 +1,24 @@
+# Orbit-Dock — ~/.config/orbit/dock.yaml. Every key is optional.
+
+edge: top
+size: 36
+monitor: 0
+reserve: true
+align: end        # start | center | end
+icon_size: 24
+apps:
+  # A desktop file by id (looked up in the XDG application dirs)...
+  - desktop: firefox.desktop
+    group: web
+  # ...or by path...
+  - desktop: ~/.local/share/applications/thunderbird.desktop
+    group: web
+  # ...or fully explicit. Explicit fields override the desktop file.
+  - name: Terminal
+    exec: kitty
+    icon: utilities-terminal
+    group: system
+  # Hidden entries stay in the list but are not shown.
+  - desktop: org.gnome.Calculator.desktop
+    group: system
+    show: false

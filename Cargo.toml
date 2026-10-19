@@ -17,6 +17,9 @@ orbit-backend-x11 = { path = "crates/orbit-backend-x11" }
 orbit-backend-wayland = { path = "crates/orbit-backend-wayland" }
 
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+# Only to enable GLib 2.68 APIs (TimeZone::from_identifier); the code uses the
+# copy re-exported as gtk::glib.
+glib = { version = "0.22", features = ["v2_68"] }
 gdk4-x11 = "0.11"
 gdk4-wayland = "0.11"
 gtk4-layer-shell = "0.8"

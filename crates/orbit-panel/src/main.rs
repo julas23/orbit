@@ -1,13 +1,15 @@
-//! Orbit-Panel: app menu at the start, status widgets at the end.
+//! Orbit-Panel: a column (or row) of independent modules.
+//!
+//! `panel.yaml` lists the modules for each part of the panel, in order;
+//! listing a module turns it on. Each module reads its own options from
+//! `modules/<name>.yaml`.
 
 mod clock;
 mod maintenance;
+mod menu;
 
 use gtk::{glib, prelude::*};
-use orbit_common::{
-    Config, Placement,
-    config::{MenuConfig, PanelConfig},
-};
+use orbit_common::{ConfigDir, Placement, config::PanelConfig};
 
 fn main() -> glib::ExitCode {
     orbit_app::run(orbit_app::Surface {
@@ -17,10 +19,11 @@ fn main() -> glib::ExitCode {
     })
 }
 
-fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placement)> {
-    let panel = &config.panel;
+/// Reads `panel.yaml` and builds the panel.
+fn build(app: &gtk::Application, dir: &ConfigDir) -> orbit_app::Built {
+    let panel = dir.panel()?;
     if !panel.enabled {
-        return None;
+        return Ok(None);
     }
     let placement = Placement {
         edge: panel.edge,
@@ -29,30 +32,33 @@ fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placem
         reserve: panel.reserve,
         namespace: "orbit-panel",
     };
-    Some((window(app, panel), placement))
+    Ok(Some((window(app, dir, &panel), placement)))
 }
 
-fn window(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
-    let orientation = if config.edge.is_vertical() {
+fn window(app: &gtk::Application, dir: &ConfigDir, config: &PanelConfig) -> gtk::Window {
+    let vertical = config.edge.is_vertical();
+    let orientation = if vertical {
         gtk::Orientation::Vertical
     } else {
         gtk::Orientation::Horizontal
     };
-
-    // 5 px between modules: the panel grid step.
-    let start = gtk::Box::new(orientation, 5);
-    if let Some(menu) = &config.menu {
-        start.append(&menu_button(menu));
-    }
-
-    let end = gtk::Box::new(orientation, 5);
-    end.append(&clock::new());
+    let part = |names: &[String]| {
+        // 5 px between modules: the panel grid step.
+        let part = gtk::Box::new(orientation, 5);
+        for name in names {
+            if let Some(module) = module(name, dir, vertical) {
+                part.append(&module);
+            }
+        }
+        part
+    };
 
     let root = gtk::CenterBox::builder()
         .orientation(orientation)
         .css_classes(["panel"])
-        .start_widget(&start)
-        .end_widget(&end)
+        .start_widget(&part(&config.start))
+        .center_widget(&part(&config.center))
+        .end_widget(&part(&config.end))
         .build();
 
     let window = gtk::ApplicationWindow::builder()
@@ -68,20 +74,19 @@ fn window(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
     window.upcast()
 }
 
-fn menu_button(menu: &MenuConfig) -> gtk::Button {
-    let button = gtk::Button::builder().css_classes(["menu"]).build();
-    match &menu.icon {
-        // 30 px + 5 px padding each side = 40 px, one column of the grid.
-        Some(icon) => button.set_child(Some(&orbit_app::icon(icon, 30))),
-        None => button.set_label("Apps"),
-    }
-    button.set_tooltip_text(menu.tooltip.as_deref());
-
-    let command = menu.command.clone();
-    button.connect_clicked(move |_| {
-        if let Err(err) = glib::spawn_command_line_async(&command) {
-            log::error!("running {command:?}: {err}");
+/// Builds module `name`. A module that is unknown or whose file does not
+/// parse is left out with an error in the log, instead of taking the whole
+/// panel down.
+fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
+    let built = match name {
+        "menu" => dir.module("menu").map(|c| menu::new(&c)),
+        "clock" => dir.module("clock").map(|c| clock::new(&c, vertical)),
+        other => {
+            log::error!("panel: unknown module {other:?}, leaving it out");
+            return None;
         }
-    });
-    button
+    };
+    built
+        .inspect_err(|err| log::error!("panel: module {name}: {err:#}, leaving it out"))
+        .ok()
 }

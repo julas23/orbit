@@ -1,0 +1,15 @@
+# Orbit-Panel in maintenance mode on the secondary monitor:
+#
+#   ./target/release/orbit-panel --config examples/maintenance
+#
+# Draws the 5 px layout grid behind the panel.
+
+edge: left
+size: 150
+monitor: HDMI-A-1   # output name (see `swaymsg -t get_outputs`) or an index
+maintenance: true
+
+start:
+  - menu
+end:
+  - clock

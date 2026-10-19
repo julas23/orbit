@@ -813,6 +813,7 @@ dependencies = [
 name = "orbit-dock"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "gio-unix",
  "gtk4",
  "log",
@@ -824,10 +825,13 @@ dependencies = [
 name = "orbit-panel"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "glib",
  "gtk4",
  "log",
  "orbit-app",
  "orbit-common",
+ "serde",
 ]
 
 [[package]]

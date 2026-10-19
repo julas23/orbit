@@ -22,6 +22,7 @@
 window.orbit {
   background: transparent;
   color: @orbit_fg;
+  font-family: "CaskaydiaCove Nerd Font", monospace;
 }
 
 window.orbit button {
@@ -56,13 +57,20 @@ window.orbit button {
   padding: 4px;            /* + 1 px border = 5 */
 }
 
-/* Line heights on the grid: 5 + 50 + 30 + 5 = 90 px card. A min-height only
- * works when it is at least the natural height: in Adwaita Sans the time at
- * 36 px is 50 px tall and the date at 20 px is 28 px. Another font may need
- * other values; maintenance mode shows it. */
-.clock .time    { font-size: 36px; font-weight: bold; min-height: 50px; }
-.clock .seconds { font-size: 16px; font-weight: bold; color: @orbit_muted; padding-bottom: 5px; }
-.clock .date    { font-size: 20px; color: @orbit_muted; min-height: 30px; }
+/* Clock. Line heights on the grid, measured in CaskaydiaCove: the date at
+ * 20 px is 24 px tall, the time at 31 px is 37, a world clock at 12 px is 14
+ * — so 25 + 40 + 15, and the card is 5 + 80 + 5 = 90 px. A min-height only
+ * works when it is at least the natural height; another font may need other
+ * values, and maintenance mode shows it.
+ * Width: zone 23 + 5 + time 91 + 5 + hourglass 5 = 129 of the card's 130. */
+.clock .date       { font-size: 20px; color: @orbit_muted; min-height: 25px; }
+.clock .time       { font-size: 31px; font-weight: bold; min-height: 40px; }
+.clock .zone       { font-size: 13px; font-weight: bold; color: @orbit_muted; }
+.clock .world-code,
+.clock .world-diff { font-size: 12px; color: @orbit_muted; min-height: 15px; }
+.clock .world-time { font-size: 12px; min-height: 15px; }
+/* The hourglass fill takes this color; the trough is fixed white at 15%. */
+.clock .hourglass  { color: @orbit_accent; }
 
 /* ------------------------------------------------------------------- dock */
 .dock {

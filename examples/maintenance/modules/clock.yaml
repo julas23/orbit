@@ -1,0 +1,10 @@
+# Clock module — ~/.config/orbit/modules/clock.yaml
+
+# label: BRT        # replaces the local zone abbreviation
+
+world:              # up to 4 other time zones, shown one at a time
+  - { code: LAX, name: Los Angeles, tz: America/Los_Angeles }
+  - { code: JFK, name: Nova York,   tz: America/New_York }
+  - { code: LHR, name: Londres,     tz: Europe/London }
+  - { code: CDG, name: Paris,       tz: Europe/Paris }
+rotate: 5           # seconds per world clock
