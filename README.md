@@ -1,4 +1,4 @@
-# Orbit Panel
+# Orbit Rack
 
 ![Orbit: the core, panel, dock and applications of the shell](orbit.png)
 
