@@ -10,6 +10,7 @@ mod clock;
 mod confirm;
 mod control;
 mod dbusmenu;
+mod forecast;
 mod maintenance;
 mod menu;
 mod pulse;
@@ -18,6 +19,8 @@ mod sni;
 mod sway;
 mod tray;
 mod volume;
+mod weather;
+mod weather_data;
 mod windows;
 mod workspaces;
 
@@ -147,6 +150,12 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
             .module("brightness")
             .map(|c| brightness::new(&c, vertical)),
         "tray" => dir.module("tray").map(|c| tray::new(&c, vertical)),
+        "weather" => dir.module("weather").map(|c| weather::new(&c, vertical)),
+        // The forecast shares the weather module's source and icons.
+        "forecast" => dir.module("forecast").and_then(|f| {
+            dir.module("weather")
+                .map(|w| forecast::new(&f, &w, vertical))
+        }),
         "windows" => dir.module("windows").map(|c| windows::new(&c, vertical)),
         "workspaces" => dir
             .module("workspaces")

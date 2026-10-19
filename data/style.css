@@ -235,6 +235,27 @@ window.confirm            { background: transparent; }
 .tray .tray-item { padding: 0; min-width: 20px; min-height: 20px; border-radius: 5px; }
 .tray .tray-item:hover { background-color: rgba(255, 255, 255, 0.15); }
 
+/* Weather (weather.rs), after the eww card: 55 px picture, then three text
+ * lines held at 15 / 20 / 15 px — card 5 + 55 + 15 + 20 + 15 + 5 = 115 px.
+ * Min in light blue, max in the alert red; sun times in the warm yellow. */
+.weather .glyph   { font-size: 40px; color: @orbit_accent; min-width: 55px; min-height: 55px; }
+.weather .temp    { font-size: 26px; font-weight: bold; }
+.weather .min     { font-size: 16px; font-weight: bold; color: #7fb4d8; }
+.weather .max     { font-size: 16px; font-weight: bold; color: @orbit_alert; }
+.weather .desc    { font-size: 10px; min-height: 15px; }
+.weather .line    { min-height: 15px; }
+.weather .sun     { font-size: 10px; color: @orbit_warn; min-height: 20px; }
+.weather .info    { font-size: 10px; color: @orbit_muted; }
+.weather-line .temp  { font-size: 15px; font-weight: bold; }
+.weather-line .glyph { font-size: 22px; color: @orbit_accent; }
+
+/* Forecast (forecast.rs): one small card per day — name 15, picture 20,
+ * maximum 15: 5 + 50 + 5 = 60 px. */
+.forecast .day .name  { font-size: 11px; color: @orbit_muted; min-height: 15px; }
+.forecast .day .max   { font-size: 10px; min-height: 15px; }
+.forecast .day .glyph { font-size: 14px; color: @orbit_accent; min-height: 20px; }
+.forecast .day        { padding-left: 0; padding-right: 0; }
+
 /* ------------------------------------------------------------------- dock */
 .dock {
   padding: 2px 6px;

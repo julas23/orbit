@@ -1,0 +1,14 @@
+# Weather — ~/.config/orbit/modules/weather.yaml (the forecast reads it too)
+
+model: icon_seamless   # Open-Meteo model; ICON matched the reference best
+interval: 15           # minutes between fetches
+# Fixed place instead of locating by IP (wttr.in):
+# latitude: -23.62
+# longitude: -45.41
+# place: Caraguatatuba
+
+# brweather pictures (third-party themes, not in the repository): tema1…tema7,
+# lua-sul, lua-norte. Without them, Nerd Font glyphs are shown.
+icon_dir: ~/.local/share/orbit/weather
+icon_theme: 3
+marquee: 21            # characters of the description shown at once
