@@ -1,0 +1,5 @@
+# Brightness module — ~/.config/orbit/modules/brightness.yaml
+
+min: 5               # lowest level, so the screen never goes fully dark
+step: 5              # % per wheel step
+ddc_display: 1       # ddcutil --display, for monitors over DDC/CI (no backlight)

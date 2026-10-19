@@ -14,4 +14,7 @@ center: []
 end:                # bottom / right
   - clock
   - calendar
+  - brightness
+  - volume
   - workspaces
+  - session

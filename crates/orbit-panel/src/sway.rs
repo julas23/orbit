@@ -132,6 +132,12 @@ pub struct Output {
     pub rect: Rect,
 }
 
+/// One entry of a RUN_COMMAND reply.
+#[derive(Debug, Deserialize)]
+pub struct CommandResult {
+    pub success: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Rect {
     pub x: i32,

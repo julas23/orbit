@@ -1,0 +1,5 @@
+# Volume module — ~/.config/orbit/modules/volume.yaml
+
+mixer: pavucontrol   # click on the icon opens (or focuses) it
+step: 5              # % per wheel step
+max: 100             # highest level

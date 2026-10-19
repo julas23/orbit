@@ -1,0 +1,7 @@
+# Safe for testing: the actions only show a notification.
+poweroff: notify-send "orbit-panel" "desligaria agora"
+reboot: notify-send "orbit-panel" "reiniciaria agora"
+logout: notify-send "orbit-panel" "encerraria a sessão agora"
+before:
+  command: sleep 1
+  message: Testando o passo antes de sair…

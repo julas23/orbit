@@ -1,0 +1,12 @@
+# Session module — ~/.config/orbit/modules/session.yaml
+
+poweroff: systemctl poweroff
+reboot: systemctl reboot
+logout: ""          # empty: ask the compositor to exit (sway: `exit`)
+
+# Optional: runs after "yes" and before acting. If it fails, you are asked
+# whether to leave anyway.
+# before:
+#   command: ~/.local/bin/st.py esperar 90
+#   message: Sincronizando com o Dell…
+#   failed: "A sincronização com o Dell não terminou.\nSair mesmo assim?"

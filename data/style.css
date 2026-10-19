@@ -10,6 +10,7 @@
 @define-color orbit_accent  #4682b4;
 @define-color orbit_border  rgba(76, 86, 106, 0.55);
 @define-color orbit_alert   #bf616a;
+@define-color orbit_warn    #ebcb8b;
 @define-color orbit_today   #ff9500;
 @define-color orbit_lines   #595959;
 @define-color orbit_area1   #1b3358;   /* dark blue */
@@ -116,6 +117,88 @@ window.orbit button {
 .workspaces .area.occupied { font-weight: 600; }
 .workspaces .area.focused  { font-weight: bold; color: #ffffff; }
 .workspaces .area:hover    { background-color: #ffffff; color: #000000; }
+
+/* Session: three cards side by side, one grid column each — 3 × 40 + 2 × 10
+ * = 140 px — and 30 px tall. The colour names the action; hover fills the
+ * card with it. */
+.session .action {
+  font-size: 16px;
+  min-height: 30px;
+  padding: 0;
+}
+/* `window.orbit button { border: none }` outranks `.card`, so the card
+ * outline of these buttons has to be restated here. The 1 px border adds to
+ * the height: 28 + 2 = 30. */
+.session .action.card {
+  border: 1px solid @orbit_border;
+  border-radius: 5px;
+  min-height: 28px;
+}
+.session .action.poweroff { color: @orbit_alert; }
+.session .action.reboot   { color: @orbit_warn; }
+.session .action.logout   { color: #ffffff; }
+.session .action.poweroff:hover { background-color: @orbit_alert; color: #ffffff; }
+.session .action.reboot:hover   { background-color: @orbit_warn;  color: #000000; }
+.session .action.logout:hover   { background-color: #ffffff;      color: #000000; }
+.session-line { font-size: 16px; color: @orbit_alert; }
+
+/* Confirmation dialog over the blurred screen (confirm.rs). The blur runs on
+ * the GPU; without a screenshot the screen is only dimmed. */
+window.confirm            { background: transparent; }
+.confirm-backdrop         { filter: blur(20px) brightness(0.7); }
+.confirm-dim              { background-color: rgba(0, 0, 0, 0.6); }
+.confirm-box {
+  background-color: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 15px;
+  padding: 20px 25px;
+}
+.confirm-box .question    { font-size: 15px; }
+.confirm-box button {
+  background-color: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  padding: 5px 20px;
+}
+.confirm-box button:hover { background-color: rgba(255, 255, 255, 0.18); }
+.confirm-box button.yes {
+  background-color: alpha(@orbit_alert, 0.30);
+  border-color: alpha(@orbit_alert, 0.55);
+}
+.confirm-box button.yes:hover { background-color: alpha(@orbit_alert, 0.45); }
+.confirm-box button:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: -2px; }
+
+/* Volume and brightness (control.rs), side by side: two half-width cards,
+ * 65 + 10 + 65 = 140 px. Each holds a vertical slider (35 px tall, up = more)
+ * and the icon beside it, so a card is 5 + 35 + 5 = 45 px tall — the pair
+ * takes 45 px where the two full-width cards took 85. Which one is on the
+ * left is the order in panel.yaml. The slider knob is hidden: the filled
+ * part of the trough is the level. */
+.control .icon              { min-width: 30px; min-height: 30px; }
+.control.volume .icon       { font-size: 24px; }
+.control.brightness .icon   { font-size: 18px; }
+.control scale              { padding: 0; margin: 0; min-width: 0; min-height: 0; }
+.control scale.vertical     { min-height: 35px; }
+.control scale trough {
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  border-radius: 5px;
+  background-color: #4c566a;
+}
+.control scale.horizontal trough { min-height: 4px; }
+.control scale.vertical trough   { min-width: 4px; }
+.control scale highlight    { border-radius: 5px; background-color: @orbit_accent; }
+.control scale slider {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+.control.popup              { padding: 10px; min-width: 150px; }
+.control-line .icon         { font-size: 20px; }
 
 /* ------------------------------------------------------------------- dock */
 .dock {

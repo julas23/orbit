@@ -14,4 +14,7 @@ start:
 end:
   - clock
   - calendar
+  - brightness
+  - volume
   - workspaces
+  - session

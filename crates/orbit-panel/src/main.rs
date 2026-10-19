@@ -4,11 +4,17 @@
 //! listing a module turns it on. Each module reads its own options from
 //! `modules/<name>.yaml`.
 
+mod brightness;
 mod calendar;
 mod clock;
+mod confirm;
+mod control;
 mod maintenance;
 mod menu;
+mod pulse;
+mod session;
 mod sway;
+mod volume;
 mod workspaces;
 
 use gtk::{glib, prelude::*};
@@ -48,10 +54,29 @@ fn window(app: &gtk::Application, dir: &ConfigDir, config: &PanelConfig) -> gtk:
     let part = |names: &[String]| {
         // 5 px between modules: the panel grid step.
         let part = gtk::Box::new(orientation, 5);
+        // In a vertical panel, two half-width modules in a row share a line.
+        let mut waiting: Option<gtk::Widget> = None;
         for name in names {
-            if let Some(module) = module(name, dir, vertical) {
-                part.append(&module);
+            let Some(module) = module(name, dir, vertical) else {
+                continue;
+            };
+            if !module.is_visible() {
+                continue; // e.g. brightness on a machine without a backlight
             }
+            if vertical && span(name) == Span::Half {
+                match waiting.take() {
+                    Some(first) => part.append(&pair(&first, Some(&module))),
+                    None => waiting = Some(module),
+                }
+                continue;
+            }
+            if let Some(first) = waiting.take() {
+                part.append(&pair(&first, None));
+            }
+            part.append(&module);
+        }
+        if let Some(first) = waiting.take() {
+            part.append(&pair(&first, None));
         }
         part
     };
@@ -77,6 +102,33 @@ fn window(app: &gtk::Application, dir: &ConfigDir, config: &PanelConfig) -> gtk:
     window.upcast()
 }
 
+/// How much of a vertical panel's width a module takes.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Span {
+    Full,
+    /// Half: 65 px of the 140, so two fit side by side with the 10 px gap
+    /// between columns.
+    Half,
+}
+
+fn span(name: &str) -> Span {
+    match name {
+        "volume" | "brightness" => Span::Half,
+        _ => Span::Full,
+    }
+}
+
+/// A line of two half-width modules; a lone one keeps its half.
+fn pair(first: &gtk::Widget, second: Option<&gtk::Widget>) -> gtk::Box {
+    let line = gtk::Box::builder().spacing(10).homogeneous(true).build();
+    line.append(first);
+    match second {
+        Some(second) => line.append(second),
+        None => line.append(&gtk::Box::new(gtk::Orientation::Horizontal, 0)),
+    }
+    line
+}
+
 /// Builds module `name`. A module that is unknown or whose file does not
 /// parse is left out with an error in the log, instead of taking the whole
 /// panel down.
@@ -85,6 +137,11 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
         "menu" => dir.module("menu").map(|c| menu::new(&c)),
         "clock" => dir.module("clock").map(|c| clock::new(&c, vertical)),
         "calendar" => dir.module("calendar").map(|c| calendar::new(&c, vertical)),
+        "session" => dir.module("session").map(|c| session::new(&c, vertical)),
+        "volume" => dir.module("volume").map(|c| volume::new(&c, vertical)),
+        "brightness" => dir
+            .module("brightness")
+            .map(|c| brightness::new(&c, vertical)),
         "workspaces" => dir
             .module("workspaces")
             .map(|c| workspaces::new(&c, vertical)),
