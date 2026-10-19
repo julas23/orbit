@@ -11,8 +11,11 @@ const STEP: i32 = 5;
 /// A brighter line every this many steps.
 const MAJOR_EVERY: i32 = 10;
 
-const MINOR: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.10);
-const MAJOR: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.28);
+// Over the translucent panel a 10% white line was only ~8 levels brighter
+// than the background: the 5 px grid vanished and only the 50 px lines
+// showed. The minor lines must be clearly visible on their own.
+const MINOR: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.22);
+const MAJOR: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.45);
 
 /// Puts `content` on top of the grid.
 pub fn wrap(content: &impl IsA<gtk::Widget>) -> gtk::Overlay {
