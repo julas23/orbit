@@ -97,6 +97,19 @@ zone) and the compositor lays them out in the order they appear: a left
 panel started first keeps the full height, and a top dock started after it
 takes the top edge to the right of the panel.
 
+To install into `~/.local/bin` and start both in the right order from the
+compositor's configuration:
+
+```sh
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-session
+orbit-session                      # (re)starts the panel, then the dock
+orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
+```
+
+In sway, e.g. `exec ~/.local/bin/orbit-session` — and set `gaps top`/`gaps
+left` to 0 if they were reserving room for another panel: Orbit reserves its
+own.
+
 Runtime: a Wayland compositor with `wlr-layer-shell` (developed on sway; the
 `windows` and `workspaces` modules talk to sway's IPC). Optional: `grim` for
 the blurred confirmation screen, `ddcutil` for external-monitor brightness.

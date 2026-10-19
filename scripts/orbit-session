@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# orbit-session — starts (or restarts) Orbit-Panel and Orbit-Dock for a
+# Wayland session, in the right order.
+#
+#   orbit-session [--fallback COMMAND]
+#
+# Order matters: each surface reserves its edge and the compositor lays them
+# out as they appear, so the panel goes first (full height) and the dock
+# after it (top edge, to the right of the panel).
+#
+# The panel is considered up when its GTK application id appears on the
+# session bus. If it does not within 3 s — e.g. a machine without the
+# gtk4-layer-shell library — COMMAND runs instead (an older panel), so the
+# session is never left without one.
+set -u
+
+BIN=$(dirname "$(readlink -f "$0")")
+PANEL_ID=io.github.julas23.Orbit.Panel
+FALLBACK=""
+if [ "${1:-}" = --fallback ]; then
+  FALLBACK=${2:-}
+fi
+
+# Restart: stop what is running.
+pkill -x orbit-dock 2>/dev/null
+pkill -x orbit-panel 2>/dev/null
+for _ in $(seq 1 20); do
+  pgrep -x orbit-panel >/dev/null || pgrep -x orbit-dock >/dev/null || break
+  sleep 0.1
+done
+
+setsid "$BIN/orbit-panel" >/dev/null 2>&1 < /dev/null &
+
+up=false
+for _ in $(seq 1 30); do
+  if busctl --user status "$PANEL_ID" >/dev/null 2>&1; then
+    up=true
+    break
+  fi
+  sleep 0.1
+done
+
+if ! $up; then
+  echo "orbit-session: orbit-panel did not start" >&2
+  pkill -x orbit-panel 2>/dev/null
+  if [ -n "$FALLBACK" ]; then
+    echo "orbit-session: running the fallback: $FALLBACK" >&2
+    exec sh -c "$FALLBACK"
+  fi
+  exit 1
+fi
+
+# Give the panel's surface a moment to be mapped before the dock's.
+sleep 0.5
+setsid "$BIN/orbit-dock" >/dev/null 2>&1 < /dev/null &
