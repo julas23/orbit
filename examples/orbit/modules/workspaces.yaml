@@ -1,0 +1,5 @@
+# Workspaces module — ~/.config/orbit/modules/workspaces.yaml
+
+count: 4      # areas shown, at least
+columns: 2    # per row in a vertical panel
+stride: 10    # area N is workspace N, stride+N, 2*stride+N... on each monitor

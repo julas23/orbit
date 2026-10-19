@@ -12,6 +12,10 @@
 @define-color orbit_alert   #bf616a;
 @define-color orbit_today   #ff9500;
 @define-color orbit_lines   #595959;
+@define-color orbit_area1   #1b3358;   /* dark blue */
+@define-color orbit_area2   #b8790a;   /* amber */
+@define-color orbit_area3   #5c101f;   /* wine */
+@define-color orbit_area4   #3a3f47;   /* dark grey */
 
 /* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
  * (see docs/PLANO-PAINEL.md). Borders count toward a box's size in GTK, so a
@@ -91,6 +95,27 @@ window.orbit button {
 .calendar.popup .day,
 .calendar.popup .head { min-width: 20px; }
 .calendar-line        { font-size: 13px; font-weight: bold; color: @orbit_fg; }
+
+/* Workspaces: one fixed colour per area, black label. The focused area only
+ * turns its label white and bold; an occupied one is semi-bold. Hover: white
+ * background, black label. Buttons 60 × 30 px — 10 px between columns, 5
+ * between rows — so the 2 × 2 card is 5 + 30 + 5 + 30 + 5 = 75 px.
+ * Areas past the fourth reuse the fourth colour. */
+.workspaces .area {
+  font-size: 13px;
+  color: #000000;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  border-radius: 5px;
+}
+.workspaces .area.area-1 { background-color: @orbit_area1; }
+.workspaces .area.area-2 { background-color: @orbit_area2; }
+.workspaces .area.area-3 { background-color: @orbit_area3; }
+.workspaces .area.area-4 { background-color: @orbit_area4; }
+.workspaces .area.occupied { font-weight: 600; }
+.workspaces .area.focused  { font-weight: bold; color: #ffffff; }
+.workspaces .area:hover    { background-color: #ffffff; color: #000000; }
 
 /* ------------------------------------------------------------------- dock */
 .dock {

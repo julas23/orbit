@@ -8,6 +8,8 @@ mod calendar;
 mod clock;
 mod maintenance;
 mod menu;
+mod sway;
+mod workspaces;
 
 use gtk::{glib, prelude::*};
 use orbit_common::{ConfigDir, Placement, config::PanelConfig};
@@ -83,6 +85,9 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
         "menu" => dir.module("menu").map(|c| menu::new(&c)),
         "clock" => dir.module("clock").map(|c| clock::new(&c, vertical)),
         "calendar" => dir.module("calendar").map(|c| calendar::new(&c, vertical)),
+        "workspaces" => dir
+            .module("workspaces")
+            .map(|c| workspaces::new(&c, vertical)),
         other => {
             log::error!("panel: unknown module {other:?}, leaving it out");
             return None;

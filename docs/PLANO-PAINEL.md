@@ -159,6 +159,7 @@ Cada etapa termina com medição de CPU e memória e com print comparando ao eww
 | | *já pronto (19/10)* | *modo manutenção (grade de 5 px, `maintenance: true`); monitor por nome da saída (`monitor: HDMI-A-1`); config em diretório (`panel.yaml`, `dock.yaml`, `modules/*.yaml`); desenvolvimento no monitor secundário com `--config examples/maintenance`* |
 | | *já pronto (19/10)* | *módulo `clock` completo (modos bloco e linha, até 4 fusos, ampulheta alinhada aos algarismos)* |
 | | *já pronto (19/10)* | *módulo `calendar` (grade 7×6, cartão de 150 px; modo linha com o mês num popup — clique ainda não testado)* |
+| | *já pronto (19/10)* | *módulo `workspaces` (áreas globais 2×2, cartão de 75 px) e cliente nativo do IPC do sway (`sway.rs`), orientado a eventos — clique e troca por teclado ainda não testados* |
 | 1 | Módulos sem serviço | `menu`, `clock`, `calendar`, `session` |
 | 2 | Clima | `weather` e `forecast` (HTTP, cache, ícones) |
 | 3 | Módulos por evento | `volume`, `brightness`, `battery`, `network`, `keyboard` |

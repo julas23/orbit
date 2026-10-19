@@ -14,3 +14,4 @@ start:
 end:
   - clock
   - calendar
+  - workspaces
