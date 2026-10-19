@@ -15,6 +15,7 @@ mod pulse;
 mod session;
 mod sway;
 mod volume;
+mod windows;
 mod workspaces;
 
 use gtk::{glib, prelude::*};
@@ -142,6 +143,7 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
         "brightness" => dir
             .module("brightness")
             .map(|c| brightness::new(&c, vertical)),
+        "windows" => dir.module("windows").map(|c| windows::new(&c, vertical)),
         "workspaces" => dir
             .module("workspaces")
             .map(|c| workspaces::new(&c, vertical)),

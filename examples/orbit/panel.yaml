@@ -10,6 +10,7 @@ maintenance: false  # true draws the 5 px layout grid behind the panel
 # modules/<name>.yaml (optional — defaults apply without it).
 start:              # top of a vertical panel, left of a horizontal one
   - menu
+  - windows
 center: []
 end:                # bottom / right
   - clock

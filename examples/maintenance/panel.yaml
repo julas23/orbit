@@ -11,6 +11,7 @@ maintenance: true
 
 start:
   - menu
+  - windows
 end:
   - clock
   - calendar

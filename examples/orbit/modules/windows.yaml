@@ -1,0 +1,10 @@
+# Window list — ~/.config/orbit/modules/windows.yaml
+
+# Desktop files searched before the system's, for names and icons.
+desktop_dirs:
+  - ~/.local/share/dock
+stride: 10          # area N is workspace N, stride+N... on each monitor
+areas: 4            # "send to area" entries in the menu
+# Menu entries run these with {id} = the window's sway con_id; empty hides them.
+maximize: ~/.config/sway/janela.sh maximizar {id}
+restore: ~/.config/sway/janela.sh restaurar {id}

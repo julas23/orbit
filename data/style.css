@@ -17,6 +17,11 @@
 @define-color orbit_area2   #b8790a;   /* amber */
 @define-color orbit_area3   #5c101f;   /* wine */
 @define-color orbit_area4   #3a3f47;   /* dark grey */
+/* Lighter variants, for thin tabs against the dark panel. */
+@define-color orbit_area1_light #3d6db0;
+@define-color orbit_area2_light #d99a2b;
+@define-color orbit_area3_light #92273d;
+@define-color orbit_area4_light #6b7280;
 
 /* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
  * (see docs/PLANO-PAINEL.md). Borders count toward a box's size in GTK, so a
@@ -199,6 +204,28 @@ window.confirm            { background: transparent; }
 }
 .control.popup              { padding: 10px; min-width: 150px; }
 .control-line .icon         { font-size: 20px; }
+
+/* Window list (windows.rs): icon + application name, a 3 px tab on the
+ * left in the light colour of the window's area. Focused: bold on a light
+ * background, no colour of its own (it would hide the area's). Minimized:
+ * faded, italic — opacity on purpose, to fade the icon too. Entries are
+ * 20 px tall, 5 px apart. */
+.windows .window {
+  font-size: 11px;
+  color: @orbit_muted;
+  min-height: 20px;
+  padding: 0 5px;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: 5px;
+}
+.windows .window.area-1 { border-left-color: @orbit_area1_light; }
+.windows .window.area-2 { border-left-color: @orbit_area2_light; }
+.windows .window.area-3 { border-left-color: @orbit_area3_light; }
+.windows .window.area-4 { border-left-color: @orbit_area4_light; }
+.windows .window:hover  { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.15); }
+.windows .window.focused   { font-weight: bold; color: @orbit_fg; background-color: rgba(255, 255, 255, 0.08); }
+.windows .window.minimized { opacity: 0.5; font-style: italic; }
 
 /* ------------------------------------------------------------------- dock */
 .dock {
