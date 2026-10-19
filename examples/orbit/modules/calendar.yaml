@@ -1,0 +1,3 @@
+# Calendar module — ~/.config/orbit/modules/calendar.yaml
+
+week_start: monday   # monday | sunday

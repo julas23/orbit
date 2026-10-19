@@ -13,3 +13,4 @@ start:
   - menu
 end:
   - clock
+  - calendar

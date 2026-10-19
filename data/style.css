@@ -9,6 +9,9 @@
 @define-color orbit_muted   #6b7280;
 @define-color orbit_accent  #4682b4;
 @define-color orbit_border  rgba(76, 86, 106, 0.55);
+@define-color orbit_alert   #bf616a;
+@define-color orbit_today   #ff9500;
+@define-color orbit_lines   #595959;
 
 /* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
  * (see docs/PLANO-PAINEL.md). Borders count toward a box's size in GTK, so a
@@ -71,6 +74,23 @@ window.orbit button {
 .clock .world-time { font-size: 12px; min-height: 15px; }
 /* The hourglass fill takes this color; the trough is fixed white at 15%. */
 .clock .hourglass  { color: @orbit_accent; }
+
+/* Calendar: black card, header + 6 weeks, every row 20 px on the grid —
+ * 5 + 20 + 6 × 20 + 5 = 150 px. Seven columns cannot split the card's 130 px
+ * into multiples of 5, so columns are 18–19 px and only the card is on the
+ * grid. The lines take the colour of .lines (white at 35%; brighter read as
+ * too loud); no CSS borders, which would add to the cell sizes. */
+.calendar             { background-color: #000000; }
+.calendar .head       { font-size: 11px; font-weight: bold; color: #ffffff; min-height: 20px; }
+.calendar .head.weekend { color: @orbit_alert; }
+.calendar .day        { font-size: 11px; color: #ffffff; min-height: 20px; }
+.calendar .day.weekend { color: @orbit_muted; }
+.calendar .day.today  { color: @orbit_today; font-weight: bold; }
+.calendar .lines      { color: @orbit_lines; }
+/* In the popover of the horizontal panel there is no column to fill. */
+.calendar.popup .day,
+.calendar.popup .head { min-width: 20px; }
+.calendar-line        { font-size: 13px; font-weight: bold; color: @orbit_fg; }
 
 /* ------------------------------------------------------------------- dock */
 .dock {

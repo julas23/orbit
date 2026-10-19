@@ -4,6 +4,7 @@
 //! listing a module turns it on. Each module reads its own options from
 //! `modules/<name>.yaml`.
 
+mod calendar;
 mod clock;
 mod maintenance;
 mod menu;
@@ -81,6 +82,7 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
     let built = match name {
         "menu" => dir.module("menu").map(|c| menu::new(&c)),
         "clock" => dir.module("clock").map(|c| clock::new(&c, vertical)),
+        "calendar" => dir.module("calendar").map(|c| calendar::new(&c, vertical)),
         other => {
             log::error!("panel: unknown module {other:?}, leaving it out");
             return None;

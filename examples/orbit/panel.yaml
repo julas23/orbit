@@ -13,3 +13,4 @@ start:              # top of a vertical panel, left of a horizontal one
 center: []
 end:                # bottom / right
   - clock
+  - calendar
