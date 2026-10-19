@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::Context;
-use gtk::{gdk, glib, prelude::*};
+use gtk::{gdk, gio, glib, prelude::*};
 use orbit_common::{Backend, ConfigDir, Placement, config::expand_home, style::Style};
 
 const BUILTIN_CSS: &str = include_str!("../../../data/style.css");
@@ -120,11 +120,39 @@ fn backend_for(display: &gdk::Display) -> anyhow::Result<Box<dyn Backend>> {
 
 /// An image from either a file path or an icon-theme name.
 pub fn icon(spec: &str, size: i32) -> gtk::Image {
-    let image = if spec.contains('/') {
-        gtk::Image::from_file(expand_home(spec.as_ref()))
+    let image = gtk::Image::new();
+    if spec.contains('/') {
+        set_file(&image, &expand_home(spec.as_ref()), size);
     } else {
-        gtk::Image::from_icon_name(spec)
-    };
+        image.set_icon_name(Some(spec));
+    }
     image.set_pixel_size(size);
     image
+}
+
+/// Shows `gicon` in `image` at `size`. Icons given as files are loaded
+/// already scaled down: GTK would otherwise keep each one decoded at its full
+/// size — AppImage icons are often 1024 px or more (one was 3840 px, 59 MB),
+/// and the dock's ~40 file icons took ~100 MB to show at 24 px.
+pub fn set_gicon(image: &gtk::Image, gicon: &gio::Icon, size: i32) {
+    let path = gicon
+        .downcast_ref::<gio::FileIcon>()
+        .and_then(|icon| icon.file().path());
+    match path {
+        Some(path) => set_file(image, &path, size),
+        None => image.set_from_gicon(gicon),
+    }
+    image.set_pixel_size(size);
+}
+
+/// Loads `path` at twice `size` (sharp on HiDPI, still tiny in memory).
+fn set_file(image: &gtk::Image, path: &Path, size: i32) {
+    let side = size.max(1) * 2;
+    match gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, side, side, true) {
+        Ok(pixbuf) => image.set_paintable(Some(&gdk::Texture::for_pixbuf(&pixbuf))),
+        Err(err) => {
+            log::warn!("icon {}: {err}", path.display());
+            image.set_icon_name(Some("application-x-executable"));
+        }
+    }
 }

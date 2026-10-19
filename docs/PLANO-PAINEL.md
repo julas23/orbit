@@ -165,6 +165,7 @@ Cada etapa termina com medição de CPU e memória e com print comparando ao eww
 | | *já pronto (19/10)* | *módulo `windows`: lista de janelas igual à do eww, em ordem geométrica (área → monitor em posição física → janela, de cima para baixo e da esquerda para a direita; minimizadas por último). Arrastar para reordenar saiu. Clique e menu ainda não testados* |
 | | *já pronto (19/10)* | *módulo `tray`: StatusNotifierItem via D-Bus do GIO (watcher próprio, ou host do watcher existente — hoje o do eww), menus dbusmenu convertidos para menu GTK. Cliques ainda não testados. Na troca (etapa 6): subir o painel ANTES do blueman-applet* |
 | | *já pronto (19/10)* | *módulos `weather` (115 px) e `forecast` (60 px), mesmos dados e visual do eww: wttr.in (local + UV) + Open-Meteo ICON, busca única compartilhada a cada 15 min via `ureq`, cache em ~/.cache/orbit/weather.json; ícones do brweather em ~/.local/share/orbit/weather (fora do repo). Com isto, todos os módulos do eww existem no Orbit* |
+| | *já pronto (19/10)* | *`orbit-dock` igual ao do eww (lista sincronizada, centralizado, grupos); ícones de arquivo carregados já reduzidos — dock de 146 para 53 MB. Ordem de partida: painel primeiro, dock depois. Falta a etapa 6 (troca do eww na partida do sway)* |
 | 1 | Módulos sem serviço | `menu`, `clock`, `calendar`, `session` |
 | 2 | Clima | `weather` e `forecast` (HTTP, cache, ícones) |
 | 3 | Módulos por evento | `volume`, `brightness`, `battery`, `network`, `keyboard` |

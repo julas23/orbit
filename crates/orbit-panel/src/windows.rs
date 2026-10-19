@@ -235,7 +235,7 @@ impl Module {
     fn show(&self, item: &Item, window: &Window) {
         let (app, gicon) = self.apps.lookup(&window.class);
         match gicon {
-            Some(gicon) => item.icon.set_from_gicon(&gicon),
+            Some(gicon) => orbit_app::set_gicon(&item.icon, &gicon, 16),
             None => item.icon.set_icon_name(Some(&fallback_icon(&window.class))),
         }
         item.name.set_label(&app);

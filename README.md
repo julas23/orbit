@@ -58,12 +58,14 @@ Then:
 
 ```sh
 cargo build --release
-./target/release/orbit-dock &
 ./target/release/orbit-panel &
+./target/release/orbit-dock &
 ```
 
-Start the dock first: where a left panel meets a top dock, the surface created
-last is drawn on top. On Wayland each surface uses its own layer-shell
+Start the panel first. Each surface reserves its edge (layer-shell exclusive
+zone) and the compositor lays them out in the order they appear: a left
+panel started first keeps the full height, and a top dock started after it
+takes the top edge to the right of the panel. On Wayland each surface uses its own layer-shell
 namespace (`orbit-panel`, `orbit-dock`), so compositor rules can target them
 separately.
 

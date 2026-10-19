@@ -137,8 +137,8 @@ impl Launcher {
         let image = match &self.icon {
             Some(IconSource::Spec(spec)) => orbit_app::icon(spec, icon_size),
             Some(IconSource::GIcon(gicon)) => {
-                let image = gtk::Image::from_gicon(gicon);
-                image.set_pixel_size(icon_size);
+                let image = gtk::Image::new();
+                orbit_app::set_gicon(&image, gicon, icon_size);
                 image
             }
             None => orbit_app::icon("application-x-executable", icon_size),
