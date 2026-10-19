@@ -217,9 +217,9 @@ impl Module {
             let weak = Rc::downgrade(self);
             let shared = shared.clone();
             let anchor = button.downgrade();
-            right.connect_pressed(move |_, _, _, _| {
+            right.connect_pressed(move |_, _, x, y| {
                 if let (Some(module), Some(anchor)) = (weak.upgrade(), anchor.upgrade()) {
-                    menu(&module, &anchor, &shared.borrow());
+                    menu(&module, &anchor, &shared.borrow(), Some((x, y)));
                 }
             });
         }
@@ -313,7 +313,7 @@ impl Module {
 }
 
 /// The right-click menu of one entry.
-fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window) {
+fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window, at: orbit_app::popup::Point) {
     let model = gio::Menu::new();
     let group = gio::SimpleActionGroup::new();
     let add = |label: &str, name: &str, act: Box<dyn Fn(&Module)>| {
@@ -375,14 +375,7 @@ fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window) {
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("win", Some(&group));
-    popover.set_parent(anchor);
-    popover.set_has_arrow(false);
-    popover.connect_closed(|popover| {
-        // Unparent after the click that closed it has been handled.
-        let popover = popover.clone();
-        glib::idle_add_local_once(move || popover.unparent());
-    });
-    popover.popup();
+    orbit_app::popup::open(&popover, anchor, at);
 }
 
 /// Every application window in the tree, with its area and output.

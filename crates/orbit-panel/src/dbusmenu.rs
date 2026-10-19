@@ -11,8 +11,15 @@ use gtk::{gio, glib, prelude::*};
 
 const IFACE: &str = "com.canonical.dbusmenu";
 
-/// Opens the menu at `path` on `bus` under `anchor`.
-pub fn show(conn: &gio::DBusConnection, bus: &str, path: &str, anchor: &impl IsA<gtk::Widget>) {
+/// Opens the menu at `path` on `bus`, with its corner at the click `at` on
+/// `anchor`.
+pub fn show(
+    conn: &gio::DBusConnection,
+    bus: &str,
+    path: &str,
+    anchor: &impl IsA<gtk::Widget>,
+    at: orbit_app::popup::Point,
+) {
     let call = |method: &str, args: glib::Variant| {
         conn.call_sync(
             Some(bus),
@@ -50,19 +57,13 @@ pub fn show(conn: &gio::DBusConnection, bus: &str, path: &str, anchor: &impl IsA
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("m", Some(&group));
-    popover.set_has_arrow(false);
-    popover.set_parent(anchor);
     {
         let conn = conn.clone();
         let (bus, path) = (bus.to_string(), path.to_string());
-        popover.connect_closed(move |popover| {
-            event(&conn, &bus, &path, 0, "closed");
-            let popover = popover.clone();
-            glib::idle_add_local_once(move || popover.unparent());
-        });
+        popover.connect_closed(move |_| event(&conn, &bus, &path, 0, "closed"));
     }
     event(conn, bus, path, 0, "opened");
-    popover.popup();
+    orbit_app::popup::open(&popover, anchor, at);
 }
 
 /// Appends the children of `node` — `(i id, a{sv} props, av children)` — to

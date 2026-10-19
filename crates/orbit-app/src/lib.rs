@@ -14,6 +14,8 @@ use anyhow::Context;
 use gtk::{gdk, gio, glib, prelude::*};
 use orbit_common::{Backend, ConfigDir, Placement, config::expand_home, style::Style};
 
+pub mod popup;
+
 const BUILTIN_CSS: &str = include_str!("../../../data/style.css");
 
 /// What a binary's `build` returns: its window and where it goes, or `None`
@@ -99,6 +101,12 @@ fn start(
     };
 
     let display = gdk::Display::default().context("no display")?;
+    // GTK4's own theme (Adwaita) is light unless asked otherwise, whatever the
+    // desktop's GTK3 theme: popover menus came out white, with the panel's
+    // light text on them. The panel is dark, so ask for the dark variant.
+    if let Some(settings) = gtk::Settings::default() {
+        settings.set_gtk_application_prefer_dark_theme(true);
+    }
     let backend = backend_for(&display)?;
     log::info!("using the {} backend", backend.name());
 

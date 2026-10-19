@@ -268,6 +268,31 @@ window.confirm            { background: transparent; }
 .status-line .icon  { font-size: 16px; }
 .status-line .first { font-size: 11px; }
 
+/* Popovers and context menus (window list, tray, network, calendar, volume):
+ * the panel's dark background and light text. They live in the panel's
+ * widget tree, so they inherit its colour; their background has to be set
+ * here or GTK's theme paints its own. */
+window.orbit popover > contents {
+  background-color: rgba(27, 31, 39, 0.97);
+  color: @orbit_fg;
+  border: 1px solid @orbit_border;
+  border-radius: 5px;
+  padding: 5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+window.orbit popover modelbutton {
+  color: @orbit_fg;
+  min-height: 20px;
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+window.orbit popover modelbutton:hover,
+window.orbit popover modelbutton:focus { background-color: alpha(@orbit_accent, 0.35); }
+window.orbit popover modelbutton:disabled { color: @orbit_muted; }
+window.orbit popover separator { background-color: @orbit_border; margin: 5px 0; min-height: 1px; }
+window.orbit popover check,
+window.orbit popover radio { color: @orbit_fg; }
+
 /* ------------------------------------------------------------------- dock */
 .dock {
   padding: 2px 6px;

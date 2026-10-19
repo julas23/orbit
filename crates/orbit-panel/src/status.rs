@@ -214,16 +214,17 @@ fn network_clicks(icon: &gtk::Label, config: &NetworkConfig, system: &gio::DBusC
 
     let right = gtk::GestureClick::builder().button(3).build();
     let (anchor, system, editor) = (icon.downgrade(), system.clone(), config.editor.clone());
-    right.connect_pressed(move |_, _, _, _| {
+    right.connect_pressed(move |_, _, x, y| {
         let Some(anchor) = anchor.upgrade() else {
             return;
         };
+        let at = Some((x, y));
         let session = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok();
         match session.as_ref().and_then(nm_applet_menu) {
             Some((bus, path)) => {
-                dbusmenu::show(session.as_ref().expect("checked"), &bus, &path, &anchor)
+                dbusmenu::show(session.as_ref().expect("checked"), &bus, &path, &anchor, at)
             }
-            None => fallback_menu(&anchor, &system, &editor),
+            None => fallback_menu(&anchor, &system, &editor, at),
         }
     });
     icon.add_controller(right);
@@ -272,7 +273,12 @@ fn nm_applet_menu(session: &gio::DBusConnection) -> Option<(String, String)> {
 }
 
 /// Without nm-applet: networking and Wi-Fi on/off, and the editor.
-fn fallback_menu(anchor: &gtk::Label, system: &gio::DBusConnection, editor: &str) {
+fn fallback_menu(
+    anchor: &gtk::Label,
+    system: &gio::DBusConnection,
+    editor: &str,
+    at: orbit_app::popup::Point,
+) {
     let flag = |name: &str| {
         property(system, NM, "/org/freedesktop/NetworkManager", NM, name)
             .and_then(|v| v.get::<bool>())
@@ -351,13 +357,7 @@ fn fallback_menu(anchor: &gtk::Label, system: &gio::DBusConnection, editor: &str
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("n", Some(&group));
-    popover.set_has_arrow(false);
-    popover.set_parent(anchor);
-    popover.connect_closed(|p| {
-        let p = p.clone();
-        glib::idle_add_local_once(move || p.unparent());
-    });
-    popover.popup();
+    orbit_app::popup::open(&popover, anchor, at);
 }
 
 fn show_network(row: &Row, conn: &gio::DBusConnection) {

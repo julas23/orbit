@@ -263,12 +263,12 @@ impl Module {
             let props = props.clone();
             let call = call.clone();
             let anchor = button.downgrade();
-            move || {
+            move |at: orbit_app::popup::Point| {
                 let Some(anchor) = anchor.upgrade() else {
                     return;
                 };
                 match props.borrow().menu.clone() {
-                    Some(menu) => dbusmenu::show(&conn, &bus, &menu, &anchor),
+                    Some(menu) => dbusmenu::show(&conn, &bus, &menu, &anchor, at),
                     None => call("ContextMenu", (0i32, 0i32).to_variant()),
                 }
             }
@@ -279,16 +279,16 @@ impl Module {
             let props = props.clone();
             let call = call.clone();
             let menu = menu.clone();
-            left.connect_released(move |_, _, _, _| {
+            left.connect_released(move |_, _, x, y| {
                 if props.borrow().item_is_menu {
-                    menu();
+                    menu(Some((x, y)));
                 } else {
                     call("Activate", (0i32, 0i32).to_variant());
                 }
             });
         }
         let right = gtk::GestureClick::builder().button(3).build();
-        right.connect_pressed(move |_, _, _, _| menu());
+        right.connect_pressed(move |_, _, x, y| menu(Some((x, y))));
         let middle = gtk::GestureClick::builder().button(2).build();
         {
             let call = call.clone();
