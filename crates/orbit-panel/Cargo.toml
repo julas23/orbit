@@ -1,6 +1,6 @@
 [package]
-name = "orbit-core"
-description = "Shared configuration, styling and backend abstraction for Orbit Panel"
+name = "orbit-panel"
+description = "Orbit-Panel: a Rust + GTK4 desktop panel, themeable with CSS"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,8 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
 gtk.workspace = true
-serde.workspace = true
-serde_yaml_ng.workspace = true
-anyhow.workspace = true
 log.workspace = true

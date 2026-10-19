@@ -1,6 +1,6 @@
 # Orbit Panel
 
-A desktop panel and dock for Linux, written in **Rust** with **GTK4** and fully themeable through **CSS**.
+**Orbit-Panel** and **Orbit-Dock**: a desktop panel and an application dock for Linux, written in **Rust** with **GTK4** and fully themeable through **CSS**. They are the panel and dock of the Orbit shell, part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 Orbit Panel is a ground-up rewrite of an existing panel/dock setup built on [EWW](https://github.com/elkowar/eww). The goal is to keep the flexibility of CSS-based styling while gaining the performance, type safety, and maintainability of a native Rust application.
 
@@ -8,7 +8,8 @@ Orbit Panel is a ground-up rewrite of an existing panel/dock setup built on [EWW
 
 ## Goals
 
-- **Native and lightweight** — a single Rust binary, no scripting runtime or polling shell scripts.
+- **Native and lightweight** — two small Rust binaries, no scripting runtime or polling shell scripts.
+- **One process per surface** — `orbit-panel` and `orbit-dock` run separately, so a crash in one does not take the other down.
 - **CSS-first theming** — the entire look and feel is defined in a user stylesheet, with live reload.
 - **Panel + dock** — a top/bottom panel and an application dock, both anchored to screen edges.
 - **X11 and Wayland** — a backend abstraction: EWMH dock hints and struts on X11 (tested on bspwm), the layer-shell protocol via `gtk4-layer-shell` on Wayland.
@@ -55,12 +56,19 @@ Then:
 
 ```sh
 cargo build --release
-./target/release/orbit
+./target/release/orbit-dock &
+./target/release/orbit-panel &
 ```
+
+Start the dock first: where a left panel meets a top dock, the surface created
+last is drawn on top. On Wayland each surface uses its own layer-shell
+namespace (`orbit-panel`, `orbit-dock`), so compositor rules can target them
+separately.
 
 ## Configuration
 
-Orbit reads `~/.config/orbit/config.yaml` (or the path given with `--config`).
+Both binaries read `~/.config/orbit/config.yaml` (or the path given with
+`--config`): the panel uses its `panel:` section, the dock its `dock:` section.
 Every key is optional; see [`examples/config.yaml`](examples/config.yaml) for
 all of them.
 
@@ -75,10 +83,12 @@ needed. Set `reserve: false` to disable this.
 
 | Crate                     | Purpose                                                    |
 | ------------------------- | ---------------------------------------------------------- |
-| `orbit-core`              | Configuration, CSS loading, display-backend abstraction    |
+| `orbit-common`            | Configuration, CSS loading, display-backend abstraction    |
 | `orbit-backend-x11`       | X11 backend: EWMH dock type, struts and positioning        |
 | `orbit-backend-wayland`   | Wayland backend: layer-shell                               |
-| `orbit`                   | The binary: panel, dock and widgets                        |
+| `orbit-app`               | Startup shared by both binaries: arguments, config, CSS, backend selection |
+| `orbit-panel`             | The `orbit-panel` binary: menu button and status widgets  |
+| `orbit-dock`              | The `orbit-dock` binary: application launchers            |
 
 ## Contributing
 

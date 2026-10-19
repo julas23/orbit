@@ -1,12 +1,36 @@
-//! The dock: a row of application launchers, split into groups.
+//! Orbit-Dock: a row of application launchers, split into groups.
 
 use gio_unix::prelude::*;
-use gtk::{gio, prelude::*};
-use orbit_core::config::{Align, DockApp, DockConfig, expand_home};
+use gtk::{gio, glib, prelude::*};
+use orbit_common::{
+    Config, Placement,
+    config::{Align, DockApp, DockConfig, expand_home},
+};
 
-use crate::widgets;
+fn main() -> glib::ExitCode {
+    orbit_app::run(orbit_app::Surface {
+        name: "orbit-dock",
+        app_id: "io.github.julas23.Orbit.Dock",
+        build,
+    })
+}
 
-pub fn build(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
+fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placement)> {
+    let dock = &config.dock;
+    if !dock.enabled {
+        return None;
+    }
+    let placement = Placement {
+        edge: dock.edge,
+        size: dock.size,
+        monitor: dock.monitor,
+        reserve: dock.reserve,
+        namespace: "orbit-dock",
+    };
+    Some((window(app, dock), placement))
+}
+
+fn window(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
     let orientation = if config.edge.is_vertical() {
         gtk::Orientation::Vertical
     } else {
@@ -53,7 +77,7 @@ pub fn build(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
 
     gtk::ApplicationWindow::builder()
         .application(app)
-        .title("Orbit Dock")
+        .title("Orbit-Dock")
         .css_classes(["orbit", "orbit-dock"])
         .child(&root)
         .build()
@@ -110,13 +134,13 @@ impl Launcher {
 
     fn button(self, icon_size: i32) -> gtk::Button {
         let image = match &self.icon {
-            Some(IconSource::Spec(spec)) => widgets::icon(spec, icon_size),
+            Some(IconSource::Spec(spec)) => orbit_app::icon(spec, icon_size),
             Some(IconSource::GIcon(gicon)) => {
                 let image = gtk::Image::from_gicon(gicon);
                 image.set_pixel_size(icon_size);
                 image
             }
-            None => widgets::icon("application-x-executable", icon_size),
+            None => orbit_app::icon("application-x-executable", icon_size),
         };
         let button = gtk::Button::builder()
             .css_classes(["app"])
@@ -136,7 +160,7 @@ impl Launcher {
                     .map_err(|err| err.to_string())
             }
             Action::Command(command) => {
-                gtk::glib::spawn_command_line_async(command).map_err(|err| err.to_string())
+                glib::spawn_command_line_async(command).map_err(|err| err.to_string())
             }
         };
         if let Err(err) = result {

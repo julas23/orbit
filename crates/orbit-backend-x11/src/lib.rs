@@ -12,7 +12,7 @@ use std::rc::Rc;
 use anyhow::Context;
 use gdk4_x11::X11Surface;
 use gtk::{gdk, prelude::*};
-use orbit_core::{Backend, Edge, Placement, backend::monitor};
+use orbit_common::{Backend, Edge, Placement, backend::monitor};
 use x11rb::{
     connection::Connection,
     protocol::xproto::{AtomEnum, ConfigureWindowAux, ConnectionExt as _, PropMode},

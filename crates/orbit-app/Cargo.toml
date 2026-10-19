@@ -1,6 +1,6 @@
 [package]
-name = "orbit"
-description = "A Rust + GTK4 desktop panel and dock, themeable with CSS"
+name = "orbit-app"
+description = "Startup shared by the Orbit-Panel and Orbit-Dock binaries"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,13 +9,12 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-orbit-core.workspace = true
+orbit-common.workspace = true
 orbit-backend-x11.workspace = true
 orbit-backend-wayland.workspace = true
 gtk.workspace = true
 gdk4-x11.workspace = true
 gdk4-wayland.workspace = true
-gio-unix.workspace = true
 anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true

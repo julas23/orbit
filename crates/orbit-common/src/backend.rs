@@ -17,6 +17,9 @@ pub struct Placement {
     pub monitor: usize,
     /// Reserve the space so other windows are laid out around the surface.
     pub reserve: bool,
+    /// Identifies the surface to the compositor (the layer-shell namespace on
+    /// Wayland), so rules can target the panel and the dock separately.
+    pub namespace: &'static str,
 }
 
 impl Placement {

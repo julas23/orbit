@@ -1,0 +1,16 @@
+[package]
+name = "orbit-dock"
+description = "Orbit-Dock: a Rust + GTK4 application dock, themeable with CSS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+gio-unix.workspace = true
+log.workspace = true

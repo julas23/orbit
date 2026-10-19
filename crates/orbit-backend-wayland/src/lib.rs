@@ -1,7 +1,7 @@
 //! Wayland backend, built on the wlr-layer-shell protocol.
 
 use gtk4_layer_shell::{Edge as LayerEdge, Layer, LayerShell};
-use orbit_core::{Backend, Edge, Placement, backend::monitor};
+use orbit_common::{Backend, Edge, Placement, backend::monitor};
 
 use gtk::prelude::*;
 
@@ -28,7 +28,7 @@ impl Backend for WaylandBackend {
         window.init_layer_shell();
         window.set_layer(Layer::Top);
         window.set_monitor(Some(&monitor));
-        window.set_namespace(Some("orbit"));
+        window.set_namespace(Some(placement.namespace));
 
         // Anchor to the chosen edge and both adjacent ones, so the surface
         // stretches along the whole edge.

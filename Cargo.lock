@@ -761,19 +761,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
-name = "orbit"
+name = "orbit-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger",
  "gdk4-wayland",
  "gdk4-x11",
- "gio-unix",
  "gtk4",
  "log",
  "orbit-backend-wayland",
  "orbit-backend-x11",
- "orbit-core",
+ "orbit-common",
 ]
 
 [[package]]
@@ -784,7 +783,7 @@ dependencies = [
  "gtk4",
  "gtk4-layer-shell",
  "log",
- "orbit-core",
+ "orbit-common",
 ]
 
 [[package]]
@@ -795,12 +794,12 @@ dependencies = [
  "gdk4-x11",
  "gtk4",
  "log",
- "orbit-core",
+ "orbit-common",
  "x11rb",
 ]
 
 [[package]]
-name = "orbit-core"
+name = "orbit-common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -808,6 +807,27 @@ dependencies = [
  "log",
  "serde",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "orbit-dock"
+version = "0.1.0"
+dependencies = [
+ "gio-unix",
+ "gtk4",
+ "log",
+ "orbit-app",
+ "orbit-common",
+]
+
+[[package]]
+name = "orbit-panel"
+version = "0.1.0"
+dependencies = [
+ "gtk4",
+ "log",
+ "orbit-app",
+ "orbit-common",
 ]
 
 [[package]]

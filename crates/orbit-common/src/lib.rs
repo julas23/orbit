@@ -1,4 +1,4 @@
-//! Shared building blocks for Orbit Panel: configuration, CSS styling and the
+//! Shared building blocks for Orbit-Panel and Orbit-Dock: configuration, CSS styling and the
 //! display-server abstraction implemented by the X11 and Wayland backends.
 
 pub mod backend;

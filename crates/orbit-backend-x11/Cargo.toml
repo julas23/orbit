@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-orbit-core.workspace = true
+orbit-common.workspace = true
 gtk.workspace = true
 gdk4-x11.workspace = true
 x11rb.workspace = true

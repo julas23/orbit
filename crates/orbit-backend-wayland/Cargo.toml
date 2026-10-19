@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-orbit-core.workspace = true
+orbit-common.workspace = true
 gtk.workspace = true
 gtk4-layer-shell.workspace = true
 anyhow.workspace = true

@@ -11,7 +11,8 @@ repository = "https://github.com/julas23/orbit_panel"
 authors = ["Juliano <julianoas@gmail.com>"]
 
 [workspace.dependencies]
-orbit-core = { path = "crates/orbit-core" }
+orbit-common = { path = "crates/orbit-common" }
+orbit-app = { path = "crates/orbit-app" }
 orbit-backend-x11 = { path = "crates/orbit-backend-x11" }
 orbit-backend-wayland = { path = "crates/orbit-backend-wayland" }
 

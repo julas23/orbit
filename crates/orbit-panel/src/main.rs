@@ -1,11 +1,37 @@
-//! The panel: app menu at the start, status widgets at the end.
+//! Orbit-Panel: app menu at the start, status widgets at the end.
+
+mod clock;
 
 use gtk::{glib, prelude::*};
-use orbit_core::config::{MenuConfig, PanelConfig};
+use orbit_common::{
+    Config, Placement,
+    config::{MenuConfig, PanelConfig},
+};
 
-use crate::widgets;
+fn main() -> glib::ExitCode {
+    orbit_app::run(orbit_app::Surface {
+        name: "orbit-panel",
+        app_id: "io.github.julas23.Orbit.Panel",
+        build,
+    })
+}
 
-pub fn build(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
+fn build(app: &gtk::Application, config: &Config) -> Option<(gtk::Window, Placement)> {
+    let panel = &config.panel;
+    if !panel.enabled {
+        return None;
+    }
+    let placement = Placement {
+        edge: panel.edge,
+        size: panel.size,
+        monitor: panel.monitor,
+        reserve: panel.reserve,
+        namespace: "orbit-panel",
+    };
+    Some((window(app, panel), placement))
+}
+
+fn window(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
     let orientation = if config.edge.is_vertical() {
         gtk::Orientation::Vertical
     } else {
@@ -18,7 +44,7 @@ pub fn build(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
     }
 
     let end = gtk::Box::new(orientation, 4);
-    end.append(&widgets::clock::new());
+    end.append(&clock::new());
 
     let root = gtk::CenterBox::builder()
         .orientation(orientation)
@@ -29,7 +55,7 @@ pub fn build(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
 
     gtk::ApplicationWindow::builder()
         .application(app)
-        .title("Orbit Panel")
+        .title("Orbit-Panel")
         .css_classes(["orbit", "orbit-panel"])
         .child(&root)
         .build()
@@ -39,7 +65,7 @@ pub fn build(app: &gtk::Application, config: &PanelConfig) -> gtk::Window {
 fn menu_button(menu: &MenuConfig) -> gtk::Button {
     let button = gtk::Button::builder().css_classes(["menu"]).build();
     match &menu.icon {
-        Some(icon) => button.set_child(Some(&widgets::icon(icon, 26))),
+        Some(icon) => button.set_child(Some(&orbit_app::icon(icon, 26))),
         None => button.set_label("Apps"),
     }
     button.set_tooltip_text(menu.tooltip.as_deref());
