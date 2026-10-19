@@ -16,6 +16,7 @@ mod menu;
 mod pulse;
 mod session;
 mod sni;
+mod status;
 mod sway;
 mod tray;
 mod volume;
@@ -150,6 +151,11 @@ fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
             .module("brightness")
             .map(|c| brightness::new(&c, vertical)),
         "tray" => dir.module("tray").map(|c| tray::new(&c, vertical)),
+        "network" => dir.module("network").map(|c| status::network(&c, vertical)),
+        "keyboard" => dir
+            .module("keyboard")
+            .map(|c| status::keyboard(&c, vertical)),
+        "battery" => dir.module("battery").map(|c| status::battery(&c, vertical)),
         "weather" => dir.module("weather").map(|c| weather::new(&c, vertical)),
         // The forecast shares the weather module's source and icons.
         "forecast" => dir.module("forecast").and_then(|f| {

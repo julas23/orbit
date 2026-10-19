@@ -21,4 +21,7 @@ end:                # bottom / right
   - brightness
   - volume
   - workspaces
+  - network
+  - keyboard
+  - battery
   - session

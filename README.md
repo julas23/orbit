@@ -62,10 +62,10 @@ A column (or row) of independent modules, anchored to a screen edge.
 | `brightness` | Backlight, or an external monitor over DDC/CI | kernel + logind / ddcutil |
 | `volume` | Default output volume and mute | PulseAudio protocol (PipeWire) |
 | `workspaces` | Global areas, shared by all monitors | sway IPC |
+| `network` | Connection name and IP/prefix; the icon opens the connection editor (left) or the network menu (right) | NetworkManager |
+| `keyboard` | Layout language and variant; click for the next layout | sway IPC |
+| `battery` | Charge and uptime | UPower |
 | `session` | Power off, reboot, log out — confirmed over a blurred screen | logind / sway |
-
-Still to come from the EWW panel: **network**, **keyboard layout** and
-**battery**.
 
 **Layout.** Every size, gap and padding is a multiple of 5 px. A vertical
 panel is three columns wide (150 px by default) and each module has a *block*

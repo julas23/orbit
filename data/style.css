@@ -256,6 +256,18 @@ window.confirm            { background: transparent; }
 .forecast .day .glyph { font-size: 14px; color: @orbit_accent; min-height: 20px; }
 .forecast .day        { padding-left: 0; padding-right: 0; }
 
+/* Status modules (status.rs): network, keyboard, battery. A 24 px glyph in a
+ * 30 px box beside two 15 px lines — first 11 px, second 10 px and muted —
+ * so a card is 5 + 30 + 5 = 40 px. */
+.status .icon   { font-size: 24px; min-width: 30px; min-height: 30px; }
+.status .first  { font-size: 11px; min-height: 15px; }
+.status .second { font-size: 10px; color: @orbit_muted; min-height: 15px; }
+/* The network icon is a button (left: editor, right: network menu). */
+.status .icon.button       { border-radius: 5px; }
+.status .icon.button:hover { background-color: rgba(255, 255, 255, 0.15); }
+.status-line .icon  { font-size: 16px; }
+.status-line .first { font-size: 11px; }
+
 /* ------------------------------------------------------------------- dock */
 .dock {
   padding: 2px 6px;

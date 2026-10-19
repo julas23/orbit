@@ -21,4 +21,7 @@ end:
   - brightness
   - volume
   - workspaces
+  - network
+  - keyboard
+  - battery
   - session

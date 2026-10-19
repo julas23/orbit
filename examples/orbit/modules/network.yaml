@@ -1,0 +1,5 @@
+# Network — ~/.config/orbit/modules/network.yaml
+
+# Left click on the icon opens (or focuses) this; right click opens the
+# network menu of nm-applet when it runs, else a small menu of our own.
+editor: nm-connection-editor

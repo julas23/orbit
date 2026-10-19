@@ -24,6 +24,7 @@ pub const GET_WORKSPACES: u32 = 1;
 const SUBSCRIBE: u32 = 2;
 pub const GET_OUTPUTS: u32 = 3;
 pub const GET_TREE: u32 = 4;
+pub const GET_INPUTS: u32 = 100;
 
 /// Whether the panel runs under sway.
 pub fn available() -> bool {
