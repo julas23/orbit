@@ -1,0 +1,23 @@
+[package]
+name = "orbit-blink"
+description = "Orbit-Blink: screen capture for Wayland — the screen, a window or an area on the frozen screen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+gtk4-layer-shell.workspace = true
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+async-channel.workspace = true
+wayland-client.workspace = true
+wayland-protocols-wlr.workspace = true
+rustix.workspace = true

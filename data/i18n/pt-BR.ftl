@@ -190,3 +190,20 @@ clip-ago-now = agora
 clip-ago-minutes = há { $n } min
 clip-ago-hours = há { $n } h
 clip-ago-days = há { $n } d
+
+## Captura de tela
+
+blink-title = Captura de tela
+blink-mode-screen = Tela
+blink-mode-window = Janela
+blink-mode-area = Área
+blink-delay = Atraso (segundos)
+blink-cursor = Incluir o ponteiro
+blink-take = Capturar
+blink-saved = Tela capturada
+blink-saved-in = { $size } · na área de transferência
+blink-open = Abrir
+blink-save-as = Salvar como…
+blink-failed = A captura falhou
+blink-no-window = Nenhuma janela em foco para capturar.
+blink-file-prefix = captura

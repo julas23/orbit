@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Blink
+GenericName=Screenshot
+GenericName[pt_BR]=Captura de tela
+Comment=Capture the screen, a window or an area, to a file and the clipboard
+Comment[pt_BR]=Captura a tela, uma janela ou uma área, em arquivo e na área de transferência
+Exec=orbit-blink
+Icon=applets-screenshooter
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=screenshot;capture;print;screen;
+Keywords[pt_BR]=captura;print;tela;imagem;

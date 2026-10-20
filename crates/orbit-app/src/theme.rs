@@ -62,6 +62,20 @@ pub fn install(display: &gdk::Display) -> Theme {
     Theme { _changes: changes }
 }
 
+/// The accent colour to draw with directly (outside CSS): the system's, or
+/// the palette's own when the desktop sets none.
+pub fn accent() -> gdk::RGBA {
+    let state = State {
+        provider: gtk::CssProvider::new(),
+        portal: gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok(),
+    };
+    match state.accent() {
+        Some((r, g, b)) => gdk::RGBA::new(r as f32, g as f32, b as f32, 1.0),
+        None => gdk::RGBA::parse(if state.dark() { "#4682b4" } else { "#3b6ea5" })
+            .expect("valid colour"),
+    }
+}
+
 impl State {
     fn apply(&self) {
         let dark = self.dark();

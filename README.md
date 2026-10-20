@@ -9,7 +9,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
-> rewritten from; **Orbit-Calc** and **Orbit-Clip** work; the other components are planned.
+> rewritten from; **Orbit-Calc**, **Orbit-Clip** and **Orbit-Blink** work; the
+> other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -25,7 +26,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | orbit-play | Video player for common formats | planned |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
-| orbit-blink | Screen capture: the whole screen, the current window or a selected area | planned |
+| **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | orbit-edit | Text editor: column selection and indentation by level | planned |
 
@@ -126,6 +127,21 @@ exec orbit-clip --background
 bindsym $mod+v exec orbit-clip
 ```
 
+## Orbit-Blink
+
+Screen capture: the whole screen, the focused window, or an area chosen on a
+frozen picture of the screens. Each capture is saved in `$HOME`, copied to the
+clipboard, and shown on a card with a thumbnail and buttons to open it or save
+a copy elsewhere. Without a mode it opens an options window (mode, delay,
+whether to include the cursor). It needs sway (for the layout of the screens
+and windows) and `wlr-screencopy`.
+
+```
+bindsym Print       exec orbit-blink screen
+bindsym Shift+Print exec orbit-blink area
+bindsym $mod+Print  exec orbit-blink
+```
+
 ## Building and running
 
 Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files.
@@ -147,7 +163,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -226,6 +242,7 @@ follow the locale.
 | `orbit-dock` | The dock |
 | `orbit-calc` | The calculator |
 | `orbit-clip` | The clipboard history |
+| `orbit-blink` | The screen capture |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

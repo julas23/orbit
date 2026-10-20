@@ -197,3 +197,21 @@ clip-ago-now = now
 clip-ago-minutes = { $n } min ago
 clip-ago-hours = { $n } h ago
 clip-ago-days = { $n } d ago
+
+## Screen capture
+
+blink-title = Screen capture
+blink-mode-screen = Screen
+blink-mode-window = Window
+blink-mode-area = Area
+blink-delay = Delay (seconds)
+blink-cursor = Include the pointer
+blink-take = Capture
+blink-saved = Screen captured
+blink-saved-in = { $size } · on the clipboard
+blink-open = Open
+blink-save-as = Save as…
+blink-failed = The capture failed
+blink-no-window = No focused window to capture.
+# Start of the saved file's name: screenshot-2026-10-19_22-50-12.png
+blink-file-prefix = screenshot

@@ -1,0 +1,45 @@
+/* Orbit-Blink built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+/* The options window. */
+window.orbit-blink {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-blink .page {
+  padding: 15px;
+}
+window.orbit-blink .modes > button {
+  padding: 10px 15px;
+}
+window.orbit-blink .modes > button:checked {
+  background: @orbit_accent;
+  color: #ffffff;
+}
+window.orbit-blink .take {
+  min-height: 35px;
+}
+
+/* The frozen screen. */
+window.orbit-blink-overlay {
+  background: none;
+}
+
+/* The card after a capture. */
+window.orbit-blink-card {
+  background: none;
+}
+window.orbit-blink-card .card {
+  padding: 10px;
+  min-width: 320px;
+  border-radius: 10px;
+  background-color: @orbit_surface;
+  color: @orbit_fg;
+  border: 1px solid @orbit_border;
+}
+window.orbit-blink-card .title  { font-weight: bold; }
+window.orbit-blink-card .file   { font-size: 12px; }
+window.orbit-blink-card .meta   { color: @orbit_muted; font-size: 12px; }
+window.orbit-blink-card .failed .title { color: @orbit_alert; }
+window.orbit-blink-card .close  { min-width: 25px; min-height: 25px; padding: 0; }
