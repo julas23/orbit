@@ -1,6 +1,8 @@
 //! Calendar module, after the calendar of the eww panel.
 //!
-//! Block form (vertical panel): a weekday header and the month as a 7×6 grid
+//! Block form (vertical panel): the season and the year on top — the season
+//! of the hemisphere the weather module's place is in, or of `latitude` in
+//! `calendar.yaml` — then a weekday header and the month as a 7×6 grid
 //! — always six weeks, so the card never changes height — with thin lines
 //! around the days, like a paper calendar. The header has no lines.
 //! Line form (horizontal panel): the day of the month; the same grid opens
@@ -12,16 +14,23 @@
 //! The lines are drawn with cairo at the real edges of the day cells instead
 //! of CSS borders, which would add their width to every cell.
 
-use std::rc::Rc;
+use std::{cell::Cell, rc::Rc};
 
 use gtk::{glib, prelude::*};
+use orbit_app::i18n::{text, tr_args};
 use serde::Deserialize;
+
+use crate::weather_data::{self, WeatherConfig};
 
 /// `modules/calendar.yaml`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CalendarConfig {
     pub week_start: WeekStart,
+    /// Where the season is reckoned (only its sign counts: south of the
+    /// equator the seasons are swapped). By default, the weather module's
+    /// place.
+    pub latitude: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -48,8 +57,19 @@ impl WeekStart {
     }
 }
 
-pub fn new(config: &CalendarConfig, vertical: bool) -> gtk::Widget {
+pub fn new(config: &CalendarConfig, weather: Option<&WeatherConfig>, vertical: bool) -> gtk::Widget {
     let month = Rc::new(Month::new(config.week_start));
+    month.latitude.set(config.latitude);
+    if config.latitude.is_none()
+        && let Some(weather) = weather
+    {
+        let month = month.clone();
+        weather_data::subscribe(weather, move |w| {
+            if month.latitude.replace(Some(w.latitude)) != Some(w.latitude) {
+                month.fill();
+            }
+        });
+    }
 
     let root: gtk::Widget = if vertical {
         let card = gtk::Box::builder()
@@ -97,6 +117,9 @@ fn today() -> Option<glib::DateTime> {
 
 struct Month {
     root: gtk::Box,
+    /// Season and year.
+    title: gtk::Label,
+    latitude: Cell<Option<f64>>,
     week_start: WeekStart,
     days: Vec<gtk::Label>,
     /// The day of the month, for the line form.
@@ -139,14 +162,18 @@ impl Month {
         overlay.add_overlay(&grid);
         overlay.set_measure_overlay(&grid, true);
 
+        let title = gtk::Label::builder().css_classes(["title"]).build();
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
+        root.append(&title);
         root.append(&head);
         root.append(&overlay);
 
         Self {
             root,
+            title,
+            latitude: Cell::new(None),
             week_start,
             days,
             today: gtk::Label::new(None),
@@ -186,7 +213,27 @@ impl Month {
             label.set_css_classes(&classes);
         }
         self.today.set_label(&day.to_string());
+        // Until the place is known, the year alone.
+        self.title.set_label(&match self.latitude.get() {
+            Some(lat) => tr_args(
+                "calendar-title",
+                &[
+                    ("season", text(capitalize(&weather_data::season(month, day, lat)))),
+                    ("year", text(year.to_string())),
+                ],
+            ),
+            None => year.to_string(),
+        });
         self.root.queue_draw();
+    }
+}
+
+/// "primavera" → "Primavera".
+fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 

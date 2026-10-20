@@ -143,6 +143,8 @@ moon-waning-gibbous = waning gibbous
 moon-last-quarter = last quarter
 moon-waning-crescent = waning crescent
 
+# The calendar's title: "Primavera 2026".
+calendar-title = { $season } { $year }
 season-winter = winter
 season-spring = spring
 season-summer = summer

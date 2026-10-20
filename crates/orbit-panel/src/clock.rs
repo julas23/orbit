@@ -261,7 +261,7 @@ impl State {
         l.zone
             .set_label(&self.label.clone().unwrap_or_else(|| abbreviation(&now)));
         l.time.set_label(&fmt(&now, "%H:%M"));
-        let date = fmt(&now, "%a %b %d");
+        let date = fmt(&now, "%a %-d %b");
         if let Some(d) = &l.date {
             d.set_label(&date);
         }

@@ -138,6 +138,8 @@ moon-waning-gibbous = minguante gibosa
 moon-last-quarter = quarto minguante
 moon-waning-crescent = minguante
 
+# The calendar's title: "Primavera 2026".
+calendar-title = { $season } { $year }
 season-winter = inverno
 season-spring = primavera
 season-summer = verão

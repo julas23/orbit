@@ -152,7 +152,11 @@ fn module(name: &str, dir: &ConfigDir, edge: Edge) -> Option<gtk::Widget> {
                 .map(|session| menu::new(&c, edge, session))
         }),
         "clock" => dir.module("clock").map(|c| clock::new(&c, vertical)),
-        "calendar" => dir.module("calendar").map(|c| calendar::new(&c, vertical)),
+        // The season in its title needs the hemisphere: the weather's place.
+        "calendar" => dir.module("calendar").map(|c| {
+            let weather = dir.module("weather").ok();
+            calendar::new(&c, weather.as_ref(), vertical)
+        }),
         "session" => dir.module("session").map(|c| session::new(&c, vertical)),
         "volume" => dir.module("volume").map(|c| volume::new(&c, vertical)),
         "brightness" => dir

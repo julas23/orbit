@@ -81,6 +81,7 @@ window.orbit button {
  * grid. The lines take the colour of .lines (white at 35%; brighter read as
  * too loud); no CSS borders, which would add to the cell sizes. */
 .calendar             { background-color: @orbit_calendar_bg; }
+.calendar .title      { font-size: 12px; font-weight: bold; color: @orbit_calendar_fg; min-height: 20px; }
 .calendar .head       { font-size: 11px; font-weight: bold; color: @orbit_calendar_fg; min-height: 20px; }
 .calendar .head.weekend { color: @orbit_alert; }
 .calendar .day        { font-size: 11px; color: @orbit_calendar_fg; min-height: 20px; }
