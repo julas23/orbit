@@ -1,0 +1,22 @@
+[package]
+name = "orbit-files"
+description = "Orbit-Files: a Rust + GTK4 file manager — Yazi's speed, the best of the desktop ones"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_yaml_ng.workspace = true
+async-channel.workspace = true
+sourceview5.workspace = true
+poppler-rs.workspace = true
+regex = "1"

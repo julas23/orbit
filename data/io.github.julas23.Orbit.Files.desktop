@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Files
+GenericName=File manager
+GenericName[pt_BR]=Gerenciador de arquivos
+Comment=Browse and manage files, fast
+Comment[pt_BR]=Navegue e organize arquivos, rápido
+Exec=orbit-files %U
+Icon=system-file-manager
+Terminal=false
+Categories=System;Utility;FileTools;FileManager;
+Keywords=files;folders;file manager;explorer;
+Keywords[pt_BR]=arquivos;pastas;gerenciador de arquivos;explorador;
+MimeType=inode/directory;

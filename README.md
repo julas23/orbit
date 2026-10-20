@@ -10,8 +10,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
 > rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink**,
-> **Orbit-View**, **Orbit-Read**, **Orbit-Play** and **Orbit-Edit** work;
-> the other components are planned.
+> **Orbit-View**, **Orbit-Read**, **Orbit-Play**, **Orbit-Edit** and
+> **Orbit-Files** work; the other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -23,7 +23,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-dock** | Application launcher dock | **working** |
 | **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
 | **orbit-read** | PDF, Markdown and plain-text reader: outline, thumbnails, search, night mode | **working** |
-| orbit-files | Complete file manager | planned |
+| **orbit-files** | File manager: Yazi's speed, three views, two panes, preview, bulk rename, actions, archives, network | **working** |
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
@@ -242,19 +242,67 @@ search and replace with regular expressions, the minimap. Of its own:
   shows and changes the indentation and the language; UTF-8 or Latin-1
   and LF or CRLF are kept as found. Options in `~/.config/orbit/edit.yaml`.
 
+## Orbit-Files
+
+A file manager with [Yazi](https://yazi-rs.github.io/)'s speed in a window,
+and the best of Thunar, Caja, Nautilus, Konqueror and Nemo.
+
+- **Fast.** A folder is read on a thread — one `readdir` and one `lstat`
+  per entry, the type guessed from the name — and fills in as it is read:
+  fifty thousand files list and sort in about 0.2 s, the window never
+  waits. A monitor keeps it current entry by entry.
+- **Three views of one folder**, switched with Ctrl+1/2/3: a list with
+  sortable columns; icons with thumbnails (the shared thumbnail cache, or
+  the system's thumbnailers: images, videos, PDFs); and Yazi's columns —
+  the parent folder, the folder, and a preview of the selection (images,
+  text highlighted, a PDF's first page, video and audio to play, a
+  folder's contents).
+- **Tabs and two panes** (F3), F5 / F6 copy or move to the other pane.
+- **Places**: home and the user's folders, GTK bookmarks, the trash, disks
+  (mount, eject) and *Connect to server* — SMB, SFTP, FTP, WebDAV through
+  GVfs, with the password asked for. Under "Devices", volumes only:
+  folders a server mounts into home (NFS, bind mounts) are left out unless
+  `devices: all` is set in `~/.config/orbit/files.yaml`. Below the places,
+  the selection's thumbnail, name and size.
+- **The mouse's back and forward buttons** go through the history.
+- **Copy, move, trash, delete** on threads, with progress and a stop
+  button; a file already there asks: skip, keep both, replace (or all).
+  Cut, copy and paste go to and from Nautilus, Thunar, Nemo and PCManFM;
+  drag and drop moves within a disk and copies across (Ctrl copies, Shift
+  moves).
+- **Rename** in place (F2), or many at once as Thunar does: find and
+  replace with regular expressions, numbering from a pattern, text before
+  or after, case — every new name shown before anything changes.
+- **Actions** of your own in the context menu, as Thunar's and Nemo's
+  ([`examples/orbit/files-actions.yaml`](examples/orbit/files-actions.yaml)),
+  and **archives**: compress to zip, tar.gz, tar.xz, tar.zst or 7z; extract
+  here.
+
+| Key | | Key | |
+| --- | --- | --- | --- |
+| j k, ↓ ↑ | down, up | h l, ⌫ ⏎ | up a folder, open |
+| gg G | first, last | Space | mark and go on |
+| yy dd pp | copy, cut, paste | / or Ctrl+F | filter |
+| Ctrl+C X V | copy, cut, paste | F2 | rename (many: bulk) |
+| Delete | to the trash | Shift+Delete | delete for good |
+| Alt+← → ↑ | back, forward, up | Ctrl+L | type a path or `smb://…` |
+| Ctrl+H | hidden files | Ctrl+T, Ctrl+W | new tab, close tab |
+| F3 | two panes | F5, F6 | copy, move to the other pane |
+
 ## Building and running
 
 Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
 bubblewrap (its sandbox); for Orbit-Read the poppler-glib development
 files; for Orbit-Play GStreamer's (core, base and bad plugins) and
-`gstreamer1.0-libav`; for Orbit-Edit GtkSourceView 5's.
+`gstreamer1.0-libav`; for Orbit-Edit GtkSourceView 5's. Orbit-Files uses
+GVfs for network shares and zip, unzip, tar and 7z for archives.
 On Debian/Ubuntu:
 
 ```sh
 sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap libpoppler-glib-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-libav \
-  libgtksourceview-5-dev
+  libgtksourceview-5-dev gvfs-backends p7zip-full unzip zip
 cargo build --release
 ./target/release/orbit-panel &
 ./target/release/orbit-dock &
@@ -269,7 +317,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -353,6 +401,7 @@ follow the locale.
 | `orbit-read` | The document reader |
 | `orbit-play` | The media player |
 | `orbit-edit` | The text editor |
+| `orbit-files` | The file manager |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

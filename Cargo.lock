@@ -2088,6 +2088,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-files"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gtk4",
+ "log",
+ "orbit-app",
+ "orbit-common",
+ "poppler-rs",
+ "regex",
+ "serde",
+ "serde_yaml_ng",
+ "sourceview5",
+]
+
+[[package]]
 name = "orbit-panel"
 version = "0.1.0"
 dependencies = [

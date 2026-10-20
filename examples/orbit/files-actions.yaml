@@ -1,0 +1,21 @@
+# Orbit-Files — ~/.config/orbit/files-actions.yaml: your own entries in the
+# context menu, as Thunar's and Nemo's custom actions.
+#
+# command: %f the first file, %F all of them, %d the folder, %n the names.
+# files / folders: where it is offered (folders includes the background).
+# types: only for these MIME types or prefixes; all if left out.
+
+- name: Abrir terminal aqui
+  icon: utilities-terminal
+  command: ghostty --working-directory=%d
+  files: false
+  folders: true
+
+- name: Reduzir imagens para 50%
+  icon: image-x-generic
+  command: mogrify -resize 50% %F
+  types: [image/]
+
+- name: Calcular SHA-256
+  icon: dialog-information
+  command: sh -c 'sha256sum %F | zenity --text-info'

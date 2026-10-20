@@ -1,0 +1,6 @@
+# Orbit-Files — ~/.config/orbit/files.yaml. Every key is optional; these are
+# the defaults.
+
+# Under "Devices": volumes — disks, partitions, pendrives and network
+# shares — or all, every mount (folders a server mounts into home too).
+devices: volumes
