@@ -14,7 +14,9 @@ use anyhow::Context;
 use gtk::{gdk, gio, glib, prelude::*};
 use orbit_common::{Backend, ConfigDir, Placement, config::expand_home, style::Style};
 
+pub mod i18n;
 pub mod popup;
+pub mod theme;
 
 const BUILTIN_CSS: &str = include_str!("../../../data/style.css");
 
@@ -48,7 +50,8 @@ pub fn run(surface: Surface) -> glib::ExitCode {
     let app = gtk::Application::builder()
         .application_id(surface.app_id)
         .build();
-    // Holds the stylesheet watcher for the lifetime of the application.
+    // Holds the stylesheet watcher and the theme for the lifetime of the
+    // application.
     let style = RefCell::new(None);
     app.connect_activate(move |app| {
         // A second invocation re-activates the running instance.
@@ -91,7 +94,7 @@ fn start(
     app: &gtk::Application,
     config_dir: &Path,
     surface: &Surface,
-) -> anyhow::Result<Option<Style>> {
+) -> anyhow::Result<Option<(Style, theme::Theme)>> {
     let dir = ConfigDir::new(config_dir);
 
     let Some((window, placement)) = (surface.build)(app, &dir)? else {
@@ -101,19 +104,15 @@ fn start(
     };
 
     let display = gdk::Display::default().context("no display")?;
-    // GTK4's own theme (Adwaita) is light unless asked otherwise, whatever the
-    // desktop's GTK3 theme: popover menus came out white, with the panel's
-    // light text on them. The panel is dark, so ask for the dark variant.
-    if let Some(settings) = gtk::Settings::default() {
-        settings.set_gtk_application_prefer_dark_theme(true);
-    }
     let backend = backend_for(&display)?;
     log::info!("using the {} backend", backend.name());
 
     let style = Style::install(&display, BUILTIN_CSS, &dir.style_path());
+    // The system's light/dark choice and accent colour, followed live.
+    let theme = theme::install(&display);
     backend.attach(&window, placement)?;
     window.present();
-    Ok(Some(style))
+    Ok(Some((style, theme)))
 }
 
 fn backend_for(display: &gdk::Display) -> anyhow::Result<Box<dyn Backend>> {

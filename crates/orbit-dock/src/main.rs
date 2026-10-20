@@ -1,6 +1,6 @@
 //! Orbit-Dock: a row of application launchers, split into groups.
 //!
-//! Left click launches. Right click opens a menu at the click: "Abrir", the
+//! Left click launches. Right click opens a menu at the click: "Open", the
 //! application's own actions (New Window, New Private Window…) — taken from
 //! the system's desktop file of the same application when the dock's own
 //! file has none — and its recent files, which open in it.
@@ -9,6 +9,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use gio_unix::prelude::*;
 use gtk::{gio, glib, prelude::*};
+use orbit_app::i18n::tr;
 use orbit_common::{
     ConfigDir, Placement,
     config::{Align, DockApp, DockConfig, expand_home},
@@ -335,7 +336,12 @@ fn menu(launcher: &Rc<Launcher>, anchor: &gtk::Button, at: orbit_app::popup::Poi
     let main = gio::Menu::new();
     {
         let l = launcher.clone();
-        add(&main, "Abrir", "open", Box::new(move |w| l.launch(w, &[])));
+        add(
+            &main,
+            &tr("dock-open"),
+            "open",
+            Box::new(move |w| l.launch(w, &[])),
+        );
     }
     if let Some(info) = &launcher.actions {
         for (i, action) in info.list_actions().iter().enumerate() {
@@ -367,7 +373,7 @@ fn menu(launcher: &Rc<Launcher>, anchor: &gtk::Button, at: orbit_app::popup::Poi
                 Box::new(move |w| l.launch(w, std::slice::from_ref(&file))),
             );
         }
-        model.append_section(Some("Recentes"), &section);
+        model.append_section(Some(&tr("dock-recent")), &section);
     }
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));
@@ -423,9 +429,9 @@ mod tests {
             let recent = l.recent().len();
             if !actions.is_empty() || recent > 0 {
                 with_menu += 1;
-                eprintln!("{:<20} ações {:?}  recentes {recent}", l.name, actions);
+                eprintln!("{:<20} actions {:?}  recent {recent}", l.name, actions);
             }
         }
-        eprintln!("{with_menu} atalhos com algo além de \"Abrir\"");
+        eprintln!("{with_menu} launchers with more than \"Open\"");
     }
 }

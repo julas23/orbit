@@ -1,0 +1,35 @@
+/* Orbit — light palette, used when the system prefers light.
+ * Same names as palette-dark.css. */
+
+@define-color orbit_bg        rgba(255, 255, 255, 0.80);
+@define-color orbit_fg        #2e3440;
+@define-color orbit_muted     #5c6370;
+@define-color orbit_accent    #3b6ea5;
+@define-color orbit_border    rgba(46, 52, 64, 0.25);
+@define-color orbit_edge      rgba(0, 0, 0, 0.10);
+@define-color orbit_hover     rgba(0, 0, 0, 0.10);
+@define-color orbit_selected  rgba(0, 0, 0, 0.06);
+@define-color orbit_faint     rgba(0, 0, 0, 0.03);
+@define-color orbit_trough    #c8ccd4;
+@define-color orbit_surface   rgba(250, 250, 252, 0.98);
+@define-color orbit_outline   rgba(0, 0, 0, 0.15);
+@define-color orbit_button    rgba(0, 0, 0, 0.06);
+@define-color orbit_button_hover rgba(0, 0, 0, 0.12);
+@define-color orbit_focus     rgba(0, 0, 0, 0.35);
+@define-color orbit_calendar_bg #ffffff;
+@define-color orbit_calendar_fg #1f2328;
+@define-color orbit_lines     #b0b4bc;
+@define-color orbit_cold      #2b6cb0;
+
+/* Fixed meanings; yellow and orange darkened to read on a light surface. */
+@define-color orbit_alert     #bf616a;
+@define-color orbit_warn      #a07408;
+@define-color orbit_today     #d97706;
+@define-color orbit_area1     #1b3358;
+@define-color orbit_area2     #b8790a;
+@define-color orbit_area3     #5c101f;
+@define-color orbit_area4     #3a3f47;
+@define-color orbit_area1_light #3d6db0;
+@define-color orbit_area2_light #c4850f;
+@define-color orbit_area3_light #92273d;
+@define-color orbit_area4_light #6b7280;

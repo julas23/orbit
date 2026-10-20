@@ -12,6 +12,8 @@ use std::rc::Rc;
 use gtk::{glib, prelude::*};
 use serde::Deserialize;
 
+use orbit_app::i18n::{text, tr_args};
+
 use crate::weather_data::{self, Weather, WeatherConfig};
 
 /// `modules/forecast.yaml`.
@@ -111,11 +113,15 @@ fn show(cards: &[DayCard], config: &WeatherConfig, w: &Weather) {
             }
         }
         card.max.set_label(&format!("{:.0}°", day.max));
-        card.root.set_tooltip_text(Some(&format!(
-            "{weekday} {short} — {}, mínima {:.0}°C, máxima {:.0}°C",
-            weather_data::description(day.code),
-            day.min,
-            day.max
+        card.root.set_tooltip_text(Some(&tr_args(
+            "forecast-tooltip",
+            &[
+                ("weekday", text(weekday)),
+                ("date", text(short)),
+                ("description", text(weather_data::description(day.code))),
+                ("min", text(format!("{:.0}", day.min))),
+                ("max", text(format!("{:.0}", day.max))),
+            ],
         )));
     }
 }

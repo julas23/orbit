@@ -33,6 +33,9 @@ async-channel = "2"
 pulseaudio = "0.3"
 # HTTP for the weather, pure Rust (rustls): no libsoup or curl needed.
 ureq = "3"
+# Translations (Project Fluent), pure Rust.
+fluent-bundle = "0.16"
+unic-langid = "0.9"
 serde_yaml_ng = "0.10"
 anyhow = "1"
 log = "0.4"

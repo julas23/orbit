@@ -16,6 +16,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use gtk::prelude::*;
+use orbit_app::i18n::{number, tr_args};
 use serde::Deserialize;
 
 use crate::sway;
@@ -167,7 +168,7 @@ impl Module {
             let area = buttons.len() as i32 + 1;
             let button = gtk::Button::builder()
                 .label(area.to_string())
-                .tooltip_text(format!("área {area} — em todas as telas (Super+{area})"))
+                .tooltip_text(tr_args("workspaces-tooltip", &[("area", number(area))]))
                 .hexpand(true)
                 .build();
             let weak = Rc::downgrade(self);

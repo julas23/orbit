@@ -24,6 +24,7 @@ use std::{
 
 use gio_unix::prelude::*;
 use gtk::{gio, glib, prelude::*};
+use orbit_app::i18n::{number, tr, tr_args};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -252,8 +253,8 @@ impl Module {
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
         item.button.set_css_classes(&classes);
         let place = match window.area {
-            Some(area) => format!("área {area}"),
-            None => "minimizada".into(),
+            Some(area) => tr_args("windows-place-area", &[("area", number(area))]),
+            None => tr("windows-place-minimized"),
         };
         let tooltip = if self.vertical {
             format!("{}  [{place}]", window.title)
@@ -330,14 +331,10 @@ fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window, at: orbit_ap
 
     let w = window.clone();
     if window.minimized() {
-        add(
-            "Mostrar (estava minimizada)",
-            "show",
-            Box::new(move |m| m.focus(&w)),
-        );
+        add(&tr("windows-show"), "show", Box::new(move |m| m.focus(&w)));
     } else {
         add(
-            "Minimizar",
+            &tr("windows-minimize"),
             "minimize",
             Box::new(move |m| m.command(&format!("[con_id={}] move scratchpad", w.id))),
         );
@@ -345,7 +342,7 @@ fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window, at: orbit_ap
     if !module.config.maximize.is_empty() {
         let w = window.clone();
         add(
-            "Maximizar",
+            &tr("windows-maximize"),
             "maximize",
             Box::new(move |m| m.run(&m.config.maximize, &w)),
         );
@@ -353,7 +350,7 @@ fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window, at: orbit_ap
     if !module.config.restore.is_empty() {
         let w = window.clone();
         add(
-            "Restaurar",
+            &tr("windows-restore"),
             "restore",
             Box::new(move |m| m.run(&m.config.restore, &w)),
         );
@@ -361,14 +358,14 @@ fn menu(module: &Rc<Module>, anchor: &gtk::Button, window: &Window, at: orbit_ap
     for area in 1..=module.config.areas.max(1) {
         let w = window.clone();
         add(
-            &format!("Área {area}"),
+            &tr_args("windows-area", &[("area", number(area))]),
             &format!("area{area}"),
             Box::new(move |m| m.send(&w, area)),
         );
     }
     let w = window.clone();
     add(
-        "Fechar",
+        &tr("windows-close"),
         "close",
         Box::new(move |m| m.command(&format!("[con_id={}] kill", w.id))),
     );

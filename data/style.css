@@ -4,24 +4,8 @@
  * top of this one and reloaded automatically when it changes.
  */
 
-@define-color orbit_bg      rgba(0, 0, 0, 0.55);
-@define-color orbit_fg      #d8dee9;
-@define-color orbit_muted   #6b7280;
-@define-color orbit_accent  #4682b4;
-@define-color orbit_border  rgba(76, 86, 106, 0.55);
-@define-color orbit_alert   #bf616a;
-@define-color orbit_warn    #ebcb8b;
-@define-color orbit_today   #ff9500;
-@define-color orbit_lines   #595959;
-@define-color orbit_area1   #1b3358;   /* dark blue */
-@define-color orbit_area2   #b8790a;   /* amber */
-@define-color orbit_area3   #5c101f;   /* wine */
-@define-color orbit_area4   #3a3f47;   /* dark grey */
-/* Lighter variants, for thin tabs against the dark panel. */
-@define-color orbit_area1_light #3d6db0;
-@define-color orbit_area2_light #d99a2b;
-@define-color orbit_area3_light #92273d;
-@define-color orbit_area4_light #6b7280;
+/* Colours: every @orbit_* name comes from data/palette-dark.css or
+ * data/palette-light.css, chosen by the system's colour scheme. */
 
 /* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
  * (see docs/PLANO-PAINEL.md). Borders count toward a box's size in GTK, so a
@@ -49,7 +33,7 @@ window.orbit button {
 /* ------------------------------------------------------------------ panel */
 .panel {
   background-color: @orbit_bg;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid @orbit_edge;
   border-radius: 10px;
   padding: 4px;            /* + 1 px border = 5 */
 }
@@ -90,10 +74,10 @@ window.orbit button {
  * into multiples of 5, so columns are 18–19 px and only the card is on the
  * grid. The lines take the colour of .lines (white at 35%; brighter read as
  * too loud); no CSS borders, which would add to the cell sizes. */
-.calendar             { background-color: #000000; }
-.calendar .head       { font-size: 11px; font-weight: bold; color: #ffffff; min-height: 20px; }
+.calendar             { background-color: @orbit_calendar_bg; }
+.calendar .head       { font-size: 11px; font-weight: bold; color: @orbit_calendar_fg; min-height: 20px; }
 .calendar .head.weekend { color: @orbit_alert; }
-.calendar .day        { font-size: 11px; color: #ffffff; min-height: 20px; }
+.calendar .day        { font-size: 11px; color: @orbit_calendar_fg; min-height: 20px; }
 .calendar .day.weekend { color: @orbit_muted; }
 .calendar .day.today  { color: @orbit_today; font-weight: bold; }
 .calendar .lines      { color: @orbit_lines; }
@@ -141,10 +125,10 @@ window.orbit button {
 }
 .session .action.poweroff { color: @orbit_alert; }
 .session .action.reboot   { color: @orbit_warn; }
-.session .action.logout   { color: #ffffff; }
+.session .action.logout   { color: @orbit_fg; }
 .session .action.poweroff:hover { background-color: @orbit_alert; color: #ffffff; }
 .session .action.reboot:hover   { background-color: @orbit_warn;  color: #000000; }
-.session .action.logout:hover   { background-color: #ffffff;      color: #000000; }
+.session .action.logout:hover   { background-color: @orbit_fg;    color: @orbit_calendar_bg; }
 .session-line { font-size: 16px; color: @orbit_alert; }
 
 /* Confirmation dialog over the blurred screen (confirm.rs). The blur runs on
@@ -153,25 +137,26 @@ window.confirm            { background: transparent; }
 .confirm-backdrop         { filter: blur(20px) brightness(0.7); }
 .confirm-dim              { background-color: rgba(0, 0, 0, 0.6); }
 .confirm-box {
-  background-color: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: @orbit_surface;
+  color: @orbit_fg;
+  border: 1px solid @orbit_outline;
   border-radius: 15px;
   padding: 20px 25px;
 }
 .confirm-box .question    { font-size: 15px; }
 .confirm-box button {
-  background-color: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background-color: @orbit_button;
+  border: 1px solid @orbit_button;
   border-radius: 10px;
   padding: 5px 20px;
 }
-.confirm-box button:hover { background-color: rgba(255, 255, 255, 0.18); }
+.confirm-box button:hover { background-color: @orbit_button_hover; }
 .confirm-box button.yes {
   background-color: alpha(@orbit_alert, 0.30);
   border-color: alpha(@orbit_alert, 0.55);
 }
 .confirm-box button.yes:hover { background-color: alpha(@orbit_alert, 0.45); }
-.confirm-box button:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: -2px; }
+.confirm-box button:focus-visible { outline: 2px solid @orbit_focus; outline-offset: -2px; }
 
 /* Volume and brightness (control.rs), side by side: two half-width cards,
  * 65 + 10 + 65 = 140 px. Each holds a vertical slider (35 px tall, up = more)
@@ -189,7 +174,7 @@ window.confirm            { background: transparent; }
   min-height: 0;
   border: none;
   border-radius: 5px;
-  background-color: #4c566a;
+  background-color: @orbit_trough;
 }
 .control scale.horizontal trough { min-height: 4px; }
 .control scale.vertical trough   { min-width: 4px; }
@@ -223,24 +208,24 @@ window.confirm            { background: transparent; }
 .windows .window.area-2 { border-left-color: @orbit_area2_light; }
 .windows .window.area-3 { border-left-color: @orbit_area3_light; }
 .windows .window.area-4 { border-left-color: @orbit_area4_light; }
-.windows .window:hover  { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.15); }
-.windows .window.focused   { font-weight: bold; color: @orbit_fg; background-color: rgba(255, 255, 255, 0.08); }
+.windows .window:hover  { box-shadow: inset 0 0 0 999px @orbit_hover; }
+.windows .window.focused   { font-weight: bold; color: @orbit_fg; background-color: @orbit_selected; }
 .windows .window.minimized { opacity: 0.5; font-style: italic; }
 
 /* System tray (tray.rs): a card with a faint fill; 20 px icons, 5 per line
  * with 5 px between them (5 × 20 + 4 × 5 = 120 of 130 px). Lines grow the
  * card downwards: 5 + 20 + 5 = 30 px for one line, +25 per extra line. */
-.tray.card { background-color: rgba(255, 255, 255, 0.04); }
+.tray.card { background-color: @orbit_faint; }
 .tray flowbox, .tray flowboxchild { padding: 0; margin: 0; min-height: 20px; }
 .tray .tray-item { padding: 0; min-width: 20px; min-height: 20px; border-radius: 5px; }
-.tray .tray-item:hover { background-color: rgba(255, 255, 255, 0.15); }
+.tray .tray-item:hover { background-color: @orbit_hover; }
 
 /* Weather (weather.rs), after the eww card: 55 px picture, then three text
  * lines held at 15 / 20 / 15 px — card 5 + 55 + 15 + 20 + 15 + 5 = 115 px.
  * Min in light blue, max in the alert red; sun times in the warm yellow. */
 .weather .glyph   { font-size: 40px; color: @orbit_accent; min-width: 55px; min-height: 55px; }
 .weather .temp    { font-size: 26px; font-weight: bold; }
-.weather .min     { font-size: 16px; font-weight: bold; color: #7fb4d8; }
+.weather .min     { font-size: 16px; font-weight: bold; color: @orbit_cold; }
 .weather .max     { font-size: 16px; font-weight: bold; color: @orbit_alert; }
 .weather .desc    { font-size: 10px; min-height: 15px; }
 .weather .line    { min-height: 15px; }
@@ -264,7 +249,7 @@ window.confirm            { background: transparent; }
 .status .second { font-size: 10px; color: @orbit_muted; min-height: 15px; }
 /* The network icon is a button (left: editor, right: network menu). */
 .status .icon.button       { border-radius: 5px; }
-.status .icon.button:hover { background-color: rgba(255, 255, 255, 0.15); }
+.status .icon.button:hover { background-color: @orbit_hover; }
 .status-line .icon  { font-size: 16px; }
 .status-line .first { font-size: 11px; }
 
@@ -273,7 +258,7 @@ window.confirm            { background: transparent; }
  * widget tree, so they inherit its colour; their background has to be set
  * here or GTK's theme paints its own. */
 window.orbit popover > contents {
-  background-color: rgba(27, 31, 39, 0.97);
+  background-color: @orbit_surface;
   color: @orbit_fg;
   border: 1px solid @orbit_border;
   border-radius: 5px;

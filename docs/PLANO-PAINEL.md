@@ -177,11 +177,10 @@ Cada etapa termina com medição de CPU e memória e com print comparando ao eww
 
 ## 7. Pendências e riscos conhecidos
 
-- **Cores do sistema (pendência aberta em 2026-10-19):** painel, dock e módulos devem
-  seguir as cores do sistema — esquema claro/escuro, cor de destaque, cores dos menus.
-  Hoje a paleta é fixa em `data/style.css` (herdada do eww) e o GTK4 é forçado à
-  variante escura (`gtk-application-prefer-dark-theme`), que foi a correção dos menus
-  brancos com texto branco.
+- ~~**Cores do sistema**~~ — **feito em 2026-10-19:** paletas clara e escura
+  (`data/palette-*.css`) escolhidas pelo `color-scheme` do portal, com a `accent-color`
+  do sistema, troca ao vivo. Junto: **idiomas** com Fluent (`data/i18n/*.ftl`, inglês
+  como fonte, pt-BR traduzido).
 
 - **Memória:** na primeira medição o `orbit-dock` usou 146 MB (eww inteiro: 110 MB).
   Investigar antes da etapa 1 para não construir em cima do problema.

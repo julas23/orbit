@@ -16,6 +16,7 @@
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 use gtk::{glib, graphene, prelude::*};
+use orbit_app::i18n::{number, tr_args};
 use serde::Deserialize;
 
 /// How many other time zones the clock can show.
@@ -55,8 +56,9 @@ pub struct WorldClock {
     pub tz: String,
 }
 
-/// The hourglass trough: the part of the minute already gone.
-const TROUGH: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.15);
+/// Opacity of the hourglass trough — the part of the minute already gone —
+/// drawn in the time's text colour, so it shows on light and dark themes.
+const TROUGH_ALPHA: f64 = 0.15;
 
 struct Zone {
     code: String,
@@ -197,15 +199,21 @@ fn hourglass(time: &gtk::Label, second: Rc<Cell<i32>>) -> gtk::DrawingArea {
     let time = time.downgrade();
     area.set_draw_func(move |area, cr, width, height| {
         // Vertical extent of the digits, in the area's coordinates.
+        let time = time.upgrade();
         let (top, bottom) = time
-            .upgrade()
-            .and_then(|time| digits(&time, area))
+            .as_ref()
+            .and_then(|time| digits(time, area))
             .unwrap_or((0.0, f64::from(height)));
         let span = bottom - top;
         let left = f64::from(59 - second.get().clamp(0, 59)) / 59.0;
 
-        let (r, g, b, a) = TROUGH;
-        cr.set_source_rgba(r, g, b, a);
+        let text = time.as_ref().map_or_else(|| area.color(), |t| t.color());
+        cr.set_source_rgba(
+            text.red().into(),
+            text.green().into(),
+            text.blue().into(),
+            TROUGH_ALPHA,
+        );
         cr.rectangle(0.0, top, f64::from(width), span);
         let _ = cr.fill();
 
@@ -297,7 +305,10 @@ impl State {
         }
         let week = now.week_of_year();
         let day = now.day_of_year();
-        lines.push(format!("semana {week} · dia {day} do ano"));
+        lines.push(tr_args(
+            "clock-tooltip-year",
+            &[("week", number(week)), ("day", number(day))],
+        ));
         lines.join("\n")
     }
 }

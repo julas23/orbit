@@ -45,6 +45,8 @@ studied as references, but no code is copied from them.
   reloaded live when saved.
 - **One process per surface.** The panel and the dock run separately, so a
   crash in one leaves the other running.
+- **Follows the system.** Light or dark and the accent colour come from the
+  desktop (XDG portal) and switch live; the language comes from the locale.
 
 ## Orbit-Panel
 
@@ -147,6 +149,26 @@ and dock on a second monitor with the layout grid shown:
 The weather pictures (from the brweather themes) are not distributed here;
 point `icon_dir` in `modules/weather.yaml` at them, or Nerd Font glyphs are
 used instead.
+
+## Colours and languages
+
+**Colours.** The panel and the dock use a dark or a light palette
+([`data/palette-dark.css`](data/palette-dark.css),
+[`data/palette-light.css`](data/palette-light.css)) following the system's
+`color-scheme`, and the system's `accent-color` when it has one — both read
+from the XDG desktop portal, and changed live. With no preference, the GTK
+theme decides (`GTK_THEME`, else the configured theme; "…-dark" means dark).
+Every colour is a named `@orbit_*` colour that `style.css` can redefine.
+
+**Languages.** Text is translated with [Fluent](https://projectfluent.org/):
+one file per language in [`data/i18n/`](data/i18n), English
+([`en-US.ftl`](data/i18n/en-US.ftl)) being the source and the fallback. The
+language comes from `LC_ALL`, `LC_MESSAGES` or `LANG`. To translate Orbit,
+copy `en-US.ftl` to your locale (e.g. `de-DE.ftl`), translate the text after
+each `=`, and add the file to `CATALOGS` in
+[`crates/orbit-app/src/i18n.rs`](crates/orbit-app/src/i18n.rs); a test checks
+that every catalog has every message. Dates, weekdays and months already
+follow the locale.
 
 ## Project layout
 

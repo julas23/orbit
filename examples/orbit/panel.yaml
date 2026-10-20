@@ -20,8 +20,8 @@ end:                # bottom / right
   - tray
   - brightness
   - volume
-  - workspaces
   - network
   - keyboard
   - battery
+  - workspaces
   - session

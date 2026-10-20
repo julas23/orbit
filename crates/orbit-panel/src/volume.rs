@@ -9,6 +9,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use gtk::{glib, prelude::*};
+use orbit_app::i18n::{number, text, tr_args};
 use serde::Deserialize;
 
 use crate::{
@@ -140,10 +141,12 @@ impl Module {
         } else {
             "\u{f057f}" // 󰕿
         };
-        let tooltip = format!(
-            "volume: {}%{} — clique no ícone abre o mixer, botão direito silencia",
-            sink.percent,
-            if sink.muted { " (mudo)" } else { "" }
+        let tooltip = tr_args(
+            "volume-tooltip",
+            &[
+                ("percent", number(sink.percent)),
+                ("muted", text(if sink.muted { "yes" } else { "no" })),
+            ],
         );
         if let Some(control) = &*self.control.borrow() {
             control.show(sink.percent, glyph, &tooltip);

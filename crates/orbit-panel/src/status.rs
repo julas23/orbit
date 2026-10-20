@@ -20,6 +20,8 @@ use std::{cell::RefCell, rc::Rc};
 use gtk::{gio, glib, prelude::*};
 use serde::Deserialize;
 
+use orbit_app::i18n::{number, text, tr, tr_args};
+
 use crate::{dbusmenu, sway};
 
 /// None of the status modules has options yet; their files may be empty.
@@ -351,9 +353,9 @@ fn fallback_menu(
         group.add_action(action);
     }
     let model = gio::Menu::new();
-    model.append(Some("Rede ativada"), Some("n.networking"));
-    model.append(Some("Wi-Fi ativado"), Some("n.wifi"));
-    model.append(Some("Editar conexões…"), Some("n.edit"));
+    model.append(Some(&tr("network-menu-networking")), Some("n.networking"));
+    model.append(Some(&tr("network-menu-wifi")), Some("n.wifi"));
+    model.append(Some(&tr("network-menu-edit")), Some("n.edit"));
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("n", Some(&group));
@@ -366,7 +368,12 @@ fn show_network(row: &Row, conn: &gio::DBusConnection) {
         .and_then(|v| v.str().map(str::to_owned))
         .filter(|p| p != "/");
     let Some(active) = primary else {
-        row.show("\u{f05aa}", "sem rede", "", "nenhuma conexão ativa"); // 󰖪
+        row.show(
+            "\u{f05aa}",
+            &tr("network-none"),
+            "",
+            &tr("network-none-tooltip"),
+        ); // 󰖪
         return;
     };
     let iface = "org.freedesktop.NetworkManager.Connection.Active";
@@ -392,12 +399,12 @@ fn show_network(row: &Row, conn: &gio::DBusConnection) {
             let prefix = first.lookup::<u32>("prefix").ok()??;
             Some(format!("{address}/{prefix}"))
         })
-        .unwrap_or_else(|| "sem endereço".into());
+        .unwrap_or_else(|| tr("network-no-address"));
     let (glyph, kind_name) = match kind.as_str() {
-        "802-11-wireless" => ("\u{f05a9}", "Wi-Fi"), // 󰖩
-        "802-3-ethernet" => ("\u{f0200}", "cabo"),   // 󰈀
-        "vpn" | "wireguard" => ("\u{f0582}", "VPN"), // 󰖂
-        _ => ("\u{f0200}", kind.as_str()),
+        "802-11-wireless" => ("\u{f05a9}", tr("network-kind-wifi")), // 󰖩
+        "802-3-ethernet" => ("\u{f0200}", tr("network-kind-wired")), // 󰈀
+        "vpn" | "wireguard" => ("\u{f0582}", tr("network-kind-vpn")), // 󰖂
+        _ => ("\u{f0200}", kind.clone()),
     };
     row.show(
         glyph,
@@ -463,7 +470,11 @@ fn show_keyboard(row: &Row, layouts: &RefCell<usize>) {
         .filter_map(|l| l.as_str())
         .collect();
     let tooltip = if all.len() > 1 {
-        format!("{name} — clique para o próximo:\n{}", all.join("\n"))
+        format!(
+            "{}\n{}",
+            tr_args("keyboard-next", &[("name", text(name))]),
+            all.join("\n")
+        )
     } else {
         name.to_string()
     };
@@ -515,9 +526,9 @@ fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) {
     if !present {
         row.show(
             "\u{f06a5}",
-            "sem bateria",
+            &tr("battery-none"),
             &uptime,
-            &format!("ligado há {uptime}"),
+            &tr_args("battery-uptime", &[("uptime", text(uptime.clone()))]),
         ); // 󰚥
         return;
     }
@@ -538,11 +549,11 @@ fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) {
         _ => "\u{f007a}",              // 󰁺
     };
     let state_name = match state {
-        1 => "carregando",
-        2 => "descarregando",
-        4 => "carregada",
-        5 => "aguardando carga",
-        _ => "",
+        1 => tr("battery-charging"),
+        2 => tr("battery-discharging"),
+        4 => tr("battery-full"),
+        5 => tr("battery-pending"),
+        _ => String::new(),
     };
     let remaining = match state {
         1 => get("TimeToFull"),
@@ -551,13 +562,24 @@ fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) {
     }
     .and_then(|v| v.get::<i64>())
     .filter(|s| *s > 0)
-    .map(|s| format!(" — {} restantes", duration(s as u64)))
+    .map(|s| tr_args("battery-remaining", &[("time", text(duration(s as u64)))]))
     .unwrap_or_default();
     row.show(
         glyph,
         &format!("{percent:.0}%"),
         &uptime,
-        &format!("bateria {percent:.0}%, {state_name}{remaining}\nligado há {uptime}"),
+        &format!(
+            "{}\n{}",
+            tr_args(
+                "battery-tooltip",
+                &[
+                    ("percent", number(percent.round())),
+                    ("state", text(state_name)),
+                    ("remaining", text(remaining)),
+                ],
+            ),
+            tr_args("battery-uptime", &[("uptime", text(uptime.clone()))])
+        ),
     );
 }
 

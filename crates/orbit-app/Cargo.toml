@@ -18,3 +18,9 @@ gdk4-wayland.workspace = true
 anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+
+[dev-dependencies]
+# The tests walk the catalogs' messages (fluent-bundle's own syntax types).
+fluent-syntax = "0.12"

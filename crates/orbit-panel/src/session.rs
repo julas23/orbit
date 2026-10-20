@@ -14,6 +14,8 @@ use std::rc::Rc;
 use gtk::{gio, glib, prelude::*};
 use serde::Deserialize;
 
+use orbit_app::i18n::tr;
+
 use crate::{
     confirm::{self, Question},
     sway,
@@ -78,20 +80,20 @@ impl Action {
         }
     }
 
-    fn tooltip(self) -> &'static str {
-        match self {
-            Action::Poweroff => "desligar",
-            Action::Reboot => "reiniciar",
-            Action::Logout => "encerrar sessão (logoff)",
-        }
+    fn tooltip(self) -> String {
+        tr(match self {
+            Action::Poweroff => "session-poweroff",
+            Action::Reboot => "session-reboot",
+            Action::Logout => "session-logout",
+        })
     }
 
-    fn question(self) -> &'static str {
-        match self {
-            Action::Poweroff => "Desligar o computador?",
-            Action::Reboot => "Reiniciar o computador?",
-            Action::Logout => "Encerrar a sessão gráfica?",
-        }
+    fn question(self) -> String {
+        tr(match self {
+            Action::Poweroff => "session-poweroff-question",
+            Action::Reboot => "session-reboot-question",
+            Action::Logout => "session-logout-question",
+        })
     }
 }
 
@@ -109,7 +111,7 @@ pub fn new(config: &SessionConfig, vertical: bool) -> gtk::Widget {
         }
         let button = gtk::Button::builder()
             .label(action.glyph())
-            .tooltip_text(action.tooltip())
+            .tooltip_text(action.tooltip().as_str())
             .css_classes(classes)
             .build();
         let config = config.clone();
@@ -123,7 +125,7 @@ pub fn new(config: &SessionConfig, vertical: bool) -> gtk::Widget {
     let popover = gtk::Popover::builder().child(&row).build();
     let button = gtk::Button::builder()
         .label(Action::Poweroff.glyph())
-        .tooltip_text("sessão")
+        .tooltip_text(tr("session-menu").as_str())
         .css_classes(["session-line"])
         .build();
     popover.set_parent(&button);
@@ -132,11 +134,12 @@ pub fn new(config: &SessionConfig, vertical: bool) -> gtk::Widget {
 }
 
 fn confirm_then(action: Action, config: Rc<SessionConfig>) {
+    let (question, yes, no) = (action.question(), tr("session-yes"), tr("session-no"));
     confirm::ask(
         Question {
-            text: action.question(),
-            yes: "Sim",
-            no: "Não",
+            text: &question,
+            yes: &yes,
+            no: &no,
         },
         move |yes| {
             if yes {
@@ -182,12 +185,13 @@ fn ask_anyway(action: Action, config: Rc<SessionConfig>, before: &Before) {
     let text = before
         .failed
         .clone()
-        .unwrap_or_else(|| "A preparação para sair não terminou.\nSair mesmo assim?".into());
+        .unwrap_or_else(|| tr("session-before-failed"));
+    let (yes, no) = (tr("session-leave-anyway"), tr("session-cancel"));
     confirm::ask(
         Question {
             text: &text,
-            yes: "Sair mesmo assim",
-            no: "Cancelar",
+            yes: &yes,
+            no: &no,
         },
         move |yes| {
             if yes {
@@ -220,7 +224,7 @@ fn notify(message: &str) {
     let Some(app) = gio::Application::default() else {
         return;
     };
-    let notification = gio::Notification::new("Sessão");
+    let notification = gio::Notification::new(&tr("session-notification-title"));
     notification.set_body(Some(message));
     app.send_notification(Some("orbit-session"), &notification);
 }

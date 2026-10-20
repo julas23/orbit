@@ -1,0 +1,40 @@
+/* Orbit — dark palette, used when the system prefers dark.
+ *
+ * Every colour the built-in theme uses is named here; the light palette
+ * names the same ones. Override any of them in ~/.config/orbit/style.css
+ * with @define-color. The accent is replaced by the system's accent colour
+ * when the desktop provides one. */
+
+@define-color orbit_bg        rgba(0, 0, 0, 0.55);      /* panel and dock surface */
+@define-color orbit_fg        #d8dee9;                  /* text */
+@define-color orbit_muted     #6b7280;                  /* secondary text */
+@define-color orbit_accent    #4682b4;
+@define-color orbit_border    rgba(76, 86, 106, 0.55);  /* card outlines */
+@define-color orbit_edge      rgba(255, 255, 255, 0.08);/* the panel's own outline */
+@define-color orbit_hover     rgba(255, 255, 255, 0.15);
+@define-color orbit_selected  rgba(255, 255, 255, 0.08);
+@define-color orbit_faint     rgba(255, 255, 255, 0.04);
+@define-color orbit_trough    #4c566a;                  /* slider tracks */
+@define-color orbit_surface   rgba(27, 31, 39, 0.97);   /* menus */
+@define-color orbit_outline   rgba(255, 255, 255, 0.15);/* dialog outline */
+@define-color orbit_button    rgba(255, 255, 255, 0.10);
+@define-color orbit_button_hover rgba(255, 255, 255, 0.18);
+@define-color orbit_focus     rgba(255, 255, 255, 0.35);
+@define-color orbit_calendar_bg #000000;
+@define-color orbit_calendar_fg #ffffff;
+@define-color orbit_lines     #595959;                  /* calendar grid */
+@define-color orbit_cold      #7fb4d8;                  /* minimum temperature */
+
+/* Fixed meanings, the same in both palettes. */
+@define-color orbit_alert     #bf616a;
+@define-color orbit_warn      #ebcb8b;
+@define-color orbit_today     #ff9500;
+@define-color orbit_area1     #1b3358;   /* dark blue */
+@define-color orbit_area2     #b8790a;   /* amber */
+@define-color orbit_area3     #5c101f;   /* wine */
+@define-color orbit_area4     #3a3f47;   /* dark grey */
+/* Lighter variants, for thin tabs against the panel. */
+@define-color orbit_area1_light #3d6db0;
+@define-color orbit_area2_light #d99a2b;
+@define-color orbit_area3_light #92273d;
+@define-color orbit_area4_light #6b7280;

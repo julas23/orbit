@@ -24,6 +24,7 @@ use std::{
 };
 
 use gtk::{gio, glib, prelude::*};
+use orbit_app::i18n::{number, tr_args};
 use serde::Deserialize;
 
 use crate::control::{Actions, Control};
@@ -182,7 +183,8 @@ impl Module {
     fn show(&self, percent: u32) {
         self.percent.set(percent);
         if let Some(control) = &*self.control.borrow() {
-            control.show(percent, GLYPH, &format!("brilho: {percent}%"));
+            let tooltip = tr_args("brightness-tooltip", &[("percent", number(percent))]);
+            control.show(percent, GLYPH, &tooltip);
         }
     }
 

@@ -21,6 +21,8 @@ use std::{cell::Cell, rc::Rc};
 use gtk::{glib, prelude::*};
 
 pub use crate::weather_data::WeatherConfig;
+use orbit_app::i18n::{text, tr_args};
+
 use crate::weather_data::{self, Weather};
 
 struct Card {
@@ -168,7 +170,7 @@ fn show(card: &Card, config: &WeatherConfig, w: &Weather) {
     }
     let description = weather_data::description(w.code);
     if let Some(desc) = &card.desc {
-        desc.set(description);
+        desc.set(&description);
     }
     if let (Some(rise), Some(set)) = (&card.sunrise, &card.sunset) {
         rise.set_label(&format!("\u{f059c} {}", today.sunrise)); // 󰖜
@@ -191,19 +193,24 @@ fn show(card: &Card, config: &WeatherConfig, w: &Weather) {
         .map(|now| weather_data::season(now.month(), now.day_of_month(), w.latitude))
         .unwrap_or_default();
     let uv = w.uv.map_or("—".to_string(), |uv| format!("{uv:.0}"));
-    card.root.set_tooltip_text(Some(&format!(
-        "{description} em {place}\n\
-         sensação {feels:.0}°C · umidade {hum:.0}%\n\
-         vento {wind:.0} km/h {compass} · pressão {pressure:.0} hPa\n\
-         nuvens {clouds:.0}% · índice UV {uv}\n\
-         lua: {moon_name} ({moon_lit}% iluminada)\n\
-         {season}",
-        place = w.place,
-        feels = w.feels_like,
-        hum = w.humidity,
-        wind = w.wind_speed,
-        pressure = w.pressure,
-        clouds = w.clouds,
+    // Numbers go in already rounded: Fluent would print 22.3 as "22.3".
+    let n = |v: f64| text(format!("{v:.0}"));
+    card.root.set_tooltip_text(Some(&tr_args(
+        "weather-tooltip",
+        &[
+            ("description", text(description.clone())),
+            ("place", text(w.place.clone())),
+            ("feels", n(w.feels_like)),
+            ("humidity", n(w.humidity)),
+            ("wind", n(w.wind_speed)),
+            ("direction", text(compass.clone())),
+            ("pressure", n(w.pressure)),
+            ("clouds", n(w.clouds)),
+            ("uv", text(uv)),
+            ("moon", text(moon_name)),
+            ("lit", text(moon_lit.to_string())),
+            ("season", text(season)),
+        ],
     )));
 }
 

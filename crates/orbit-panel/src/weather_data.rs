@@ -18,6 +18,7 @@ use std::{
 };
 
 use gtk::glib;
+use orbit_app::i18n::tr;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -220,7 +221,7 @@ fn fetch(source: &WeatherConfig) -> Result<Weather, String> {
     let (lat, lon, mut place, uv) = match (source.latitude, source.longitude) {
         (Some(lat), Some(lon)) => (lat, lon, source.place.clone().unwrap_or_default(), None),
         _ => {
-            let wttr = get_json(&agent, "https://wttr.in/?format=j1&lang=pt")?;
+            let wttr = get_json(&agent, "https://wttr.in/?format=j1")?;
             let area = &wttr["nearest_area"][0];
             let number = |v: &Value| v.as_str().and_then(|s| s.parse::<f64>().ok());
             (
@@ -340,75 +341,87 @@ pub fn glyph(code: i32) -> &'static str {
     }
 }
 
-/// WMO weather code -> description in Portuguese.
-pub fn description(code: i32) -> &'static str {
+/// WMO weather code -> description, in the user's language.
+pub fn description(code: i32) -> String {
+    tr(&format!("weather-code-{}", description_id(code)))
+}
+
+/// The catalog message for a WMO code: codes that read the same share one.
+fn description_id(code: i32) -> String {
     match code {
-        0 => "Céu limpo",
-        1 => "Predomínio de sol",
-        2 => "Parcialmente nublado",
-        3 => "Nublado",
-        45 => "Nevoeiro",
-        48 => "Nevoeiro com geada",
-        51 => "Garoa fraca",
-        53 => "Garoa",
-        55 => "Garoa forte",
-        56 | 57 => "Garoa congelante",
-        61 => "Chuva fraca",
-        63 => "Chuva",
-        65 => "Chuva forte",
-        66 | 67 => "Chuva congelante",
-        71 => "Neve fraca",
-        73 | 77 => "Neve",
-        75 => "Neve forte",
-        80 => "Pancadas de chuva",
-        81 => "Pancadas fortes",
-        82 => "Pancadas violentas",
-        85 | 86 => "Pancadas de neve",
-        95 => "Trovoadas",
-        96 | 99 => "Trovoadas com granizo",
-        _ => "—",
+        0 | 1 | 2 | 3 | 45 | 48 | 51 | 53 | 55 | 56 | 61 | 63 | 65 | 66 | 71 | 73 | 75 | 80
+        | 81 | 82 | 85 | 95 | 96 => code.to_string(),
+        57 => "56".into(),
+        67 => "66".into(),
+        77 => "73".into(),
+        86 => "85".into(),
+        99 => "96".into(),
+        _ => "unknown".into(),
     }
 }
 
-/// Degrees -> 16-point compass rose in Portuguese (east = L, west = O).
-pub fn compass(degrees: f64) -> &'static str {
-    const ROSE: [&str; 16] = [
-        "N", "NNL", "NL", "LNL", "L", "LSL", "SL", "SSL", "S", "SSO", "SO", "OSO", "O", "ONO",
-        "NO", "NNO",
-    ];
-    ROSE[((degrees / 22.5).round() as i64).rem_euclid(16) as usize]
+/// Degrees -> point of the 16-point compass rose (0 = north, clockwise).
+fn compass_index(degrees: f64) -> usize {
+    ((degrees / 22.5).round() as i64).rem_euclid(16) as usize
 }
 
-/// The moon now: (image index 0..36 — 0 new, 18 full —, name, % lit).
-/// Age from a known new moon (2000-01-06 18:14 UTC) over the synodic month.
-pub fn moon() -> (usize, &'static str, u32) {
+/// Degrees -> compass point in the user's language (N NNE NE… in English,
+/// N NNL NL… in Portuguese, where east is L and west O).
+pub fn compass(degrees: f64) -> String {
+    const ENGLISH: [&str; 16] = [
+        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW",
+        "NW", "NNW",
+    ];
+    let index = compass_index(degrees);
+    let rose = tr("weather-compass");
+    let points: Vec<&str> = rose.split_whitespace().collect();
+    points
+        .get(index)
+        .filter(|_| points.len() == 16)
+        .copied()
+        .unwrap_or(ENGLISH[index])
+        .to_string()
+}
+
+/// The moon now: (image index 0..36 — 0 new, 18 full —, phase name in the
+/// user's language, % lit). Age from a known new moon (2000-01-06 18:14 UTC)
+/// over the synodic month.
+pub fn moon() -> (usize, String, u32) {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0.0, |d| d.as_secs_f64());
-    moon_at(now)
+    let (index, id, lit) = moon_at(now);
+    (index, tr(id), lit)
 }
 
+/// (image index, phase message id, % lit) at `unix`.
 fn moon_at(unix: f64) -> (usize, &'static str, u32) {
     const SYNODIC: f64 = 29.530_588_853;
     let age = ((unix - 947_182_440.0) / 86_400.0).rem_euclid(SYNODIC);
     let f = age / SYNODIC;
     let index = (f * 36.0).round() as usize % 36;
-    let name = match f {
-        f if !(0.02..0.98).contains(&f) => "lua nova",
-        f if f < 0.23 => "crescente",
-        f if f < 0.27 => "quarto crescente",
-        f if f < 0.48 => "crescente gibosa",
-        f if f < 0.52 => "lua cheia",
-        f if f < 0.73 => "minguante gibosa",
-        f if f < 0.77 => "quarto minguante",
-        _ => "minguante",
+    let id = match f {
+        f if !(0.02..0.98).contains(&f) => "moon-new",
+        f if f < 0.23 => "moon-waxing-crescent",
+        f if f < 0.27 => "moon-first-quarter",
+        f if f < 0.48 => "moon-waxing-gibbous",
+        f if f < 0.52 => "moon-full",
+        f if f < 0.73 => "moon-waning-gibbous",
+        f if f < 0.77 => "moon-last-quarter",
+        _ => "moon-waning-crescent",
     };
     let lit = ((1.0 - (2.0 * std::f64::consts::PI * f).cos()) / 2.0 * 100.0).round() as u32;
-    (index, name, lit)
+    (index, id, lit)
 }
 
-/// The season by mean equinox/solstice dates, for the hemisphere of `lat`.
-pub fn season(month: i32, day: i32, lat: f64) -> &'static str {
+/// The season, in the user's language.
+pub fn season(month: i32, day: i32, lat: f64) -> String {
+    tr(season_id(month, day, lat))
+}
+
+/// The season's message id by mean equinox/solstice dates, for the
+/// hemisphere of `lat`.
+fn season_id(month: i32, day: i32, lat: f64) -> &'static str {
     let md = month * 100 + day;
     let north = match md {
         md if !(320..1221).contains(&md) => 0, // winter
@@ -417,7 +430,12 @@ pub fn season(month: i32, day: i32, lat: f64) -> &'static str {
         _ => 3,                                // autumn
     };
     let season = if lat < 0.0 { (north + 2) % 4 } else { north };
-    ["inverno", "primavera", "verão", "outono"][season]
+    [
+        "season-winter",
+        "season-spring",
+        "season-summer",
+        "season-autumn",
+    ][season]
 }
 
 #[cfg(test)]
@@ -426,28 +444,39 @@ mod tests {
 
     #[test]
     fn compass_points() {
-        assert_eq!(compass(0.0), "N");
-        assert_eq!(compass(90.0), "L");
-        assert_eq!(compass(180.0), "S");
-        assert_eq!(compass(270.0), "O");
-        assert_eq!(compass(359.0), "N");
+        assert_eq!(compass_index(0.0), 0);
+        assert_eq!(compass_index(90.0), 4);
+        assert_eq!(compass_index(180.0), 8);
+        assert_eq!(compass_index(270.0), 12);
+        assert_eq!(compass_index(359.0), 0);
     }
 
     #[test]
     fn seasons_flip_south() {
-        assert_eq!(season(10, 19, -23.6), "primavera");
-        assert_eq!(season(10, 19, 40.0), "outono");
-        assert_eq!(season(1, 10, -23.6), "verão");
+        assert_eq!(season_id(10, 19, -23.6), "season-spring");
+        assert_eq!(season_id(10, 19, 40.0), "season-autumn");
+        assert_eq!(season_id(1, 10, -23.6), "season-summer");
     }
 
     #[test]
     fn moon_matches_known_dates() {
         // 2026-10-19 15:00 UTC: waxing gibbous, about 60% lit (as the eww script had it).
-        let (index, name, lit) = moon_at(1_792_422_000.0);
-        assert_eq!(name, "crescente gibosa");
+        let (index, id, lit) = moon_at(1_792_422_000.0);
+        assert_eq!(id, "moon-waxing-gibbous");
         assert!((55..=65).contains(&lit), "{lit}");
         assert!((9..=12).contains(&index), "{index}");
         // The reference new moon itself.
-        assert_eq!(moon_at(947_182_440.0).1, "lua nova");
+        assert_eq!(moon_at(947_182_440.0).1, "moon-new");
+    }
+
+    #[test]
+    fn every_weather_code_has_a_message_id() {
+        for code in [
+            0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82,
+            85, 86, 95, 96, 99,
+        ] {
+            assert_ne!(description_id(code), "unknown", "{code}");
+        }
+        assert_eq!(description_id(42), "unknown");
     }
 }
