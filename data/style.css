@@ -38,13 +38,15 @@ window.orbit button {
   padding: 4px;            /* + 1 px border = 5 */
 }
 
-/* 30 px icon + 5 + 5 = 40 px: one column. */
-.panel .menu {
+/* 30 px icon + 5 + 5 = 40 px: one column. `button.menu`, not `.menu`: GTK's
+ * menus are `popover.menu` nodes, and those inside the panel would take the
+ * hover fill too, over their whole surface. */
+.panel button.menu {
   color: @orbit_accent;
   padding: 5px;
   border-radius: 5px;
 }
-.panel .menu:hover {
+.panel button.menu:hover {
   background-color: alpha(@orbit_accent, 0.25);
 }
 
