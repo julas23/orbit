@@ -32,6 +32,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/calc.css"),
         build,
         resident: false,
+        open: None,
     })
 }
 

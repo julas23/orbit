@@ -1,0 +1,9 @@
+# Orbit-View — ~/.config/orbit/view.yaml. Every key is optional; these are
+# the defaults.
+
+# Seconds each image stays in the slideshow (F5).
+slideshow_seconds: 5
+# The strip of thumbnails under the image.
+thumbnails: true
+# The information panel open from the start (I toggles it).
+info: false

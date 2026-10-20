@@ -1,0 +1,89 @@
+/* Orbit-View built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+window.orbit-view {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-view .canvas {
+  background-color: @orbit_window;
+}
+
+/* ------------------------------------------------- the bar along the top */
+window.orbit-view .bar {
+  padding: 5px 10px;
+  background-color: alpha(@orbit_surface, 0.85);
+  border-bottom: 1px solid @orbit_border;
+}
+window.orbit-view .bar button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 5px;
+}
+window.orbit-view .bar .group {
+  border-spacing: 0;
+}
+window.orbit-view .bar .name {
+  font-weight: bold;
+}
+window.orbit-view .bar .position,
+window.orbit-view .bar .zoom {
+  color: @orbit_muted;
+  font-size: 12px;
+}
+/* A rotation waiting to be saved. */
+window.orbit-view .bar button.pending {
+  background: @orbit_accent;
+  color: #ffffff;
+}
+
+/* ------------------------------------------------- the strip along the bottom */
+window.orbit-view .strip-scroll {
+  min-height: 80px;
+  background-color: alpha(@orbit_surface, 0.85);
+  border-top: 1px solid @orbit_border;
+}
+window.orbit-view .strip {
+  background: none;
+  padding: 5px;
+}
+window.orbit-view .strip > row {
+  padding: 5px;
+  margin: 0 5px 0 0;
+  border-radius: 5px;
+}
+window.orbit-view .strip > row:hover    { background-color: @orbit_hover; }
+window.orbit-view .strip > row:selected { background-color: alpha(@orbit_accent, 0.5); }
+window.orbit-view .strip .thumb {
+  min-width: 80px;
+  min-height: 60px;
+}
+
+/* ---------------------------------------------------- information panel */
+window.orbit-view .info {
+  padding: 60px 15px 15px 15px;
+  background-color: @orbit_surface;
+  border-left: 1px solid @orbit_border;
+}
+window.orbit-view .info .label {
+  color: @orbit_muted;
+  font-size: 11px;
+}
+window.orbit-view .info .value {
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------- the rest */
+window.orbit-view .message {
+  color: @orbit_muted;
+}
+window.orbit-view .message-icon {
+  color: @orbit_muted;
+}
+window.orbit-view .toast {
+  padding: 10px 15px;
+  border-radius: 10px;
+  background-color: @orbit_surface;
+  border: 1px solid @orbit_border;
+}

@@ -9,8 +9,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
-> rewritten from; **Orbit-Calc**, **Orbit-Clip** and **Orbit-Blink** work; the
-> other components are planned.
+> rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink** and
+> **Orbit-View** work; the other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -20,7 +20,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay) | planned |
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
-| orbit-view | Universal image viewer | planned |
+| **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
 | orbit-read | PDF, Markdown and plain-text reader | planned |
 | orbit-files | Complete file manager | planned |
 | orbit-play | Video player for common formats | planned |
@@ -132,9 +132,10 @@ bindsym $mod+v exec orbit-clip
 Screen capture: the whole screen, the focused window, or an area chosen on a
 frozen picture of the screens. Each capture is saved in `$HOME`, copied to the
 clipboard, and shown on a card with a thumbnail and buttons to copy it again
-(if something else was copied since) or save a copy elsewhere. Without a mode it opens an options window (mode, delay,
-whether to include the cursor). It needs sway (for the layout of the screens
-and windows) and `wlr-screencopy`.
+(if something else was copied since) or save a copy elsewhere. Without a
+mode it opens an options window (mode, delay, whether to include the
+cursor). It needs sway (for the layout of the screens and windows) and
+`wlr-screencopy`.
 
 ```
 bindsym Print       exec orbit-blink screen
@@ -142,13 +143,44 @@ bindsym Shift+Print exec orbit-blink area
 bindsym $mod+Print  exec orbit-blink
 ```
 
+## Orbit-View
+
+An image viewer. The image fills the window and the controls show while the
+pointer moves. Opening an image lists its folder — arrow keys, the buttons or
+a strip of thumbnails go through it, and the list follows files added or
+removed there. The wheel or a pinch zooms around the pointer, dragging pans,
+a double-click switches between fitted and actual size. It turns and mirrors
+images and saves that into JPEG files (by changing only the orientation tag
+when there is one) and PNG files; shows the file's and the camera's details
+(EXIF: date, camera, exposure, place with a map link); plays animations and
+slideshows (F5); copies the image; and sends files to the trash (Delete).
+
+Every format is decoded by [glycin](https://gitlab.gnome.org/GNOME/glycin) —
+the engine of GNOME's Loupe — each in a sandbox, so a malformed file can only
+crash its loader: PNG, JPEG, GIF, WebP, AVIF, HEIC, JPEG XL, SVG, TIFF, QOI,
+OpenEXR and more, as installed (`glycin-loaders`). Thumbnails share the
+freedesktop.org cache with file managers. Options in
+`~/.config/orbit/view.yaml` (see
+[`examples/orbit/view.yaml`](examples/orbit/view.yaml)).
+
+| Key | | Key | |
+| --- | --- | --- | --- |
+| ← → Space | previous, next | + − | zoom in, out |
+| Home End | first, last | 0 1 | fit, actual size |
+| R, Shift+R | turn right, left | H V | mirror |
+| Ctrl+S | save the turn | Ctrl+C | copy |
+| I | information | F5 | slideshow |
+| F11 or F | full screen | Delete | to the trash |
+
 ## Building and running
 
-Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files.
+Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files;
+for Orbit-View also the `libseccomp` development files, glycin's loaders and
+bubblewrap (its sandbox).
 On Debian/Ubuntu:
 
 ```sh
-sudo apt install libgtk-4-dev libgtk4-layer-shell-dev
+sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap
 cargo build --release
 ./target/release/orbit-panel &
 ./target/release/orbit-dock &
@@ -163,7 +195,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -243,6 +275,7 @@ follow the locale.
 | `orbit-calc` | The calculator |
 | `orbit-clip` | The clipboard history |
 | `orbit-blink` | The screen capture |
+| `orbit-view` | The image viewer |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

@@ -1,0 +1,24 @@
+[package]
+name = "orbit-view"
+description = "Orbit-View: a Rust + GTK4 image viewer, with sandboxed decoding (glycin)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+async-channel.workspace = true
+glycin.workspace = true
+gio20.workspace = true
+async-io.workspace = true
+gufo-common.workspace = true
+gufo-exif.workspace = true
+chrono.workspace = true

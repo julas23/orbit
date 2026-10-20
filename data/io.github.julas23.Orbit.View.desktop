@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-View
+GenericName=Image viewer
+GenericName[pt_BR]=Visualizador de imagens
+Comment=Browse, zoom and turn images; every format decoded in a sandbox
+Comment[pt_BR]=Navegue, amplie e gire imagens; cada formato decodificado em um ambiente isolado
+Exec=orbit-view %U
+Icon=image-x-generic
+Terminal=false
+Categories=Graphics;Viewer;
+Keywords=image;photo;picture;viewer;
+Keywords[pt_BR]=imagem;foto;fotografia;visualizador;
+MimeType=image/apng;image/avif;image/bmp;image/gif;image/heif;image/heic;image/jpeg;image/jxl;image/png;image/qoi;image/svg+xml;image/svg+xml-compressed;image/tiff;image/vnd.microsoft.icon;image/vnd-ms.dds;image/webp;image/x-dds;image/x-exr;image/x-portable-anymap;image/x-portable-bitmap;image/x-portable-graymap;image/x-portable-pixmap;image/x-qoi;image/x-tga;

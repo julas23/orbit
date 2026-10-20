@@ -42,6 +42,16 @@ serde_yaml_ng = "0.10"
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 rustix = { version = "1", features = ["event", "pipe", "time", "fs"] }
+# orbit-view: image decoding in a sandbox, the engine of GNOME's Loupe. The
+# 2.x series reads the loaders Debian 13 ships (glycin-loaders 1.x, the
+# "1+" set); it brings its own copy of gio 0.20, used only to name files for
+# it. gufo and chrono read the EXIF it hands back.
+glycin = "=2.1.4"
+gio20 = { package = "gio", version = "0.20" }
+async-io = "2"
+gufo-common = { version = "0.2", features = ["chrono"] }
+gufo-exif = { version = "0.2", features = ["chrono"] }
+chrono = { version = "0.4", default-features = false }
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"

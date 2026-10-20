@@ -216,3 +216,52 @@ blink-failed = The capture failed
 blink-no-window = No focused window to capture.
 # Start of the saved file's name: screenshot-2026-10-19_22-50-12.png
 blink-file-prefix = screenshot
+
+## Image viewer
+
+view-title = Orbit-View
+view-empty = No image open.
+    Drop an image here or choose one.
+view-open = Open…
+view-filter-images = Images
+view-failed = Could not open { $name }.
+    { $reason }
+view-unknown-format = Unrecognised image format.
+view-previous = Previous
+view-next = Next
+view-zoom-out = Zoom out
+view-zoom-in = Zoom in
+view-fit = Fit to window
+view-actual-size = Actual size
+view-turn-left = Turn left
+view-turn-right = Turn right
+view-mirror-horizontal = Mirror horizontally
+view-mirror-vertical = Mirror vertically
+view-save = Save the rotation into the file
+view-save-unsupported = This format cannot be saved; only JPEG and PNG
+view-saved = Saved
+view-save-failed = Could not save: { $reason }
+view-copy = Copy the image
+view-copied = Image copied
+view-info = Information
+view-slideshow = Slideshow
+view-fullscreen = Full screen
+view-trash = Move to the trash
+view-trashed = { $name } moved to the trash
+view-trash-failed = Could not move to the trash: { $reason }
+view-info-name = Name
+view-info-folder = Folder
+view-info-format = Format
+view-info-dimensions = Dimensions
+view-info-file-size = File size
+view-info-modified = Modified
+view-info-taken = Taken
+view-info-camera = Camera
+view-info-exposure = Exposure
+view-info-software = Software
+view-info-place = Place
+view-info-coordinate = { $degrees }°{ $minutes }′{ $seconds }″ { $side }
+view-info-north = N
+view-info-south = S
+view-info-east = E
+view-info-west = W

@@ -41,8 +41,8 @@ pub struct Surface {
 pub fn run(surface: Surface) -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let config_dir = match parse_args(surface.name, false) {
-        Ok((path, _)) => path,
+    let config_dir = match parse_args(surface.name, false, false) {
+        Ok((path, _, _)) => path,
         Err(err) => {
             eprintln!("{}: {err}", surface.name);
             return glib::ExitCode::FAILURE;
@@ -85,6 +85,10 @@ pub struct App {
     /// with `--background` it shows no window, closing the window only hides
     /// it, and launching the program again shows or hides it.
     pub resident: bool,
+    /// Takes files on the command line, like an image viewer: they are
+    /// handed to this after the window is built, and a second launch with
+    /// files hands them to the running window.
+    pub open: Option<fn(&gtk::ApplicationWindow, &[gio::File])>,
 }
 
 /// Runs `spec` until its window is closed. Logging, arguments, the
@@ -94,60 +98,95 @@ pub struct App {
 pub fn run_app(spec: App) -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let (config_dir, background) = match parse_args(spec.name, spec.resident) {
-        Ok(parsed) => parsed,
-        Err(err) => {
-            eprintln!("{}: {err}", spec.name);
-            return glib::ExitCode::FAILURE;
+    let (config_dir, background, files) =
+        match parse_args(spec.name, spec.resident, spec.open.is_some()) {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                eprintln!("{}: {err}", spec.name);
+                return glib::ExitCode::FAILURE;
+            }
+        };
+
+    let mut app = gtk::Application::builder().application_id(spec.app_id);
+    if spec.open.is_some() {
+        app = app.flags(gio::ApplicationFlags::HANDLES_OPEN);
+    }
+    let app = app.build();
+    // The window, built on the first activation or open.
+    let keep = std::rc::Rc::new(RefCell::new(None));
+    let window = {
+        let keep = keep.clone();
+        move |app: &gtk::Application| -> Option<gtk::ApplicationWindow> {
+            if let Some(window) = app.windows().first() {
+                return window.clone().downcast().ok();
+            }
+            let Some(display) = gdk::Display::default() else {
+                log::error!("no display");
+                app.quit();
+                return None;
+            };
+            let dir = ConfigDir::new(&config_dir);
+            let style = Style::install(&display, spec.css, &dir.style_path());
+            let theme = theme::install(&display);
+            match (spec.build)(app, &dir) {
+                Ok(window) => {
+                    if spec.resident {
+                        window.set_hide_on_close(true);
+                    }
+                    *keep.borrow_mut() = Some((style, theme));
+                    if !background {
+                        window.present();
+                    }
+                    Some(window)
+                }
+                Err(err) => {
+                    log::error!("{err:#}");
+                    app.quit();
+                    None
+                }
+            }
         }
     };
-
-    let app = gtk::Application::builder()
-        .application_id(spec.app_id)
-        .build();
-    let keep = RefCell::new(None);
-    app.connect_activate(move |app| {
-        if let Some(window) = app.windows().first() {
-            if spec.resident && window.is_visible() {
-                window.set_visible(false);
-            } else {
-                window.present();
-            }
-            return;
-        }
-        let Some(display) = gdk::Display::default() else {
-            log::error!("no display");
-            app.quit();
-            return;
-        };
-        let dir = ConfigDir::new(&config_dir);
-        let style = Style::install(&display, spec.css, &dir.style_path());
-        let theme = theme::install(&display);
-        match (spec.build)(app, &dir) {
-            Ok(window) => {
-                if spec.resident {
-                    window.set_hide_on_close(true);
-                }
-                if !background {
+    {
+        let window = window.clone();
+        app.connect_activate(move |app| {
+            let built = !app.windows().is_empty();
+            let Some(window) = window(app) else { return };
+            if built {
+                if spec.resident && window.is_visible() {
+                    window.set_visible(false);
+                } else {
                     window.present();
                 }
-                *keep.borrow_mut() = Some((style, theme));
             }
-            Err(err) => {
-                log::error!("{err:#}");
-                app.quit();
+        });
+    }
+    if let Some(open) = spec.open {
+        app.connect_open(move |app, files, _| {
+            if let Some(window) = window(app) {
+                open(&window, files);
+                window.present();
             }
-        }
-    });
-    app.run_with_args::<&str>(&[])
+        });
+    }
+    // Arguments are already parsed; GApplication only gets the files, which
+    // it opens here or hands to the instance already running.
+    let mut args = vec![spec.name.to_owned()];
+    args.extend(files);
+    app.run_with_args(&args)
 }
 
-/// The config directory and, when `background` is accepted, whether
-/// `--background` was given.
-fn parse_args(name: &str, background: bool) -> anyhow::Result<(PathBuf, bool)> {
+/// The config directory, whether `--background` was given (when
+/// `background` is accepted) and the files given (when `files` are).
+fn parse_args(
+    name: &str,
+    background: bool,
+    files: bool,
+) -> anyhow::Result<(PathBuf, bool, Vec<String>)> {
     let mut args = std::env::args().skip(1);
     let mut config = None;
     let mut hidden = false;
+    let mut paths = Vec::new();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => {
@@ -158,13 +197,16 @@ fn parse_args(name: &str, background: bool) -> anyhow::Result<(PathBuf, bool)> {
             "--background" if background => hidden = true,
             "-h" | "--help" => {
                 let extra = if background { " [--background]" } else { "" };
+                let extra = if files { " [FILE…]" } else { extra };
                 println!("Usage: {name} [-c|--config DIR]{extra}  (default: ~/.config/orbit)");
                 std::process::exit(0);
             }
+            "--" if files => paths.extend(args.by_ref()),
+            other if files && !other.starts_with('-') => paths.push(other.to_owned()),
             other => anyhow::bail!("unknown argument: {other}"),
         }
     }
-    Ok((config.unwrap_or_else(ConfigDir::default_path), hidden))
+    Ok((config.unwrap_or_else(ConfigDir::default_path), hidden, paths))
 }
 
 fn start(

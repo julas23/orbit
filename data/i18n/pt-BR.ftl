@@ -208,3 +208,52 @@ blink-save-as = Salvar como…
 blink-failed = A captura falhou
 blink-no-window = Nenhuma janela em foco para capturar.
 blink-file-prefix = captura
+
+## Visualizador de imagens
+
+view-title = Orbit-View
+view-empty = Nenhuma imagem aberta.
+    Arraste uma imagem para cá ou escolha uma.
+view-open = Abrir…
+view-filter-images = Imagens
+view-failed = Não foi possível abrir { $name }.
+    { $reason }
+view-unknown-format = Formato de imagem não reconhecido.
+view-previous = Anterior
+view-next = Próxima
+view-zoom-out = Diminuir
+view-zoom-in = Aumentar
+view-fit = Ajustar à janela
+view-actual-size = Tamanho real
+view-turn-left = Girar para a esquerda
+view-turn-right = Girar para a direita
+view-mirror-horizontal = Espelhar na horizontal
+view-mirror-vertical = Espelhar na vertical
+view-save = Gravar a rotação no arquivo
+view-save-unsupported = Este formato não pode ser gravado; só JPEG e PNG
+view-saved = Gravado
+view-save-failed = Não foi possível gravar: { $reason }
+view-copy = Copiar a imagem
+view-copied = Imagem copiada
+view-info = Informações
+view-slideshow = Apresentação
+view-fullscreen = Tela cheia
+view-trash = Mover para a lixeira
+view-trashed = { $name } foi para a lixeira
+view-trash-failed = Não foi possível mover para a lixeira: { $reason }
+view-info-name = Nome
+view-info-folder = Pasta
+view-info-format = Formato
+view-info-dimensions = Dimensões
+view-info-file-size = Tamanho do arquivo
+view-info-modified = Modificado em
+view-info-taken = Fotografado em
+view-info-camera = Câmera
+view-info-exposure = Exposição
+view-info-software = Programa
+view-info-place = Local
+view-info-coordinate = { $degrees }°{ $minutes }′{ $seconds }″ { $side }
+view-info-north = N
+view-info-south = S
+view-info-east = L
+view-info-west = O
