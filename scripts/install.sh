@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# install.sh — builds Orbit-Panel and Orbit-Dock and installs them, with
-# orbit-session, into ~/.local/bin (or PREFIX/bin).
+# install.sh — builds Orbit-Panel, Orbit-Dock and Orbit-Calc and installs
+# them, with orbit-session, into ~/.local/bin (or PREFIX/bin); Orbit-Calc's
+# menu entry goes to ~/.local/share/applications (or PREFIX/share/...).
 #
 #   scripts/install.sh            # ~/.local/bin
 #   PREFIX=/usr/local scripts/install.sh
@@ -11,15 +12,20 @@ set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEST=${PREFIX:-$HOME/.local}/bin
+APPS=${PREFIX:-$HOME/.local}/share/applications
 
-cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock
+cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock -p orbit-calc
 
 mkdir -p "$DEST"
 # install(1) replaces the file instead of writing into it, so a running
 # panel keeps its old binary until restarted.
 install -m 755 "$ROOT/target/release/orbit-panel" "$DEST/orbit-panel"
 install -m 755 "$ROOT/target/release/orbit-dock" "$DEST/orbit-dock"
+install -m 755 "$ROOT/target/release/orbit-calc" "$DEST/orbit-calc"
 install -m 755 "$ROOT/scripts/orbit-session" "$DEST/orbit-session"
+mkdir -p "$APPS"
+install -m 644 "$ROOT/data/io.github.julas23.Orbit.Calc.desktop" "$APPS/"
 
-echo "installed orbit-panel, orbit-dock and orbit-session in $DEST"
+echo "installed orbit-panel, orbit-dock, orbit-calc and orbit-session in $DEST"
+echo "and the Orbit-Calc menu entry in $APPS"
 echo "start them with: orbit-session"

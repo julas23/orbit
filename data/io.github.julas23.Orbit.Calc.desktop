@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Calc
+GenericName=Calculator
+GenericName[pt_BR]=Calculadora
+Comment=Standard, scientific, HP-12C and IPv4 subnet calculator
+Comment[pt_BR]=Calculadora padrão, científica, HP-12C e de sub-rede IPv4
+Exec=orbit-calc
+Icon=accessories-calculator
+Terminal=false
+Categories=Utility;Calculator;
+Keywords=calculator;scientific;financial;hp12c;subnet;ipv4;
+Keywords[pt_BR]=calculadora;científica;financeira;hp12c;sub-rede;ipv4;

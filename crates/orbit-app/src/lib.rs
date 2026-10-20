@@ -1,7 +1,9 @@
-//! Startup shared by the `orbit-panel` and `orbit-dock` binaries.
+//! Startup shared by the Orbit binaries: the `orbit-panel` and `orbit-dock`
+//! surfaces ([`run`]) and the applications, such as `orbit-calc`
+//! ([`run_app`]).
 //!
 //! Each surface runs as its own process, so a crash in one does not take the
-//! other down. Both read the same config directory and stylesheet; this crate
+//! other down. All read the same config directory and stylesheet; this crate
 //! does the common work (arguments, logging, config, CSS, display backend)
 //! and hands each binary a ready window to fill.
 
@@ -67,6 +69,62 @@ pub fn run(surface: Surface) -> glib::ExitCode {
         }
     });
     // Arguments are already parsed; don't let GApplication reject them.
+    app.run_with_args::<&str>(&[])
+}
+
+/// What an application — an ordinary window, not a surface on a screen edge
+/// — contributes: its identity, its stylesheet and how to build its window.
+pub struct App {
+    /// Program name, used in messages (`orbit-calc`).
+    pub name: &'static str,
+    pub app_id: &'static str,
+    /// The built-in stylesheet; the user's style.css goes on top of it.
+    pub css: &'static str,
+    pub build: fn(&gtk::Application, &ConfigDir) -> anyhow::Result<gtk::ApplicationWindow>,
+}
+
+/// Runs `spec` until its window is closed. Logging, arguments, the
+/// stylesheet and the system's colours are set up as for the panel; a second
+/// launch brings the running window forward.
+pub fn run_app(spec: App) -> glib::ExitCode {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    let config_dir = match parse_args(spec.name) {
+        Ok(path) => path,
+        Err(err) => {
+            eprintln!("{}: {err}", spec.name);
+            return glib::ExitCode::FAILURE;
+        }
+    };
+
+    let app = gtk::Application::builder()
+        .application_id(spec.app_id)
+        .build();
+    let keep = RefCell::new(None);
+    app.connect_activate(move |app| {
+        if let Some(window) = app.active_window() {
+            window.present();
+            return;
+        }
+        let Some(display) = gdk::Display::default() else {
+            log::error!("no display");
+            app.quit();
+            return;
+        };
+        let dir = ConfigDir::new(&config_dir);
+        let style = Style::install(&display, spec.css, &dir.style_path());
+        let theme = theme::install(&display);
+        match (spec.build)(app, &dir) {
+            Ok(window) => {
+                window.present();
+                *keep.borrow_mut() = Some((style, theme));
+            }
+            Err(err) => {
+                log::error!("{err:#}");
+                app.quit();
+            }
+        }
+    });
     app.run_with_args::<&str>(&[])
 }
 

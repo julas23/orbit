@@ -8,8 +8,8 @@ everyday applications around them — designed to look and behave as one.
 It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
-> are being prepared to replace the [EWW](https://github.com/elkowar/eww)
-> panel they were rewritten from; the other components are planned.
+> have replaced the [EWW](https://github.com/elkowar/eww) panel they were
+> rewritten from; **Orbit-Calc** works; the other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -25,7 +25,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | orbit-play | Video player for common formats | planned |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | orbit-clip | Copy and paste across Wayland and XWayland | planned |
-| orbit-calc | Calculator: standard, scientific, HP-12C and IP subnet profiles | planned |
+| **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | orbit-edit | Text editor: column selection and indentation by level | planned |
 
 Orbit is a clean reimplementation: existing desktops and compositors are
@@ -82,6 +82,28 @@ A row of launchers on a screen edge, built from desktop files, in groups with
 separators between them. Icons come from the icon theme or from the files the
 desktop entries point to, loaded at display size.
 
+## Orbit-Calc
+
+A calculator with four profiles, one tab each; it always opens on the
+standard one. The window has a fixed size, each profile's own, so tiling
+compositors float it.
+
+- **Standard** and **scientific**: type an expression — with the keypad or
+  the keyboard — and see its value as you type; usual precedence,
+  parentheses, desk-calculator percent (`200 + 10%` is 220), trigonometry in
+  degrees or radians, logarithms, powers, roots, factorial.
+- **Financial**: after the HP-12C — the 12c's keyboard and RPN stack, with its gold (f) and blue
+  (g) functions: time value of money (n, i, PV, PMT, FV, BEGIN/END, 12×,
+  12÷), amortization, simple interest, cash flows with NPV and IRR,
+  depreciation (SL, SOYD, DB), bond price and yield, statistics and linear
+  estimates, dates (DATE, ΔDYS, D.MY/M.DY) and the STO/RCL registers.
+  Programming (P/R, R/S, GTO…) is not implemented.
+- **IPv4 subnet**: an address with a prefix or mask in, its mask, wildcard,
+  network, broadcast, host range and count, class, kind (private, CGNAT,
+  loopback…) and binary form out.
+
+Numbers follow the language: `1.234,5` in Portuguese, `1,234.5` in English.
+
 ## Building and running
 
 Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files.
@@ -103,7 +125,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -177,9 +199,10 @@ follow the locale.
 | `orbit-common` | Configuration, CSS loading, display-backend abstraction |
 | `orbit-backend-wayland` | Wayland backend: layer-shell |
 | `orbit-backend-x11` | X11 backend: EWMH dock type, struts and positioning |
-| `orbit-app` | Startup shared by the panel and the dock, icon loading |
+| `orbit-app` | Startup shared by the panel, the dock and the applications; icons, theme, translations |
 | `orbit-panel` | The panel and its modules |
 | `orbit-dock` | The dock |
+| `orbit-calc` | The calculator |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

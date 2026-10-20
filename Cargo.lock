@@ -1103,6 +1103,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-calc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "log",
+ "orbit-app",
+ "orbit-common",
+]
+
+[[package]]
 name = "orbit-common"
 version = "0.1.0"
 dependencies = [

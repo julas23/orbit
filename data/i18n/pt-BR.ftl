@@ -127,3 +127,48 @@ season-autumn = outono
 
 dock-open = Abrir
 dock-recent = Recentes
+
+## Calculadora
+
+calc-title = Calculadora
+calc-profile-standard = Padrão
+calc-profile-scientific = Científica
+calc-profile-financial = Financeira
+# O visor da calculadora financeira quando uma operação falha (os números de erro da HP 12c).
+calc-hp-error = Erro { $code }
+calc-angle = Unidade dos ângulos: graus (DEG) ou radianos (RAD). Clique para trocar.
+calc-profile-subnet = Sub-rede
+calc-decimal-separator = ,
+calc-group-separator = .
+calc-error-syntax = Expressão incompleta ou inválida
+calc-error-division-by-zero = Não é possível dividir por zero
+calc-error-domain = Fora do domínio da função
+calc-error-overflow = Número grande demais
+calc-subnet-prefix = Comprimento do prefixo (bits da máscara)
+calc-subnet-hint = Digite um endereço, como 10.0.0.199/24
+calc-subnet-bad-address = Não é um endereço IPv4
+calc-subnet-bad-mask = Prefixo ou máscara inválidos
+calc-subnet-address = Endereço
+calc-subnet-mask = Máscara
+calc-subnet-wildcard = Curinga (wildcard)
+calc-subnet-network = Rede
+calc-subnet-broadcast = Broadcast
+calc-subnet-first = Primeiro host
+calc-subnet-last = Último host
+calc-subnet-hosts = Hosts utilizáveis
+calc-subnet-size = Endereços
+calc-subnet-class = Classe
+calc-subnet-kind = Tipo
+calc-subnet-binary-address = Endereço (binário)
+calc-subnet-binary-mask = Máscara (binário)
+calc-subnet-hex-address = Endereço (hexa)
+calc-subnet-hex-mask = Máscara (hexa)
+calc-subnet-none = nenhum (/31 e /32)
+calc-kind-private = privado (RFC 1918)
+calc-kind-shared = compartilhado, CGNAT (RFC 6598)
+calc-kind-loopback = loopback
+calc-kind-link-local = link-local
+calc-kind-multicast = multicast
+calc-kind-reserved = reservado
+calc-kind-broadcast = broadcast
+calc-kind-public = público

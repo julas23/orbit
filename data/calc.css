@@ -1,0 +1,116 @@
+/* Orbit-Calc built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid, as in the panel. */
+
+window.orbit-calc {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+
+window.orbit-calc .standard,
+window.orbit-calc .scientific,
+window.orbit-calc .hp12c,
+window.orbit-calc .subnet {
+  padding: 10px;
+}
+
+/* ------------------------------------------------------------------- tabs */
+window.orbit-calc .titlebar-row {
+  padding: 5px 5px 5px 10px;
+  /* A step from the window's colour towards the text's: darker in the
+   * dark palette, a light grey in the light one. */
+  background-color: mix(@orbit_window, @orbit_fg, 0.1);
+}
+window.orbit-calc .tabs > button {
+  padding: 0 10px;
+  min-height: 30px;
+}
+window.orbit-calc .tabs > button:checked {
+  background: @orbit_accent;
+  color: #ffffff;
+}
+
+/* ---------------------------------------------------------------- display */
+window.orbit-calc .display {
+  padding: 10px;
+  border-radius: 5px;
+  background-color: @orbit_faint;
+  border: 1px solid @orbit_border;
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+}
+window.orbit-calc .display .history { font-size: 15px; color: @orbit_muted; min-height: 20px; }
+window.orbit-calc .display .main    { font-size: 35px; font-weight: bold; min-height: 45px; }
+window.orbit-calc .display .preview { font-size: 15px; color: @orbit_muted; min-height: 20px; }
+window.orbit-calc .display .preview.error { color: @orbit_alert; }
+
+/* ----------------------------------------------------------------- keypad */
+window.orbit-calc .keypad .key {
+  min-width: 60px;
+  min-height: 50px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  box-shadow: none;
+  font-size: 20px;
+  background: @orbit_button;
+  color: @orbit_fg;
+}
+window.orbit-calc .keypad .key:hover  { background: @orbit_button_hover; }
+window.orbit-calc .keypad .key:active { background: @orbit_focus; }
+window.orbit-calc .keypad .key.digit  { font-weight: bold; }
+window.orbit-calc .keypad .key.op,
+window.orbit-calc .keypad .key.fn     { color: @orbit_accent; }
+window.orbit-calc .keypad .key.clear  { color: @orbit_alert; }
+window.orbit-calc .keypad .key.equals { background: @orbit_accent; color: #ffffff; }
+window.orbit-calc .keypad .key.equals:hover  { background: shade(@orbit_accent, 1.15); }
+window.orbit-calc .keypad .key.equals:active { background: shade(@orbit_accent, 0.85); }
+window.orbit-calc .scientific .keypad .key.fn { font-size: 15px; }
+
+/* ----------------------------------------------------------------- HP-12C */
+/* The display, in the system's colours like the other profiles'. */
+window.orbit-calc .hp12c .lcd {
+  padding: 5px 15px;
+  border-radius: 5px;
+  background-color: @orbit_faint;
+  border: 1px solid @orbit_border;
+  color: @orbit_fg;
+}
+window.orbit-calc .hp12c .lcd .number {
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+  font-size: 40px;
+  min-height: 50px;
+}
+window.orbit-calc .hp12c .lcd .indicators {
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+  font-size: 11px;
+  font-weight: bold;
+  min-height: 15px;
+  color: @orbit_accent;
+}
+window.orbit-calc .hp12c .keypad .key {
+  min-width: 55px;
+  min-height: 45px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  background: @orbit_button;
+  color: @orbit_fg;
+}
+window.orbit-calc .hp12c .keypad .key:hover  { background: @orbit_button_hover; }
+window.orbit-calc .hp12c .keypad .key:active { background: @orbit_focus; box-shadow: none; }
+window.orbit-calc .hp12c .keypad .key .main  { font-size: 15px; font-weight: bold; }
+window.orbit-calc .hp12c .keypad .key .blue  { font-size: 11px; color: @orbit_blue; }
+window.orbit-calc .hp12c .keypad .gold       { font-size: 11px; color: @orbit_gold; min-height: 15px; }
+window.orbit-calc .hp12c .keypad .unused     { opacity: 0.35; }
+window.orbit-calc .hp12c .keypad .key.f      { background: @orbit_gold; }
+window.orbit-calc .hp12c .keypad .key.f .main,
+window.orbit-calc .hp12c .keypad .key.g .main { color: #ffffff; }
+window.orbit-calc .hp12c .keypad .key.g      { background: @orbit_blue; }
+
+/* ----------------------------------------------------------------- subnet */
+window.orbit-calc .subnet .address { font-family: "CaskaydiaCove Nerd Font", monospace; }
+window.orbit-calc .subnet .address.error { color: @orbit_alert; }
+window.orbit-calc .subnet .message { color: @orbit_muted; font-size: 13px; }
+window.orbit-calc .subnet .results .name  { color: @orbit_muted; }
+window.orbit-calc .subnet .results .value { font-family: "CaskaydiaCove Nerd Font", monospace; }

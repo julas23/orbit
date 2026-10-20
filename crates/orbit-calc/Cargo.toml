@@ -1,0 +1,16 @@
+[package]
+name = "orbit-calc"
+description = "Orbit-Calc: a Rust + GTK4 calculator with standard and IPv4 subnet profiles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true

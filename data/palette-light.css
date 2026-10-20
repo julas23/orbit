@@ -12,6 +12,9 @@
 @define-color orbit_faint     rgba(0, 0, 0, 0.03);
 @define-color orbit_trough    #c8ccd4;
 @define-color orbit_surface   rgba(250, 250, 252, 0.98);
+@define-color orbit_window    #fafafc;
+@define-color orbit_gold      #9a6b12;
+@define-color orbit_blue      #1f5fa8;
 @define-color orbit_outline   rgba(0, 0, 0, 0.15);
 @define-color orbit_button    rgba(0, 0, 0, 0.06);
 @define-color orbit_button_hover rgba(0, 0, 0, 0.12);

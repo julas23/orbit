@@ -16,6 +16,9 @@
 @define-color orbit_faint     rgba(255, 255, 255, 0.04);
 @define-color orbit_trough    #4c566a;                  /* slider tracks */
 @define-color orbit_surface   rgba(27, 31, 39, 0.97);   /* menus */
+@define-color orbit_window    #1b1f27;                  /* application windows */
+@define-color orbit_gold      #d4a24c;                  /* HP-12C f functions */
+@define-color orbit_blue      #6ea8e0;                  /* HP-12C g functions */
 @define-color orbit_outline   rgba(255, 255, 255, 0.15);/* dialog outline */
 @define-color orbit_button    rgba(255, 255, 255, 0.10);
 @define-color orbit_button_hover rgba(255, 255, 255, 0.18);

@@ -132,3 +132,50 @@ season-autumn = autumn
 
 dock-open = Open
 dock-recent = Recent
+
+## Calculator
+
+calc-title = Calculator
+calc-profile-standard = Standard
+calc-profile-scientific = Scientific
+calc-profile-financial = Financial
+# The financial calculator's display when an operation fails (the HP 12c's error numbers).
+calc-hp-error = Error { $code }
+calc-angle = Unit of angles: degrees (DEG) or radians (RAD). Click to switch.
+calc-profile-subnet = Subnet
+# Number notation: the decimal separator and the digit-group separator
+# (leave the group separator empty for no grouping).
+calc-decimal-separator = .
+calc-group-separator = ,
+calc-error-syntax = Incomplete or invalid expression
+calc-error-division-by-zero = Cannot divide by zero
+calc-error-domain = Outside the function's domain
+calc-error-overflow = Number too large
+calc-subnet-prefix = Prefix length (mask bits)
+calc-subnet-hint = Type an address, such as 10.0.0.199/24
+calc-subnet-bad-address = Not an IPv4 address
+calc-subnet-bad-mask = Invalid prefix or mask
+calc-subnet-address = Address
+calc-subnet-mask = Mask
+calc-subnet-wildcard = Wildcard
+calc-subnet-network = Network
+calc-subnet-broadcast = Broadcast
+calc-subnet-first = First host
+calc-subnet-last = Last host
+calc-subnet-hosts = Usable hosts
+calc-subnet-size = Addresses
+calc-subnet-class = Class
+calc-subnet-kind = Kind
+calc-subnet-binary-address = Address (binary)
+calc-subnet-binary-mask = Mask (binary)
+calc-subnet-hex-address = Address (hex)
+calc-subnet-hex-mask = Mask (hex)
+calc-subnet-none = none (/31 and /32)
+calc-kind-private = private (RFC 1918)
+calc-kind-shared = shared, CGNAT (RFC 6598)
+calc-kind-loopback = loopback
+calc-kind-link-local = link-local
+calc-kind-multicast = multicast
+calc-kind-reserved = reserved
+calc-kind-broadcast = broadcast
+calc-kind-public = public
