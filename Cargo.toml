@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.92"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/julas23/orbit"
 authors = ["Juliano <julianoas@gmail.com>"]
@@ -56,6 +56,11 @@ chrono = { version = "0.4", default-features = false }
 # gtk-rs 0.22 as the rest), Markdown parsed by pulldown-cmark.
 poppler-rs = "0.26"
 pulldown-cmark = { version = "0.13", default-features = false }
+# orbit-play: GStreamer's player, with the video drawn into GTK by the
+# gtk4paintablesink element (built in, registered at start).
+gst = { package = "gstreamer", version = "0.25" }
+gst-play = { package = "gstreamer-play", version = "0.25" }
+gst-plugin-gtk4 = { version = "0.15", features = ["wayland", "gtk_v4_14"] }
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"

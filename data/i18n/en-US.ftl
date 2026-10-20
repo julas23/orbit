@@ -321,3 +321,34 @@ read-print = Print
 read-source = Show the source
 read-outline = Outline
 read-pages = Pages
+
+## Video and audio player
+
+play-title = Orbit-Play
+play-empty = Nothing playing.
+    Drop a video, a song or a Flash movie here, or choose a file.
+play-open = Open…
+play-filter = Video, audio and Flash
+play-failed = Could not play { $name }.
+    { $reason }
+play-no-ruffle = Flash movies need Ruffle (ruffle.rs), in ~/.local/bin or on the PATH.
+play-play = Play
+play-pause = Pause
+play-previous = Previous in the folder
+play-next = Next in the folder
+play-frame-back = Previous frame
+play-frame-forward = Next frame
+play-mute = Mute
+play-volume = Volume
+play-speed = Speed
+play-audio-track = Audio track
+play-subtitles = Subtitles
+play-subtitles-off = Off
+play-subtitles-load = Load subtitles…
+play-track = Track { $n }
+play-mono = mono
+play-stereo = stereo
+play-channels = { $n } channels
+play-fullscreen = Full screen
+play-leave-fullscreen = Leave full screen
+play-key-space = Space

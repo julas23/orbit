@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Play
+GenericName=Media player
+GenericName[pt_BR]=Reprodutor de mídia
+Comment=Play video, audio and Flash movies
+Comment[pt_BR]=Reproduza vídeos, músicas e animações Flash
+Exec=orbit-play %U
+Icon=multimedia-video-player
+Terminal=false
+Categories=AudioVideo;Video;Audio;Player;
+Keywords=video;movie;music;audio;player;flash;swf;
+Keywords[pt_BR]=vídeo;filme;música;áudio;reprodutor;flash;swf;
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;video/x-flv;video/x-ms-wmv;video/x-ms-asf;video/3gpp;video/3gpp2;video/mp2t;video/x-m4v;video/vnd.rn-realvideo;application/vnd.rn-realmedia;video/dv;video/x-ogm+ogg;video/x-theora+ogg;audio/mpeg;audio/mp4;audio/flac;audio/x-flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/x-wav;audio/wav;audio/x-ms-wma;audio/aac;audio/x-matroska;audio/webm;audio/x-ape;audio/x-musepack;audio/x-wavpack;audio/midi;application/ogg;application/x-shockwave-flash;application/vnd.adobe.flash.movie;

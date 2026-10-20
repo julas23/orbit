@@ -1,0 +1,46 @@
+/* Orbit-Play built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+window.orbit-play {
+  background-color: #000000;
+  color: @orbit_fg;
+}
+
+window.orbit-play .bar {
+  padding: 5px 10px;
+  background-color: alpha(@orbit_surface, 0.85);
+}
+window.orbit-play .bar.top    { border-bottom: 1px solid @orbit_border; background-color: @orbit_surface; }
+window.orbit-play .bar.controls {
+  padding: 10px 15px;
+  background-color: @orbit_surface;
+  border-top: 1px solid @orbit_border;
+}
+window.orbit-play .bar .title { font-weight: bold; }
+window.orbit-play .bar button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 5px;
+}
+window.orbit-play .bar button.main {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 20px;
+  background: @orbit_accent;
+  color: #ffffff;
+}
+window.orbit-play .time-label {
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+  font-size: 12px;
+  color: @orbit_muted;
+}
+window.orbit-play scale.time highlight { background-color: @orbit_accent; }
+window.orbit-play .menu-list { padding: 5px; }
+
+window.orbit-play .cover      { border-radius: 10px; }
+window.orbit-play .cover-icon { color: @orbit_muted; }
+window.orbit-play .song       { font-size: 20px; font-weight: bold; }
+window.orbit-play .artist     { color: @orbit_muted; }
+window.orbit-play .message,
+window.orbit-play .message-icon { color: @orbit_muted; }

@@ -313,3 +313,34 @@ read-print = Imprimir
 read-source = Ver o texto-fonte
 read-outline = Índice
 read-pages = Páginas
+
+## Reprodutor de vídeo e áudio
+
+play-title = Orbit-Play
+play-empty = Nada tocando.
+    Arraste um vídeo, uma música ou uma animação Flash para cá, ou escolha um arquivo.
+play-open = Abrir…
+play-filter = Vídeo, áudio e Flash
+play-failed = Não foi possível tocar { $name }.
+    { $reason }
+play-no-ruffle = Para animações Flash é preciso o Ruffle (ruffle.rs), em ~/.local/bin ou no PATH.
+play-play = Tocar
+play-pause = Pausar
+play-previous = Anterior na pasta
+play-next = Próximo na pasta
+play-frame-back = Quadro anterior
+play-frame-forward = Próximo quadro
+play-mute = Sem som
+play-volume = Volume
+play-speed = Velocidade
+play-audio-track = Faixa de áudio
+play-subtitles = Legendas
+play-subtitles-off = Desligadas
+play-subtitles-load = Carregar legenda…
+play-track = Faixa { $n }
+play-mono = mono
+play-stereo = estéreo
+play-channels = { $n } canais
+play-fullscreen = Tela cheia
+play-leave-fullscreen = Sair da tela cheia
+play-key-space = Espaço

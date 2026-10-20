@@ -1,0 +1,20 @@
+[package]
+name = "orbit-play"
+description = "Orbit-Play: a Rust + GTK4 video and audio player on GStreamer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true
+async-channel.workspace = true
+gst.workspace = true
+gst-play.workspace = true
+gst-plugin-gtk4.workspace = true

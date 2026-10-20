@@ -10,7 +10,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
 > rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink**,
-> **Orbit-View** and **Orbit-Read** work; the other components are planned.
+> **Orbit-View**, **Orbit-Read** and **Orbit-Play** work; the other
+> components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -23,7 +24,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
 | **orbit-read** | PDF, Markdown and plain-text reader: outline, thumbnails, search, night mode | **working** |
 | orbit-files | Complete file manager | planned |
-| orbit-play | Video player for common formats | planned |
+| **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
@@ -194,15 +195,43 @@ A reader for PDF, Markdown and plain text; documents open at the top.
 The text keeps to a comfortable width, centred; Ctrl + / − / 0 changes its
 size.
 
+## Orbit-Play
+
+A player for video and audio, on [GStreamer](https://gstreamer.freedesktop.org/)
+with FFmpeg's decoders behind it (`gstreamer1.0-libav`), so practically
+every format plays — MKV, MP4, WebM, AVI, FLV, WMV, RMVB, MP3, FLAC, Opus…
+— decoded on the GPU where it can (VA-API). The picture is drawn into the
+window by GTK; audio shows the album's cover, title and artist.
+
+The folder is a playlist: previous and next, and on to the next when one
+ends. Audio tracks and subtitles — embedded, the file of the same name
+beside the video (`filme.srt`, `filme.pt-BR.srt`), or one chosen — speed
+from 0.25× to 2×, frame by frame. The controls go a moment after the
+pointer stops while a video plays.
+
+Old **Flash movies** (`.swf`) are not video: they are handed to
+[Ruffle](https://ruffle.rs/), the Flash Player emulator, in a window of its
+own (`ruffle` in `~/.local/bin` or on the PATH).
+
+| Key | | Key | |
+| --- | --- | --- | --- |
+| Space | play, pause | ← → | 5 s back, on (Shift: 60 s) |
+| ↑ ↓ | volume | M | mute |
+| , . | frame back, on | [ ] Backspace | slower, faster, normal |
+| PgUp PgDn | previous, next | F or F11 | full screen |
+
 ## Building and running
 
-Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files;
+Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
-bubblewrap (its sandbox); for Orbit-Read the poppler-glib development files.
+bubblewrap (its sandbox); for Orbit-Read the poppler-glib development
+files; for Orbit-Play GStreamer's (core, base and bad plugins) and
+`gstreamer1.0-libav`.
 On Debian/Ubuntu:
 
 ```sh
-sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap libpoppler-glib-dev
+sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap libpoppler-glib-dev \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-libav
 cargo build --release
 ./target/release/orbit-panel &
 ./target/release/orbit-dock &
@@ -217,7 +246,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -299,6 +328,7 @@ follow the locale.
 | `orbit-blink` | The screen capture |
 | `orbit-view` | The image viewer |
 | `orbit-read` | The document reader |
+| `orbit-play` | The media player |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).
