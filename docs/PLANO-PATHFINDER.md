@@ -34,7 +34,7 @@ Motor decidido: **WebKitGTK 6.0**.
 | Item | Valor |
 |---|---|
 | Binário / app id | `orbit-pathfinder` / `io.github.julas23.Orbit.Pathfinder` |
-| Configuração | `~/.config/orbit/pathfinder.yaml` (+ `pathfinder-services.yaml`) |
+| Configuração | `~/.config/orbit/pathfinder.yaml` (serviços e opções num arquivo só) |
 | Dados | `~/.local/share/orbit/pathfinder/` — um diretório por serviço e um por espaço de navegação |
 | Cache | `~/.cache/orbit/pathfinder/` (mesma divisão) |
 | Estado da sessão | `~/.local/state/orbit/pathfinder/` |
@@ -105,7 +105,7 @@ cookies, parâmetros), como o do Zen/Firefox.
 Configuração:
 
 ```yaml
-# ~/.config/orbit/pathfinder-services.yaml
+# ~/.config/orbit/pathfinder.yaml
 groups:
   - name: Comunicação
     color: "#88c0d0"
@@ -205,6 +205,27 @@ pacote `libwebkitgtk-6.0-4` no Debian 13); o app
 em si só desenha a interface e coordena.
 
 ## 9. Fases
+
+**Ordem decidida em 2026-10-20:** a barra de serviços (Fase 2) vem antes da
+navegação completa, para tirar o Wavebox de uso o quanto antes (licença paga, e
+o Ferdium não atende). A primeira entrega juntou o essencial das Fases 1 e 2:
+barra com grupos, cofres por serviço, contadores, notificações, links externos,
+limpeza de URLs e a parte do escudo que não depende de listas (ITP, cookies de
+terceiros, TLS, permissões). Ficaram para depois: listas de bloqueio, hibernar,
+arrastar, receitas do Ferdium, contador no dock.
+
+**Logins permanentes (2026-10-20):** cada serviço guarda os cookies em
+`cookies.sqlite` na própria pasta, e os cookies de sessão (sem validade, que o
+WebKit descarta ao fechar e onde muitos sites guardam o login) vão para
+`session-cookies.json` (0600) ao fechar e a cada 5 min, voltando antes da página
+carregar — como o Chromium/Wavebox faz. O ícone do site fica em `icon.png`
+para o botão aparecer certo antes de carregar. A pasta
+`~/.local/share/orbit/pathfinder` fica **fora do Syncthing** (logins são de
+cada máquina; SQLite aberto em duas máquinas corrompe).
+
+Nota de teste: no sway headless o monitor virtual tem taxa de atualização 0 e o
+WebKitGTK 2.52 morre com SIGFPE ao carregar a primeira página; a config de teste
+fixa `mode 1600x1000@60Hz`.
 
 ### Fase 1 — navegador mínimo com privacidade
 

@@ -1,0 +1,83 @@
+/* Orbit-Pathfinder built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+window.orbit-pathfinder {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+
+/* The sidebar of services. */
+window.orbit-pathfinder .sidebar {
+  min-width: 70px;
+  background-color: mix(@orbit_window, #000000, 0.35);
+  border-right: 1px solid @orbit_border;
+  padding: 5px 0;
+}
+window.orbit-pathfinder .group-header {
+  margin: 5px 5px 0 5px;
+  padding: 0 5px;
+  min-height: 20px;
+  font-size: 10px;
+  font-weight: bold;
+  color: @orbit_muted;
+  border-radius: 5px;
+}
+window.orbit-pathfinder .group-header:hover { color: @orbit_fg; }
+window.orbit-pathfinder .group-services { padding: 0 5px; }
+window.orbit-pathfinder button.service {
+  min-width: 50px;
+  min-height: 50px;
+  margin: 5px 5px 0 5px;
+  padding: 0;
+  border-radius: 10px;
+  border-left: 3px solid transparent;
+}
+window.orbit-pathfinder button.service:hover { background-color: @orbit_hover; }
+window.orbit-pathfinder button.service.active {
+  background-color: alpha(@orbit_accent, 0.30);
+  border-left-color: @orbit_accent;
+}
+window.orbit-pathfinder .service-icon.placeholder { opacity: 0.5; }
+window.orbit-pathfinder .badge {
+  min-width: 10px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background-color: @orbit_alert;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: bold;
+}
+window.orbit-pathfinder .group-badge { padding: 0 4px; }
+window.orbit-pathfinder .footer-button {
+  min-height: 40px;
+  margin: 5px 10px 0 10px;
+  border-radius: 10px;
+}
+
+/* The bar over the page. */
+window.orbit-pathfinder .bar {
+  padding: 5px 10px;
+  background-color: mix(@orbit_window, @orbit_fg, 0.06);
+  border-bottom: 1px solid @orbit_border;
+}
+window.orbit-pathfinder .bar button { min-width: 30px; min-height: 30px; padding: 0 5px; }
+window.orbit-pathfinder .page-title { color: @orbit_muted; padding: 0 5px; }
+window.orbit-pathfinder .empty { color: @orbit_muted; font-size: 14px; }
+
+/* Menus and dialogs. */
+window.orbit-pathfinder popover > contents {
+  background-color: @orbit_surface;
+  color: @orbit_fg;
+  border: 1px solid @orbit_border;
+  border-radius: 5px;
+  padding: 5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+window.orbit-pathfinder .menu-item { padding: 5px 10px; min-height: 20px; border-radius: 5px; }
+window.orbit-pathfinder .menu-item:hover { background-color: alpha(@orbit_accent, 0.35); }
+window.orbit-pathfinder-dialog {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-pathfinder-dialog .dialog-box { padding: 15px; }

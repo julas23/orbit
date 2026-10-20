@@ -15,7 +15,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEST=${PREFIX:-$HOME/.local}/bin
 APPS=${PREFIX:-$HOME/.local}/share/applications
 
-cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files
+cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder
 
 mkdir -p "$DEST"
 # install(1) replaces the file instead of writing into it, so a running
@@ -30,6 +30,7 @@ install -m 755 "$ROOT/target/release/orbit-read" "$DEST/orbit-read"
 install -m 755 "$ROOT/target/release/orbit-play" "$DEST/orbit-play"
 install -m 755 "$ROOT/target/release/orbit-edit" "$DEST/orbit-edit"
 install -m 755 "$ROOT/target/release/orbit-files" "$DEST/orbit-files"
+install -m 755 "$ROOT/target/release/orbit-pathfinder" "$DEST/orbit-pathfinder"
 install -m 755 "$ROOT/scripts/orbit-session" "$DEST/orbit-session"
 mkdir -p "$APPS"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Calc.desktop" "$APPS/"
@@ -40,6 +41,7 @@ install -m 644 "$ROOT/data/io.github.julas23.Orbit.Read.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Play.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Edit.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Files.desktop" "$APPS/"
+install -m 644 "$ROOT/data/io.github.julas23.Orbit.Pathfinder.desktop" "$APPS/"
 
 echo "installed orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files and orbit-session in $DEST"
 echo "and the Orbit-Calc, Orbit-Clip, Orbit-Blink, Orbit-View, Orbit-Read, Orbit-Play, Orbit-Edit and Orbit-Files menu entries in $APPS"

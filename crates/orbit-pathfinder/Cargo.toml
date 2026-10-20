@@ -1,0 +1,20 @@
+[package]
+name = "orbit-pathfinder"
+description = "Orbit-Pathfinder: a private web browser with a sidebar of services, on WebKitGTK"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+webkit6.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+log.workspace = true
+anyhow.workspace = true
