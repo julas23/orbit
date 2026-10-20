@@ -1,0 +1,18 @@
+[package]
+name = "orbit-read"
+description = "Orbit-Read: a Rust + GTK4 reader for PDF (poppler), Markdown and plain text"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true
+poppler-rs.workspace = true
+pulldown-cmark.workspace = true

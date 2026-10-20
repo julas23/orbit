@@ -9,8 +9,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
-> rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink** and
-> **Orbit-View** work; the other components are planned.
+> rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink**,
+> **Orbit-View** and **Orbit-Read** work; the other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -21,7 +21,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
 | **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
-| orbit-read | PDF, Markdown and plain-text reader | planned |
+| **orbit-read** | PDF, Markdown and plain-text reader: outline, thumbnails, search, night mode | **working** |
 | orbit-files | Complete file manager | planned |
 | orbit-play | Video player for common formats | planned |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
@@ -172,15 +172,37 @@ freedesktop.org cache with file managers. Options in
 | I | information | F5 | slideshow |
 | F11 or F | full screen | Delete | to the trash |
 
+## Orbit-Read
+
+A reader for PDF, Markdown and plain text; documents open at the top.
+
+- **PDF**, drawn by [poppler](https://poppler.freedesktop.org/): pages one
+  under another, fitted to the width or zoomed (Ctrl + wheel); a sidebar
+  with the outline, when the document has one, and the pages; search with
+  every match marked (Ctrl+F, Enter / Shift+Enter); text selected by
+  dragging and copied with Ctrl+C; links followed, inside the document or
+  out; night mode, which turns the pages' colours over and keeps their hues
+  (Ctrl+I); printing (Ctrl+P); and a password asked for when the file has
+  one. Only the pages on screen are rendered, so long documents open at
+  once.
+- **Markdown**, laid out: headings, emphasis, lists and task lists, quotes,
+  code, tables, local images, links (to other documents, which open in the
+  reader, and to headings in the page) and footnotes; Ctrl+U shows the
+  source.
+- **Plain text** in a monospaced font, UTF-8 or Latin-1.
+
+The text keeps to a comfortable width, centred; Ctrl + / − / 0 changes its
+size.
+
 ## Building and running
 
 Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
-bubblewrap (its sandbox).
+bubblewrap (its sandbox); for Orbit-Read the poppler-glib development files.
 On Debian/Ubuntu:
 
 ```sh
-sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap
+sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap libpoppler-glib-dev
 cargo build --release
 ./target/release/orbit-panel &
 ./target/release/orbit-dock &
@@ -195,7 +217,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -276,6 +298,7 @@ follow the locale.
 | `orbit-clip` | The clipboard history |
 | `orbit-blink` | The screen capture |
 | `orbit-view` | The image viewer |
+| `orbit-read` | The document reader |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

@@ -52,6 +52,10 @@ async-io = "2"
 gufo-common = { version = "0.2", features = ["chrono"] }
 gufo-exif = { version = "0.2", features = ["chrono"] }
 chrono = { version = "0.4", default-features = false }
+# orbit-read: PDF pages drawn by poppler (its GLib binding, on the same
+# gtk-rs 0.22 as the rest), Markdown parsed by pulldown-cmark.
+poppler-rs = "0.26"
+pulldown-cmark = { version = "0.13", default-features = false }
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"

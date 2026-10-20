@@ -1,0 +1,73 @@
+/* Orbit-Read built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+window.orbit-read {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+
+/* --------------------------------------------------------------- the bar */
+window.orbit-read .bar {
+  padding: 5px 10px;
+  background-color: mix(@orbit_window, @orbit_fg, 0.1);
+}
+window.orbit-read .bar button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 5px;
+}
+window.orbit-read .bar .name     { font-weight: bold; }
+window.orbit-read .bar .zoom,
+window.orbit-read .bar .pages-count { color: @orbit_muted; font-size: 12px; }
+window.orbit-read .bar entry     { min-height: 30px; }
+window.orbit-read searchbar .counter { color: @orbit_muted; font-size: 12px; margin-left: 5px; }
+
+/* -------------------------------------------------------------- the PDF */
+window.orbit-read .document {
+  background-color: mix(@orbit_window, #000000, 0.25);
+}
+window.orbit-read .page {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+/* Night: the pages' colours turned over, hues kept. */
+window.orbit-read .night .page,
+window.orbit-read .night .thumb {
+  filter: invert(1) hue-rotate(180deg);
+}
+window.orbit-read .sidebar {
+  background-color: @orbit_window;
+}
+window.orbit-read .sidebar .switcher { margin: 5px; }
+window.orbit-read .sidebar .switcher button:checked { background: alpha(@orbit_accent, 0.45); }
+window.orbit-read .sidebar list      { background: none; }
+window.orbit-read .sidebar row       { padding: 5px 10px; border-radius: 5px; }
+window.orbit-read .sidebar row:selected { background-color: alpha(@orbit_accent, 0.45); }
+window.orbit-read .thumbs .number    { color: @orbit_muted; font-size: 11px; }
+window.orbit-read .thumb             { box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45); }
+
+/* ------------------------------------------------- Markdown and text */
+window.orbit-read textview.doc,
+window.orbit-read textview.doc text {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-read textview.source {
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+}
+window.orbit-read .md-table {
+  border: 1px solid @orbit_border;
+  margin: 5px 0;
+}
+window.orbit-read .md-table .cell {
+  padding: 5px 10px;
+  border: 1px solid @orbit_border;
+}
+window.orbit-read .md-table .header {
+  font-weight: bold;
+  background-color: @orbit_faint;
+}
+
+/* ------------------------------------------------------------- the rest */
+window.orbit-read .message,
+window.orbit-read .message-icon { color: @orbit_muted; }

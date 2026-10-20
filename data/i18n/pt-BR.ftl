@@ -279,3 +279,37 @@ view-info-north = N
 view-info-south = S
 view-info-east = L
 view-info-west = O
+
+## Leitor de documentos
+
+read-title = Orbit-Read
+read-empty = Nenhum documento aberto.
+    Arraste um PDF, Markdown ou texto para cá, ou escolha um.
+read-open = Abrir…
+read-open-button = Abrir…
+read-filter = Documentos (PDF, Markdown, texto)
+read-failed = Não foi possível abrir { $name }.
+    { $reason }
+read-encrypted = { $name } está protegido por senha.
+read-wrong-password = Senha incorreta para { $name }.
+read-password = Senha
+read-sidebar = Índice e páginas
+read-page = Ir para a página
+read-of-pages = de { $total }
+read-zoom-out = Diminuir
+read-zoom-in = Aumentar
+read-fit = Ajustar à largura
+read-search = Buscar no documento
+read-search-placeholder = Buscar…
+read-search-previous = Anterior
+read-search-next = Próximo
+read-search-none = Nada encontrado
+read-search-running = Buscando…
+read-search-count = { $total } encontrados
+read-search-position = { $position } de { $total }
+read-search-position-running = { $position } de { $total }…
+read-night = Modo noturno
+read-print = Imprimir
+read-source = Ver o texto-fonte
+read-outline = Índice
+read-pages = Páginas

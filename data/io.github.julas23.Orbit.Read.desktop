@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Read
+GenericName=Document reader
+GenericName[pt_BR]=Leitor de documentos
+Comment=Read PDF, Markdown and plain text
+Comment[pt_BR]=Leia PDF, Markdown e texto puro
+Exec=orbit-read %U
+Icon=x-office-document
+Terminal=false
+Categories=Office;Viewer;
+Keywords=pdf;markdown;text;reader;document;
+Keywords[pt_BR]=pdf;markdown;texto;leitor;documento;
+MimeType=application/pdf;text/markdown;text/x-markdown;text/plain;

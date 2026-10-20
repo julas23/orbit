@@ -287,3 +287,37 @@ view-info-north = N
 view-info-south = S
 view-info-east = E
 view-info-west = W
+
+## Document reader
+
+read-title = Orbit-Read
+read-empty = No document open.
+    Drop a PDF, Markdown or text file here, or choose one.
+read-open = Open…
+read-open-button = Open…
+read-filter = Documents (PDF, Markdown, text)
+read-failed = Could not open { $name }.
+    { $reason }
+read-encrypted = { $name } is protected by a password.
+read-wrong-password = Wrong password for { $name }.
+read-password = Password
+read-sidebar = Outline and pages
+read-page = Go to page
+read-of-pages = of { $total }
+read-zoom-out = Zoom out
+read-zoom-in = Zoom in
+read-fit = Fit to width
+read-search = Search the document
+read-search-placeholder = Search…
+read-search-previous = Previous
+read-search-next = Next
+read-search-none = Nothing found
+read-search-running = Searching…
+read-search-count = { $total } found
+read-search-position = { $position } of { $total }
+read-search-position-running = { $position } of { $total }…
+read-night = Night mode
+read-print = Print
+read-source = Show the source
+read-outline = Outline
+read-pages = Pages

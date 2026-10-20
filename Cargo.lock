@@ -1756,6 +1756,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-read"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "log",
+ "orbit-app",
+ "orbit-common",
+ "poppler-rs",
+ "pulldown-cmark",
+]
+
+[[package]]
 name = "orbit-view"
 version = "0.1.0"
 dependencies = [
@@ -1863,6 +1876,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "poppler-rs"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d93d32751326b83aeba757236c7fd2f14ca65309e7b295ba54973fbba338bc43"
+dependencies = [
+ "cairo-rs",
+ "gio 0.22.10",
+ "glib 0.22.10",
+ "libc",
+ "poppler-sys-rs",
+]
+
+[[package]]
+name = "poppler-sys-rs"
+version = "0.26.0-alpha.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4e4fb6a837c07c22710ca4a84dccf68878a127b64b834059e7ae714443e5403"
+dependencies = [
+ "cairo-sys-rs",
+ "gio-sys 0.22.9",
+ "glib-sys 0.22.9",
+ "gobject-sys 0.22.9",
+ "libc",
+ "system-deps 7.0.8",
+]
+
+[[package]]
 name = "portable-atomic"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1893,6 +1933,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+dependencies = [
+ "bitflags 2.13.2",
+ "memchr",
+ "unicase",
 ]
 
 [[package]]
@@ -2456,6 +2507,12 @@ checksum = "dce1bf08044d4b7a94028c93786f8566047edc11110595914de93362559bc658"
 dependencies = [
  "tinystr",
 ]
+
+[[package]]
+name = "unicase"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357cc3acc6a036009fd6c973ed009037c732d60d0b4f6c673e9041497482a28f"
 
 [[package]]
 name = "unicode-ident"
