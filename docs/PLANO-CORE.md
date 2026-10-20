@@ -12,7 +12,10 @@ mínimo que o core precisa fazer no primeiro dia.
 
 1. **Nada quebra na troca.** Painel, dock, blink, menu, atalhos e scripts que hoje
    falam com o sway continuam funcionando sem mudança de código: o core fala o IPC
-   do sway/i3 (seção 5). Recurso novo entra por extensão do IPC, nunca por
+   do sway/i3 (seção 5) como **camada de compatibilidade**. O caminho principal
+   entre o core e os componentes são **protocolos Wayland padrão** (o método do
+   COSMIC: o compositor só compõe, o resto são clientes); recurso novo entra por
+   protocolo padrão ou, na falta dele, por extensão do IPC — nunca por
    incompatibilidade.
 2. **O sway fica como sessão de resgate** no greetd até o core ser o uso diário
    por **duas semanas seguidas** sem voltar ao sway. Só então ele sai do padrão
@@ -45,10 +48,11 @@ mínimo que o core precisa fazer no primeiro dia.
   `orbitctl -t get_tree` aceitando a mesma sintaxe do `swaymsg`.
 - Estado em `~/.local/state/orbit/core/` (sessão de janelas, layouts por
   workspace).
+- Login e bloqueio: `orbit-greet` (seção 7), serviço PAM `/etc/pam.d/orbit-greet`.
 
 ## 3. Recursos por origem
 
-O que cada WM/DE ensina e como entra no core. Coluna "Fase" remete à seção 7.
+O que cada WM/DE ensina e como entra no core. Coluna "Fase" remete à seção 8.
 
 | Origem | Recurso | Como fica no Orbit | Fase |
 |---|---|---|---|
@@ -78,7 +82,7 @@ O que cada WM/DE ensina e como entra no core. Coluna "Fase" remete à seção 7.
 | **niri** | Faixa de rolagem infinita de colunas | Layout `scroll`: janelas em colunas que rolam na horizontal, foco centraliza | 3 |
 | | Visão geral (overview) | Exposição de todos os workspaces com miniatura (a mesma captura do blink) | 4 |
 | **GNOME / KDE** | Portal (captura de tela, seletor de arquivos, compartilhar tela) | `xdg-desktop-portal-wlr` no começo; backend próprio depois | 2 / 5 |
-| | Gerência de sessão, autostart XDG, tela de bloqueio | Autostart XDG; `ext-session-lock-v1` com locker próprio | 2 / 5 |
+| | Gerência de sessão, autostart XDG, tela de bloqueio | Autostart XDG; login e bloqueio são a mesma camada do core, o `orbit-greet` (seção 7); `ext-session-lock-v1` para lockers de terceiros | 2 |
 | | Configuração de monitores pela interface | Monitores via `wlr-output-management` (funciona com `wdisplays`/`kanshi`) e depois app Orbit | 2 / 5 |
 | | Notificações, teclado/idioma, áudio, rede | Já no painel; o core só fornece o necessário (layout de teclado por IPC) | — |
 | | Arrastar janela entre monitores, "aero snap" | Flutuantes com snap nas bordas e em metades/quartos | 3 |
@@ -108,12 +112,22 @@ Necessários na **Fase 1** (sem eles o que já existe para de funcionar):
 | `text-input-v3`, `input-method-v2`, `virtual-keyboard`, `wlr-virtual-pointer` | Dead keys do us alt-intl em todo app; testes automatizados (o `vptr`) |
 | `pointer-constraints`, `relative-pointer`, `pointer-gestures` | Jogos, gestos |
 | `xdg-activation` | Um app trazer outro à frente (abrir arquivo no orbit-files) |
+| `ext-workspace-v1` | Áreas de trabalho para o painel sem IPC (protocolo que nasceu no COSMIC e foi padronizado) |
 | XWayland (via `xwayland-satellite` ou o do Smithay) | Apps X restantes (Steam no PVE, utilitários antigos) |
 
 Na **Fase 2**: `ext-session-lock`, `security-context` (sandbox), `tearing-control`
 (jogos), `content-type`, `cursor-shape`.
 
 ## 5. IPC compatível com o sway
+
+**Papel: camada de compatibilidade, não o centro.** Ela existe para que nada
+quebre no dia da troca e para scripts, `orbitctl` e clientes de terceiros
+(waybar, autotiling). Os componentes do Orbit migram aos poucos para os
+protocolos padrão — `ext-workspace-v1` (áreas), `ext-foreign-toplevel-list` +
+`wlr-foreign-toplevel-management` (janelas), `ext-image-copy-capture` (blink) —
+e com isso passam a funcionar também em niri, COSMIC e qualquer compositor que
+os implemente. O IPC continua mantido, mas não ganha recurso que um protocolo
+padrão já cubra.
 
 O core implementa o **mesmo protocolo binário** do i3/sway (`i3-ipc` + JSON). O
 critério de compatibilidade é objetivo: **tudo o que o Orbit usa hoje**,
@@ -159,21 +173,98 @@ Tudo no workspace do repositório `orbit`, junto com os apps.
 | `orbit-config` | YAML → configuração tipada, validação com mensagens claras, recarga a quente, importador do sway |
 | `orbit-render` | Efeitos: bordas, cantos, sombras, blur (dual kawase), animações com curvas. Isolado para poder ser desligado inteiro |
 | `orbit-remote` | Acesso remoto: trait `Session { frames(); inject(); }`, captura por dmabuf, codificação VA-API, WebRTC, cliente web, pareamento. Implementações `WlrootsSession` (testar já sobre o sway) e `CoreSession` (dentro do core) |
+| `orbit-greet` | A face do login e do bloqueio (seção 7): GTK4, PAM, destrava o chaveiro. Processo à parte do core, cliente privilegiado dele |
 | `orbitctl` | Linha de comando (`swaymsg` do Orbit) |
 
 Princípios: o **layout não sabe que existe Wayland** (testes rápidos e
-determinísticos); o **IPC não sabe que existe renderização**; os **efeitos são
+determinísticos); o **IPC não sabe que existe renderização** e é só uma visão do
+estado, como os protocolos padrão; os **efeitos são
 opcionais em tempo de execução** (um `decoration: off` deixa o core no custo do
 sway).
 
-## 7. Fases
+## 7. Orbit-Greet: o login é uma camada do core
+
+O login não é um programa que roda antes da sessão e some: é o **estado
+travado do próprio orbit-core**. O core sobe já travado; o `orbit-greet` é a
+face desse estado; autenticar **destrava** a camada e revela a sessão que já
+estava carregada atrás. A mesma camada é a tela de bloqueio (Super+L, ociosidade,
+suspender) — login e bloqueio são uma coisa só, com a mesma aparência.
+
+### 7.1 Como funciona
+
+1. **Boot:** o greetd inicia o core direto para o usuário (`initial_session`,
+   uma vez por boot) com `orbit-core --locked`. O `default_session` continua sendo
+   o **tuigreet**: depois de sair da sessão ou de um crash do core, a volta é
+   sempre para o tuigreet, nunca para outro login automático.
+2. **Travado desde o quadro zero:** antes de aceitar qualquer cliente, o core já
+   está no estado `Locked`. Nesse estado ele **não desenha nenhuma superfície de
+   cliente nem entrega entrada a elas** — só o fundo (wallpaper, e o Jarvis
+   quando existir) e o greet. Quem garante o bloqueio é o core, não o greet.
+3. **O greet é um cliente privilegiado:** o core lança o `orbit-greet` num socket
+   Wayland privado; só as superfícies desse cliente aparecem no estado travado,
+   em tela cheia, com o teclado exclusivo. Ele fica num processo à parte para o
+   código de autenticação (PAM) não morar dentro do compositor.
+4. **Se o greet cair, a sessão continua travada:** o core mostra o fundo e
+   relança o greet (a mesma regra do `ext-session-lock`). Crash do greet nunca
+   destrava.
+5. **Autenticação:** o greet fala PAM pelo serviço `orbit-greet` (`pam_unix`, que
+   checa a senha do próprio usuário via `unix_chkpwd`, como o swaylock). Tentativas
+   erradas esperam cada vez mais. Com a senha certa, o greet **destrava o
+   chaveiro** (gnome-keyring), que hoje o PAM do greetd destrava no login.
+6. **Destravar:** o greet avisa o core por um pedido do protocolo privado; o core
+   sai de `Locked`, roda o autostart XDG (no boot) e revela a sessão. Na Fase 4
+   a revelação vira transição animada (o greet se dissolve sobre o desktop).
+7. **Bloqueio durante o uso:** o mesmo estado `Locked`, com as janelas
+   existindo atrás. **O conteúdo atrás nunca aparece**, nem desfocado (blur de
+   conteúdo real vaza informação): atrás fica só o fundo.
+8. **Vários monitores:** o greet no monitor com o cursor; nos outros, só o fundo.
+9. **Outra pessoa / outra sessão:** botão "Outra sessão" encerra o core e cai no
+   tuigreet do greetd (sway de resgate, outro usuário).
+
+### 7.2 O que o greet mostra
+
+Relógio e data no estilo do painel (mesmo formato "ter 20 out"), foto e nome do
+usuário, campo de senha, estado da bateria e da rede, teclado (us alt-intl, com
+troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
+`confirm::choose` do painel) e o tema do Orbit. Configuração em
+`~/.config/orbit/greet.yaml`.
+
+### 7.3 Passos
+
+| # | Passo | Fase |
+|---|---|---|
+| 1 | Estado `Locked` no core: com ele ligado, nada de cliente é desenhado nem recebe entrada; teste headless provando que uma janela aberta não aparece no quadro capturado | 1 |
+| 2 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar, saber o monitor ativo) | 1 |
+| 3 | `ext-session-lock-v1` no core, testado com o `swaylock` dentro da sessão aninhada | 1 |
+| 4 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) | 1 |
+| 5 | `--locked` no boot + autostart adiado até destravar; `initial_session` no greetd com tuigreet de `default_session` | 2 |
+| 6 | Destravar o gnome-keyring com a senha (conferir o caminho: PAM `pam_gnome_keyring` no serviço do greet ou a chamada D-Bus do daemon) | 2 |
+| 7 | Bloqueio por Super+L, ociosidade e antes de suspender; trocar o `swaylock` da config | 2 |
+| 8 | Visual completo (seção 7.2), vários monitores, "Outra sessão" | 2 |
+| 9 | Transição animada ao destravar | 4 |
+| 10 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |
+
+**Pronto (login) quando:** o hp liga direto no greet do Orbit, sem tuigreet;
+a senha certa revela a sessão com o chaveiro destravado e o autostart rodando;
+a errada não revela nada; matar o greet não destrava; sair da sessão cai no
+tuigreet; Super+L, ociosidade e suspender travam com a mesma tela.
+
+## 8. Fases
 
 Cada fase só termina com o critério de "pronto" verificado — em teste
 automatizado sempre que der.
 
-### Fase 1 — aninhado (janela dentro do sway)
+### Fase 1 — aninhado (janela dentro do sway), com a sessão real já testável
 
-Core roda como janela (backend winit) dentro da sessão sway atual.
+Ponto de partida: o **esqueleto do anvil** (estado, event loop calloop,
+backends winit/headless) com a **organização do cosmic-comp** (`state`,
+`backend/{kms,winit}`, `shell/{floating,tiling}`, `input`, `wayland/protocols`,
+`xwayland`). Os backends, a entrada e o XWayland são portados do cosmic-comp; o
+tiling automático dele dá a base do layout `tree`.
+
+O uso é aninhado (backend winit dentro da sessão sway atual), mas como o backend
+DRM vem portado junto, **a sessão real já sobe num TTY de teste** desde o fim
+desta fase — sem esperar o aninhado ficar completo.
 
 - Janelas `xdg-shell`, foco (clique e `focus_follows_mouse`), teclado com o
   layout us alt-intl e dead keys, mouse, `floating_modifier`.
@@ -182,23 +273,31 @@ Core roda como janela (backend winit) dentro da sessão sway atual.
 - Layer-shell: painel e dock do Orbit sobem dentro dele.
 - XWayland.
 - IPC compatível (seção 5) + `orbitctl`; importador da config do sway.
+- Backend DRM/KMS + libinput via libseat portado do cosmic-comp, entrada `orbit`
+  no greetd marcada como experimental.
+- Estado `Locked`, cliente privilegiado, `ext-session-lock` e o `orbit-greet`
+  mínimo (passos 1–4 da seção 7.3).
 - **Pronto quando:** dentro da janela aninhada, painel, dock, menu, blink,
   orbit-files/view/play/edit/read funcionam como no sway; o `swaymsg -t get_tree`
   responde; a suíte de testes headless passa (abrir, fechar, dividir, mover para
-  workspace, flutuar, scratchpad, regras).
+  workspace, flutuar, scratchpad, regras); e a sessão `orbit` sobe num TTY do hp
+  com painel e um terminal, mesmo que ainda sem monitor externo.
 
-### Fase 2 — sessão real
+### Fase 2 — sessão real de uso diário
 
-- Backend DRM/KMS + libinput via libseat; entrada `orbit` no greetd.
+O backend DRM já existe desde a Fase 1; esta fase é deixá-lo completo para o dia
+a dia, portando do cosmic-comp o que falta:
+
 - Múltiplos monitores (eDP-1 + HDMI-A-4 4K), hotplug, escala fracionária,
   `wlr-output-management`.
-- Portal (`xdg-desktop-portal-wlr` + gtk), autostart XDG, idle/DPMS, bloqueio de
-  tela (`swaylock` no começo, via `ext-session-lock`).
+- Portal (`xdg-desktop-portal-wlr` + gtk), autostart XDG, idle/DPMS.
+- Login e bloqueio pelo `orbit-greet` (passos 5–8 da seção 7.3), no lugar do
+  tuigreet no boot e do `swaylock`.
 - VRR e tearing para jogos.
 - **Pronto quando:** um dia inteiro de uso no hp sem voltar ao sway; suspender e
   voltar; conectar/desconectar o monitor externo com janelas abertas; vídeo 4K no
-  orbit-play sem quadros perdidos; compartilhamento de tela no navegador.
-  A partir daqui conta o prazo de duas semanas da regra 1.2.
+  orbit-play sem quadros perdidos; compartilhamento de tela no navegador; e o
+  critério de login da seção 7.3. A partir daqui conta o prazo de duas semanas da regra 1.2.
 
 ### Fase 3 — os layouts dos outros
 
@@ -213,6 +312,7 @@ Core roda como janela (backend winit) dentro da sessão sway atual.
 - Animações com curvas (abrir, fechar, mover, trocar workspace), cantos, sombras,
   blur, opacidade por regra, gestos com acompanhamento, overview.
 - Desligamento automático na bateria (`effects: { on_battery: off }`).
+- Transição animada do greet ao destravar (passo 9 da seção 7.3).
 - **Pronto quando:** consumo parado igual ao da Fase 2 (medido com `powertop`);
   animação a 60 fps no iGPU do 7730U com o monitor 4K.
 
@@ -225,7 +325,8 @@ Core roda como janela (backend winit) dentro da sessão sway atual.
 - Wallpaper Jarvis: camada `background` que reage ao áudio (PipeWire) e sobe a
   `overlay` quando o orbit-talk escuta; FPS limitado e pausa quando coberto.
 - orbit-talk integrado: atalho do core ativa, comandos viram IPC.
-- Locker e configurações de monitor próprios; backend de portal próprio.
+- Configurações de monitor próprias; backend de portal próprio; digital no
+  greet (passo 10 da seção 7.3).
 - **Pronto quando:** abrir a sessão do hp no navegador do celular fora de casa,
   com mouse e teclado, sem instalar nada; e "abrir o arquivos na pasta
   Downloads" por voz funcionar.
@@ -236,16 +337,67 @@ Core roda como janela (backend winit) dentro da sessão sway atual.
   cedo.
 - `orbit-ipc` substitui os dois `sway.rs` atuais já na Fase 1, com os apps
   passando a usar `ORBIT_SOCK` → `SWAYSOCK` como fallback.
+- Painel, dock e blink migram para os protocolos padrão (seção 5), um módulo por
+  vez, testados no core e, onde der, no sway. O sway 1.10.1 do Debian 13 tem
+  `ext-foreign-toplevel-list` mas **não** `ext-workspace` (conferido em
+  2026-10-20), então no sway o módulo de áreas mantém o IPC como alternativa.
+  Quando todos migrarem, o IPC fica só para scripts e terceiros.
+- `orbit-remote` estuda o `libei.rs` do cosmic-comp: injeção de mouse e teclado
+  pelo padrão libei, o mesmo que o portal de área de trabalho remota usa.
 
-## 8. Pendências e riscos
+## 9. Referências e como portar
+
+**Decidido (2026-10-20): nada de fork.** O orbit-core começa do zero e
+**porta** para dentro do projeto os conceitos e trechos de código dos outros:
+entende-se como o projeto de origem resolve o problema, reescreve-se no estilo e
+na arquitetura do Orbit (seção 6) e testa-se aqui. Nenhuma dependência de crate
+dos outros compositores; só do Smithay.
+
+| Projeto | Linguagem / licença | O que se estuda e porta |
+|---|---|---|
+| **cosmic-comp** (System76) | Rust, Smithay / GPL-3.0-only | Referência principal: backend DRM e multi-monitor, hotplug, escala fracionária, libseat, XWayland, tiling automático, foco, protocolos de layer-shell e screencopy |
+| **niri** | Rust, Smithay / GPL-3.0-or-later | Layout `scroll` (Fase 3), animações com curvas e molas, overview, gestos com acompanhamento, testes de layout sem tela, qualidade do renderizador GLES |
+| **anvil** (exemplo do Smithay) | Rust / MIT | Esqueleto mínimo: estado, event loop calloop, backends winit/DRM/headless. Ponto de partida da Fase 1 |
+| **Smithay** | Rust / MIT | Dependência (versão exata fixada), não referência |
+| **sway** + **wlroots** | C / MIT | IPC e sintaxe de comandos/critérios (seção 5), `GET_TREE`, regras, scratchpad, modos |
+| **i3** | C / BSD-3-Clause | Árvore de contêineres: split, tabbed, stacked, `focus parent`, movimentação na árvore |
+| **bspwm** | C / BSD-2-Clause | BSP, preseleção, receptáculos, controle 100% externo |
+| **xmonad** | Haskell / BSD-3-Clause | Layouts combináveis e modificadores (conceito; o código não porta) |
+| **dwm** | C / MIT | Mestre-pilha (`nmaster`, `mfact`), tags, monocle |
+| **spectrwm** | C / ISC | Padrões sem configuração, workspaces por monitor |
+| **awesome** | C + Lua / GPL-2.0 | Regras e layouts programáveis (só conceito) |
+| **Hyprland** | C++ / BSD-3-Clause | Curvas de animação, blur (dual kawase), cantos, sombras, workspaces especiais, gestos |
+
+Regras de porte:
+
+1. **Licença confere antes de copiar.** MIT, BSD, ISC e GPL-3.0-or-later entram
+   sem problema. Código do **cosmic-comp (GPL-3.0-only)** pode ser portado, mas o
+   arquivo que o recebe passa a ser GPL-3.0-only — anotar no cabeçalho. Haskell,
+   Lua e o que for só conceito não têm essa questão. Confirmar a licença no
+   repositório de origem no momento do porte.
+2. **Todo trecho portado registra a origem** no comentário do módulo: projeto,
+   arquivo e commit (ex.: `// Portado de niri src/layout/scrolling.rs @ abc1234`),
+   mantendo o aviso de copyright que a licença exigir.
+3. **Porta-se o comportamento, não a estrutura.** O código vem para a arquitetura
+   do Orbit (`orbit-layout` sem Wayland, `orbit-ipc` sem renderização); não se
+   copia módulo inteiro com as dependências internas do projeto de origem.
+4. **Teste junto com o porte.** Cada recurso portado chega com o teste headless
+   ou de `orbit-layout` que prova que ele se comporta como no original.
+5. Clones de referência em `~/Vault/GIT/ref/` (cosmic-comp, niri, smithay com
+   anvil, sway, bspwm, dwm), só para leitura, fora do workspace do Orbit.
+
+## 10. Pendências e riscos
 
 | Item | Risco / decisão em aberto |
 |---|---|
 | Wayfire no think | O think usa sway **e** wayfire; com o core, o wayfire sai também? (proposta: sim, na mesma regra de duas semanas) |
-| Smithay e a API instável | Smithay muda API entre versões; fixar versão exata e atualizar de propósito, como foi com o glycin |
-| XWayland | `xwayland-satellite` (processo à parte, mais simples) ou integrado do Smithay (mais controle). Proposta: satellite na Fase 1 |
+| Smithay e a API instável | Smithay muda API entre versões; fixar versão exata e atualizar de propósito, como foi com o glycin. O cosmic-comp faz o mesmo (Smithay 0.7 com `[patch]` num commit do git): ao portar um trecho, usar o mesmo commit de Smithay que ele usava naquele ponto, para o código vir funcionando |
+| XWayland | Conferido em 2026-10-20: o **cosmic-comp usa o XWayland integrado do Smithay** (`XWayland::spawn` + `X11Wm`, em `src/xwayland.rs`); o **niri usa o `xwayland-satellite`** (processo à parte). Integrado = foco, empilhamento e regras das janelas X sob controle do core, e código pronto para portar; satellite = menos código, mas janelas X viram clientes Wayland comuns e perdem detalhes (posição de menus, ícones na bandeja X). **Proposta: integrado, portado do cosmic-comp**; o satellite fica como plano B se o porte travar a Fase 1 |
+| Porte do cosmic-comp | Código grande e amarrado a `cosmic-protocols`, `cosmic-config` e libcosmic: portar só o comportamento, trocando as dependências COSMIC pelas nossas (`orbit-config`, protocolos padrão); arquivos que receberem código dele viram GPL-3.0-only (seção 9) |
 | Renderização | GLES2 do Smithay basta para Fases 1–3; blur e animações podem pedir shaders próprios — medir na iGPU antes de prometer |
 | Compatibilidade do IPC | Clientes de terceiros (waybar, autotiling) podem usar campos que o Orbit não usa; a meta é o que o Orbit usa + o que aparecer nos testes, não 100% do sway |
 | Segurança do remoto | Expor a sessão é o recurso mais perigoso do projeto; desligado por padrão, só via túnel, pareamento explícito, auditoria antes de abrir para fora |
 | Tamanho do esforço | Fase 1 sozinha é o maior bloco de código do Orbit até agora; cada fase vira commits pequenos, nunca um despejo único |
+| Login automático do greetd | O `initial_session` abre a sessão do usuário **antes** da senha: serviços de usuário do systemd (Syncthing, PipeWire) já sobem no boot, embora nada apareça na tela até destravar. O `$HOME` não é criptografado, então a senha protege a tela, não os dados em disco. Decidir se isso é aceitável ou se o greet roda como usuário `_greetd` e o core reinicia como o usuário depois do login (mais seguro, mas perde o "a sessão já estava carregada atrás") |
+| Chaveiro no destravar | Hoje o PAM do greetd destrava o gnome-keyring no login; com login automático isso não acontece sozinho — o passo 6 da seção 7.3 tem que resolver antes da Fase 2 acabar, ou Chromium e afins pedem a senha do chaveiro |
 | Nome dos layouts e tags | Se tags (dwm) e workspaces convivem na mesma barra de áreas do painel ou só um dos dois — decidir antes da Fase 3 |
