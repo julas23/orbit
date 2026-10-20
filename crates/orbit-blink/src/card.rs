@@ -1,5 +1,5 @@
 //! The card shown after a capture: a thumbnail, where it was saved, and
-//! buttons to open it or save a copy elsewhere.
+//! buttons to copy it again and to save a copy elsewhere.
 //!
 //! A notification of our own rather than the desktop's: notification
 //! daemons such as dunst show actions in a menu, not as buttons. It sits in
@@ -16,8 +16,14 @@ use crate::image::Image;
 
 const SHOWN_FOR: Duration = Duration::from_secs(8);
 
-/// Shows the card for the capture saved at `path`.
-pub fn saved(app: &gtk::Application, monitor: Option<&gdk::Monitor>, image: &Image, path: PathBuf) {
+/// Shows the card for the capture saved at `path`, whose bytes are `png`.
+pub fn saved(
+    app: &gtk::Application,
+    monitor: Option<&gdk::Monitor>,
+    image: &Image,
+    path: PathBuf,
+    png: Vec<u8>,
+) {
     let window = new_window(app, monitor);
     let title = gtk::Label::builder()
         .label(tr("blink-saved"))
@@ -58,10 +64,10 @@ pub fn saved(app: &gtk::Application, monitor: Option<&gdk::Monitor>, image: &Ima
         .css_classes(["meta"])
         .build();
 
-    let open = gtk::Button::with_label(&tr("blink-open"));
+    let copy = gtk::Button::with_label(&tr("blink-copy"));
     let save_as = gtk::Button::with_label(&tr("blink-save-as"));
     let buttons = gtk::Box::builder().spacing(5).homogeneous(true).build();
-    buttons.append(&open);
+    buttons.append(&copy);
     buttons.append(&save_as);
 
     let card = gtk::Box::builder()
@@ -83,16 +89,11 @@ pub fn saved(app: &gtk::Application, monitor: Option<&gdk::Monitor>, image: &Ima
         close.connect_clicked(move |_| window.destroy());
     }
     {
-        let window = window.clone();
-        let path = path.clone();
-        open.connect_clicked(move |_| {
-            let uri = gio::File::for_path(&path).uri();
-            if let Err(err) =
-                gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>)
-            {
-                log::warn!("opening {uri}: {err}");
-            }
-            window.destroy();
+        // Back on the clipboard, in case something else was copied since.
+        let app = app.clone();
+        copy.connect_clicked(move |button| match crate::copy(&app, png.clone()) {
+            Ok(()) => button.set_label(&tr("blink-copied")),
+            Err(err) => log::warn!("copying: {err:#}"),
         });
     }
     {

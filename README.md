@@ -131,8 +131,8 @@ bindsym $mod+v exec orbit-clip
 
 Screen capture: the whole screen, the focused window, or an area chosen on a
 frozen picture of the screens. Each capture is saved in `$HOME`, copied to the
-clipboard, and shown on a card with a thumbnail and buttons to open it or save
-a copy elsewhere. Without a mode it opens an options window (mode, delay,
+clipboard, and shown on a card with a thumbnail and buttons to copy it again
+(if something else was copied since) or save a copy elsewhere. Without a mode it opens an options window (mode, delay,
 whether to include the cursor). It needs sway (for the layout of the screens
 and windows) and `wlr-screencopy`.
 

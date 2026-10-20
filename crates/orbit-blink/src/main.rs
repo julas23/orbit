@@ -187,27 +187,33 @@ fn focused_monitor(screens: &[Screen]) -> Option<gdk::Monitor> {
 /// Saves, copies and announces the capture.
 fn finish(app: &gtk::Application, screens: &[Screen], image: Image) {
     let monitor = focused_monitor(screens);
-    let result = (|| -> anyhow::Result<PathBuf> {
+    let result = (|| -> anyhow::Result<(PathBuf, Vec<u8>)> {
         let png = image.png()?;
         let path = file_path();
         std::fs::write(&path, &png).with_context(|| format!("writing {}", path.display()))?;
-        // On the clipboard until something else is copied.
-        let (done, copied_over) = async_channel::bounded(1);
-        clipboard::offer(png, done)?;
-        let hold = app.hold();
-        glib::spawn_future_local(async move {
-            let _ = copied_over.recv().await;
-            drop(hold);
-        });
-        Ok(path)
+        copy(app, png.clone())?;
+        Ok((path, png))
     })();
     match result {
-        Ok(path) => {
+        Ok((path, png)) => {
             log::info!("saved {}", path.display());
-            card::saved(app, monitor.as_ref(), &image, path);
+            card::saved(app, monitor.as_ref(), &image, path, png);
         }
         Err(err) => card::failed(app, monitor.as_ref(), &format!("{err:#}")),
     }
+}
+
+/// Puts `png` on the clipboard; the program stays alive serving it until
+/// something else is copied.
+pub fn copy(app: &gtk::Application, png: Vec<u8>) -> anyhow::Result<()> {
+    let (done, copied_over) = async_channel::bounded(1);
+    clipboard::offer(png, done)?;
+    let hold = app.hold();
+    glib::spawn_future_local(async move {
+        let _ = copied_over.recv().await;
+        drop(hold);
+    });
+    Ok(())
 }
 
 fn fail(app: &gtk::Application, message: &str) {
