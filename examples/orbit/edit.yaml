@@ -1,0 +1,11 @@
+# Orbit-Edit — ~/.config/orbit/edit.yaml. Every key is optional; these are
+# the defaults.
+
+font: CaskaydiaCove Nerd Font Mono
+# In points; Ctrl + / − / 0 change it for the session.
+font_size: 11
+# For new files: a file's own indentation is read from it.
+tab_width: 4
+insert_spaces: true
+minimap: true
+wrap: false

@@ -1,0 +1,75 @@
+/* Orbit-Edit built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css) — the code's own come from the
+ * GtkSourceView style scheme; ~/.config/orbit/style.css goes on top. */
+
+window.orbit-edit {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-edit .bar {
+  padding: 5px 10px;
+  background-color: mix(@orbit_window, @orbit_fg, 0.1);
+}
+window.orbit-edit .bar button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 5px;
+}
+
+/* Tabs. */
+window.orbit-edit notebook > header {
+  background-color: mix(@orbit_window, @orbit_fg, 0.05);
+}
+window.orbit-edit notebook > header tab {
+  padding: 5px 5px 5px 10px;
+}
+window.orbit-edit notebook > header tab:checked {
+  background-color: @orbit_window;
+  box-shadow: inset 0 -2px @orbit_accent;
+}
+window.orbit-edit .tab-close {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+}
+
+/* The folder. */
+window.orbit-edit .sidebar {
+  background-color: mix(@orbit_window, @orbit_fg, 0.04);
+}
+window.orbit-edit .sidebar .folder-title {
+  padding: 10px;
+  font-weight: bold;
+}
+window.orbit-edit .sidebar listview { background: none; }
+window.orbit-edit .sidebar row { padding: 2px 5px; }
+window.orbit-edit .sidebar row:hover { background-color: @orbit_hover; }
+
+/* Find, status. */
+window.orbit-edit .findbar {
+  padding: 5px 10px;
+  border-bottom: 1px solid @orbit_border;
+}
+window.orbit-edit .findbar .option { min-width: 30px; font-family: monospace; }
+window.orbit-edit .findbar .option:checked { background: alpha(@orbit_accent, 0.45); }
+window.orbit-edit .findbar .count { color: @orbit_muted; font-size: 12px; }
+window.orbit-edit .status {
+  padding: 0 10px;
+  border-top: 1px solid @orbit_border;
+  font-size: 12px;
+}
+window.orbit-edit .status .status-item { min-height: 25px; padding: 0 5px; }
+window.orbit-edit .status .status-text { color: @orbit_muted; padding: 0 5px; }
+window.orbit-edit .indent-menu { padding: 10px; }
+window.orbit-edit gutter .fold { color: @orbit_muted; }
+
+/* Ctrl+P. */
+window.quick-open .quick-open-box {
+  padding: 10px;
+  background-color: @orbit_surface;
+  border: 1px solid @orbit_outline;
+  border-radius: 10px;
+}
+window.quick-open .results { background: none; }
+window.quick-open .results row { padding: 5px 10px; border-radius: 5px; }
+window.quick-open .results row:selected { background-color: alpha(@orbit_accent, 0.45); }

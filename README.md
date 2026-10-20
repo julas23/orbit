@@ -10,8 +10,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
 > rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink**,
-> **Orbit-View**, **Orbit-Read** and **Orbit-Play** work; the other
-> components are planned.
+> **Orbit-View**, **Orbit-Read**, **Orbit-Play** and **Orbit-Edit** work;
+> the other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -29,7 +29,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
-| orbit-edit | Text editor: column selection and indentation by level | planned |
+| **orbit-edit** | Text and code editor: several cursors, column selection, indent guides and folding, folder sidebar, session | **working** |
 
 Orbit is a clean reimplementation: existing desktops and compositors are
 studied as references, but no code is copied from them.
@@ -220,18 +220,41 @@ own (`ruffle` in `~/.local/bin` or on the PATH).
 | , . | frame back, on | [ ] Backspace | slower, faster, normal |
 | PgUp PgDn | previous, next | F or F11 | full screen |
 
+## Orbit-Edit
+
+A text and code editor on [GtkSourceView](https://gitlab.gnome.org/GNOME/gtksourceview):
+highlighting for hundreds of languages, line numbers, auto-indentation,
+search and replace with regular expressions, the minimap. Of its own:
+
+- **Several cursors.** Ctrl+D selects the word, then adds the next
+  occurrence; Ctrl+click adds a cursor; Alt+drag selects a column, a cursor
+  per line. What is typed at one goes in at all — dead keys and input
+  methods too — and so do Backspace, Delete, Enter, the arrows, copy and
+  paste (a line per cursor when the counts match). Escape: back to one.
+- **Indentation.** Guides at every level, through blank lines; blocks fold
+  by indentation from the arrow in the margin or Ctrl+Shift+[ / ]. A
+  file's own indentation — tabs, or how many spaces — is read from it.
+- **The folder** in a sidebar (Ctrl+B), and Ctrl+P to open a file of it by
+  a few letters of its path.
+- **The session.** Closing never asks: the tabs, their cursors and any
+  unsaved text come back next time (`~/.local/state/orbit/edit/`).
+- Ctrl+/ comments lines in or out; Ctrl+G goes to a line; the status line
+  shows and changes the indentation and the language; UTF-8 or Latin-1
+  and LF or CRLF are kept as found. Options in `~/.config/orbit/edit.yaml`.
+
 ## Building and running
 
 Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
 bubblewrap (its sandbox); for Orbit-Read the poppler-glib development
 files; for Orbit-Play GStreamer's (core, base and bad plugins) and
-`gstreamer1.0-libav`.
+`gstreamer1.0-libav`; for Orbit-Edit GtkSourceView 5's.
 On Debian/Ubuntu:
 
 ```sh
 sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap libpoppler-glib-dev \
-  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-libav
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-libav \
+  libgtksourceview-5-dev
 cargo build --release
 ./target/release/orbit-panel &
 ./target/release/orbit-dock &
@@ -246,7 +269,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -329,6 +352,7 @@ follow the locale.
 | `orbit-view` | The image viewer |
 | `orbit-read` | The document reader |
 | `orbit-play` | The media player |
+| `orbit-edit` | The text editor |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

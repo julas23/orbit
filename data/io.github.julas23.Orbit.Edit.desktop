@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Edit
+GenericName=Text editor
+GenericName[pt_BR]=Editor de texto
+Comment=Edit text and code: several cursors, column selection, folding
+Comment[pt_BR]=Edite texto e código: vários cursores, seleção em coluna, blocos recolhíveis
+Exec=orbit-edit %U
+Icon=accessories-text-editor
+Terminal=false
+Categories=Utility;TextEditor;Development;
+Keywords=text;editor;code;programming;
+Keywords[pt_BR]=texto;editor;código;programação;
+MimeType=text/plain;text/markdown;text/x-markdown;text/x-python;text/x-python3;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/rust;text/x-rust;text/x-go;text/x-java;text/x-lua;text/x-ruby;text/x-perl;text/x-php;text/x-sql;text/x-shellscript;application/x-shellscript;application/json;application/xml;text/xml;text/css;text/javascript;application/javascript;application/x-yaml;text/x-yaml;application/toml;text/x-toml;text/x-makefile;text/x-cmake;text/x-log;text/csv;text/x-diff;text/x-patch;application/x-desktop;text/x-ini;text/x-tex;text/x-nix;text/x-dockerfile;
