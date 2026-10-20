@@ -18,7 +18,7 @@ mod window;
 
 use std::{cell::RefCell, rc::Rc};
 
-use gtk::glib;
+use gtk::{gio, glib, prelude::*};
 use orbit_common::ConfigDir;
 
 thread_local! {
@@ -35,7 +35,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/pathfinder.css"),
         build,
         resident: false,
-        open: None,
+        open: Some(open),
     })
 }
 
@@ -44,4 +44,13 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
     let w = window.window().clone();
     WINDOW.with(|cell| *cell.borrow_mut() = Some(window));
     Ok(w)
+}
+
+/// Links from other programs (the default browser): they open in the
+/// built-in browser, which comes forward.
+fn open(_window: &gtk::ApplicationWindow, files: &[gio::File]) {
+    let Some(window) = WINDOW.with(|cell| cell.borrow().clone()) else { return };
+    for file in files {
+        window.open_link(&file.uri());
+    }
 }

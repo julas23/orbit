@@ -1191,6 +1191,11 @@ impl Window {
         self.select(&browser);
     }
 
+    /// A link handed over by another program: opened in the browser.
+    pub fn open_link(self: &Rc<Self>, uri: &str) {
+        self.go_to(uri);
+    }
+
     /// Home: the browser, on its start page.
     fn go_home(self: &Rc<Self>) {
         let home = self.cfg.borrow().home.clone().unwrap_or_else(|| DEFAULT_HOME.into());
