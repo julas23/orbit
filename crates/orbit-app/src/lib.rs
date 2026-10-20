@@ -41,8 +41,8 @@ pub struct Surface {
 pub fn run(surface: Surface) -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let config_dir = match parse_args(surface.name) {
-        Ok(path) => path,
+    let config_dir = match parse_args(surface.name, false) {
+        Ok((path, _)) => path,
         Err(err) => {
             eprintln!("{}: {err}", surface.name);
             return glib::ExitCode::FAILURE;
@@ -81,16 +81,21 @@ pub struct App {
     /// The built-in stylesheet; the user's style.css goes on top of it.
     pub css: &'static str,
     pub build: fn(&gtk::Application, &ConfigDir) -> anyhow::Result<gtk::ApplicationWindow>,
+    /// Keeps running in the background, like a clipboard manager: started
+    /// with `--background` it shows no window, closing the window only hides
+    /// it, and launching the program again shows or hides it.
+    pub resident: bool,
 }
 
 /// Runs `spec` until its window is closed. Logging, arguments, the
 /// stylesheet and the system's colours are set up as for the panel; a second
-/// launch brings the running window forward.
+/// launch brings the running window forward (or, for a resident app, shows
+/// or hides it).
 pub fn run_app(spec: App) -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let config_dir = match parse_args(spec.name) {
-        Ok(path) => path,
+    let (config_dir, background) = match parse_args(spec.name, spec.resident) {
+        Ok(parsed) => parsed,
         Err(err) => {
             eprintln!("{}: {err}", spec.name);
             return glib::ExitCode::FAILURE;
@@ -102,8 +107,12 @@ pub fn run_app(spec: App) -> glib::ExitCode {
         .build();
     let keep = RefCell::new(None);
     app.connect_activate(move |app| {
-        if let Some(window) = app.active_window() {
-            window.present();
+        if let Some(window) = app.windows().first() {
+            if spec.resident && window.is_visible() {
+                window.set_visible(false);
+            } else {
+                window.present();
+            }
             return;
         }
         let Some(display) = gdk::Display::default() else {
@@ -116,7 +125,12 @@ pub fn run_app(spec: App) -> glib::ExitCode {
         let theme = theme::install(&display);
         match (spec.build)(app, &dir) {
             Ok(window) => {
-                window.present();
+                if spec.resident {
+                    window.set_hide_on_close(true);
+                }
+                if !background {
+                    window.present();
+                }
                 *keep.borrow_mut() = Some((style, theme));
             }
             Err(err) => {
@@ -128,9 +142,12 @@ pub fn run_app(spec: App) -> glib::ExitCode {
     app.run_with_args::<&str>(&[])
 }
 
-fn parse_args(name: &str) -> anyhow::Result<PathBuf> {
+/// The config directory and, when `background` is accepted, whether
+/// `--background` was given.
+fn parse_args(name: &str, background: bool) -> anyhow::Result<(PathBuf, bool)> {
     let mut args = std::env::args().skip(1);
     let mut config = None;
+    let mut hidden = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => {
@@ -138,14 +155,16 @@ fn parse_args(name: &str) -> anyhow::Result<PathBuf> {
                     args.next().context("--config needs a directory")?,
                 ));
             }
+            "--background" if background => hidden = true,
             "-h" | "--help" => {
-                println!("Usage: {name} [-c|--config DIR]  (default: ~/.config/orbit)");
+                let extra = if background { " [--background]" } else { "" };
+                println!("Usage: {name} [-c|--config DIR]{extra}  (default: ~/.config/orbit)");
                 std::process::exit(0);
             }
             other => anyhow::bail!("unknown argument: {other}"),
         }
     }
-    Ok(config.unwrap_or_else(ConfigDir::default_path))
+    Ok((config.unwrap_or_else(ConfigDir::default_path), hidden))
 }
 
 fn start(

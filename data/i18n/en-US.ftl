@@ -179,3 +179,21 @@ calc-kind-multicast = multicast
 calc-kind-reserved = reserved
 calc-kind-broadcast = broadcast
 calc-kind-public = public
+
+## Clipboard
+
+clip-title = Clipboard
+clip-search = Search the history
+clip-empty = Nothing copied yet
+clip-no-match = Nothing found
+clip-clear = Clear history
+clip-count = { $count ->
+        [one] 1 item
+       *[other] { $count } items
+    }
+clip-image = image { $width } × { $height }
+clip-image-unreadable = image (unreadable)
+clip-ago-now = now
+clip-ago-minutes = { $n } min ago
+clip-ago-hours = { $n } h ago
+clip-ago-days = { $n } d ago

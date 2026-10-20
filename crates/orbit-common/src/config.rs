@@ -67,6 +67,11 @@ impl ConfigDir {
         self.load(&self.path.join("modules").join(format!("{name}.yaml")))
     }
 
+    /// The options of application `name` (`clip`), from `<name>.yaml`.
+    pub fn app<T: DeserializeOwned + Default>(&self, name: &str) -> anyhow::Result<T> {
+        self.load(&self.path.join(format!("{name}.yaml")))
+    }
+
     /// Loads one file. A missing (or empty) file yields the defaults.
     fn load<T: DeserializeOwned + Default>(&self, path: &Path) -> anyhow::Result<T> {
         let text = match std::fs::read_to_string(path) {

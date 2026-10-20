@@ -31,6 +31,7 @@ fn main() -> glib::ExitCode {
         app_id: "io.github.julas23.Orbit.Calc",
         css: include_str!("../../../data/calc.css"),
         build,
+        resident: false,
     })
 }
 

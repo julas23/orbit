@@ -1,0 +1,22 @@
+[package]
+name = "orbit-clip"
+description = "Orbit-Clip: a Rust + GTK4 clipboard history for Wayland and XWayland"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true
+wayland-client.workspace = true
+wayland-protocols-wlr.workspace = true
+rustix.workspace = true

@@ -172,3 +172,21 @@ calc-kind-multicast = multicast
 calc-kind-reserved = reservado
 calc-kind-broadcast = broadcast
 calc-kind-public = público
+
+## Área de transferência
+
+clip-title = Área de transferência
+clip-search = Buscar no histórico
+clip-empty = Nada copiado ainda
+clip-no-match = Nada encontrado
+clip-clear = Limpar histórico
+clip-count = { $count ->
+        [one] 1 item
+       *[other] { $count } itens
+    }
+clip-image = imagem { $width } × { $height }
+clip-image-unreadable = imagem (ilegível)
+clip-ago-now = agora
+clip-ago-minutes = há { $n } min
+clip-ago-hours = há { $n } h
+clip-ago-days = há { $n } d

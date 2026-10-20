@@ -1,0 +1,24 @@
+/* Orbit-Clip built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+window.orbit-clip {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-clip .page {
+  padding: 10px;
+}
+window.orbit-clip .items {
+  background: none;
+}
+window.orbit-clip .items row {
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+window.orbit-clip .items row:hover    { background-color: @orbit_hover; }
+window.orbit-clip .items row:selected { background-color: alpha(@orbit_accent, 0.35); }
+window.orbit-clip .items .text        { font-family: "CaskaydiaCove Nerd Font", monospace; font-size: 12px; }
+window.orbit-clip .meta               { color: @orbit_muted; font-size: 11px; }
+window.orbit-clip .placeholder        { color: @orbit_muted; padding: 20px; }
+window.orbit-clip .status             { color: @orbit_muted; font-size: 12px; }

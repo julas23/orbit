@@ -9,7 +9,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
 > have replaced the [EWW](https://github.com/elkowar/eww) panel they were
-> rewritten from; **Orbit-Calc** works; the other components are planned.
+> rewritten from; **Orbit-Calc** and **Orbit-Clip** work; the other components are planned.
 > Configuration and APIs may still change.
 
 ## The rack
@@ -24,7 +24,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | orbit-files | Complete file manager | planned |
 | orbit-play | Video player for common formats | planned |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
-| orbit-clip | Copy and paste across Wayland and XWayland | planned |
+| **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | orbit-edit | Text editor: column selection and indentation by level | planned |
 
@@ -104,6 +104,27 @@ compositors float it.
 
 Numbers follow the language: `1.234,5` in Portuguese, `1,234.5` in English.
 
+## Orbit-Clip
+
+A clipboard history. It runs in the background and keeps what is copied —
+text and images, from Wayland and X11 (XWayland) applications alike — in a
+history that survives restarts (`~/.local/share/orbit/clip/`). Launching it
+again shows or hides the history: typing searches it, Enter or a click puts
+an item back in the clipboard, ready for Ctrl+V; Delete removes one.
+
+It can keep the clipboard and the primary selection (mouse selection,
+middle-button paste) in sync, and leaves out what password managers mark as
+secret. Options in `~/.config/orbit/clip.yaml` (see
+[`examples/orbit/clip.yaml`](examples/orbit/clip.yaml)). It needs a
+compositor with `wlr-data-control` (sway, Hyprland, river, labwc…).
+
+In sway:
+
+```
+exec orbit-clip --background
+bindsym $mod+v exec orbit-clip
+```
+
 ## Building and running
 
 Requirements: Rust 1.88+, GTK 4.12+ and `gtk4-layer-shell` development files.
@@ -125,7 +146,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-session
+scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-session
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -203,6 +224,7 @@ follow the locale.
 | `orbit-panel` | The panel and its modules |
 | `orbit-dock` | The dock |
 | `orbit-calc` | The calculator |
+| `orbit-clip` | The clipboard history |
 
 The plan for the panel (in Portuguese) is in
 [`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).

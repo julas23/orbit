@@ -1,0 +1,15 @@
+# Orbit-Clip — ~/.config/orbit/clip.yaml. Every key is optional; these are
+# the defaults.
+
+# Items kept in the history (the oldest go first).
+limit: 200
+# Keep copied images too (screenshots, images copied from a browser).
+images: true
+# Keep the clipboard (Ctrl+C) and the primary selection (selecting with the
+# mouse, pasting with the middle button) the same: selecting text also
+# copies it, and copying also makes it the middle-button paste.
+sync_primary: true
+# Leave out what password managers (KeePassXC…) mark as secret.
+ignore_secrets: true
+# Largest copy kept, in megabytes.
+max_size_mb: 20

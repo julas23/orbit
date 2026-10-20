@@ -37,6 +37,10 @@ ureq = "3"
 fluent-bundle = "0.16"
 unic-langid = "0.9"
 serde_yaml_ng = "0.10"
+# orbit-clip: watching and setting the clipboard (wlr-data-control).
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+rustix = { version = "1", features = ["event", "pipe", "time"] }
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"

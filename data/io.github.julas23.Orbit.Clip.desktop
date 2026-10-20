@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Clip
+GenericName=Clipboard history
+GenericName[pt_BR]=Histórico da área de transferência
+Comment=Text and images copied, searchable, back in the clipboard with a click
+Comment[pt_BR]=Textos e imagens copiados, com busca, de volta à área de transferência com um clique
+Exec=orbit-clip
+Icon=edit-paste
+Terminal=false
+Categories=Utility;
+Keywords=clipboard;copy;paste;history;
+Keywords[pt_BR]=área de transferência;copiar;colar;histórico;
