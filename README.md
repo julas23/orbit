@@ -25,6 +25,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | orbit-play | Video player for common formats | planned |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
+| orbit-blink | Screen capture: the whole screen, the current window or a selected area | planned |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | orbit-edit | Text editor: column selection and indentation by level | planned |
 
