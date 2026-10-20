@@ -214,6 +214,32 @@ limpeza de URLs e a parte do escudo que não depende de listas (ITP, cookies de
 terceiros, TLS, permissões). Ficaram para depois: listas de bloqueio, hibernar,
 arrastar, receitas do Ferdium, contador no dock.
 
+**Grupos e perfis (2026-10-20, pedido do Juliano):** grupos sem nome viram só
+uma linha separadora (nome é opcional; com nome, o cabeçalho recolhe); ícones de
+22 px em botões de 35 px, para ~20 serviços caberem na vertical. Serviços com o
+mesmo `profile` dividem a mesma sessão (cookies, login, cache) — Gmail, Agenda,
+Maps, YouTube e Gemini numa conta Google só; sem `profile`, cada serviço é um
+cofre. "Limpar dados" avisa quando o login é compartilhado.
+
+**Mais decisões de 2026-10-20 (uso real):**
+- **User agent:** o do WebKit com a plataforma trocada para macOS — a Microsoft
+  recusa "Safari no Linux" (`OwaBasicUnsupportedException` no Outlook); o motor é
+  o mesmo. Configurável por serviço ou global (`user_agent:`).
+- **Login na mesma página:** link de login ou do próprio site com `target=_blank`
+  abre no próprio serviço; janelas de script continuam janelas e, ao voltar ao
+  endereço do serviço, fecham e levam o serviço para lá.
+- **Navegador fixo** no topo (cofre próprio, todo link dentro, sem contador nem
+  notificações), **barra de endereço** (o digitado abre no Navegador; não
+  endereço = busca), **Home** (`home:`/`search:`, padrão Google).
+- **Senhas pelo Bitwarden** (`bw` oficial, sessão só em memória, sem `bw serve`):
+  preencher (Ctrl+Shift+L) e importar de Firefox (NSS do próprio Firefox num
+  processo auxiliar), Chrome (chave do chaveiro via Secret Service) e Wavebox,
+  só o que o cofre não tem.
+- **Barra lateral editável:** adicionar/editar/mover, arrastar botões e
+  separadores, separador pelo "+"; ícone por endereço, touch icon da página.
+- **Notificações:** além das da página, contador que sobe vira "N não lidas" na
+  central do desktop (uma por serviço; nunca com o serviço na tela).
+
 **Logins permanentes (2026-10-20):** cada serviço guarda os cookies em
 `cookies.sqlite` na própria pasta, e os cookies de sessão (sem validade, que o
 WebKit descarta ao fechar e onde muitos sites guardam o login) vão para

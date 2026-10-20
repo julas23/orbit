@@ -498,7 +498,6 @@ pathfinder-reload-config = Reload settings
 pathfinder-name = Name
 pathfinder-url = Address
 pathfinder-group = Group
-pathfinder-default-group = General
 pathfinder-always-active = Always active (gets notifications)
 pathfinder-media = Camera, microphone and calls
 pathfinder-add-button = Add
@@ -510,4 +509,44 @@ pathfinder-remove = Remove
 pathfinder-remove-confirm = Remove { $name } from the sidebar? Its data stays on disk.
 pathfinder-cancel = Cancel
 pathfinder-empty = No services yet. Use + in the sidebar to add one.
+pathfinder-group-n = Group { $n } ({ $first }…)
+pathfinder-new-group = New group
+pathfinder-profile = Profile
+pathfinder-profile-hint = optional: same name = same login (e.g. google)
+pathfinder-clear-confirm-shared = Delete the cookies, logins and cache of { $name }? The login is shared: { $others } are signed out too.
+pathfinder-fill = Fill login from Bitwarden (Ctrl+Shift+L)
+pathfinder-bw-missing = The Bitwarden CLI (bw) is not installed.
+pathfinder-bw-login = Log in to Bitwarden once in a terminal: bw login
+pathfinder-bw-master = Bitwarden master password
+pathfinder-bw-unlock = Unlock
+pathfinder-bw-wrong = Wrong master password.
+pathfinder-bw-none = No Bitwarden login for this site.
+pathfinder-import-title = Import passwords into Bitwarden…
+pathfinder-import-intro = The passwords these browsers saved go to your Bitwarden vault, into an "Importado do …" folder per browser. Those the vault already has are skipped.
+pathfinder-import-source = { $name }: { $count } passwords
+pathfinder-import-nothing = No browser with saved passwords was found.
+pathfinder-import-firefox-pw = Firefox primary password (only if it has one)
+pathfinder-import-go = Import
+pathfinder-import-working = Importing…
+pathfinder-import-done = { $added } passwords added to Bitwarden; { $already } were already in the vault.
+pathfinder-import-failed = The import failed: { $error }
+pathfinder-import-firefox-needed = Firefox: the Firefox primary password is needed (or is wrong).
+pathfinder-edit = Edit…
+pathfinder-save = Save
+pathfinder-move-up = Move up
+pathfinder-move-down = Move down
+pathfinder-icon = Icon
+pathfinder-icon-hint = empty = the site's; or an image address, a file
+pathfinder-separator-below = Separator below
+pathfinder-separator-remove = Remove separator
+pathfinder-add-service = Add a service…
+pathfinder-add-separator = Add a separator
+pathfinder-group-empty = Group { $n } (empty)
+pathfinder-browser = Browser
+pathfinder-home = Home page (Alt+Home)
+pathfinder-address-hint = Type an address or search (Ctrl+L)
+pathfinder-unread = { $count ->
+    [one] 1 unread
+   *[other] { $count } unread
+}
 pathfinder-downloaded = Download finished: { $name }

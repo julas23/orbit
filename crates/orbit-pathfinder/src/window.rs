@@ -26,6 +26,12 @@ use crate::{
     state::State,
 };
 
+/// The built-in browser's start page and search, when the file names none.
+const DEFAULT_HOME: &str = "https://www.google.com/";
+const DEFAULT_SEARCH: &str = "https://www.google.com/search?q=";
+/// The browser's key: its storage, icon and zoom.
+const BROWSER_ID: &str = "orbit-browser";
+
 /// A group in the sidebar: its unread badge, its services and the revealer
 /// that folds it.
 type GroupRow = (gtk::Label, Vec<Rc<Service>>, gtk::Revealer);
@@ -44,11 +50,19 @@ pub struct Window {
     /// Each group's unread badge, its services and whether it is folded.
     groups: RefCell<Vec<GroupRow>>,
     stack: gtk::Stack,
-    title: gtk::Label,
+    /// The address bar: the page's address; what is typed opens in the
+    /// browser.
+    address: gtk::Entry,
+    /// Typing in the address bar: the page's address does not overwrite it.
+    editing: std::cell::Cell<bool>,
+    /// The built-in browser, at the top of the sidebar.
+    browser: Rc<Service>,
     back: gtk::Button,
     forward: gtk::Button,
     current: RefCell<Option<Rc<Service>>>,
     state: RefCell<State>,
+    vault: Rc<crate::passwords::Vault>,
+    key_button: gtk::Button,
 }
 
 impl Window {
@@ -61,8 +75,11 @@ impl Window {
             cache: base(glib::user_cache_dir()),
             user_agent: cfg.user_agent.clone(),
             external_browser: cfg.external_browser.clone(),
+            profiles: RefCell::new(HashMap::new()),
+            notify_origins: RefCell::new(HashMap::new()),
             changed: RefCell::new(None),
             page_changed: RefCell::new(None),
+            watching: RefCell::new(None),
         });
 
         let window = gtk::ApplicationWindow::builder()
@@ -96,11 +113,18 @@ impl Window {
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["sidebar"])
             .hexpand(false)
-            .width_request(70)
+            .width_request(40)
             .build();
+        // "+" over the gear, one under the other: the sidebar stays narrow.
+        let footer = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["footer"]).build();
+        footer.append(&add);
+        footer.append(&menu);
+        // The browser, always there above the services.
+        let top = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["group-services", "browser-slot"]).build();
+        sidebar.append(&top);
+        sidebar.append(&gtk::Separator::builder().css_classes(["group-separator"]).build());
         sidebar.append(&scroller);
-        sidebar.append(&add);
-        sidebar.append(&menu);
+        sidebar.append(&footer);
 
         let button = |icon: &str, tip: &str| {
             gtk::Button::builder().icon_name(icon).tooltip_text(tr(tip)).css_classes(["flat"]).build()
@@ -109,14 +133,16 @@ impl Window {
         let forward = button("go-next-symbolic", "pathfinder-forward");
         let reload = button("view-refresh-symbolic", "pathfinder-reload");
         let outside = button("send-to-symbolic", "pathfinder-open-external");
-        let title = gtk::Label::builder()
+        let key_button = button("changes-prevent-symbolic", "pathfinder-fill");
+        let home = button("go-home-symbolic", "pathfinder-home");
+        let address = gtk::Entry::builder()
             .hexpand(true)
-            .xalign(0.0)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .css_classes(["page-title"])
+            .placeholder_text(tr("pathfinder-address-hint"))
+            .input_purpose(gtk::InputPurpose::Url)
+            .css_classes(["address"])
             .build();
         let bar = gtk::Box::builder().spacing(5).css_classes(["bar"]).build();
-        for w in [back.upcast_ref::<gtk::Widget>(), forward.upcast_ref(), reload.upcast_ref(), title.upcast_ref(), outside.upcast_ref()] {
+        for w in [home.upcast_ref::<gtk::Widget>(), back.upcast_ref(), forward.upcast_ref(), reload.upcast_ref(), address.upcast_ref(), key_button.upcast_ref(), outside.upcast_ref()] {
             bar.append(w);
         }
 
@@ -132,6 +158,18 @@ impl Window {
         root.append(&page);
         window.set_child(Some(&root));
 
+        let state = State::load();
+        let browser = {
+            let mut cfg_b = config::Service::new(&tr("pathfinder-browser"), cfg.home.as_deref().unwrap_or(DEFAULT_HOME));
+            cfg_b.id = Some(BROWSER_ID.into());
+            cfg_b.icon = Some("web-browser-symbolic".into());
+            cfg_b.browser = true;
+            // Any site opens here: none may notify by just asking.
+            cfg_b.notifications = false;
+            let zoom = state.zoom.get(BROWSER_ID).copied().unwrap_or(1.0);
+            Service::new(cfg_b, &env, zoom)
+        };
+        top.append(&browser.button);
         let this = Rc::new(Self {
             window,
             env,
@@ -141,11 +179,15 @@ impl Window {
             groups_box,
             groups: RefCell::new(Vec::new()),
             stack,
-            title,
+            address,
+            editing: std::cell::Cell::new(false),
+            browser,
             back,
             forward,
             current: RefCell::new(None),
-            state: RefCell::new(State::load()),
+            state: RefCell::new(state),
+            vault: Rc::new(crate::passwords::Vault::default()),
+            key_button,
         });
 
         {
@@ -156,6 +198,12 @@ impl Window {
                 }
             }));
             let weak = Rc::downgrade(&this);
+            *this.env.watching.borrow_mut() = Some(Box::new(move |service| {
+                weak.upgrade().is_some_and(|w| {
+                    w.window.is_active() && w.window.is_visible() && w.current.borrow().as_ref().is_some_and(|c| c.key == service.key)
+                })
+            }));
+            let weak = Rc::downgrade(&this);
             *this.env.page_changed.borrow_mut() = Some(Box::new(move |service| {
                 if let Some(w) = weak.upgrade()
                     && w.current.borrow().as_ref().is_some_and(|c| c.key == service.key)
@@ -163,6 +211,38 @@ impl Window {
                     w.update_bar();
                 }
             }));
+        }
+        this.wire(&this.browser.clone());
+        home.connect_clicked(glib::clone!(#[weak] this, move |_| this.go_home()));
+        this.address.connect_activate(glib::clone!(#[weak] this, move |e| this.go_to(&e.text())));
+        {
+            // Editing: the page's address waits; leaving puts it back.
+            let focus = gtk::EventControllerFocus::new();
+            focus.connect_enter(glib::clone!(#[weak] this, move |_| this.editing.set(true)));
+            focus.connect_leave(glib::clone!(#[weak] this, move |_| {
+                this.editing.set(false);
+                this.update_bar();
+            }));
+            this.address.add_controller(focus);
+            let keys = gtk::EventControllerKey::new();
+            keys.connect_key_pressed(glib::clone!(
+                #[weak]
+                this,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_, key, _, _| {
+                    if key != gdk::Key::Escape {
+                        return glib::Propagation::Proceed;
+                    }
+                    this.editing.set(false);
+                    this.update_bar();
+                    this.with_view(|v| {
+                        v.grab_focus();
+                    });
+                    glib::Propagation::Stop
+                }
+            ));
+            this.address.add_controller(keys);
         }
         this.back.connect_clicked(glib::clone!(#[weak] this, move |_| this.with_view(|v| v.go_back())));
         this.forward.connect_clicked(glib::clone!(#[weak] this, move |_| this.with_view(|v| v.go_forward())));
@@ -172,7 +252,8 @@ impl Window {
                 this.env.open_external(&uri);
             }
         }));
-        add.connect_clicked(glib::clone!(#[weak] this, move |_| this.add_dialog()));
+        add.connect_clicked(glib::clone!(#[weak] this, move |b| this.add_menu(b.upcast_ref())));
+        this.key_button.connect_clicked(glib::clone!(#[weak] this, move |_| this.fill_login()));
         menu.set_popover(Some(&this.settings_menu()));
         this.install_keys(app);
         this.keep_logins();
@@ -221,38 +302,66 @@ impl Window {
         let mut kept = HashMap::new();
         let mut groups = Vec::new();
         let cfg = self.cfg.borrow().clone();
-        for group in &cfg.groups {
-            let collapsed = self.state.borrow().collapsed.contains(&group.name);
-            let name = gtk::Label::builder()
-                .label(&group.name)
-                .ellipsize(gtk::pango::EllipsizeMode::End)
-                .max_width_chars(8)
-                .hexpand(true)
-                .xalign(0.0)
-                .build();
-            let arrow = gtk::Image::from_icon_name(if collapsed { "pan-end-symbolic" } else { "pan-down-symbolic" });
+        // The browser first (Ctrl+1), whatever the file holds.
+        kept.insert(self.browser.key.clone(), self.browser.clone());
+        self.services.borrow_mut().push(self.browser.clone());
+        // Who may notify, by profile — read when a profile's first page
+        // starts.
+        {
+            let mut origins = self.env.notify_origins.borrow_mut();
+            origins.clear();
+            for s in cfg.groups.iter().flat_map(|g| &g.services).filter(|s| s.notifications) {
+                origins.entry(s.profile()).or_default().push(s.url.clone());
+            }
+        }
+        let mut seps = 0;
+        for (index, group) in cfg.groups.iter().enumerate() {
+            let collapsed = group.name.as_ref().is_some_and(|n| self.state.borrow().collapsed.contains(n));
             let badge = gtk::Label::builder().css_classes(["badge", "group-badge"]).visible(false).build();
-            let head = gtk::Box::builder().spacing(2).build();
-            head.append(&arrow);
-            head.append(&name);
-            head.append(&badge);
-            let header = gtk::Button::builder()
-                .child(&head)
-                .tooltip_text(&group.name)
-                .css_classes(["flat", "group-header"])
-                .build();
             let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["group-services"]).build();
             let revealer = gtk::Revealer::builder()
                 .child(&list)
                 .reveal_child(!collapsed)
                 .transition_type(gtk::RevealerTransitionType::SlideDown)
                 .build();
+            // The same count `flatten` makes: a slot per heading or line.
+            let separator = |widget: &gtk::Widget, this: &Rc<Self>, n: usize| {
+                this.draggable(widget, format!("sep:{n}"));
+                this.separator_menu(widget, n);
+            };
+            match &group.name {
+                // A named group: a heading that folds it.
+                Some(name) => {
+                    let header = self.group_header(name, collapsed, &badge, &revealer);
+                    separator(header.upcast_ref(), self, seps);
+                    seps += 1;
+                    self.groups_box.append(&header);
+                }
+                // Otherwise just a line between it and the one above, in a
+                // slot tall enough to grab.
+                None if index > 0 => {
+                    let line = gtk::Separator::builder().css_classes(["group-separator"]).hexpand(true).valign(gtk::Align::Center).build();
+                    let slot = gtk::Box::builder().css_classes(["separator-slot"]).build();
+                    slot.append(&line);
+                    separator(slot.upcast_ref(), self, seps);
+                    seps += 1;
+                    self.groups_box.append(&slot);
+                }
+                None => {}
+            }
             let mut members = Vec::new();
             for cfg in &group.services {
                 let key = cfg.key();
                 let service = match old.get(&key) {
                     Some(s) => {
+                        let icon_changed = s.cfg.borrow().icon != cfg.icon;
                         *s.cfg.borrow_mut() = cfg.clone();
+                        s.button.set_tooltip_text(Some(&cfg.name));
+                        if icon_changed {
+                            // A cleared or new icon: the copy kept for the old one goes.
+                            let _ = std::fs::remove_file(self.env.icon_file(&key));
+                            s.apply_icon();
+                        }
                         s.clone()
                     }
                     None => {
@@ -270,31 +379,6 @@ impl Window {
                 members.push(service.clone());
                 self.services.borrow_mut().push(service);
             }
-            header.connect_clicked(glib::clone!(
-                #[weak(rename_to = this)]
-                self,
-                #[weak]
-                revealer,
-                #[weak]
-                arrow,
-                #[strong(rename_to = group)]
-                group.name,
-                move |_| {
-                    let open = !revealer.reveals_child();
-                    revealer.set_reveal_child(open);
-                    arrow.set_icon_name(Some(if open { "pan-down-symbolic" } else { "pan-end-symbolic" }));
-                    {
-                        let mut state = this.state.borrow_mut();
-                        state.collapsed.retain(|g| *g != group);
-                        if !open {
-                            state.collapsed.push(group.clone());
-                        }
-                        state.save();
-                    }
-                    this.update_counts();
-                }
-            ));
-            self.groups_box.append(&header);
             self.groups_box.append(&revealer);
             groups.push((badge, members, revealer));
         }
@@ -320,6 +404,50 @@ impl Window {
         self.update_counts();
     }
 
+    /// The heading of a named group: arrow, name and — folded — the sum of
+    /// its unread counts. A click folds or unfolds it.
+    fn group_header(self: &Rc<Self>, group: &str, collapsed: bool, badge: &gtk::Label, revealer: &gtk::Revealer) -> gtk::Button {
+        let name = gtk::Label::builder()
+            .label(group)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(8)
+            .hexpand(true)
+            .xalign(0.0)
+            .build();
+        let arrow = gtk::Image::from_icon_name(if collapsed { "pan-end-symbolic" } else { "pan-down-symbolic" });
+        let head = gtk::Box::builder().spacing(2).build();
+        head.append(&arrow);
+        head.append(&name);
+        head.append(badge);
+        let header = gtk::Button::builder()
+            .child(&head)
+            .tooltip_text(group)
+            .css_classes(["flat", "group-header"])
+            .build();
+        let group = group.to_owned();
+        header.connect_clicked(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[weak]
+            revealer,
+            move |_| {
+                let open = !revealer.reveals_child();
+                revealer.set_reveal_child(open);
+                arrow.set_icon_name(Some(if open { "pan-down-symbolic" } else { "pan-end-symbolic" }));
+                {
+                    let mut state = this.state.borrow_mut();
+                    state.collapsed.retain(|g| *g != group);
+                    if !open {
+                        state.collapsed.push(group.clone());
+                    }
+                    state.save();
+                }
+                this.update_counts();
+            }
+        ));
+        header
+    }
+
     /// Clicks on a service's button.
     fn wire(self: &Rc<Self>, service: &Rc<Service>) {
         let weak = Rc::downgrade(service);
@@ -334,6 +462,10 @@ impl Window {
                 }
             }
         ));
+        if service.cfg.borrow().browser {
+            // Fixed in place, nothing to edit or remove.
+            return;
+        }
         let click = gtk::GestureClick::builder().button(gdk::BUTTON_SECONDARY).build();
         click.connect_pressed(glib::clone!(
             #[weak(rename_to = this)]
@@ -354,6 +486,7 @@ impl Window {
             }
         });
         service.button.add_controller(middle);
+        self.draggable(service.button.upcast_ref(), format!("svc:{}", service.key));
     }
 
     /// Makes the service's page and puts it in the stack.
@@ -384,12 +517,15 @@ impl Window {
 
     fn update_bar(&self) {
         let Some(view) = self.current_view() else {
-            self.title.set_label("");
+            if !self.editing.get() {
+                self.address.set_text("");
+            }
             return;
         };
-        let title = view.title().filter(|t| !t.is_empty()).or_else(|| view.uri()).unwrap_or_default();
-        self.title.set_label(&title);
-        self.title.set_tooltip_text(view.uri().as_deref());
+        if !self.editing.get() {
+            self.address.set_text(view.uri().as_deref().unwrap_or_default());
+        }
+        self.address.set_tooltip_text(view.title().as_deref());
         self.back.set_sensitive(view.can_go_back());
         self.forward.set_sensitive(view.can_go_forward());
     }
@@ -425,6 +561,18 @@ impl Window {
         };
         let s = service.clone();
         item(tr("pathfinder-reload"), Box::new(move || s.reload()));
+        let (key, this) = (service.key.clone(), self.clone());
+        item(tr("pathfinder-edit"), Box::new(move || this.service_dialog(Some(key.clone()))));
+        let (key, this) = (service.key.clone(), self.clone());
+        item(tr("pathfinder-move-up"), Box::new(move || this.move_service(&key, true)));
+        let (key, this) = (service.key.clone(), self.clone());
+        item(tr("pathfinder-move-down"), Box::new(move || this.move_service(&key, false)));
+        let (key, this) = (service.key.clone(), self.clone());
+        item(tr("pathfinder-separator-below"), Box::new(move || this.edit_slots(|slots| {
+            if let Some(i) = slots.iter().position(|s| matches!(s, Slot::Service(c) if c.key() == key)) {
+                slots.insert(i + 1, Slot::Separator(None));
+            }
+        })));
         let muted = service.cfg.borrow().muted;
         let (s, this) = (service.clone(), self.clone());
         item(
@@ -447,7 +595,14 @@ impl Window {
             tr("pathfinder-clear"),
             Box::new(move || {
                 let s = s.clone();
-                this.confirm(&tr_args("pathfinder-clear-confirm", &[("name", text(s.name()))]), &tr("pathfinder-clear"), move || s.clear_data());
+                let sharing: Vec<String> =
+                    this.services.borrow().iter().filter(|o| o.profile() == s.profile() && o.key != s.key).map(|o| o.name()).collect();
+                let message = if sharing.is_empty() {
+                    tr_args("pathfinder-clear-confirm", &[("name", text(s.name()))])
+                } else {
+                    tr_args("pathfinder-clear-confirm-shared", &[("name", text(s.name())), ("others", text(sharing.join(", ")))])
+                };
+                this.confirm(&message, &tr("pathfinder-clear"), move || s.clear_data());
             }),
         );
         let (s, this) = (service.clone(), self.clone());
@@ -512,20 +667,54 @@ impl Window {
         self.rebuild();
     }
 
-    /// "+": name, address, group and the two choices that matter at once.
-    fn add_dialog(self: &Rc<Self>) {
+    /// "+" (`editing` = None) or "Edit…" on a service: name, address, group,
+    /// a profile to share a login with, and the two choices that matter at
+    /// once.
+    fn service_dialog(self: &Rc<Self>, editing: Option<String>) {
+        let old: Option<(usize, config::Service)> = editing.as_ref().and_then(|key| {
+            self.cfg.borrow().groups.iter().enumerate().find_map(|(gi, g)| g.services.iter().find(|s| s.key() == *key).map(|s| (gi, s.clone())))
+        });
         let name = gtk::Entry::builder().hexpand(true).build();
         let url = gtk::Entry::builder().placeholder_text("https://").build();
-        let default_group = self.cfg.borrow().groups.first().map(|g| g.name.clone()).unwrap_or_else(|| tr("pathfinder-default-group"));
-        let group = gtk::Entry::builder().text(&default_group).build();
+        // Groups by name, or by their first service when unnamed; then "new".
+        let mut choices: Vec<String> = self
+            .cfg
+            .borrow()
+            .groups
+            .iter()
+            .enumerate()
+            .map(|(i, g)| {
+                g.name.clone().unwrap_or_else(|| match g.services.first() {
+                    Some(first) => tr_args("pathfinder-group-n", &[("n", text((i + 1).to_string())), ("first", text(first.name.clone()))]),
+                    None => tr_args("pathfinder-group-empty", &[("n", text((i + 1).to_string()))]),
+                })
+            })
+            .collect();
+        let existing = choices.len() as u32;
+        choices.push(tr("pathfinder-new-group"));
+        let group = gtk::DropDown::from_strings(&choices.iter().map(String::as_str).collect::<Vec<_>>());
+        let profile = gtk::Entry::builder().placeholder_text(tr("pathfinder-profile-hint")).build();
+        let icon = gtk::Entry::builder().placeholder_text(tr("pathfinder-icon-hint")).build();
         let always = gtk::CheckButton::with_label(&tr("pathfinder-always-active"));
         let media = gtk::CheckButton::with_label(&tr("pathfinder-media"));
-        let go = gtk::Button::builder().label(tr("pathfinder-add-button")).css_classes(["suggested-action"]).halign(gtk::Align::End).build();
+        if let Some((gi, s)) = &old {
+            name.set_text(&s.name);
+            url.set_text(&s.url);
+            group.set_selected(*gi as u32);
+            profile.set_text(s.profile.as_deref().unwrap_or_default());
+            icon.set_text(s.icon.as_deref().unwrap_or_default());
+            always.set_active(s.always_active);
+            media.set_active(s.media);
+        }
+        let button = if old.is_some() { "pathfinder-save" } else { "pathfinder-add-button" };
+        let go = gtk::Button::builder().label(tr(button)).css_classes(["suggested-action"]).halign(gtk::Align::End).build();
         let grid = gtk::Grid::builder().row_spacing(10).column_spacing(10).css_classes(["dialog-box"]).build();
         for (row, (label, widget)) in [
             ("pathfinder-name", name.upcast_ref::<gtk::Widget>()),
             ("pathfinder-url", url.upcast_ref()),
             ("pathfinder-group", group.upcast_ref()),
+            ("pathfinder-profile", profile.upcast_ref()),
+            ("pathfinder-icon", icon.upcast_ref()),
         ]
         .into_iter()
         .enumerate()
@@ -533,18 +722,20 @@ impl Window {
             grid.attach(&gtk::Label::builder().label(tr(label)).xalign(1.0).build(), 0, row as i32, 1, 1);
             grid.attach(widget, 1, row as i32, 1, 1);
         }
-        grid.attach(&always, 1, 3, 1, 1);
-        grid.attach(&media, 1, 4, 1, 1);
-        grid.attach(&go, 1, 5, 1, 1);
+        grid.attach(&always, 1, 5, 1, 1);
+        grid.attach(&media, 1, 6, 1, 1);
+        grid.attach(&go, 1, 7, 1, 1);
+        let title = if old.is_some() { "pathfinder-edit" } else { "pathfinder-add" };
         let dialog = gtk::Window::builder()
             .transient_for(&self.window)
             .modal(true)
-            .title(tr("pathfinder-add"))
+            .title(tr(title))
             .resizable(false)
             .default_width(420)
             .css_classes(["orbit-pathfinder-dialog"])
             .child(&grid)
             .build();
+        crate::ui::close_on_escape(dialog.upcast_ref());
         let run = Rc::new(glib::clone!(
             #[weak(rename_to = this)]
             self,
@@ -556,6 +747,10 @@ impl Window {
             url,
             #[weak]
             group,
+            #[weak]
+            profile,
+            #[weak]
+            icon,
             #[weak]
             always,
             #[weak]
@@ -573,29 +768,72 @@ impl Window {
                 if label.is_empty() {
                     label = crate::privacy::host(&address).unwrap_or_else(|| address.clone());
                 }
-                let mut service = config::Service::new(&label, &address);
+                // Editing keeps what the dialog does not show (domains, proxy…).
+                let mut service = old.as_ref().map(|(_, s)| s.clone()).unwrap_or_else(|| config::Service::new(&label, &address));
+                let old_key = old.as_ref().map(|(_, s)| s.key());
+                let old_profile = old.as_ref().map(|(_, s)| s.profile());
+                service.name = label;
+                service.url = address;
                 service.always_active = always.is_active();
                 service.media = media.is_active();
-                // Two of the same name get storage of their own.
-                let taken: Vec<String> = this.services.borrow().iter().map(|s| s.key.clone()).collect();
-                if taken.contains(&service.key()) {
-                    let base = service.key();
-                    let free = (2..).map(|n| format!("{base}-{n}")).find(|k| !taken.contains(k)).expect("free key");
-                    service.id = Some(free);
+                service.profile = Some(profile.text().trim().to_owned()).filter(|p| !p.is_empty());
+                service.icon = Some(icon.text().trim().to_owned()).filter(|i| !i.is_empty());
+                match &old_key {
+                    // A new name must not move the service to new storage
+                    // (its login) or lose its icon and zoom: it keeps its key.
+                    Some(key) if service.key() != *key => service.id = Some(key.clone()),
+                    Some(_) => {}
+                    // Two of the same name get storage of their own.
+                    None => {
+                        let taken: Vec<String> = this.services.borrow().iter().map(|s| s.key.clone()).collect();
+                        if taken.contains(&service.key()) {
+                            let base = service.key();
+                            let free = (2..).map(|n| format!("{base}-{n}")).find(|k| !taken.contains(k)).expect("free key");
+                            service.id = Some(free);
+                        }
+                    }
                 }
                 let key = service.key();
-                let group_name = Some(group.text().trim().to_owned()).filter(|g| !g.is_empty()).unwrap_or_else(|| tr("pathfinder-default-group"));
+                let new_url = service.url.clone();
+                let profile_changed = old_profile.is_some_and(|p| p != service.profile());
                 {
                     let mut cfg = this.cfg.borrow_mut();
-                    match cfg.groups.iter_mut().find(|g| g.name == group_name) {
-                        Some(g) => g.services.push(service),
-                        None => cfg.groups.push(config::Group { name: group_name, services: vec![service] }),
+                    let chosen = group.selected();
+                    let same_group = old.as_ref().is_some_and(|(gi, _)| *gi as u32 == chosen);
+                    let replaced = same_group
+                        && cfg.groups.iter_mut().flat_map(|g| g.services.iter_mut()).find(|s| Some(s.key()) == old_key).map(|s| *s = service.clone()).is_some();
+                    if !replaced {
+                        if let Some(k) = &old_key {
+                            for g in &mut cfg.groups {
+                                g.services.retain(|s| s.key() != *k);
+                            }
+                        }
+                        match cfg.groups.get_mut(chosen as usize).filter(|_| chosen < existing) {
+                            Some(g) => g.services.push(service),
+                            None => cfg.groups.push(config::Group { name: None, services: vec![service] }),
+                        }
                     }
                     this.save(&cfg);
                 }
+                // A loaded page in another profile's storage is made again.
+                if profile_changed {
+                    let loaded = this.services.borrow().iter().find(|s| s.key == key).cloned();
+                    if let Some(s) = loaded {
+                        if let Some(view) = s.view() {
+                            this.stack.remove(&view);
+                        }
+                        s.drop_view();
+                    }
+                }
                 this.rebuild();
-                let added = this.services.borrow().iter().find(|s| s.key == key).cloned();
-                if let Some(s) = added {
+                let service = this.services.borrow().iter().find(|s| s.key == key).cloned();
+                if let Some(s) = service {
+                    if let Some(view) = s.view()
+                        && old_key.is_some()
+                        && view.uri().is_none_or(|u| crate::privacy::host(&u) != crate::privacy::host(&new_url))
+                    {
+                        view.load_uri(&new_url);
+                    }
                     this.select(&s);
                 }
                 dialog.close();
@@ -605,7 +843,7 @@ impl Window {
             let run = run.clone();
             go.connect_clicked(move |_| run());
         }
-        for entry in [&name, &url, &group] {
+        for entry in [&name, &url, &profile, &icon] {
             let run = run.clone();
             entry.connect_activate(move |_| run());
         }
@@ -613,13 +851,207 @@ impl Window {
         name.grab_focus();
     }
 
+    /// "+": a service, or a separator (at the end of the sidebar, to drag
+    /// where it goes).
+    fn add_menu(self: &Rc<Self>, anchor: &gtk::Widget) {
+        let popover = gtk::Popover::builder().has_arrow(false).position(gtk::PositionType::Right).build();
+        popover.set_parent(anchor);
+        let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["menu-list"]).build();
+        for (label, separator) in [("pathfinder-add-service", false), ("pathfinder-add-separator", true)] {
+            let item = gtk::Button::builder().label(tr(label)).css_classes(["flat", "menu-item"]).build();
+            if let Some(l) = item.child().and_downcast::<gtk::Label>() {
+                l.set_xalign(0.0);
+            }
+            let (this, p) = (self.clone(), popover.clone());
+            item.connect_clicked(move |_| {
+                p.popdown();
+                if separator {
+                    let this = this.clone();
+                    glib::idle_add_local_once(move || this.edit_slots(|slots| slots.push(Slot::Separator(None))));
+                } else {
+                    this.service_dialog(None);
+                }
+            });
+            list.append(&item);
+        }
+        popover.set_child(Some(&list));
+        popover.connect_closed(|p| {
+            let p = p.clone();
+            glib::idle_add_local_once(move || p.unparent());
+        });
+        popover.popup();
+    }
+
+    /// Lets `widget` be dragged (as `id`, "svc:<key>" or "sep:<n>") and
+    /// take drops: what lands on its upper half goes before it, on its
+    /// lower half after it.
+    fn draggable(self: &Rc<Self>, widget: &gtk::Widget, id: String) {
+        let source = gtk::DragSource::builder().actions(gdk::DragAction::MOVE).build();
+        let value = id.clone();
+        source.connect_prepare(move |_, _, _| Some(gdk::ContentProvider::for_value(&value.to_value())));
+        source.connect_drag_begin(|source, _| {
+            if let Some(widget) = source.widget() {
+                let paintable = gtk::WidgetPaintable::new(Some(&widget));
+                source.set_icon(Some(&paintable), widget.width() / 2, widget.height() / 2);
+            }
+        });
+        widget.add_controller(source);
+
+        let target = gtk::DropTarget::new(glib::Type::STRING, gdk::DragAction::MOVE);
+        let mark = |w: &gtk::Widget, y: f64| {
+            let after = y > w.height() as f64 / 2.0;
+            w.remove_css_class(if after { "drop-before" } else { "drop-after" });
+            w.add_css_class(if after { "drop-after" } else { "drop-before" });
+        };
+        target.connect_enter(move |t, _, y| {
+            if let Some(w) = t.widget() {
+                mark(&w, y);
+            }
+            gdk::DragAction::MOVE
+        });
+        target.connect_motion(move |t, _, y| {
+            if let Some(w) = t.widget() {
+                mark(&w, y);
+            }
+            gdk::DragAction::MOVE
+        });
+        target.connect_leave(|t| {
+            if let Some(w) = t.widget() {
+                w.remove_css_class("drop-before");
+                w.remove_css_class("drop-after");
+            }
+        });
+        let weak = Rc::downgrade(self);
+        target.connect_drop(move |t, value, _, y| {
+            let Some(w) = t.widget() else { return false };
+            w.remove_css_class("drop-before");
+            w.remove_css_class("drop-after");
+            let (Some(this), Ok(from)) = (weak.upgrade(), value.get::<String>()) else { return false };
+            if from == id {
+                return false;
+            }
+            let after = y > w.height() as f64 / 2.0;
+            let (from, to) = (from.clone(), id.clone());
+            // After the drop finishes: the rebuild removes the widgets.
+            glib::idle_add_local_once(move || {
+                this.edit_slots(|slots| {
+                    let find = |slots: &[Slot], id: &str| slots.iter().position(|s| s.id(slots) == id);
+                    let Some(i) = find(slots, &from) else { return };
+                    let ids: Vec<String> = slots.iter().map(|s| s.id(slots)).collect();
+                    let moving = slots.remove(i);
+                    // The target, found by the id it had before the move.
+                    let Some(j) = ids.iter().position(|x| *x == to) else {
+                        slots.insert(i, moving);
+                        return;
+                    };
+                    let j = if j > i { j - 1 } else { j };
+                    slots.insert(if after { j + 1 } else { j }, moving);
+                })
+            });
+            true
+        });
+        widget.add_controller(target);
+    }
+
+    /// A right click on a separator: remove it (its group joins the one
+    /// above).
+    fn separator_menu(self: &Rc<Self>, widget: &gtk::Widget, n: usize) {
+        let click = gtk::GestureClick::builder().button(gdk::BUTTON_SECONDARY).build();
+        let weak = Rc::downgrade(self);
+        let anchor = widget.clone();
+        click.connect_pressed(move |_, _, _, _| {
+            let Some(this) = weak.upgrade() else { return };
+            let popover = gtk::Popover::builder().has_arrow(false).position(gtk::PositionType::Right).build();
+            popover.set_parent(&anchor);
+            let remove = gtk::Button::builder().label(tr("pathfinder-separator-remove")).css_classes(["flat", "menu-item"]).build();
+            let p = popover.clone();
+            remove.connect_clicked(move |_| {
+                p.popdown();
+                let this = this.clone();
+                glib::idle_add_local_once(move || {
+                    this.edit_slots(|slots| {
+                        let mut seen = 0;
+                        slots.retain(|s| match s {
+                            Slot::Separator(_) => {
+                                seen += 1;
+                                seen - 1 != n
+                            }
+                            Slot::Service(_) => true,
+                        });
+                    })
+                });
+            });
+            popover.set_child(Some(&remove));
+            popover.connect_closed(|p| {
+                let p = p.clone();
+                glib::idle_add_local_once(move || p.unparent());
+            });
+            popover.popup();
+        });
+        widget.add_controller(click);
+    }
+
+    /// Changes the sidebar as a flat list of services and separators, then
+    /// saves it as groups again and rebuilds.
+    fn edit_slots(self: &Rc<Self>, f: impl FnOnce(&mut Vec<Slot>)) {
+        {
+            let mut cfg = self.cfg.borrow_mut();
+            let mut slots = flatten(&cfg.groups);
+            f(&mut slots);
+            cfg.groups = regroup(slots);
+            self.save(&cfg);
+        }
+        self.rebuild();
+    }
+
+    /// Moves a service one place up or down; past the edge of its group, into
+    /// the next group.
+    fn move_service(self: &Rc<Self>, key: &str, up: bool) {
+        {
+            let mut cfg = self.cfg.borrow_mut();
+            let Some((gi, si)) = cfg.groups.iter().enumerate().find_map(|(gi, g)| g.services.iter().position(|s| s.key() == key).map(|si| (gi, si))) else { return };
+            let len = cfg.groups[gi].services.len();
+            match (up, si) {
+                (true, 0) if gi > 0 => {
+                    let s = cfg.groups[gi].services.remove(0);
+                    cfg.groups[gi - 1].services.push(s);
+                }
+                (true, 0) => return,
+                (true, _) => cfg.groups[gi].services.swap(si, si - 1),
+                (false, _) if si + 1 < len => cfg.groups[gi].services.swap(si, si + 1),
+                (false, _) if gi + 1 < cfg.groups.len() => {
+                    let s = cfg.groups[gi].services.remove(si);
+                    cfg.groups[gi + 1].services.insert(0, s);
+                }
+                (false, _) => return,
+            }
+            self.save(&cfg);
+        }
+        self.rebuild();
+    }
+
     fn settings_menu(self: &Rc<Self>) -> gtk::Popover {
         let popover = gtk::Popover::builder().has_arrow(false).build();
         let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["menu-list"]).build();
         let edit = gtk::Button::builder().label(tr("pathfinder-edit-config")).css_classes(["flat", "menu-item"]).build();
         let reload = gtk::Button::builder().label(tr("pathfinder-reload-config")).css_classes(["flat", "menu-item"]).build();
-        list.append(&edit);
-        list.append(&reload);
+        let import = gtk::Button::builder().label(tr("pathfinder-import-title")).css_classes(["flat", "menu-item"]).build();
+        for item in [&edit, &reload, &import] {
+            if let Some(label) = item.child().and_downcast::<gtk::Label>() {
+                label.set_xalign(0.0);
+            }
+            list.append(item);
+        }
+        import.connect_clicked(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[weak]
+            popover,
+            move |_| {
+                popover.popdown();
+                this.vault.import_dialog(this.window.upcast_ref());
+            }
+        ));
         popover.set_child(Some(&list));
         edit.connect_clicked(glib::clone!(
             #[weak(rename_to = this)]
@@ -710,6 +1142,12 @@ impl Window {
         add("zoom-in", None, Box::new(|this, _| this.zoom(Some(0.1))));
         add("zoom-out", None, Box::new(|this, _| this.zoom(Some(-0.1))));
         add("zoom-reset", None, Box::new(|this, _| this.zoom(None)));
+        add("fill", None, Box::new(|this, _| this.fill_login()));
+        add("address", None, Box::new(|this, _| {
+            this.address.grab_focus();
+            this.address.select_region(0, -1);
+        }));
+        add("home", None, Box::new(|this, _| this.go_home()));
         add("inspect", None, Box::new(|this, _| {
             this.with_view(|v| {
                 if let Some(i) = v.inspector() {
@@ -731,8 +1169,40 @@ impl Window {
             ("win.zoom-out", &["<Control>minus", "<Control>KP_Subtract"]),
             ("win.zoom-reset", &["<Control>0", "<Control>KP_0"]),
             ("win.inspect", &["F12"]),
+            ("win.fill", &["<Control><Shift>l"]),
+            ("win.address", &["<Control>l", "F6"]),
+            ("win.home", &["<Alt>Home"]),
         ] {
             app.set_accels_for_action(action, keys);
+        }
+    }
+
+    /// Opens what was typed in the address bar — an address, or a search —
+    /// in the browser, which comes forward.
+    fn go_to(self: &Rc<Self>, text: &str) {
+        let search = self.cfg.borrow().search.clone().unwrap_or_else(|| DEFAULT_SEARCH.into());
+        let url = crate::privacy::typed(text, &search);
+        if url.is_empty() {
+            return;
+        }
+        self.editing.set(false);
+        let browser = self.browser.clone();
+        browser.open(&url);
+        self.select(&browser);
+    }
+
+    /// Home: the browser, on its start page.
+    fn go_home(self: &Rc<Self>) {
+        let home = self.cfg.borrow().home.clone().unwrap_or_else(|| DEFAULT_HOME.into());
+        let browser = self.browser.clone();
+        browser.open(&home);
+        self.select(&browser);
+    }
+
+    /// Fills the page's login form from Bitwarden.
+    fn fill_login(&self) {
+        if let Some(view) = self.current_view() {
+            self.vault.fill(self.window.upcast_ref(), &view, self.key_button.upcast_ref());
         }
     }
 
@@ -775,7 +1245,10 @@ impl Window {
 
     /// Writes every loaded service's session cookies, then calls `done`.
     fn save_cookies(&self, done: impl FnOnce() + 'static) {
-        let loaded: Vec<Rc<Service>> = self.services.borrow().iter().filter(|s| s.is_loaded()).cloned().collect();
+        // One per profile: services sharing a profile share its cookies.
+        let mut seen = std::collections::HashSet::new();
+        let loaded: Vec<Rc<Service>> =
+            self.services.borrow().iter().filter(|s| s.is_loaded() && seen.insert(s.profile())).cloned().collect();
         if loaded.is_empty() {
             done();
             return;
@@ -822,5 +1295,93 @@ impl Window {
             state.zoom.insert(service.key.clone(), service.zoom());
         }
         state.save();
+    }
+}
+
+/// The sidebar as a flat list: a separator where each group but the first
+/// begins (and before a named first group), then its services.
+#[derive(Debug, Clone)]
+enum Slot {
+    /// The group's name, when it has one.
+    Separator(Option<String>),
+    Service(config::Service),
+}
+
+impl Slot {
+    /// "svc:<key>", or "sep:<n>" for the n-th separator in `slots`.
+    fn id(&self, slots: &[Slot]) -> String {
+        match self {
+            Slot::Service(s) => format!("svc:{}", s.key()),
+            Slot::Separator(_) => {
+                let n = slots.iter().take_while(|s| !std::ptr::eq(*s, self)).filter(|s| matches!(s, Slot::Separator(_))).count();
+                format!("sep:{n}")
+            }
+        }
+    }
+}
+
+fn flatten(groups: &[config::Group]) -> Vec<Slot> {
+    let mut slots = Vec::new();
+    for (i, g) in groups.iter().enumerate() {
+        if i > 0 || g.name.is_some() {
+            slots.push(Slot::Separator(g.name.clone()));
+        }
+        slots.extend(g.services.iter().cloned().map(Slot::Service));
+    }
+    slots
+}
+
+/// Back to groups. A separator stays even with nothing after it yet (one
+/// just added, to drag services under); only "Remove separator" takes it
+/// away.
+fn regroup(slots: Vec<Slot>) -> Vec<config::Group> {
+    let mut groups: Vec<config::Group> = Vec::new();
+    let mut current = config::Group::default();
+    for slot in slots {
+        match slot {
+            Slot::Separator(name) => {
+                let previous = std::mem::replace(&mut current, config::Group { name, services: Vec::new() });
+                // Before a first separator there may be no group at all.
+                if !(groups.is_empty() && previous.services.is_empty() && previous.name.is_none()) {
+                    groups.push(previous);
+                }
+            }
+            Slot::Service(s) => current.services.push(s),
+        }
+    }
+    groups.push(current);
+    groups
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn svc(name: &str) -> config::Service {
+        config::Service::new(name, "https://a.example/")
+    }
+
+    fn names(groups: &[config::Group]) -> Vec<Vec<String>> {
+        groups.iter().map(|g| g.services.iter().map(|s| s.name.clone()).collect()).collect()
+    }
+
+    #[test]
+    fn flattens_and_regroups() {
+        let groups = vec![
+            config::Group { name: None, services: vec![svc("A"), svc("B")] },
+            config::Group { name: None, services: vec![svc("C")] },
+        ];
+        let mut slots = flatten(&groups);
+        assert_eq!(slots.iter().map(|s| s.id(&slots)).collect::<Vec<_>>(), ["svc:a", "svc:b", "sep:0", "svc:c"]);
+        // Moving the separator up one: B joins C's group.
+        let sep = slots.remove(2);
+        slots.insert(1, sep);
+        assert_eq!(names(&regroup(slots.clone())), [vec!["A"], vec!["B", "C"]]);
+        // A separator added at the end stays, with nothing under it yet.
+        slots.push(Slot::Separator(None));
+        let groups = regroup(slots);
+        assert_eq!(names(&groups), [vec!["A"], vec!["B", "C"], vec![]]);
+        // And flattens back to the same slots.
+        assert_eq!(flatten(&groups).len(), 5);
     }
 }

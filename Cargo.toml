@@ -66,6 +66,15 @@ sourceview5 = { version = "0.11", features = ["v5_10"] }
 # orbit-pathfinder: the web engine, WebKitGTK 6.0 from Debian (2.52 in
 # trixie), on the same gtk-rs 0.11/0.22 as the rest.
 webkit6 = { version = "0.6", features = ["v2_48"] }
+# orbit-pathfinder: importing saved passwords from other browsers — their
+# SQLite stores, Chromium's AES-128-CBC with a PBKDF2 key, and Firefox's NSS
+# (the system's libnss3, loaded at run time).
+rusqlite = "0.37"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+sha1 = "0.10"
+libloading = "0.8"
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"

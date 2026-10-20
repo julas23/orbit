@@ -5,11 +5,15 @@
 //! The services are in `~/.config/orbit/pathfinder.yaml` (see `config`);
 //! the plan is `docs/PLANO-PATHFINDER.md`.
 
+mod bitwarden;
 mod config;
 mod cookies;
+mod import;
+mod passwords;
 mod privacy;
 mod service;
 mod state;
+mod ui;
 mod window;
 
 use std::{cell::RefCell, rc::Rc};
@@ -22,6 +26,9 @@ thread_local! {
 }
 
 fn main() -> glib::ExitCode {
+    if std::env::args().nth(1).as_deref() == Some(import::FIREFOX_HELPER) {
+        return import::firefox_helper();
+    }
     orbit_app::run_app(orbit_app::App {
         name: "orbit-pathfinder",
         app_id: "io.github.julas23.Orbit.Pathfinder",

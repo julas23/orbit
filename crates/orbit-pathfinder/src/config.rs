@@ -32,11 +32,21 @@ pub struct Config {
     /// own when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
+    /// The browser's start page (the Home button); Google's when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    /// Where text typed in the address bar that is no address is searched:
+    /// the query goes on the end. Google's when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A run of services; between groups the sidebar draws a line. A named
+/// group gets a heading that folds it away.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Group {
-    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub services: Vec<Service>,
 }
@@ -45,10 +55,16 @@ pub struct Group {
 pub struct Service {
     pub name: String,
     pub url: String,
-    /// Names the service's own storage — cookies, logins, cache — so two
-    /// accounts of one site stay apart. From the name when absent.
+    /// Names the service (its icon, zoom and place). From the name when
+    /// absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// The storage — cookies, logins, cache — it uses. Services naming the
+    /// same profile share one login (Gmail, Calendar and YouTube on one
+    /// Google account); without one, a service has storage of its own, so
+    /// two accounts of one site stay apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
     /// An icon file or icon-theme name; the site's own icon otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
@@ -72,6 +88,10 @@ pub struct Service {
     /// external browser (its login pages, its file previews).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub domains: Vec<String>,
+    /// The built-in browser at the top of the sidebar (not in the file):
+    /// every link opens in it, and its title counts nothing.
+    #[serde(skip)]
+    pub browser: bool,
 }
 
 fn yes() -> bool {
@@ -92,6 +112,7 @@ impl Service {
             name: name.to_owned(),
             url: url.to_owned(),
             id: None,
+            profile: None,
             icon: None,
             always_active: false,
             media: false,
@@ -100,12 +121,18 @@ impl Service {
             user_agent: None,
             proxy: None,
             domains: Vec::new(),
+            browser: false,
         }
     }
 
     /// The name of its storage: `id`, or the name made safe for a folder.
     pub fn key(&self) -> String {
         slug(self.id.as_deref().unwrap_or(&self.name))
+    }
+
+    /// The name of its storage: the profile, or its own key.
+    pub fn profile(&self) -> String {
+        self.profile.as_deref().map(slug).unwrap_or_else(|| self.key())
     }
 }
 
@@ -159,9 +186,11 @@ mod tests {
 
     #[test]
     fn reads_and_writes_back() {
-        let text = "groups:\n  - name: A\n    services:\n      - name: WhatsApp\n        url: https://web.whatsapp.com/\n        always_active: true\n";
+        let text = "groups:\n  - services:\n      - name: Gmail\n        url: https://mail.google.com/\n        profile: Google\n  - name: A\n    services:\n      - name: WhatsApp\n        url: https://web.whatsapp.com/\n        always_active: true\n";
         let config: Config = serde_yaml_ng::from_str(text).unwrap();
-        let s = &config.groups[0].services[0];
+        assert_eq!(config.groups[0].name, None);
+        assert_eq!(config.groups[0].services[0].profile(), "google");
+        let s = &config.groups[1].services[0];
         assert!(s.always_active && s.notifications && !s.media);
         assert_eq!(s.key(), "whatsapp");
         let back = serde_yaml_ng::to_string(&config).unwrap();

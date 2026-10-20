@@ -164,6 +164,40 @@ pub fn unread(title: &str) -> Option<u32> {
     None
 }
 
+/// What was typed in the address bar, as an address: as it is when it
+/// has a scheme; with https:// when it looks like a host ("site.com",
+/// "localhost:8080", "10.0.0.1/x"); otherwise a search in `search` (a URL
+/// the query is appended to).
+pub fn typed(text: &str, search: &str) -> String {
+    let text = text.trim();
+    if text.is_empty() {
+        return String::new();
+    }
+    let lower = text.to_ascii_lowercase();
+    if ["http://", "https://", "file://", "about:"].iter().any(|s| lower.starts_with(s)) {
+        return clean(text);
+    }
+    let host = text.split(['/', '?', '#']).next().unwrap_or_default();
+    let host_name = host.split(':').next().unwrap_or_default();
+    let looks_like_host = !text.contains(char::is_whitespace)
+        && !host_name.is_empty()
+        && (host_name == "localhost"
+            || (host_name.contains('.') && !host_name.starts_with('.') && !host_name.ends_with('.')))
+        && host_name.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-');
+    if looks_like_host {
+        return clean(&format!("https://{text}"));
+    }
+    let query: String = text
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            b' ' => "+".into(),
+            b => format!("%{b:02X}"),
+        })
+        .collect();
+    format!("{search}{query}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,6 +230,18 @@ mod tests {
         assert!(stays_inside("https://docs.google.com/x", "https://mail.google.com/", &[]));
         assert!(!stays_inside("https://example.org/", "https://mail.google.com/", &[]));
         assert!(stays_inside("https://res.cdn.office.net/", "https://teams.live.com/", &["office.net".into()]));
+    }
+
+    #[test]
+    fn reads_typed_addresses() {
+        let g = "https://www.google.com/search?q=";
+        assert_eq!(typed("g1.globo.com", g), "https://g1.globo.com");
+        assert_eq!(typed("https://a.com/x?utm_source=y", g), "https://a.com/x");
+        assert_eq!(typed("localhost:8080/app", g), "https://localhost:8080/app");
+        assert_eq!(typed("10.0.0.250:8006", g), "https://10.0.0.250:8006");
+        assert_eq!(typed("previsão do tempo", g), "https://www.google.com/search?q=previs%C3%A3o+do+tempo");
+        assert_eq!(typed("rust", g), "https://www.google.com/search?q=rust");
+        assert_eq!(typed("  ", g), "");
     }
 
     #[test]

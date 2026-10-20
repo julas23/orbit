@@ -490,7 +490,6 @@ pathfinder-reload-config = Recarregar configuração
 pathfinder-name = Nome
 pathfinder-url = Endereço
 pathfinder-group = Grupo
-pathfinder-default-group = Geral
 pathfinder-always-active = Sempre ativo (recebe notificações)
 pathfinder-media = Câmera, microfone e chamadas
 pathfinder-add-button = Adicionar
@@ -502,4 +501,44 @@ pathfinder-remove = Remover
 pathfinder-remove-confirm = Remover { $name } da barra? Os dados ficam no disco.
 pathfinder-cancel = Cancelar
 pathfinder-empty = Nenhum serviço ainda. Use + na barra para adicionar.
+pathfinder-group-n = Grupo { $n } ({ $first }…)
+pathfinder-new-group = Novo grupo
+pathfinder-profile = Perfil
+pathfinder-profile-hint = opcional: mesmo nome = mesmo login (ex.: google)
+pathfinder-clear-confirm-shared = Apagar cookies, logins e cache de { $name }? O login é compartilhado: { $others } também saem da conta.
+pathfinder-fill = Preencher login do Bitwarden (Ctrl+Shift+L)
+pathfinder-bw-missing = O Bitwarden CLI (bw) não está instalado.
+pathfinder-bw-login = Entre no Bitwarden uma vez no terminal: bw login
+pathfinder-bw-master = Senha mestra do Bitwarden
+pathfinder-bw-unlock = Desbloquear
+pathfinder-bw-wrong = Senha mestra incorreta.
+pathfinder-bw-none = Nenhum login do Bitwarden para este site.
+pathfinder-import-title = Importar senhas para o Bitwarden…
+pathfinder-import-intro = As senhas salvas nestes navegadores vão para o seu cofre do Bitwarden, numa pasta "Importado do …" por navegador. As que o cofre já tem são puladas.
+pathfinder-import-source = { $name }: { $count } senhas
+pathfinder-import-nothing = Nenhum navegador com senhas salvas foi encontrado.
+pathfinder-import-firefox-pw = Senha mestra do Firefox (só se houver)
+pathfinder-import-go = Importar
+pathfinder-import-working = Importando…
+pathfinder-import-done = { $added } senhas adicionadas ao Bitwarden; { $already } já estavam no cofre.
+pathfinder-import-failed = A importação falhou: { $error }
+pathfinder-import-firefox-needed = Firefox: a senha mestra do Firefox é necessária (ou está errada).
+pathfinder-edit = Editar…
+pathfinder-save = Salvar
+pathfinder-move-up = Mover para cima
+pathfinder-move-down = Mover para baixo
+pathfinder-icon = Ícone
+pathfinder-icon-hint = vazio = o do site; ou endereço de imagem, arquivo
+pathfinder-separator-below = Separador abaixo
+pathfinder-separator-remove = Remover separador
+pathfinder-add-service = Adicionar serviço…
+pathfinder-add-separator = Adicionar separador
+pathfinder-group-empty = Grupo { $n } (vazio)
+pathfinder-browser = Navegador
+pathfinder-home = Página inicial (Alt+Home)
+pathfinder-address-hint = Digite um endereço ou pesquise (Ctrl+L)
+pathfinder-unread = { $count ->
+    [one] 1 não lida
+   *[other] { $count } não lidas
+}
 pathfinder-downloaded = Download concluído: { $name }
