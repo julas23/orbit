@@ -26,7 +26,10 @@ mod windows;
 mod workspaces;
 
 use gtk::{glib, prelude::*};
-use orbit_common::{ConfigDir, Placement, config::PanelConfig};
+use orbit_common::{
+    ConfigDir, Placement,
+    config::{Edge, PanelConfig},
+};
 
 fn main() -> glib::ExitCode {
     orbit_app::run(orbit_app::Surface {
@@ -65,7 +68,7 @@ fn window(app: &gtk::Application, dir: &ConfigDir, config: &PanelConfig) -> gtk:
         // In a vertical panel, two half-width modules in a row share a line.
         let mut waiting: Option<gtk::Widget> = None;
         for name in names {
-            let Some(module) = module(name, dir, vertical) else {
+            let Some(module) = module(name, dir, config.edge) else {
                 continue;
             };
             if !module.is_visible() {
@@ -140,9 +143,14 @@ fn pair(first: &gtk::Widget, second: Option<&gtk::Widget>) -> gtk::Box {
 /// Builds module `name`. A module that is unknown or whose file does not
 /// parse is left out with an error in the log, instead of taking the whole
 /// panel down.
-fn module(name: &str, dir: &ConfigDir, vertical: bool) -> Option<gtk::Widget> {
+fn module(name: &str, dir: &ConfigDir, edge: Edge) -> Option<gtk::Widget> {
+    let vertical = edge.is_vertical();
     let built = match name {
-        "menu" => dir.module("menu").map(|c| menu::new(&c)),
+        // The menu's power button offers the session module's actions.
+        "menu" => dir.module("menu").and_then(|c| {
+            dir.module("session")
+                .map(|session| menu::new(&c, edge, session))
+        }),
         "clock" => dir.module("clock").map(|c| clock::new(&c, vertical)),
         "calendar" => dir.module("calendar").map(|c| calendar::new(&c, vertical)),
         "session" => dir.module("session").map(|c| session::new(&c, vertical)),

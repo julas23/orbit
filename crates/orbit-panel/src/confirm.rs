@@ -1,4 +1,5 @@
-//! Confirmation dialog over a blurred, darkened screen.
+//! Confirmation dialog over a blurred, darkened screen — a yes-or-no
+//! question ([`ask`]) or a choice among a few actions ([`choose`]).
 //!
 //! Every monitor is photographed with `grim` before anything is shown, and
 //! each photo goes on a layer-shell OVERLAY surface covering that monitor —
@@ -22,10 +23,111 @@ pub struct Question<'a> {
     pub no: &'a str,
 }
 
-type Answer = Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>;
+/// One of the actions offered by [`choose`].
+pub struct Choice<'a> {
+    /// A Nerd Font glyph, shown large.
+    pub glyph: &'a str,
+    pub label: &'a str,
+    /// CSS class of its button (`poweroff`…).
+    pub class: &'a str,
+}
+
+type Answer<T> = Rc<RefCell<Option<Box<dyn FnOnce(T)>>>>;
+type Windows = Rc<RefCell<Vec<gtk::Window>>>;
 
 /// Asks `question`; `answer` runs once, with `true` for "yes".
 pub fn ask(question: Question, answer: impl FnOnce(bool) + 'static) {
+    let answer: Answer<bool> = Rc::new(RefCell::new(Some(Box::new(answer))));
+    let windows: Windows = Rc::default();
+    let respond = {
+        let windows = windows.clone();
+        Rc::new(move |yes: bool| {
+            close(&windows);
+            if let Some(answer) = answer.borrow_mut().take() {
+                answer(yes);
+            }
+        })
+    };
+    let (dialog, no) = dialog(&question, respond.clone());
+    cover(&windows, dialog.upcast(), no.upcast(), Rc::new(move || respond(false)));
+}
+
+/// Offers `choices` under `title`, with a cancel button labelled `cancel`;
+/// `answer` runs once, with the index chosen or `None`.
+pub fn choose(
+    title: &str,
+    choices: &[Choice],
+    cancel: &str,
+    answer: impl FnOnce(Option<usize>) + 'static,
+) {
+    let answer: Answer<Option<usize>> = Rc::new(RefCell::new(Some(Box::new(answer))));
+    let windows: Windows = Rc::default();
+    let respond = {
+        let windows = windows.clone();
+        Rc::new(move |choice: Option<usize>| {
+            close(&windows);
+            if let Some(answer) = answer.borrow_mut().take() {
+                answer(choice);
+            }
+        })
+    };
+
+    let row = gtk::Box::builder()
+        .spacing(20)
+        .homogeneous(true)
+        .halign(gtk::Align::Center)
+        .build();
+    for (i, choice) in choices.iter().enumerate() {
+        let content = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
+            .build();
+        content.append(
+            &gtk::Label::builder()
+                .label(choice.glyph)
+                .css_classes(["glyph"])
+                .build(),
+        );
+        content.append(&gtk::Label::new(Some(choice.label)));
+        let button = gtk::Button::builder()
+            .child(&content)
+            .css_classes(["choice", choice.class])
+            .build();
+        let respond = respond.clone();
+        button.connect_clicked(move |_| respond(Some(i)));
+        row.append(&button);
+    }
+    let cancel = gtk::Button::builder()
+        .label(cancel)
+        .halign(gtk::Align::Center)
+        .css_classes(["cancel"])
+        .build();
+    {
+        let respond = respond.clone();
+        cancel.connect_clicked(move |_| respond(None));
+    }
+    let dialog = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(20)
+        .css_classes(["confirm-box", "choose"])
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .build();
+    dialog.append(&gtk::Label::builder().label(title).css_classes(["question"]).build());
+    dialog.append(&row);
+    dialog.append(&cancel);
+    cover(&windows, dialog.upcast(), cancel.upcast(), Rc::new(move || respond(None)));
+}
+
+fn close(windows: &Windows) {
+    for window in windows.borrow_mut().drain(..) {
+        window.destroy();
+    }
+}
+
+/// Covers every monitor with its blurred photo and shows `dialog` on the
+/// focused one, `focus` focused (the harmless answer); Escape runs `escape`.
+fn cover(windows: &Windows, dialog: gtk::Widget, focus: gtk::Widget, escape: Rc<dyn Fn()>) {
     let Some(display) = gdk::Display::default() else {
         return;
     };
@@ -43,22 +145,7 @@ pub fn ask(question: Question, answer: impl FnOnce(bool) + 'static) {
         .map(|m| if layered { photo(m) } else { None })
         .collect();
 
-    let answer: Answer = Rc::new(RefCell::new(Some(Box::new(answer))));
-    let windows: Rc<RefCell<Vec<gtk::Window>>> = Rc::default();
-    let respond = {
-        let answer = answer.clone();
-        let windows = windows.clone();
-        move |yes: bool| {
-            for window in windows.borrow_mut().drain(..) {
-                window.destroy();
-            }
-            if let Some(answer) = answer.borrow_mut().take() {
-                answer(yes);
-            }
-        }
-    };
-    let respond = Rc::new(respond);
-
+    let mut dialog = Some(dialog);
     for (i, monitor) in monitors.iter().enumerate() {
         let is_target = i == target;
         if !layered && !is_target {
@@ -86,20 +173,19 @@ pub fn ask(question: Question, answer: impl FnOnce(bool) + 'static) {
         };
         overlay.set_child(Some(&backdrop));
 
-        if is_target {
-            let (dialog, no) = dialog(&question, respond.clone());
+        if is_target && let Some(dialog) = dialog.take() {
             overlay.add_overlay(&dialog);
             let keys = gtk::EventControllerKey::new();
-            let respond = respond.clone();
+            let escape = escape.clone();
             keys.connect_key_pressed(move |_, key, _, _| {
                 if key == gdk::Key::Escape {
-                    respond(false);
+                    escape();
                     return glib::Propagation::Stop;
                 }
                 glib::Propagation::Proceed
             });
             window.add_controller(keys);
-            GtkWindowExt::set_focus(&window, Some(&no));
+            GtkWindowExt::set_focus(&window, Some(&focus));
         }
         window.set_child(Some(&overlay));
 

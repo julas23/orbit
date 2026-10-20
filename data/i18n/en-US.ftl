@@ -25,6 +25,26 @@ session-before-failed = Getting ready to leave did not finish.
     Leave anyway?
 session-leave-anyway = Leave anyway
 session-cancel = Cancel
+session-choose = What do you want to do?
+
+## Application menu
+
+menu-label = APPS
+menu-search = Search applications…
+menu-power = Power off, reboot or log out
+menu-run = No application found. Enter runs “{ $command }”.
+menu-category-all = All
+menu-category-utilities = Accessories
+menu-category-development = Development
+menu-category-education = Education and science
+menu-category-games = Games
+menu-category-graphics = Graphics
+menu-category-internet = Internet
+menu-category-multimedia = Multimedia
+menu-category-office = Office
+menu-category-settings = Settings
+menu-category-system = System
+menu-category-other = Other
 
 ## Window list
 

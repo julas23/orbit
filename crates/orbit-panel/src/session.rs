@@ -17,7 +17,7 @@ use serde::Deserialize;
 use orbit_app::i18n::tr;
 
 use crate::{
-    confirm::{self, Question},
+    confirm::{self, Choice, Question},
     sway,
 };
 
@@ -131,6 +131,40 @@ pub fn new(config: &SessionConfig, vertical: bool) -> gtk::Widget {
     popover.set_parent(&button);
     button.connect_clicked(move |_| popover.popup());
     button.upcast()
+}
+
+/// The three actions over the blurred screen, as the application menu's
+/// power button offers them: choosing one is the confirmation.
+pub fn choose(config: Rc<SessionConfig>) {
+    let labels = Action::ALL.map(|a| capitalize(&a.tooltip()));
+    let choices: Vec<Choice> = Action::ALL
+        .iter()
+        .zip(&labels)
+        .map(|(action, label)| Choice {
+            glyph: action.glyph(),
+            label,
+            class: action.class(),
+        })
+        .collect();
+    confirm::choose(
+        &tr("session-choose"),
+        &choices,
+        &tr("session-cancel"),
+        move |choice| {
+            if let Some(i) = choice {
+                prepare(Action::ALL[i], config);
+            }
+        },
+    );
+}
+
+/// "desligar" → "Desligar": the tooltips are lower case.
+fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
 }
 
 fn confirm_then(action: Action, config: Rc<SessionConfig>) {

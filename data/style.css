@@ -46,6 +46,10 @@ window.orbit button {
   padding: 5px;
   border-radius: 5px;
 }
+.panel button.menu .label {
+  font-weight: bold;
+  font-size: 15px;
+}
 .panel button.menu:hover {
   background-color: alpha(@orbit_accent, 0.25);
 }
@@ -158,6 +162,52 @@ window.confirm            { background: transparent; }
   border-color: alpha(@orbit_alert, 0.55);
 }
 .confirm-box button.yes:hover { background-color: alpha(@orbit_alert, 0.45); }
+/* The choice of the application menu's power button: three large buttons. */
+.confirm-box.choose button.choice {
+  min-width: 120px;
+  padding: 20px 10px 15px 10px;
+}
+.confirm-box.choose button.choice .glyph {
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+  font-size: 40px;
+}
+.confirm-box.choose button.choice.poweroff:hover { background-color: alpha(@orbit_alert, 0.45); }
+.confirm-box.choose button.cancel { padding: 5px 20px; }
+
+/* ------------------------------------------------- application menu */
+window.orbit-menu { background: transparent; }
+.orbit-menu .launcher {
+  padding: 10px;
+  border-radius: 10px;
+  background-color: @orbit_surface;
+  color: @orbit_fg;
+  border: 1px solid @orbit_outline;
+}
+.orbit-menu .launcher entry { min-height: 35px; }
+.orbit-menu .launcher entry.error { color: @orbit_alert; }
+.orbit-menu .launcher scrolledwindow,
+.orbit-menu .launcher list { background: none; }
+.orbit-menu .categories row,
+.orbit-menu .apps row {
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+.orbit-menu .categories row:hover,
+.orbit-menu .apps row:hover        { background-color: @orbit_hover; }
+.orbit-menu .categories row:selected,
+.orbit-menu .apps row:selected     { background-color: alpha(@orbit_accent, 0.45); color: @orbit_fg; }
+.orbit-menu .apps .name            { font-weight: bold; }
+.orbit-menu .apps .comment         { color: @orbit_muted; font-size: 11px; }
+.orbit-menu .apps .hint            { color: @orbit_muted; padding: 20px; }
+.orbit-menu .bottom {
+  padding-top: 10px;
+  border-top: 1px solid @orbit_border;
+}
+.orbit-menu .bottom .power {
+  min-width: 35px;
+  min-height: 35px;
+}
+.orbit-menu .bottom .power:hover   { background-color: alpha(@orbit_alert, 0.45); }
 .confirm-box button:focus-visible { outline: 2px solid @orbit_focus; outline-offset: -2px; }
 
 /* Volume and brightness (control.rs), side by side: two half-width cards,

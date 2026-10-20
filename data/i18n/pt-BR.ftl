@@ -20,6 +20,26 @@ session-before-failed = A preparação para sair não terminou.
     Sair mesmo assim?
 session-leave-anyway = Sair mesmo assim
 session-cancel = Cancelar
+session-choose = O que deseja fazer?
+
+## Menu de aplicativos
+
+menu-label = APPS
+menu-search = Buscar aplicativos…
+menu-power = Desligar, reiniciar ou encerrar a sessão
+menu-run = Nenhum aplicativo encontrado. Enter executa “{ $command }”.
+menu-category-all = Todos
+menu-category-utilities = Acessórios
+menu-category-development = Desenvolvimento
+menu-category-education = Educação e ciência
+menu-category-games = Jogos
+menu-category-graphics = Gráficos
+menu-category-internet = Internet
+menu-category-multimedia = Multimídia
+menu-category-office = Escritório
+menu-category-settings = Configurações
+menu-category-system = Sistema
+menu-category-other = Outros
 
 ## Window list
 
