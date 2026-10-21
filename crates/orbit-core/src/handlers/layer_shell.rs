@@ -23,7 +23,7 @@ impl WlrLayerShellHandler for Orbit {
     }
 
     fn new_layer_surface(&mut self, surface: WlrLayerSurface, output: Option<WlOutput>, _layer: Layer, namespace: String) {
-        let Some(output) = output.as_ref().and_then(Output::from_resource).or_else(|| self.output()) else {
+        let Some(output) = output.as_ref().and_then(Output::from_resource).or_else(|| self.pointer_output()) else {
             tracing::warn!("layer surface {namespace}: no output");
             return;
         };

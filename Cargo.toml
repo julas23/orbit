@@ -87,7 +87,14 @@ smithay = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d0013
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d00131eb7f388efed26e35ea316b0018" }
 # orbit-core: the pointer's image, from the cursor theme.
 xcursor = "0.3"
+# The matrices of the renderer's shaders (the version Smithay uses).
+glam = { version = "0.33", default-features = false, features = ["std"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4"
 env_logger = "0.11"
+
+# Smithay at the commit above, with one change: linux-dmabuf with feedback
+# goes out at version 5, not 6 (see vendor/smithay/ORBIT.md).
+[patch."https://github.com/Smithay/smithay.git"]
+smithay = { path = "vendor/smithay" }

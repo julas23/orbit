@@ -8,10 +8,13 @@
 //! terminal: kitty
 //! gaps: 6
 //! border: 2
+//! corner_radius: 10
 //! startup: [orbit-session]
+//! outputs:               # where each monitor sits; unnamed ones stack
+//!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
 //! ```
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use serde::Deserialize;
 
@@ -27,6 +30,8 @@ pub struct Config {
     pub gaps: i32,
     /// Width of the border drawn around each window.
     pub border: i32,
+    /// Radius of the windows' corners (0: square).
+    pub corner_radius: i32,
     /// RGB colours of the border: the focused window's and the others'.
     pub focused_color: String,
     pub unfocused_color: String,
@@ -38,6 +43,15 @@ pub struct Config {
     /// handed to clients as XCURSOR_THEME and XCURSOR_SIZE.
     pub cursor_theme: String,
     pub cursor_size: u32,
+    /// Monitors by connector name (`eDP-1`, `HDMI-A-1`).
+    pub outputs: HashMap<String, OutputConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct OutputConfig {
+    /// Top-left corner, in the layout's logical pixels (sway's `position`).
+    pub position: Option<(i32, i32)>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,12 +82,14 @@ impl Default for Config {
             terminal: "kitty".into(),
             gaps: 6,
             border: 2,
+            corner_radius: 10,
             focused_color: "#4682b4".into(),
             unfocused_color: "#4c566a".into(),
             focus_follows_mouse: true,
             startup: Vec::new(),
             cursor_theme: "Breeze_Light".into(),
             cursor_size: 24,
+            outputs: HashMap::new(),
         }
     }
 }
@@ -142,6 +158,8 @@ mod tests {
         assert_eq!(config.keyboard.variant, "intl");
         assert_eq!(config.modifier, Modifier::Super);
         assert!(serde_yaml_ng::from_str::<Config>("gapz: 1").is_err());
+        let config: Config = serde_yaml_ng::from_str("outputs: { HDMI-A-1: { position: [0, 1080] } }").unwrap();
+        assert_eq!(config.outputs["HDMI-A-1"].position, Some((0, 1080)));
     }
 
     #[test]

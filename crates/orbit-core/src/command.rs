@@ -161,6 +161,11 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.loop_signal.stop();
             Ok(())
         }
+        // Anyone may lock; only the greet unlocks.
+        ["lock"] => {
+            state.lock();
+            Ok(())
+        }
         ["reload"] => {
             state.reload_config();
             Ok(())
@@ -182,12 +187,12 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             }
             Ok(())
         }
-        ["focus", "output", name] => {
-            if state.output().is_some_and(|o| o.name() == *name) || ["left", "right", "up", "down"].contains(name) {
-                Ok(())
-            } else {
-                Err(format!("There is no output called {name}"))
+        ["focus", "output", which] => {
+            let target = state.output_toward(which).ok_or_else(|| format!("There is no output called {which}"))?;
+            if let Some(num) = state.visible.get(&target).copied() {
+                state.switch_workspace(num);
             }
+            Ok(())
         }
         ["kill"] => {
             for window in windows() {

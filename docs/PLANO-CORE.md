@@ -29,7 +29,7 @@ mínimo que o core precisa fazer no primeiro dia.
 5. **Configuração recarrega a quente**, sem perder janelas, e um erro nela nunca
    derruba a sessão: o core avisa (notificação + log) e segue com a última válida.
 6. **Um crash de cliente nunca derruba o core**; um crash do core deve ser raro e,
-   quando acontecer, o greetd volta para a tela de login, não para um TTY morto.
+   quando acontecer, o autologin do tty1 sobe o core de novo **travado**, não um TTY morto.
 7. **Testável sem tela.** Todo comportamento de janela tem teste automatizado
    rodando o core em backend headless (o mesmo jeito que testamos os apps hoje
    com o sway headless).
@@ -192,34 +192,54 @@ suspender) — login e bloqueio são uma coisa só, com a mesma aparência.
 
 ### 7.1 Como funciona
 
-1. **Boot:** o greetd inicia o core direto para o usuário (`initial_session`,
-   uma vez por boot) com `orbit-core --locked`. O `default_session` continua sendo
-   o **tuigreet**: depois de sair da sessão ou de um crash do core, a volta é
-   sempre para o tuigreet, nunca para outro login automático.
+Decidido com o Juliano em 2026-10-21. Todo mundo faz boot → greeter → sessão →
+interface; no Orbit a interface **já está carregada** quando o greet aparece, e
+entrar é só abrir os olhos.
+
+1. **Boot:** autologin no tty1 (getty, sem greetd desde 2026-10-21) inicia
+   `orbit-core --locked`. Painel, dock e wallpaper sobem atrás da camada; o
+   autostart XDG (apps) espera o primeiro destravar. Se o core cair, o getty
+   refaz o autologin e o core volta **travado** — nunca cai numa sessão aberta.
 2. **Travado desde o quadro zero:** antes de aceitar qualquer cliente, o core já
    está no estado `Locked`. Nesse estado ele **não desenha nenhuma superfície de
-   cliente nem entrega entrada a elas** — só o fundo (wallpaper, e o Jarvis
-   quando existir) e o greet. Quem garante o bloqueio é o core, não o greet.
-3. **O greet é um cliente privilegiado:** o core lança o `orbit-greet` num socket
+   cliente nem entrega entrada a elas**: a tela é **preta**, só com o greet por
+   cima. Quem garante o bloqueio é o core, não o greet.
+3. **Abrir e fechar os olhos:** a transição é do core. Ao destravar, o preto se
+   dissolve (opacidade 1 → 0) **junto** com o blur da sessão (raio máximo → 0),
+   na mesma curva, ~400 ms: a sessão aparece desfocada e entra em foco. Ao
+   travar, o inverso: a sessão desfoca e escurece até o preto. Fora da
+   transição não há blur nem quadro desenhado (regra 3); travado, a sessão
+   **nunca** aparece, nem desfocada. A entrada para os clientes é cortada no
+   primeiro quadro do fechar e só volta no fim do abrir.
+4. **O greet é um cliente privilegiado:** o core lança o `orbit-greet` num socket
    Wayland privado; só as superfícies desse cliente aparecem no estado travado,
    em tela cheia, com o teclado exclusivo. Ele fica num processo à parte para o
-   código de autenticação (PAM) não morar dentro do compositor.
-4. **Se o greet cair, a sessão continua travada:** o core mostra o fundo e
+   código de autenticação (PAM) não morar dentro do compositor. Na transição o
+   greet some/aparece com o mesmo fade.
+5. **Se o greet cair, a sessão continua travada:** o core mostra o preto e
    relança o greet (a mesma regra do `ext-session-lock`). Crash do greet nunca
    destrava.
-5. **Autenticação:** o greet fala PAM pelo serviço `orbit-greet` (`pam_unix`, que
+6. **Autenticação:** o greet fala PAM pelo serviço `orbit-greet` (`pam_unix`, que
    checa a senha do próprio usuário via `unix_chkpwd`, como o swaylock). Tentativas
    erradas esperam cada vez mais. Com a senha certa, o greet **destrava o
-   chaveiro** (gnome-keyring), que hoje o PAM do greetd destrava no login.
-6. **Destravar:** o greet avisa o core por um pedido do protocolo privado; o core
-   sai de `Locked`, roda o autostart XDG (no boot) e revela a sessão. Na Fase 4
-   a revelação vira transição animada (o greet se dissolve sobre o desktop).
-7. **Bloqueio durante o uso:** o mesmo estado `Locked`, com as janelas
-   existindo atrás. **O conteúdo atrás nunca aparece**, nem desfocado (blur de
-   conteúdo real vaza informação): atrás fica só o fundo.
-8. **Vários monitores:** o greet no monitor com o cursor; nos outros, só o fundo.
-9. **Outra pessoa / outra sessão:** botão "Outra sessão" encerra o core e cai no
-   tuigreet do greetd (sway de resgate, outro usuário).
+   chaveiro** (gnome-keyring): com autologin, o PAM do login não tem senha para
+   isso.
+7. **Destravar:** o greet avisa o core por um pedido do protocolo privado; o core
+   roda o autostart XDG (só no primeiro destravar) e abre os olhos.
+8. **Bloqueio durante o uso:** o mesmo estado `Locked` (Super+L, ociosidade,
+   antes de suspender), com as janelas existindo atrás; fecha os olhos.
+   **Regra que não se quebra:** a ociosidade **jamais** trava a tela enquanto
+   houver qualquer janela em tela cheia — navegador, vídeo, jogo, o que for —
+   em qualquer monitor; nem a ociosidade desliga a tela (DPMS) nesse caso.
+   Só o usuário trava, pelas teclas (Super+L) ou por `orbitctl lock`. Somam-se
+   a isso os pedidos explícitos (`idle-inhibit-v1`, o inibidor do portal/D-Bus
+   que players e navegadores usam).
+9. **Vários monitores:** o greet no monitor com o cursor; nos outros, só o preto.
+10. **Usuários:** por agora, um só (o dono do autologin). Depois, **seleção de
+    usuário**: escolhido o usuário, a sessão dele já começa a carregar atrás da
+    camada enquanto a senha é digitada, e o login fica instantâneo. Isso pede
+    um processo do sistema (fora da sessão de um usuário) que abra sessões
+    logind por usuário — fica para depois do caminho de um usuário estar pronto.
 
 ### 7.2 O que o greet mostra
 
@@ -233,21 +253,23 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 
 | # | Passo | Fase |
 |---|---|---|
-| 1 | Estado `Locked` no core: com ele ligado, nada de cliente é desenhado nem recebe entrada; teste headless provando que uma janela aberta não aparece no quadro capturado | 1 |
-| 2 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar, saber o monitor ativo) | 1 |
-| 3 | `ext-session-lock-v1` no core, testado com o `swaylock` dentro da sessão aninhada | 1 |
-| 4 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) | 1 |
-| 5 | `--locked` no boot + autostart adiado até destravar; `initial_session` no greetd com tuigreet de `default_session` | 2 |
-| 6 | Destravar o gnome-keyring com a senha (conferir o caminho: PAM `pam_gnome_keyring` no serviço do greet ou a chamada D-Bus do daemon) | 2 |
-| 7 | Bloqueio por Super+L, ociosidade e antes de suspender; trocar o `swaylock` da config | 2 |
-| 8 | Visual completo (seção 7.2), vários monitores, "Outra sessão" | 2 |
-| 9 | Transição animada ao destravar | 4 |
-| 10 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |
+| 1 | Estado `Locked` no core: com ele ligado, a tela é preta, nada de cliente é desenhado nem recebe entrada; `--locked`; teste headless provando que uma janela aberta não aparece no quadro capturado | 1 |
+| 2 | Abrir e fechar os olhos: fade do preto + blur (dual kawase, shader GLES próprio) da sessão numa textura fora da tela, só durante a transição | 1 |
+| 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar, saber o monitor ativo) | 1 |
+| 4 | `ext-session-lock-v1` no core (para lockers de terceiros) | 1 |
+| 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) | 1 |
+| 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar | 2 |
+| 7 | Destravar o gnome-keyring com a senha (conferir o caminho: PAM `pam_gnome_keyring` no serviço do greet ou a chamada D-Bus do daemon) | 2 |
+| 8 | Bloqueio por Super+L, ociosidade e antes de suspender | 2 |
+| 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar | 2 |
+| 9 | Visual completo (seção 7.2), vários monitores | 2 |
+| 10 | Seleção de usuário com a sessão carregando atrás da camada | 5 |
+| 11 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |
 
-**Pronto (login) quando:** o hp liga direto no greet do Orbit, sem tuigreet;
-a senha certa revela a sessão com o chaveiro destravado e o autostart rodando;
-a errada não revela nada; matar o greet não destrava; sair da sessão cai no
-tuigreet; Super+L, ociosidade e suspender travam com a mesma tela.
+**Pronto (login) quando:** o hp liga direto no greet do Orbit; a senha certa
+abre os olhos sobre a sessão com o chaveiro destravado e o autostart rodando;
+a errada não revela nada; matar o greet (ou o core) não destrava; Super+L,
+ociosidade e suspender fecham os olhos na mesma tela.
 
 ## 8. Fases
 
@@ -275,8 +297,8 @@ desta fase — sem esperar o aninhado ficar completo.
 - IPC compatível (seção 5) + `orbitctl`; importador da config do sway.
 - Backend DRM/KMS + libinput via libseat portado do cosmic-comp, entrada `orbit`
   no greetd marcada como experimental.
-- Estado `Locked`, cliente privilegiado, `ext-session-lock` e o `orbit-greet`
-  mínimo (passos 1–4 da seção 7.3).
+- Estado `Locked`, a transição de abrir/fechar os olhos, cliente privilegiado,
+  `ext-session-lock` e o `orbit-greet` mínimo (passos 1–5 da seção 7.3).
 - **Pronto quando:** dentro da janela aninhada, painel, dock, menu, blink,
   orbit-files/view/play/edit/read funcionam como no sway; o `swaymsg -t get_tree`
   responde; a suíte de testes headless passa (abrir, fechar, dividir, mover para
@@ -349,6 +371,42 @@ desta fase — sem esperar o aninhado ficar completo.
   em `~/.local/state/orbit/core/core.log` no modo tela. Saída de emergência
   Ctrl+Alt+Backspace. Instalado em `~/.local/bin` para o 1º teste num TTY
   (não testável de dentro do sway, que é o dono da GPU).
+- **2026-10-21 — estado `Locked`** (§7.3 passo 1, `lock.rs`). `--locked` trava
+  antes de o loop aceitar clientes; `lock` no IPC trava a sessão em uso (não
+  há `unlock` no IPC: destravar é só do greet). Travado: tela preta, só o
+  ponteiro do tema; teclado e ponteiro saem de todo cliente; atalhos
+  desligados, menos Ctrl+Alt+Fn e Ctrl+Alt+Backspace; clique e roda não chegam
+  a ninguém; foco pedido por janela nova ou menu só é anotado para o
+  destravar; commits de cliente não pedem quadro nem recebem frame callback
+  (regra 3). Testado aninhado (`--locked -- foot` + `orbitctl lock`).
+  - **Falta antes de travar no boot:** o `~/.shell/raiz/profile` roda o core
+    sem `exec` — sair (ou o core cair) deixa um shell logado no tty1, o que
+    fura o lock. No passo 6 vira `exec orbit-core --locked`.
+  - Ainda não: teste headless com captura de quadro (não há backend headless).
+- **2026-10-21 — vários monitores, arrastar, cantos.** Pedidos do Juliano.
+  - `output.rs`: monitores sem posição em `outputs:` (`core.yaml`) empilham
+    **para baixo**, o do notebook (`eDP`/`LVDS`/`DSI`) em cima, cada um
+    centrado no mais largo — o arranjo da mesa do hp. `focus output
+    <nome|up|down|left|right>`.
+  - Áreas de trabalho por monitor, como no sway: cada monitor mostra a sua;
+    a focada é a da janela com o teclado. **Janela nova abre no monitor do
+    ponteiro.** Área que não existe nasce no monitor focado; monitor que sai
+    deixa as áreas num que ficou. IPC: `output`/`visible` por área, uma
+    entrada por monitor em `GET_OUTPUTS` e na árvore.
+  - `grab.rs` (do smallvil): **Mod + botão esquerdo arrasta** a janela (e a
+    barra de título do próprio app, `move_request`). Solta sobre outra
+    janela, as duas trocam de lugar; sobre a parte vazia de outro monitor,
+    vai para a área que ele mostra.
+  - `rounded.rs`: **cantos arredondados** (`corner_radius`, padrão 10): cada
+    superfície da janela passa por um shader de textura que apaga o que fica
+    fora do retângulo arredondado (1 px de antialias), achando a posição do
+    pixel pela inversa da matriz de textura do Smithay (método do niri); a
+    borda virou um anel desenhado por shader de pixel na mesma curva. Menus
+    não são cortados. Cada janela é desenhada em ordem (menus, conteúdo,
+    borda), então a arrastada fica inteira por cima.
+  - Ainda não: redimensionar com Mod + botão direito (não faz sentido nas
+    colunas; vem com as flutuantes), monitor girado (cantos supõem
+    `Transform::Normal` da saída — o do buffer é tratado).
 
 ### Fase 2 — sessão real de uso diário
 
@@ -358,8 +416,8 @@ a dia, portando do cosmic-comp o que falta:
 - Múltiplos monitores (eDP-1 + HDMI-A-4 4K), hotplug, escala fracionária,
   `wlr-output-management`.
 - Portal (`xdg-desktop-portal-wlr` + gtk), autostart XDG, idle/DPMS.
-- Login e bloqueio pelo `orbit-greet` (passos 5–8 da seção 7.3), no lugar do
-  tuigreet no boot e do `swaylock`.
+- Login e bloqueio pelo `orbit-greet` (passos 6–9 da seção 7.3), no lugar do
+  console de texto no boot e de bloqueio nenhum (o hp hoje não trava).
 - VRR e tearing para jogos.
 - **Pronto quando:** um dia inteiro de uso no hp sem voltar ao sway; suspender e
   voltar; conectar/desconectar o monitor externo com janelas abertas; vídeo 4K no
@@ -465,6 +523,6 @@ Regras de porte:
 | Compatibilidade do IPC | Clientes de terceiros (waybar, autotiling) podem usar campos que o Orbit não usa; a meta é o que o Orbit usa + o que aparecer nos testes, não 100% do sway |
 | Segurança do remoto | Expor a sessão é o recurso mais perigoso do projeto; desligado por padrão, só via túnel, pareamento explícito, auditoria antes de abrir para fora |
 | Tamanho do esforço | Fase 1 sozinha é o maior bloco de código do Orbit até agora; cada fase vira commits pequenos, nunca um despejo único |
-| Login automático do greetd | O `initial_session` abre a sessão do usuário **antes** da senha: serviços de usuário do systemd (Syncthing, PipeWire) já sobem no boot, embora nada apareça na tela até destravar. O `$HOME` não é criptografado, então a senha protege a tela, não os dados em disco. Decidir se isso é aceitável ou se o greet roda como usuário `_greetd` e o core reinicia como o usuário depois do login (mais seguro, mas perde o "a sessão já estava carregada atrás") |
-| Chaveiro no destravar | Hoje o PAM do greetd destrava o gnome-keyring no login; com login automático isso não acontece sozinho — o passo 6 da seção 7.3 tem que resolver antes da Fase 2 acabar, ou Chromium e afins pedem a senha do chaveiro |
+| Login automático | O autologin do tty1 abre a sessão do usuário **antes** da senha: serviços de usuário do systemd (Syncthing, PipeWire) já sobem no boot, embora nada apareça na tela até destravar. O `$HOME` não é criptografado, então a senha protege a tela, não os dados em disco. **Aceito em 2026-10-21**: é o preço de "a sessão já estava carregada atrás" (§7.1) |
+| Chaveiro no destravar | Hoje o PAM do greetd destrava o gnome-keyring no login; com login automático isso não acontece sozinho — o passo 7 da seção 7.3 tem que resolver antes da Fase 2 acabar, ou Chromium e afins pedem a senha do chaveiro |
 | Nome dos layouts e tags | Se tags (dwm) e workspaces convivem na mesma barra de áreas do painel ou só um dos dois — decidir antes da Fase 3 |

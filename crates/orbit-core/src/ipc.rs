@@ -17,6 +17,7 @@ use std::{
 use orbit_ipc as proto;
 use serde_json::{Value, json};
 use smithay::{
+    output::Output,
     desktop::Window,
     reexports::{
         calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic},
@@ -230,7 +231,7 @@ impl Orbit {
                 }
                 Err(_) => json!({ "success": false }),
             },
-            proto::GET_OUTPUTS => Value::Array(self.output_json(false).into_iter().collect()),
+            proto::GET_OUTPUTS => Value::Array(self.outputs_json(false)),
             proto::GET_TREE => self.tree_json(),
             proto::GET_MARKS => json!([]),
             proto::GET_BAR_CONFIG => json!([]),
@@ -251,23 +252,30 @@ impl Orbit {
         }
     }
 
-    fn output_name(&self) -> String {
-        self.output().map(|o| o.name()).unwrap_or_else(|| "winit".into())
+    /// The rectangle around every monitor.
+    fn layout_rect(&self) -> Value {
+        let geos: Vec<_> = self.space.outputs().filter_map(|o| self.space.output_geometry(o)).collect();
+        let x = geos.iter().map(|g| g.loc.x).min().unwrap_or(0);
+        let y = geos.iter().map(|g| g.loc.y).min().unwrap_or(0);
+        let right = geos.iter().map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
+        let bottom = geos.iter().map(|g| g.loc.y + g.size.h).max().unwrap_or(0);
+        rect((x, y, right - x, bottom - y))
     }
 
-    fn output_rect(&self) -> Value {
-        let geo = self.output().and_then(|o| self.space.output_geometry(&o)).unwrap_or_default();
-        rect((geo.loc.x, geo.loc.y, geo.size.w, geo.size.h))
+    fn outputs_json(&self, with_nodes: bool) -> Vec<Value> {
+        let outputs: Vec<Output> = self.space.outputs().cloned().collect();
+        outputs.iter().enumerate().map(|(i, o)| self.output_json(i, o, with_nodes)).collect()
     }
 
-    fn output_json(&self, with_nodes: bool) -> Option<Value> {
-        let output = self.output()?;
+    fn output_json(&self, index: usize, output: &Output, with_nodes: bool) -> Value {
+        let name = output.name();
+        let geo = self.space.output_geometry(output).unwrap_or_default();
         let mode = output.current_mode().map(|m| json!({ "width": m.size.w, "height": m.size.h, "refresh": m.refresh })).unwrap_or(Value::Null);
         let props = output.physical_properties();
         let mut value = json!({
-            "id": 2,
+            "id": 10 + index as i64,
             "type": "output",
-            "name": output.name(),
+            "name": name,
             "make": props.make,
             "model": props.model,
             "serial": props.serial_number,
@@ -278,31 +286,32 @@ impl Orbit {
             "scale": output.current_scale().fractional_scale(),
             "subpixel_hinting": "unknown",
             "transform": "normal",
-            "current_workspace": self.current.to_string(),
+            "current_workspace": self.visible.get(&name).map(|n| n.to_string()),
             "modes": [mode.clone()],
             "current_mode": mode,
-            "rect": self.output_rect(),
-            "focused": true,
+            "rect": rect((geo.loc.x, geo.loc.y, geo.size.w, geo.size.h)),
+            "focused": self.focused_output_name() == name,
             "visible": true,
         });
         if with_nodes {
-            value["nodes"] = Value::Array(self.workspaces.iter().map(|w| self.workspace_json(w.num)).collect());
+            value["nodes"] = Value::Array(self.workspaces.iter().filter(|w| w.output == name).map(|w| self.workspace_json(w.num)).collect());
             value["floating_nodes"] = json!([]);
         }
-        Some(value)
+        value
     }
 
     pub fn workspace_json(&self, num: i32) -> Value {
         let windows: Vec<Value> = self.workspaces.iter().find(|w| w.num == num).map(|w| w.windows.iter().map(|win| self.window_json(win)).collect()).unwrap_or_default();
-        let area = self.usable_area().unwrap_or_default();
+        let output = self.ws_output(num).unwrap_or_else(|| self.focused_output_name());
+        let area = self.output_named(&output).and_then(|o| self.usable_area(&o)).unwrap_or_default();
         json!({
             "id": 1000 + num as i64,
             "type": "workspace",
             "name": num.to_string(),
             "num": num,
-            "output": self.output_name(),
+            "output": output,
             "focused": num == self.current && self.focused_window().is_none_or(|w| self.workspace_of(&w) == Some(num)),
-            "visible": num == self.current,
+            "visible": self.is_visible(num),
             "urgent": false,
             "layout": "splith",
             "orientation": "horizontal",
@@ -347,7 +356,7 @@ impl Orbit {
             "deco_rect": rect((0, 0, 0, 0)),
             "geometry": rect((0, 0, info.rect.2, info.rect.3)),
             "focused": self.focused_window().as_ref() == Some(window),
-            "visible": on == Some(self.current),
+            "visible": on.is_some_and(|n| self.is_visible(n)),
             "urgent": false,
             "layout": "none",
             "orientation": "none",
@@ -375,8 +384,8 @@ impl Orbit {
             "nodes": [{ "id": 4, "type": "workspace", "name": "__i3_scratch", "num": -1, "rect": rect((0, 0, 0, 0)), "nodes": [], "floating_nodes": scratch }],
         });
         let mut nodes = vec![hidden];
-        nodes.extend(self.output_json(true));
-        json!({ "id": 1, "type": "root", "name": "root", "rect": self.output_rect(), "focused": false, "nodes": nodes, "floating_nodes": [] })
+        nodes.extend(self.outputs_json(true));
+        json!({ "id": 1, "type": "root", "name": "root", "rect": self.layout_rect(), "focused": false, "nodes": nodes, "floating_nodes": [] })
     }
 
     fn inputs_json(&self) -> Vec<Value> {

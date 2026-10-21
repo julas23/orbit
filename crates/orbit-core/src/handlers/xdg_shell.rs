@@ -6,8 +6,8 @@
 //! Ported from Smithay's smallvil `src/handlers/xdg_shell.rs` @ 24647fc (MIT,
 //! Copyright (c) 2017 Victor Berger and Victoria Brekenfeld); the popup grab
 //! and keeping layer-surface menus on screen from anvil `src/shell/xdg.rs`
-//! @ 24647fc (same licence). Moving and resizing by the pointer come with
-//! floating windows.
+//! @ 24647fc (same licence). Moving by the title bar is `grab`'s; resizing
+//! by the pointer comes with floating windows.
 
 use smithay::{
     desktop::{
@@ -15,7 +15,7 @@ use smithay::{
         get_popup_toplevel_coords, layer_map_for_output,
     },
     input::{Seat, pointer::Focus},
-    reexports::wayland_server::protocol::wl_seat,
+    reexports::wayland_server::{Resource, protocol::wl_seat},
     utils::{Logical, Rectangle, Serial},
     wayland::shell::xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState},
 };
@@ -31,7 +31,10 @@ impl XdgShellHandler for Orbit {
         let window = Window::new_wayland_window(surface);
         info(&window).borrow_mut().id = self.next_window_id;
         self.next_window_id += 1;
-        self.current_ws().windows.push(window.clone());
+        // On the monitor under the pointer, in the workspace it shows.
+        let num = self.pointer_output().and_then(|o| self.visible.get(&o.name()).copied()).unwrap_or(self.current);
+        let i = self.ensure_ws(num);
+        self.workspaces[i].windows.push(window.clone());
         self.space.map_element(window.clone(), (0, 0), false);
         self.arrange();
         self.window_event("new", &window);
@@ -41,14 +44,15 @@ impl XdgShellHandler for Orbit {
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let Some(window) = self.window_for(surface.wl_surface()) else { return };
         let had_focus = self.focused_window().as_ref() == Some(&window) || self.focused_window().is_none();
-        let index = self.tiled().iter().position(|w| w == &window).unwrap_or(0);
-        if !self.forget(&window) {
-            return;
+        let index = self.workspace_of(&window).and_then(|n| self.windows_of(n).iter().position(|w| w == &window)).unwrap_or(0);
+        if self.dragging.as_ref() == Some(&window) {
+            self.dragging = None;
         }
+        let Some(num) = self.forget(&window) else { return };
         self.arrange();
         if had_focus {
             // The neighbour on the left, as i3 does; or the first.
-            let next = self.tiled().get(index.saturating_sub(1)).cloned();
+            let next = self.windows_of(num).get(index.saturating_sub(1)).cloned();
             self.focus_window(next);
         }
     }
@@ -79,11 +83,27 @@ impl XdgShellHandler for Orbit {
         surface.send_repositioned(token);
     }
 
-    // Tiled windows stay where the layout puts them.
-    fn move_request(&mut self, _surface: ToplevelSurface, _seat: wl_seat::WlSeat, _serial: Serial) {}
+    /// A window's own title bar dragged: moved as with Mod+drag, while
+    /// the button that began it is held.
+    fn move_request(&mut self, surface: ToplevelSurface, seat: wl_seat::WlSeat, serial: Serial) {
+        let Some(pointer) = Seat::<Self>::from_resource(&seat).and_then(|s| s.get_pointer()) else { return };
+        if self.locked() || !pointer.has_grab(serial) {
+            return;
+        }
+        let Some(start) = pointer.grab_start_data() else { return };
+        // The press began on this client's window.
+        if !start.focus.as_ref().is_some_and(|(s, _)| s.id().same_client_as(&surface.wl_surface().id())) {
+            return;
+        }
+        let Some(window) = self.window_for(surface.wl_surface()) else { return };
+        self.start_move(window, serial, Some(start));
+    }
 
     /// A menu holds the pointer and the keyboard until it closes.
     fn grab(&mut self, surface: PopupSurface, seat: wl_seat::WlSeat, serial: Serial) {
+        if self.locked() {
+            return;
+        }
         let Some(seat) = Seat::<Self>::from_resource(&seat) else { return };
         let kind = PopupKind::Xdg(surface);
         let Ok(root) = find_popup_root_surface(&kind) else { return };
@@ -116,17 +136,18 @@ impl Orbit {
     pub fn unconstrain_popup(&self, popup: &PopupSurface) {
         let kind = PopupKind::Xdg(popup.clone());
         let Ok(root) = find_popup_root_surface(&kind) else { return };
-        let Some(output) = self.output() else { return };
-        let Some(out) = self.space.output_geometry(&output) else { return };
-        let parent: Option<Rectangle<i32, Logical>> = match self.window_for(&root) {
-            Some(window) => self.space.element_geometry(&window),
+        // The monitor the parent is on: a window's, or a layer surface's.
+        let parent: Option<(Rectangle<i32, Logical>, smithay::output::Output)> = match self.window_for(&root) {
+            Some(window) => self.space.element_geometry(&window).and_then(|geo| Some((geo, self.output_at(crate::output::center(geo).to_f64())?))),
             None => self.layer_for(&root).and_then(|layer| {
+                let output = self.space.outputs().find(|o| layer_map_for_output(o).layers().any(|l| l == &layer))?.clone();
                 let mut geo = layer_map_for_output(&output).layer_geometry(&layer)?;
-                geo.loc += out.loc;
-                Some(geo)
+                geo.loc += self.space.output_geometry(&output)?.loc;
+                Some((geo, output))
             }),
         };
-        let Some(parent) = parent else { return };
+        let Some((parent, output)) = parent else { return };
+        let Some(out) = self.space.output_geometry(&output) else { return };
         let mut target = out;
         target.loc -= get_popup_toplevel_coords(&kind);
         target.loc -= parent.loc;

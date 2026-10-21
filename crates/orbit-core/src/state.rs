@@ -44,7 +44,7 @@ use crate::{
     config::Config,
     ipc::Ipc,
     tile,
-    workspace::{Workspace, info},
+    workspace::info,
 };
 
 pub struct Orbit {
@@ -61,8 +61,10 @@ pub struct Orbit {
     /// the stacking order) and the layer surfaces.
     pub space: Space<Window>,
     /// The workspaces that exist, in number order (see `workspace`).
-    pub workspaces: Vec<Workspace>,
-    /// The number of the one shown, and of the one before
+    pub workspaces: Vec<crate::workspace::Workspace>,
+    /// The workspace each monitor shows, by connector name.
+    pub visible: std::collections::HashMap<String, i32>,
+    /// The number of the focused one, and of the one before
     /// (`workspace back_and_forth`).
     pub current: i32,
     pub previous_ws: Option<i32>,
@@ -97,8 +99,15 @@ pub struct Orbit {
     pub needs_render: bool,
     /// The keyboard's layouts by name, and the active one (for the IPC).
     pub layouts: (Vec<String>, usize),
+    /// The programs that round the corners (`rounded`): compiled at the
+    /// first frame; `Some(None)` when they failed to.
+    pub shaders: Option<Option<crate::rounded::Shaders>>,
+    /// The window Mod+drag is moving (`grab`).
+    pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
     pub suppressed: Vec<smithay::input::keyboard::Keycode>,
+    /// Whether the session is shown (`lock`).
+    pub lock: crate::lock::Lock,
 }
 
 impl Orbit {
@@ -138,7 +147,8 @@ impl Orbit {
             config,
             config_path,
             space: Space::default(),
-            workspaces: vec![Workspace { num: 1, windows: Vec::new(), last_focus: None }],
+            workspaces: Vec::new(),
+            visible: Default::default(),
             current: 1,
             previous_ws: None,
             scratchpad: Vec::new(),
@@ -160,7 +170,10 @@ impl Orbit {
             cursor,
             needs_render: true,
             suppressed: Vec::new(),
+            dragging: None,
+            shaders: None,
             layouts: (Vec::new(), 0),
+            lock: crate::lock::Lock::default(),
         }
     }
 
@@ -213,9 +226,9 @@ impl Orbit {
         });
     }
 
-    /// The one output, for now (multi-monitor is Phase 2).
+    /// The monitor of the focused workspace.
     pub fn output(&self) -> Option<Output> {
-        self.space.outputs().next().cloned()
+        self.output_named(&self.focused_output_name()).or_else(|| self.space.outputs().next().cloned())
     }
 
     /// Draw a new frame when the loop is next idle.
@@ -233,13 +246,12 @@ impl Orbit {
         self.all_windows().find(|w| w.toplevel().is_some_and(|t| t.wl_surface() == surface)).cloned()
     }
 
-    /// The area windows are laid out in: the output without the parts the
-    /// panel and dock reserve.
-    pub fn usable_area(&self) -> Option<tile::Rect> {
-        let output = self.output()?;
-        let out = self.space.output_geometry(&output)?;
+    /// The area windows are laid out in on `output`: the monitor without
+    /// the parts the panel and dock reserve.
+    pub fn usable_area(&self, output: &Output) -> Option<tile::Rect> {
+        let out = self.space.output_geometry(output)?;
         let zone = {
-            let mut map = layer_map_for_output(&output);
+            let mut map = layer_map_for_output(output);
             map.arrange();
             map.non_exclusive_zone()
         };
@@ -251,12 +263,21 @@ impl Orbit {
         self.space.outputs().find_map(|o| layer_map_for_output(o).layer_for_surface(surface, WindowSurfaceType::TOPLEVEL).cloned())
     }
 
-    /// Lays the windows out over what the layer surfaces leave free.
+    /// Lays the windows of each monitor out over what its layer surfaces
+    /// leave free.
     pub fn arrange(&mut self) {
-        let Some(area) = self.usable_area() else { return };
-        let windows = self.tiled();
+        let shown: Vec<(String, i32)> = self.visible.iter().map(|(o, n)| (o.clone(), *n)).collect();
+        for (output, num) in shown {
+            let Some(area) = self.output_named(&output).and_then(|o| self.usable_area(&o)) else { continue };
+            self.arrange_on(area, num);
+        }
+        self.request_render();
+    }
+
+    fn arrange_on(&mut self, area: tile::Rect, num: i32) {
+        let windows = self.windows_of(num);
         let rects = tile::columns(windows.len(), area, self.config.gaps, self.config.border);
-        tracing::debug!(?area, ?rects, "arrange");
+        tracing::debug!(num, ?area, ?rects, "arrange");
         for (window, (x, y, w, h)) in windows.into_iter().zip(rects) {
             info(&window).borrow_mut().rect = (x, y, w, h);
             let Some(toplevel) = window.toplevel() else { continue };
@@ -273,9 +294,11 @@ impl Orbit {
             });
             // Sends nothing when nothing changed.
             toplevel.send_pending_configure();
-            self.space.map_element(window, (x, y), false);
+            // The one being dragged follows the pointer until it is let go.
+            if self.dragging.as_ref() != Some(&window) {
+                self.space.map_element(window, (x, y), false);
+            }
         }
-        self.request_render();
     }
 
     /// Gives `window` the keyboard (and the active look); `None` takes it
@@ -283,10 +306,18 @@ impl Orbit {
     pub fn focus_window(&mut self, window: Option<Window>) {
         let serial = SERIAL_COUNTER.next_serial();
         let before = self.focused_window();
-        if let Some(w) = &window {
-            self.current_ws().last_focus = Some(w.clone());
+        if let Some(w) = &window
+            && let Some(num) = self.workspace_of(w)
+        {
+            let i = self.ensure_ws(num);
+            self.workspaces[i].last_focus = Some(w.clone());
+            self.follow_focus(num);
         }
-        for w in &self.tiled() {
+        // Locked, it is noted for the unlock and nothing more.
+        if self.locked() {
+            return;
+        }
+        for w in &self.all_windows().cloned().collect::<Vec<_>>() {
             let active = window.as_ref() == Some(w);
             if w.set_activated(active)
                 && let Some(t) = w.toplevel()
@@ -309,6 +340,9 @@ impl Orbit {
     /// Gives the keyboard to a layer surface that asks for it (a menu of
     /// the panel, the notification centre).
     pub fn focus_layer(&mut self, layer: &LayerSurface) {
+        if self.locked() {
+            return;
+        }
         let serial = SERIAL_COUNTER.next_serial();
         let surface = layer.wl_surface().clone();
         if let Some(keyboard) = self.seat.get_keyboard() {
@@ -346,20 +380,21 @@ impl Orbit {
     /// A layer surface that takes the keyboard for as long as it is there
     /// (a lock screen, a launcher), on top first.
     pub fn exclusive_layer(&self) -> Option<LayerSurface> {
-        let output = self.output()?;
-        let map = layer_map_for_output(&output);
-        [WlrLayer::Overlay, WlrLayer::Top].into_iter().find_map(|layer| {
-            map.layers_on(layer)
-                .rev()
-                .find(|l| l.cached_state().keyboard_interactivity == KeyboardInteractivity::Exclusive)
-                .cloned()
+        self.space.outputs().find_map(|output| {
+            let map = layer_map_for_output(output);
+            [WlrLayer::Overlay, WlrLayer::Top].into_iter().find_map(|layer| {
+                map.layers_on(layer)
+                    .rev()
+                    .find(|l| l.cached_state().keyboard_interactivity == KeyboardInteractivity::Exclusive)
+                    .cloned()
+            })
         })
     }
 
     /// The surface under `pos` and where its origin is: overlay and top
     /// layers, then windows, then bottom and background layers.
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
-        let output = self.output()?;
+        let output = self.output_at(pos)?;
         let out = self.space.output_geometry(&output)?;
         let map = layer_map_for_output(&output);
         let in_layer = |layer: WlrLayer| {

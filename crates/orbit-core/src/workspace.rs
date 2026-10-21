@@ -1,5 +1,6 @@
-//! Numbered workspaces, as sway's: each holds its windows in their order on
-//! screen; one is shown at a time (multi-monitor is Phase 2). A workspace
+//! Numbered workspaces, as sway's: each belongs to a monitor and holds its
+//! windows in their order on screen; each monitor shows one, and the one
+//! with the keyboard is the focused workspace (`current`). A workspace
 //! exists while it is shown or holds windows. The scratchpad holds windows
 //! taken off every workspace — the panel's "minimise".
 //!
@@ -14,14 +15,16 @@ use crate::state::Orbit;
 
 pub struct Workspace {
     pub num: i32,
+    /// The monitor it belongs to (its connector name).
+    pub output: String,
     pub windows: Vec<Window>,
     /// The window to give the keyboard back to when the workspace is shown.
     pub last_focus: Option<Window>,
 }
 
 impl Workspace {
-    fn new(num: i32) -> Self {
-        Self { num, windows: Vec::new(), last_focus: None }
+    pub fn new(num: i32, output: String) -> Self {
+        Self { num, output, windows: Vec::new(), last_focus: None }
     }
 }
 
@@ -43,16 +46,21 @@ pub fn id(window: &Window) -> u64 {
 }
 
 impl Orbit {
-    /// The workspace shown; made when missing.
+    /// The focused workspace; made when missing.
     pub fn current_ws(&mut self) -> &mut Workspace {
         let num = self.current;
         let i = self.ensure_ws(num);
         &mut self.workspaces[i]
     }
 
-    /// The windows of the workspace shown, in order.
+    /// The windows of the focused workspace, in order.
     pub fn tiled(&self) -> Vec<Window> {
-        self.workspaces.iter().find(|w| w.num == self.current).map(|w| w.windows.clone()).unwrap_or_default()
+        self.windows_of(self.current)
+    }
+
+    /// The windows of workspace `num`, in order.
+    pub fn windows_of(&self, num: i32) -> Vec<Window> {
+        self.workspaces.iter().find(|w| w.num == num).map(|w| w.windows.clone()).unwrap_or_default()
     }
 
     /// Every window, on any workspace or in the scratchpad.
@@ -60,14 +68,33 @@ impl Orbit {
         self.workspaces.iter().flat_map(|w| &w.windows).chain(&self.scratchpad)
     }
 
-    /// The index of workspace `num`, made (and announced) when missing;
-    /// the list stays in number order.
+    /// Whether a monitor shows workspace `num`.
+    pub fn is_visible(&self, num: i32) -> bool {
+        self.visible.values().any(|n| *n == num)
+    }
+
+    /// The monitor workspace `num` belongs to.
+    pub fn ws_output(&self, num: i32) -> Option<String> {
+        self.workspaces.iter().find(|w| w.num == num).map(|w| w.output.clone())
+    }
+
+    /// The monitor of the focused workspace.
+    pub fn focused_output_name(&self) -> String {
+        self.ws_output(self.current)
+            .or_else(|| self.visible.iter().find(|(_, n)| **n == self.current).map(|(o, _)| o.clone()))
+            .or_else(|| self.space.outputs().next().map(|o| o.name()))
+            .unwrap_or_default()
+    }
+
+    /// The index of workspace `num`, made (and announced) when missing, on
+    /// the focused monitor; the list stays in number order.
     pub fn ensure_ws(&mut self, num: i32) -> usize {
         if let Some(i) = self.workspaces.iter().position(|w| w.num == num) {
             return i;
         }
+        let output = self.focused_output_name();
         let i = self.workspaces.iter().position(|w| w.num > num).unwrap_or(self.workspaces.len());
-        self.workspaces.insert(i, Workspace::new(num));
+        self.workspaces.insert(i, Workspace::new(num, output));
         self.workspace_event("init", num, None);
         i
     }
@@ -77,16 +104,36 @@ impl Orbit {
         self.workspaces.iter().find(|w| w.windows.contains(window)).map(|w| w.num)
     }
 
-    /// Shows workspace `num`: the windows of the one shown leave the screen,
-    /// its own come back, and the keyboard goes to the one that had it.
+    /// Puts workspace `num` on monitor `output` in place of the one it
+    /// showed, whose windows leave the screen. Nothing is laid out yet.
+    pub fn show_on(&mut self, output: &str, num: i32) {
+        if let Some(old) = self.visible.get(output).copied().filter(|old| *old != num) {
+            for window in self.windows_of(old) {
+                self.space.unmap_elem(&window);
+            }
+        }
+        // Shown elsewhere before: that monitor is left without it.
+        self.visible.retain(|_, n| *n != num);
+        let i = self.ensure_ws(num);
+        self.workspaces[i].output = output.to_owned();
+        self.visible.insert(output.to_owned(), num);
+        for window in self.windows_of(num) {
+            self.space.map_element(window, (0, 0), false);
+        }
+    }
+
+    /// Focuses workspace `num`: shown on another monitor, the keyboard goes
+    /// there; hidden, it comes to its own monitor (a new one, to the
+    /// focused monitor) in place of what that showed.
     pub fn switch_workspace(&mut self, num: i32) {
         if num == self.current {
             return;
         }
         let old = self.current;
         self.previous_ws = Some(old);
-        for window in self.tiled() {
-            self.space.unmap_elem(&window);
+        if !self.is_visible(num) {
+            let output = self.ws_output(num).filter(|o| self.visible.contains_key(o)).unwrap_or_else(|| self.focused_output_name());
+            self.show_on(&output, num);
         }
         self.current = num;
         let i = self.ensure_ws(num);
@@ -98,21 +145,35 @@ impl Orbit {
         self.drop_empty();
     }
 
+    /// The keyboard went to a window on another monitor: its workspace is
+    /// the focused one now.
+    pub fn follow_focus(&mut self, num: i32) {
+        if num == self.current || !self.is_visible(num) {
+            return;
+        }
+        let old = self.current;
+        self.previous_ws = Some(old);
+        self.current = num;
+        self.workspace_event("focus", num, Some(old));
+        self.drop_empty();
+    }
+
     /// Moves `window` to workspace `num` (from another, or from the
-    /// scratchpad), without showing it.
+    /// scratchpad), without focusing that workspace.
     pub fn move_to_workspace(&mut self, window: &Window, num: i32) {
-        let was_shown = self.workspace_of(window) == Some(self.current);
+        let was_focused = self.focused_window().as_ref() == Some(window);
+        let from = self.workspace_of(window);
         self.take(window);
         let i = self.ensure_ws(num);
         self.workspaces[i].windows.push(window.clone());
-        if num == self.current {
+        if self.is_visible(num) {
             self.space.map_element(window.clone(), (0, 0), false);
-        } else if was_shown {
+        } else {
             self.space.unmap_elem(window);
-            if self.focused_window().as_ref() == Some(window) {
-                let next = self.tiled().last().cloned();
-                self.focus_window(next);
-            }
+        }
+        if was_focused && !self.is_visible(num) {
+            let next = from.and_then(|n| self.windows_of(n).last().cloned());
+            self.focus_window(next);
         }
         self.arrange();
         self.window_event("move", window);
@@ -134,6 +195,18 @@ impl Orbit {
         self.drop_empty();
     }
 
+    /// Swaps two windows' places, on one workspace or across two.
+    pub fn swap_windows(&mut self, a: &Window, b: &Window) {
+        let place = |state: &Self, w: &Window| {
+            state.workspaces.iter().enumerate().find_map(|(i, ws)| ws.windows.iter().position(|x| x == w).map(|j| (i, j)))
+        };
+        let (Some((ia, ja)), Some((ib, jb))) = (place(self, a), place(self, b)) else { return };
+        self.workspaces[ia].windows[ja] = b.clone();
+        self.workspaces[ib].windows[jb] = a.clone();
+        self.arrange();
+        self.window_event("move", a);
+    }
+
     /// Takes a window out of wherever it is (workspace or scratchpad).
     fn take(&mut self, window: &Window) {
         for ws in &mut self.workspaces {
@@ -145,20 +218,24 @@ impl Orbit {
         self.scratchpad.retain(|w| w != window);
     }
 
-    /// Forgets a window that closed; whether it was on the workspace shown.
-    pub fn forget(&mut self, window: &Window) -> bool {
-        let shown = self.workspace_of(window) == Some(self.current);
+    /// Forgets a window that closed; the workspace it was on, if shown.
+    pub fn forget(&mut self, window: &Window) -> Option<i32> {
+        let on = self.workspace_of(window).filter(|n| self.is_visible(*n));
         self.take(window);
         self.space.unmap_elem(window);
         self.window_event("close", window);
         self.drop_empty();
-        shown
+        on
     }
 
     /// Workspaces neither shown nor holding windows go, as in sway.
     fn drop_empty(&mut self) {
-        let current = self.current;
-        let gone: Vec<i32> = self.workspaces.iter().filter(|w| w.num != current && w.windows.is_empty()).map(|w| w.num).collect();
+        let gone: Vec<i32> = self
+            .workspaces
+            .iter()
+            .filter(|w| w.num != self.current && !self.is_visible(w.num) && w.windows.is_empty())
+            .map(|w| w.num)
+            .collect();
         for num in gone {
             self.workspace_event("empty", num, None);
             self.workspaces.retain(|w| w.num != num);

@@ -95,9 +95,22 @@ impl Orbit {
                 let pos = event.position_transformed(geo.size) + geo.loc.to_f64();
                 self.pointer_to(pos, Event::time(&event));
             }
+            // Locked, clicks and the wheel reach no client.
+            InputEvent::PointerButton { .. } | InputEvent::PointerAxis { .. } if self.locked() => {}
             InputEvent::PointerButton { event, .. } => {
                 let Some(pointer) = self.seat.get_pointer() else { return };
                 let serial = SERIAL_COUNTER.next_serial();
+                // Mod + left button on a window moves it; the click is not
+                // the window's.
+                if event.state() == ButtonState::Pressed
+                    && event.button_code() == crate::grab::BTN_LEFT
+                    && !pointer.is_grabbed()
+                    && self.modifier_held()
+                    && let Some((window, _)) = self.space.element_under(pointer.current_location()).map(|(w, l)| (w.clone(), l))
+                {
+                    self.start_move(window, serial, None);
+                    return;
+                }
                 if event.state() == ButtonState::Pressed && !pointer.is_grabbed() {
                     self.focus_at(pointer.current_location());
                 }
@@ -133,6 +146,10 @@ impl Orbit {
             if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw()).contains(&vt) {
                 state.suppressed.push(code);
                 return FilterResult::Intercept(Some(Action::Vt((vt - Keysym::XF86_Switch_VT_1.raw() + 1) as i32)));
+            }
+            // Locked, no shortcut and no client: only the two above.
+            if state.locked() {
+                return FilterResult::Intercept(None);
             }
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             match shortcut(modifier, mods, sym) {
@@ -186,6 +203,16 @@ impl Orbit {
         }
     }
 
+    /// Whether the core's modifier is held now.
+    fn modifier_held(&self) -> bool {
+        let Some(mods) = self.seat.get_keyboard().map(|k| k.modifier_state()) else { return false };
+        match self.config.modifier {
+            Modifier::Super => mods.logo,
+            Modifier::Alt => mods.alt,
+            Modifier::Ctrl => mods.ctrl,
+        }
+    }
+
     /// `pos` kept on the screens: inside the output it is over, or the
     /// nearest one.
     fn clamp(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
@@ -234,8 +261,8 @@ impl Orbit {
     fn pointer_to(&mut self, pos: Point<f64, Logical>, time: smithay::backend::input::InputTime) {
         let Some(pointer) = self.seat.get_pointer() else { return };
         let serial = SERIAL_COUNTER.next_serial();
-        let under = self.surface_under(pos);
-        if self.config.focus_follows_mouse && !pointer.is_grabbed() && self.exclusive_layer().is_none() {
+        let under = if self.locked() { None } else { self.surface_under(pos) };
+        if !self.locked() && self.config.focus_follows_mouse && !pointer.is_grabbed() && self.exclusive_layer().is_none() {
             let window = self.space.element_under(pos).map(|(w, _)| w.clone());
             let over_layer = self.layer_at(pos, &[WlrLayer::Overlay, WlrLayer::Top]);
             if !over_layer && window.is_some() && window != self.focused_window() {
@@ -256,7 +283,7 @@ impl Orbit {
         if self.exclusive_layer().is_some() {
             return;
         }
-        let Some(output) = self.output() else { return };
+        let Some(output) = self.output_at(pos) else { return };
         let Some(out) = self.space.output_geometry(&output) else { return };
         let layer = {
             let map = layer_map_for_output(&output);
@@ -277,7 +304,7 @@ impl Orbit {
     }
 
     fn layer_at(&self, pos: Point<f64, Logical>, layers: &[WlrLayer]) -> bool {
-        let Some(output) = self.output() else { return false };
+        let Some(output) = self.output_at(pos) else { return false };
         let Some(out) = self.space.output_geometry(&output) else { return false };
         let map = layer_map_for_output(&output);
         let rel = pos - out.loc.to_f64();

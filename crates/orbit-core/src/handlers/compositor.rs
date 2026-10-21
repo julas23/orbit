@@ -51,7 +51,10 @@ impl CompositorHandler for Orbit {
             // The first configure is always allowed.
             popup.send_configure().expect("initial popup configure");
         }
-        self.request_render();
+        // Locked, a client changing is nothing to draw.
+        if !self.locked() {
+            self.request_render();
+        }
     }
 }
 

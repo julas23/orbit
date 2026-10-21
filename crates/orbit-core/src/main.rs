@@ -4,14 +4,16 @@
 //! and dock (layer shell), and speaks the clipboard protocols orbit-clip
 //! uses.
 //!
-//!   orbit-core [-c CONFIG] [--nested | --drm] [-- COMMAND…]
+//!   orbit-core [-c CONFIG] [--nested | --drm] [--locked] [-- COMMAND…]
 //!
 //! Inside a Wayland or X session it runs nested, as a window; from a text
 //! console it takes the screen (DRM/KMS, libinput, libseat), and logs to
 //! `$XDG_STATE_HOME/orbit/core/core.log`. Ctrl+Alt+F1…F12 switch consoles,
 //! Mod+Shift+E leaves.
 //!
-//! COMMAND (and the config's `startup:`) run as clients of the core. The
+//! `--locked` starts with the session hidden behind the lock (the login,
+//! PLANO-CORE §7). COMMAND (and the config's `startup:`) run as clients of
+//! the core. The
 //! plan is `docs/PLANO-CORE.md`.
 //!
 //! Files that hold code from other projects say so at the top, with the
@@ -20,10 +22,14 @@
 mod command;
 mod config;
 mod cursor;
+mod grab;
 mod handlers;
 mod input;
 mod ipc;
+mod lock;
+mod output;
 mod render;
+mod rounded;
 mod state;
 mod tile;
 mod udev;
@@ -40,14 +46,16 @@ fn main() -> anyhow::Result<()> {
     let mut drm = std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none();
     let mut config_path = Config::path();
     let mut command: Vec<String> = Vec::new();
+    let mut locked = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => config_path = args.next().map(Into::into).ok_or_else(|| anyhow::anyhow!("--config needs a file"))?,
             "--" => command = args.by_ref().collect(),
             "--nested" => drm = false,
             "--drm" => drm = true,
+            "--locked" => locked = true,
             "-h" | "--help" => {
-                println!("Usage: orbit-core [-c|--config FILE] [--nested|--drm] [-- COMMAND…]  (default config: {})", Config::path().display());
+                println!("Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [-- COMMAND…]  (default config: {})", Config::path().display());
                 return Ok(());
             }
             other => anyhow::bail!("unknown argument: {other}"),
@@ -59,6 +67,10 @@ fn main() -> anyhow::Result<()> {
     let mut event_loop: EventLoop<Orbit> = EventLoop::try_new()?;
     let display: Display<Orbit> = Display::new()?;
     let mut state = Orbit::new(&mut event_loop, display, config, config_path);
+    // Before the loop runs, so before any client is let in.
+    if locked {
+        state.lock();
+    }
     state.read_layouts();
     if drm {
         udev::init(&mut event_loop, &mut state)?;

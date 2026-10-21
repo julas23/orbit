@@ -7,16 +7,17 @@
 //! (c) 2017 Victor Berger and Victoria Brekenfeld), with the dmabuf setup
 //! of anvil `src/winit.rs` @ 24647fc (same licence).
 //!
-//! linux-dmabuf goes out at version 3, with EGL's wl_drm beside it for Mesa:
-//! Smithay at this commit offers version 6 whenever there is feedback, and
-//! GTK 4.18 (Debian 13) crashes on it while opening the display — v6 no
-//! longer sends `main_device`, which it still reads. Back to v4+ feedback
-//! when the GTK in use takes it.
+//! linux-dmabuf goes out at version 5 with feedback naming the render node
+//! (Mesa 26 finds the GPU only that way), with EGL's wl_drm beside it for
+//! older Mesa. Version 5, not 6, through the vendored Smithay: GTK 4.18
+//! (Debian 13) crashes on 6, which no longer sends `main_device`. Without
+//! a render node it falls back to version 3.
 
 use std::time::Duration;
 
 use smithay::{
     backend::{
+        egl::EGLDevice,
         renderer::{ImportDma, ImportEgl, ImportMemWl, damage::OutputDamageTracker, gles::GlesRenderer},
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
@@ -24,11 +25,11 @@ use smithay::{
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
     utils::{Rectangle, Transform},
-    wayland::dmabuf::{DmabufGlobal, DmabufState},
+    wayland::dmabuf::{DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 
 use crate::{
-    render::{BACKGROUND, output_elements},
+    render::{background, output_elements},
     state::{Backend, Orbit},
 };
 
@@ -52,11 +53,19 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     let _global = output.create_global::<Orbit>(&state.display_handle);
     output.change_current_state(Some(mode), Some(Transform::Flipped180), None, Some((0, 0).into()));
     output.set_preferred(mode);
-    state.space.map_output(&output, (0, 0));
+    state.add_output(&output);
 
     // Buffers from the GPU (see the note at the top).
     let mut dmabuf_state = DmabufState::new();
-    let dmabuf_global = dmabuf_state.create_global::<Orbit>(&state.display_handle, backend.renderer().dmabuf_formats());
+    let formats = backend.renderer().dmabuf_formats();
+    let render_node = EGLDevice::device_for_display(backend.renderer().egl_context().display())
+        .ok()
+        .and_then(|device| device.try_get_render_node().ok().flatten());
+    let feedback = render_node.and_then(|node| DmabufFeedbackBuilder::new(node.dev_id(), formats.clone()).build().ok());
+    let dmabuf_global = match &feedback {
+        Some(feedback) => dmabuf_state.create_global_with_default_feedback::<Orbit>(&state.display_handle, feedback),
+        None => dmabuf_state.create_global::<Orbit>(&state.display_handle, formats),
+    };
     if let Err(err) = backend.renderer().bind_wl_display(&state.display_handle) {
         tracing::warn!("no wl_drm, GL clients may draw in software: {err:?}");
     }
@@ -97,8 +106,9 @@ fn render(state: &mut Orbit) {
     // (EGL logs BAD_SURFACE): the frame is then drawn whole.
     let age = winit.backend.buffer_age().unwrap_or(0);
     let elements = output_elements(state, &output, winit.backend.renderer(), false);
+    let clear = background(state);
     let damage = match winit.backend.bind() {
-        Ok((renderer, mut framebuffer)) => match winit.damage_tracker.render_output(renderer, &mut framebuffer, age, &elements, BACKGROUND) {
+        Ok((renderer, mut framebuffer)) => match winit.damage_tracker.render_output(renderer, &mut framebuffer, age, &elements, clear) {
             Ok(result) => result.damage.cloned(),
             Err(err) => {
                 tracing::warn!("render: {err:?}");
@@ -119,11 +129,12 @@ fn render(state: &mut Orbit) {
     }
     state.backend = Backend::Winit(winit);
 
+    // Locked, clients are not drawn, so they are not asked to draw.
     let time = state.start_time.elapsed();
-    for window in state.space.elements() {
+    for window in state.space.elements().filter(|_| !state.locked()) {
         window.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
-    for layer in layer_map_for_output(&output).layers() {
+    for layer in layer_map_for_output(&output).layers().filter(|_| !state.locked()) {
         layer.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
     state.space.refresh();

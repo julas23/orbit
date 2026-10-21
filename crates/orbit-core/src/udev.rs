@@ -30,7 +30,7 @@ use smithay::{
         },
         egl::{EGLContext, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
-        renderer::{ImportDma, ImportEgl, ImportMemWl, element::surface::WaylandSurfaceRenderElement, gles::GlesRenderer},
+        renderer::{ImportDma, ImportEgl, ImportMemWl, gles::GlesRenderer},
         session::{Event as SessionEvent, Session, libseat::LibSeatSession},
         udev::{UdevBackend, UdevEvent, all_gpus, primary_gpu},
     },
@@ -47,13 +47,13 @@ use smithay::{
     utils::DeviceFd,
     wayland::{
         compositor::{SurfaceAttributes, TraversalAction, with_surface_tree_downward},
-        dmabuf::{DmabufGlobal, DmabufState},
+        dmabuf::{DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
     },
 };
 use smithay_drm_extras::{display_info, drm_scanner::{DrmScanEvent, DrmScanner}};
 
 use crate::{
-    render::{BACKGROUND, OutputElement, output_elements},
+    render::{OutputElement, background, output_elements},
     state::{Backend, Orbit},
 };
 
@@ -61,7 +61,7 @@ use crate::{
 const FORMATS: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 type Manager = DrmOutputManager<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
-type Element = OutputElement<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>;
+type Element = OutputElement;
 
 pub struct DrmData {
     pub session: LibSeatSession,
@@ -117,9 +117,13 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
         render_formats,
     );
 
-    // Client buffers: dmabuf v3 with wl_drm, as nested (see `winit`).
+    // Client buffers: dmabuf v5 with feedback, and wl_drm, as nested (see `winit`).
     let mut dmabuf_state = DmabufState::new();
-    let dmabuf_global = dmabuf_state.create_global::<Orbit>(&state.display_handle, renderer.dmabuf_formats());
+    let formats = renderer.dmabuf_formats();
+    let dmabuf_global = match DmabufFeedbackBuilder::new(render_node.dev_id(), formats.clone()).build() {
+        Ok(feedback) => dmabuf_state.create_global_with_default_feedback::<Orbit>(&state.display_handle, &feedback),
+        Err(_) => dmabuf_state.create_global::<Orbit>(&state.display_handle, formats),
+    };
     if let Err(err) = renderer.bind_wl_display(&state.display_handle) {
         tracing::warn!("no wl_drm, GL clients may draw in software: {err:?}");
     }
@@ -238,10 +242,10 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
         },
     );
     let global = output.create_global::<Orbit>(&state.display_handle);
-    let x = state.space.outputs().filter_map(|o| state.space.output_geometry(o)).map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
     let wl_mode = WlMode::from(mode);
     output.set_preferred(wl_mode);
-    output.change_current_state(Some(wl_mode), None, None, Some((x, 0).into()));
+    // Its place comes with the others' (`output::place`).
+    output.change_current_state(Some(wl_mode), None, None, Some((0, 0).into()));
     let Backend::Drm(drm) = &mut state.backend else { return };
     let drm_output = match drm.manager.lock().initialize_output::<_, Element>(
         crtc,
@@ -261,7 +265,7 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
     };
     tracing::info!("{name}: {}x{}@{}", wl_mode.size.w, wl_mode.size.h, wl_mode.refresh);
     drm.surfaces.insert(crtc, Surface { output: output.clone(), drm_output, global, waiting: false, scheduled: false, dirty: true });
-    state.space.map_output(&output, (x, 0));
+    state.add_output(&output);
     state.request_render();
 }
 
@@ -269,8 +273,8 @@ fn disconnected(state: &mut Orbit, crtc: crtc::Handle) {
     let Backend::Drm(drm) = &mut state.backend else { return };
     let Some(surface) = drm.surfaces.remove(&crtc) else { return };
     tracing::info!("{}: gone", surface.output.name());
-    state.space.unmap_output(&surface.output);
     state.display_handle.disable_global::<Orbit>(surface.global.clone());
+    state.remove_output(&surface.output);
 }
 
 /// Marks every output changed and draws those not waiting for their
@@ -314,8 +318,9 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
         surface.dirty = false;
     }
     let elements = output_elements(state, &output, &mut drm.renderer, true);
+    let clear = background(state);
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
-        match surface.drm_output.render_frame(&mut drm.renderer, &elements, BACKGROUND, FrameFlags::DEFAULT) {
+        match surface.drm_output.render_frame(&mut drm.renderer, &elements, clear, FrameFlags::DEFAULT) {
             Ok(result) if !result.is_empty => match surface.drm_output.queue_frame(()) {
                 Ok(()) => surface.waiting = true,
                 Err(err) => tracing::warn!("queue frame: {err:?}"),
@@ -328,13 +333,14 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
     send_frames(state, &output);
 }
 
-/// Tells the clients on `output` they may draw their next frame.
+/// Tells the clients on `output` they may draw their next frame — none
+/// while locked: they are not drawn.
 fn send_frames(state: &mut Orbit, output: &Output) {
     let time = state.start_time.elapsed();
-    for window in state.space.elements_for_output(output) {
+    for window in state.space.elements_for_output(output).filter(|_| !state.locked()) {
         window.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
-    for layer in layer_map_for_output(output).layers() {
+    for layer in layer_map_for_output(output).layers().filter(|_| !state.locked()) {
         layer.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
     // The pointer's own surface, when a client gave one.
