@@ -212,7 +212,8 @@ o Ferdium não atende). A primeira entrega juntou o essencial das Fases 1 e 2:
 barra com grupos, cofres por serviço, contadores, notificações, links externos,
 limpeza de URLs e a parte do escudo que não depende de listas (ITP, cookies de
 terceiros, TLS, permissões). Ficaram para depois: listas de bloqueio, hibernar,
-arrastar, receitas do Ferdium, contador no dock.
+arrastar, receitas do Ferdium, contador no dock — feitos em 2026-10-21 (abaixo),
+menos o arrastar, que veio antes.
 
 **Grupos e perfis (2026-10-20, pedido do Juliano):** grupos sem nome viram só
 uma linha separadora (nome é opcional; com nome, o cabeçalho recolhe); ícones de
@@ -262,6 +263,43 @@ carregar — como o Chromium/Wavebox faz. O ícone do site fica em `icon.png`
 para o botão aparecer certo antes de carregar. A pasta
 `~/.local/share/orbit/pathfinder` fica **fora do Syncthing** (logins são de
 cada máquina; SQLite aberto em duas máquinas corrompe).
+
+**O que faltava para aposentar o Wavebox (2026-10-21, #98):**
+- **Listas de bloqueio** (`shield`): EasyList + EasyPrivacy por padrão
+  (`blocklists:` troca; `[]` desliga; `block: false` num serviço que quebre).
+  O formato do Adblock é convertido para regras do WebKit — duas listas
+  compiladas por fonte, rede e ocultação de elementos, para um seletor recusado
+  não derrubar o bloqueio. Fica de fora o que o WebKit não tem: regras por
+  expressão regular, `$redirect`, `$csp`, `$removeparam`, seletores estendidos
+  (`:has-text`…); exceções `#@#` viram `unless-domain` da regra genérica. A
+  compilação (~40 s na primeira vez, numa thread do WebKit) só se repete quando
+  o texto muda; as listas são baixadas de novo depois de 4 dias (checagem a cada
+  6 h). Tudo em `~/.cache/orbit/pathfinder/` (~90 MB compilados, regeneráveis).
+  As páginas esperam os filtros do disco antes de carregar, como esperam os
+  cookies. O painel "Escudo" com contadores não é possível: o WebKitGTK não
+  informa o que bloqueou.
+- **Hibernar:** serviço sem uso há `hibernate_after` minutos (padrão 30; 0
+  nunca) sai da memória e volta no clique, na página em que estava; nunca o
+  da tela, os `always_active`, o Navegador ou um serviço tocando som. Também
+  "Hibernar" no menu do botão. Ícone esmaecido enquanto hiberna.
+- **Contador no dock:** o total sai pelo sinal Unity `LauncherEntry` (o mesmo de
+  Thunderbird/Telegram), repetido 2 s depois de o dock aparecer no bus (ele pega
+  o nome antes de montar a janela). O orbit-dock passou a ler esse sinal para
+  qualquer programa, casando pelo nome, executável, classe ou id do .desktop.
+- **Receitas do Ferdium:** as 441 receitas de `ferdium-recipes` (MIT) vêm em
+  `data/pathfinder/recipes` (só `package.json`, `webview.js`, CSS e scripts de
+  página; `scripts/update-recipes.sh` atualiza) e são instaladas em
+  `~/.local/share/orbit-pathfinder/recipes`; as suas em
+  `~/.local/share/orbit/pathfinder/recipes` têm precedência. O `webview.js` roda
+  sem mudança num mundo isolado, sobre o subconjunto da API `Ferdium` que as
+  receitas usam (`setBadge`, `loop`, `injectCSS`, `injectJSUnsafe` — este no
+  mundo da página —, `openNewWindow`, `isImage`, `handleDarkMode`…), em
+  `data/pathfinder/recipe.js`. A receita de um serviço é a que ele nomeia
+  (`recipe:`; `none` desliga) ou a do endereço: prefixo mais longo, depois mesmo
+  host (não em hosts de vários produtos como `www.google.com`), depois apelido do
+  mesmo produto (Outlook = `live.com`/`mail`, o calendário não). Com receita, o
+  contador vem dela e o título deixa de ser lido; mensagens "indiretas" (grupos,
+  conversas silenciadas) viram um ponto quando não há diretas.
 
 Nota de teste: no sway headless o monitor virtual tem taxa de atualização 0 e o
 WebKitGTK 2.52 morre com SIGFPE ao carregar a primeira página; a config de teste

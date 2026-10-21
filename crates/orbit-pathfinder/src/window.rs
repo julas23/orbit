@@ -31,6 +31,9 @@ const DEFAULT_HOME: &str = "https://www.google.com/";
 const DEFAULT_SEARCH: &str = "https://www.google.com/search?q=";
 /// The browser's key: its storage, icon and zoom.
 const BROWSER_ID: &str = "orbit-browser";
+/// Where the unread total goes out to the dock (see `announce`).
+const LAUNCHER_PATH: &str = "/io/github/julas23/Orbit/Pathfinder/LauncherEntry";
+const DOCK_NAME: &str = "io.github.julas23.Orbit.Dock";
 
 /// A group in the sidebar: its unread badge, its services and the revealer
 /// that folds it.
@@ -73,6 +76,8 @@ pub struct Window {
     state: RefCell<State>,
     vault: Rc<crate::passwords::Vault>,
     key_button: gtk::Button,
+    /// The unread total last sent to the dock.
+    announced: std::cell::Cell<u32>,
 }
 
 impl Window {
@@ -91,6 +96,11 @@ impl Window {
             page_changed: RefCell::new(None),
             watching: RefCell::new(None),
             tabs_changed: RefCell::new(None),
+            recipes: crate::recipe::Index::load(),
+            shield: {
+                let lists = cfg.blocklists.clone().unwrap_or_else(|| crate::shield::DEFAULT_LISTS.iter().map(|s| s.to_string()).collect());
+                (!lists.is_empty()).then(|| crate::shield::Shield::new(&base(glib::user_cache_dir()), lists))
+            },
         });
 
         let window = gtk::ApplicationWindow::builder()
@@ -221,6 +231,7 @@ impl Window {
             state: RefCell::new(state),
             vault: Rc::new(crate::passwords::Vault::default()),
             key_button,
+            announced: std::cell::Cell::new(0),
         });
 
         {
@@ -323,6 +334,26 @@ impl Window {
             if service.cfg.borrow().always_active {
                 this.attach(service);
             }
+        }
+        this.watch_hibernation();
+        // A dock started (or restarted) after us hears the count again —
+        // once it is listening: it takes its name before building itself.
+        if let Some(conn) = app.dbus_connection() {
+            let weak = Rc::downgrade(&this);
+            gio::bus_watch_name_on_connection(
+                &conn,
+                DOCK_NAME,
+                gio::BusNameWatcherFlags::NONE,
+                move |_, _, _| {
+                    let weak = weak.clone();
+                    glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
+                        if let Some(w) = weak.upgrade() {
+                            w.announce(w.announced.get());
+                        }
+                    });
+                },
+                |_, _| {},
+            );
         }
         let last = this.state.borrow().last.clone();
         let first = {
@@ -562,7 +593,9 @@ impl Window {
         self.unguard_tab();
         if let Some(old) = self.current.borrow().as_ref() {
             old.button.remove_css_class("active");
+            old.touch();
         }
+        service.touch();
         let view = self.attach(service);
         self.stack.set_visible_child(&view);
         service.button.add_css_class("active");
@@ -578,6 +611,38 @@ impl Window {
             state.last = Some(service.key.clone());
             state.save();
         }
+    }
+
+    /// Once a minute, the services unused for `hibernate_after` minutes are
+    /// unloaded (see `Service::can_hibernate`); the one shown never is.
+    fn watch_hibernation(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_seconds_local(60, move || {
+            let Some(this) = weak.upgrade() else { return glib::ControlFlow::Break };
+            let minutes = this.cfg.borrow().hibernate_after;
+            if minutes > 0 {
+                let current = this.current.borrow().as_ref().map(|c| c.key.clone());
+                let idle: Vec<Rc<Service>> = this
+                    .services
+                    .borrow()
+                    .iter()
+                    .filter(|s| Some(&s.key) != current.as_ref() && s.can_hibernate(minutes))
+                    .cloned()
+                    .collect();
+                for service in idle {
+                    this.hibernate(&service);
+                }
+            }
+            glib::ControlFlow::Continue
+        });
+    }
+
+    fn hibernate(&self, service: &Service) {
+        log::info!("hibernating {}", service.key);
+        for view in service.views() {
+            self.stack.remove(&view);
+        }
+        service.hibernate();
     }
 
     fn update_bar(&self) {
@@ -606,6 +671,24 @@ impl Window {
         }
         let title = tr("pathfinder-title");
         self.window.set_title(Some(&if total > 0 { format!("({total}) {title}") } else { title }));
+        if total != self.announced.get() {
+            self.announce(total);
+        }
+    }
+
+    /// The unread total on the dock's launcher: Unity's `LauncherEntry`
+    /// signal, which docks (Orbit-Dock among them) read.
+    fn announce(&self, total: u32) {
+        self.announced.set(total);
+        let Some(conn) = self.env.app.dbus_connection() else { return };
+        let app_id = self.env.app.application_id().unwrap_or_default();
+        let props = glib::VariantDict::new(None);
+        props.insert("count", total as i64);
+        props.insert("count-visible", total > 0);
+        let args = glib::Variant::tuple_from_iter([format!("application://{app_id}.desktop").to_variant(), props.end()]);
+        if let Err(err) = conn.emit_signal(None, LAUNCHER_PATH, "com.canonical.Unity.LauncherEntry", "Update", Some(&args)) {
+            log::debug!("launcher count: {err}");
+        }
     }
 
     fn context_menu(self: &Rc<Self>, service: &Rc<Service>) {
@@ -626,6 +709,12 @@ impl Window {
         };
         let s = service.clone();
         item(tr("pathfinder-reload"), Box::new(move || s.reload()));
+        // Unloaded now; the one shown is not (its page would vanish).
+        let shown = self.current.borrow().as_ref().is_some_and(|c| c.key == service.key);
+        if service.is_loaded() && !shown {
+            let (s, this) = (service.clone(), self.clone());
+            item(tr("pathfinder-hibernate"), Box::new(move || this.hibernate(&s)));
+        }
         let (key, this) = (service.key.clone(), self.clone());
         item(tr("pathfinder-edit"), Box::new(move || this.service_dialog(Some(key.clone()))));
         let (key, this) = (service.key.clone(), self.clone());

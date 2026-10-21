@@ -1,0 +1,26 @@
+# Orbit-Pathfinder: the sidebar's services, in groups, and the browser's
+# choices. The sidebar's "+" and "Edit…" write this file too.
+
+# Block lists (Adblock format). EasyList and EasyPrivacy when absent; [] for none.
+# blocklists:
+#   - https://easylist.to/easylist/easylist.txt
+#   - https://easylist.to/easylist/easyprivacy.txt
+
+# Minutes a service may go unused before its page is unloaded (0: never).
+# hibernate_after: 30
+
+groups:
+  - services:
+      - name: WhatsApp
+        url: https://web.whatsapp.com/
+        always_active: true     # loaded at start, never hibernated
+        media: true             # camera, microphone, calls
+  - name: Mail
+    services:
+      - name: Gmail
+        url: https://mail.google.com/
+        profile: google         # shares the Google login with the others naming it
+      - name: Outlook
+        url: https://outlook.live.com/mail/
+        # recipe: office365-owa # the Ferdium recipe that counts unread; found by the address when absent, "none" for none
+        # block: false          # if the block lists break it

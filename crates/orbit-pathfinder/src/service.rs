@@ -20,7 +20,7 @@ use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::{number, text, tr, tr_args};
 use webkit6::prelude::*;
 
-use crate::{config, cookies, privacy, trust};
+use crate::{config, cookies, privacy, recipe, trust};
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 type Waiting = Rc<RefCell<Option<Vec<Box<dyn FnOnce()>>>>>;
@@ -68,6 +68,10 @@ pub struct Env {
     pub watching: RefCell<Option<Watching>>,
     /// The browser's tabs changed (opened, closed, shown, retitled).
     pub tabs_changed: RefCell<Option<PageHook>>,
+    /// The block lists, put on the pages of the services that block.
+    pub shield: Option<Rc<crate::shield::Shield>>,
+    /// The Ferdium recipes found.
+    pub recipes: recipe::Index,
 }
 
 impl Env {
@@ -194,11 +198,25 @@ pub struct Service {
     badge: gtk::Label,
     /// The pages: one for a service, one per tab for the browser.
     views: RefCell<Vec<webkit6::WebView>>,
+    /// What its pages carry besides the site's own: the block lists and
+    /// its recipe.
+    content: webkit6::UserContentManager,
+    /// The recipe that reads its count, if any.
+    recipe: Option<recipe::Recipe>,
+    /// The recipe has given a count: the title's is no longer read.
+    recipe_counts: Cell<bool>,
+    /// Messages in places that matter less (muted chats, groups): a dot
+    /// when there is nothing else.
+    indirect: Cell<u32>,
     /// Which of `views` is shown.
     active: Cell<usize>,
     /// Tabs saved from the last run, opened when the browser first shows.
     restore: RefCell<(Vec<String>, usize)>,
     unread: Cell<u32>,
+    /// When it was last shown or left: what hibernation counts from.
+    last_used: Cell<std::time::Instant>,
+    /// The address its page was on when it was unloaded, to come back to.
+    resume: RefCell<Option<String>>,
     /// The page's last notification: clicking the desktop's tells the page,
     /// which then opens the conversation.
     notification: RefCell<Option<webkit6::Notification>>,
@@ -231,6 +249,26 @@ impl Service {
             .tooltip_text(&cfg.name)
             .css_classes(["service", "flat"])
             .build();
+        let content = webkit6::UserContentManager::new();
+        if cfg.block
+            && let Some(shield) = &env.shield
+        {
+            shield.attach(&content);
+        }
+        let recipe = if cfg.browser { None } else { env.recipes.find(cfg.recipe.as_deref(), &cfg.url).cloned() };
+        let script = recipe.as_ref().and_then(|r| r.script());
+        if let Some(source) = &script {
+            let script = webkit6::UserScript::for_world(
+                source,
+                webkit6::UserContentInjectedFrames::TopFrame,
+                webkit6::UserScriptInjectionTime::End,
+                recipe::WORLD,
+                &[],
+                &[],
+            );
+            content.add_script(&script);
+            content.register_script_message_handler(recipe::HANDLER, Some(recipe::WORLD));
+        }
         let service = Rc::new(Self {
             key: cfg.key(),
             cfg: RefCell::new(cfg),
@@ -238,9 +276,15 @@ impl Service {
             image,
             badge,
             views: RefCell::new(Vec::new()),
+            content,
+            recipe: recipe.clone(),
+            recipe_counts: Cell::new(false),
+            indirect: Cell::new(0),
             active: Cell::new(0),
             restore: RefCell::new((Vec::new(), 0)),
             unread: Cell::new(0),
+            last_used: Cell::new(std::time::Instant::now()),
+            resume: RefCell::new(None),
             notification: RefCell::new(None),
             zoom: Cell::new(zoom),
             env: Rc::downgrade(env),
@@ -250,7 +294,60 @@ impl Service {
             last_page_notification: Cell::new(None),
         });
         service.apply_icon();
+        if script.is_some() {
+            log::info!("{}: recipe {}", service.key, service.recipe.as_ref().map(|r| r.id.as_str()).unwrap_or_default());
+            let weak = Rc::downgrade(&service);
+            service.content.connect_script_message_received(Some(recipe::HANDLER), move |_, value| {
+                if let Some(service) = weak.upgrade() {
+                    service.recipe_message(&value.to_str());
+                }
+            });
+        }
         service
+    }
+
+    /// What the recipe in the page says: a count, a link to open, a page
+    /// script to run.
+    fn recipe_message(&self, text: &str) {
+        let Ok(message) = serde_json::from_str::<serde_json::Value>(text) else { return };
+        if let Some(counts) = message.get("badge").and_then(|b| b.as_array()) {
+            let n = |i: usize| counts.get(i).and_then(|v| v.as_u64()).unwrap_or(0).min(u32::MAX as u64) as u32;
+            self.recipe_counts.set(true);
+            self.indirect.set(n(1));
+            self.set_unread(n(0));
+            self.show_badge();
+        } else if let Some(url) = message.get("open").and_then(|u| u.as_str()) {
+            let Some(env) = self.env.upgrade() else { return };
+            let cfg = self.cfg.borrow();
+            match self.view() {
+                Some(view) if privacy::stays_inside(url, &cfg.url, &cfg.domains) => view.load_uri(&privacy::clean(url)),
+                _ => env.open_external(url),
+            }
+        } else if let Some(name) = message.get("unsafe").and_then(|u| u.as_str())
+            && let Some(source) = self.recipe.as_ref().and_then(|r| r.page_script(name))
+            && let Some(view) = self.view()
+        {
+            // As the page's own script, where the recipe needs it.
+            view.evaluate_javascript(&source, None, None, gio::Cancellable::NONE, |result| {
+                if let Err(err) = result {
+                    log::debug!("recipe page script: {err}");
+                }
+            });
+        }
+    }
+
+    /// The count on the button: the unread messages, or a dot for the ones
+    /// that matter less.
+    fn show_badge(&self) {
+        let (n, indirect) = (self.unread.get(), self.indirect.get());
+        if n > 0 {
+            self.badge.remove_css_class("indirect");
+            self.badge.set_label(&if n > 99 { "99+".to_owned() } else { n.to_string() });
+        } else {
+            self.badge.add_css_class("indirect");
+            self.badge.set_label("");
+        }
+        self.badge.set_visible(n > 0 || indirect > 0);
     }
 
     /// The name of its storage (see `config::Service::profile`).
@@ -282,6 +379,31 @@ impl Service {
 
     pub fn is_loaded(&self) -> bool {
         !self.views.borrow().is_empty()
+    }
+
+    /// Shown, or just left: the time unused starts again.
+    pub fn touch(&self) {
+        self.last_used.set(std::time::Instant::now());
+    }
+
+    /// Whether its page may be unloaded after `minutes` unused: loaded, not
+    /// the browser, not kept active, and not playing sound (music, a call).
+    pub fn can_hibernate(&self, minutes: u32) -> bool {
+        let cfg = self.cfg.borrow();
+        self.is_loaded()
+            && !cfg.browser
+            && !cfg.always_active
+            && self.last_used.get().elapsed() >= std::time::Duration::from_secs(minutes as u64 * 60)
+            && !self.views.borrow().iter().any(|v| v.is_playing_audio())
+    }
+
+    /// Unloads the page — the window has taken it out of the stack — keeping
+    /// where it was; the next click loads it there. The count stays as it
+    /// was last read.
+    pub fn hibernate(&self) {
+        *self.resume.borrow_mut() = self.view().and_then(|v| v.uri()).map(|u| u.to_string()).filter(|u| u.starts_with("http"));
+        self.drop_view();
+        self.button.add_css_class("hibernated");
     }
 
     /// Tabs to open the first time the browser shows (the last run's).
@@ -371,7 +493,7 @@ impl Service {
     /// A page a script opened (`window.open`), taken as a tab: it shares the
     /// opener's storage and process, as WebKit requires.
     fn adopt_tab(self: &Rc<Self>, opener: &webkit6::WebView) -> webkit6::WebView {
-        let view = webkit6::WebView::builder().related_view(opener).hexpand(true).vexpand(true).build();
+        let view = webkit6::WebView::builder().related_view(opener).user_content_manager(&self.content).hexpand(true).vexpand(true).build();
         if let Some(settings) = WebViewExt::settings(opener) {
             view.set_settings(&settings);
         }
@@ -428,6 +550,8 @@ impl Service {
     /// The first pages: the last run's tabs (the browser), then `extra`, or
     /// else the service's address.
     fn first_pages(self: &Rc<Self>, extra: Option<String>) {
+        self.button.remove_css_class("hibernated");
+        let extra = extra.or_else(|| self.resume.borrow_mut().take());
         let (saved, saved_active) = std::mem::take(&mut *self.restore.borrow_mut());
         for url in &saved {
             let view = self.make_view(url.clone());
@@ -618,8 +742,7 @@ impl Service {
         if self.counted.replace(true) && n > before {
             self.notify_unread(n);
         }
-        self.badge.set_visible(n > 0);
-        self.badge.set_label(&if n > 99 { "99+".to_owned() } else { n.to_string() });
+        self.show_badge();
         if let Some(env) = self.env.upgrade()
             && let Some(changed) = env.changed.borrow().as_ref()
         {
@@ -655,6 +778,7 @@ impl Service {
             .network_session(&profile.session)
             .web_context(&profile.context)
             .settings(&settings)
+            .user_content_manager(&self.content)
             .hexpand(true)
             .vexpand(true)
             .build();
@@ -663,11 +787,16 @@ impl Service {
         view.set_is_muted(cfg.muted);
         view.set_zoom_level(self.zoom.get());
         self.connect(&view, &env);
-        // Loaded once the profile's session cookies are back: the login.
+        // Loaded once the profile's session cookies are back (the login) and
+        // the block lists are in force.
+        let shield = env.shield.clone().filter(|_| cfg.block);
         profile.when_ready(glib::clone!(
             #[weak]
             view,
-            move || view.load_uri(&first)
+            move || match shield {
+                Some(shield) => shield.when_ready(move || view.load_uri(&first)),
+                None => view.load_uri(&first),
+            }
         ));
         view
     }
@@ -682,7 +811,7 @@ impl Service {
                 let title = view.title().unwrap_or_default();
                 if service.cfg.borrow().browser {
                     service.tabs_changed();
-                } else {
+                } else if !service.recipe_counts.get() {
                     service.set_unread(privacy::unread(&title).unwrap_or(0));
                 }
                 service.page_changed();

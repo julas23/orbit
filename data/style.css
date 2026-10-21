@@ -348,6 +348,17 @@ window.orbit popover radio { color: @orbit_fg; }
   background-color: alpha(@orbit_accent, 0.30);
 }
 
+/* An application's unread count, on its launcher's corner. */
+.dock .app .badge {
+  min-width: 10px;
+  padding: 0 3px;
+  border-radius: 10px;
+  background-color: @orbit_alert;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: bold;
+}
+
 .dock .separator {
   background-color: @orbit_muted;
   min-width: 2px;

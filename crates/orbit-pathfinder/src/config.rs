@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub groups: Vec<Group>,
@@ -39,6 +39,37 @@ pub struct Config {
     /// the query goes on the end. Google's when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub search: Option<String>,
+    /// The block lists (Adblock format) every page uses; EasyList and
+    /// EasyPrivacy when absent, none when empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocklists: Option<Vec<String>>,
+    /// Minutes a service may go unused before its page is unloaded, to come
+    /// back on the next click; 0 never. Services kept always active are
+    /// never unloaded.
+    #[serde(default = "hibernate_default", skip_serializing_if = "is_hibernate_default")]
+    pub hibernate_after: u32,
+}
+
+fn hibernate_default() -> u32 {
+    30
+}
+
+fn is_hibernate_default(n: &u32) -> bool {
+    *n == hibernate_default()
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            groups: Vec::new(),
+            external_browser: None,
+            user_agent: None,
+            home: None,
+            search: None,
+            blocklists: None,
+            hibernate_after: hibernate_default(),
+        }
+    }
 }
 
 /// A run of services; between groups the sidebar draws a line. A named
@@ -88,6 +119,13 @@ pub struct Service {
     /// external browser (its login pages, its file previews).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub domains: Vec<String>,
+    /// The Ferdium recipe that reads its unread count ("gmail"; "none" for
+    /// none); the one matching its address when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<String>,
+    /// The block lists apply to it; off for a service they break.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub block: bool,
     /// The built-in browser at the top of the sidebar (not in the file):
     /// every link opens in it, and its title counts nothing.
     #[serde(skip)]
@@ -121,6 +159,8 @@ impl Service {
             user_agent: None,
             proxy: None,
             domains: Vec::new(),
+            recipe: None,
+            block: true,
             browser: false,
         }
     }

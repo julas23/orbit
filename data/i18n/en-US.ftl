@@ -490,6 +490,7 @@ pathfinder-title = Orbit-Pathfinder
 pathfinder-back = Back
 pathfinder-forward = Forward
 pathfinder-reload = Reload
+pathfinder-hibernate = Hibernate
 pathfinder-open-external = Open in the external browser
 pathfinder-add = Add a service
 pathfinder-menu = Settings

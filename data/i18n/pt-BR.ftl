@@ -482,6 +482,7 @@ pathfinder-title = Orbit-Pathfinder
 pathfinder-back = Voltar
 pathfinder-forward = Avançar
 pathfinder-reload = Recarregar
+pathfinder-hibernate = Hibernar
 pathfinder-open-external = Abrir no navegador externo
 pathfinder-add = Adicionar serviço
 pathfinder-menu = Configuração

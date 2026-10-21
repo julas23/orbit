@@ -4,6 +4,11 @@
 //! application's own actions (New Window, New Private Window…) — taken from
 //! the system's desktop file of the same application when the dock's own
 //! file has none — and its recent files, which open in it.
+//!
+//! A launcher shows the unread count its application announces (see
+//! `badges`).
+
+mod badges;
 
 use std::{collections::HashMap, rc::Rc};
 
@@ -66,6 +71,7 @@ fn window(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
         })
         .build();
 
+    let badges = badges::Badges::new(&launchers);
     let system = SystemApps::load();
     let mut last_group: Option<&str> = None;
     for entry in config.apps.iter().filter(|entry| entry.show) {
@@ -77,7 +83,7 @@ fn window(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
             launchers.append(&gtk::Box::builder().css_classes(["separator"]).build());
         }
         last_group = group;
-        launchers.append(&launcher.button(config.icon_size));
+        launchers.append(&launcher.button(config.icon_size, &badges));
     }
 
     let root = gtk::Box::builder().css_classes(["dock"]).build();
@@ -240,7 +246,7 @@ impl Launcher {
         })
     }
 
-    fn button(self, icon_size: i32) -> gtk::Button {
+    fn button(self, icon_size: i32, badges: &badges::Badges) -> gtk::Button {
         let this = Rc::new(self);
         let image = match &this.icon {
             Some(IconSource::Spec(spec)) => orbit_app::icon(spec, icon_size),
@@ -254,7 +260,7 @@ impl Launcher {
         let button = gtk::Button::builder()
             .css_classes(["app"])
             .tooltip_text(this.name.as_str())
-            .child(&image)
+            .child(&badges.wrap(&image, this.recent_names.clone()))
             .build();
 
         {

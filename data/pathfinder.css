@@ -48,6 +48,15 @@ window.orbit-pathfinder button.service.active {
   border-left-color: @orbit_accent;
 }
 window.orbit-pathfinder .service-icon.placeholder { opacity: 0.5; }
+/* Messages that matter less (muted chats, groups): a dot. */
+window.orbit-pathfinder .badge.indirect {
+  min-width: 6px;
+  min-height: 6px;
+  padding: 0;
+  background-color: @orbit_muted;
+}
+/* Unloaded until the next click. */
+window.orbit-pathfinder button.service.hibernated .service-icon { opacity: 0.45; }
 window.orbit-pathfinder .badge {
   min-width: 10px;
   padding: 0 3px;

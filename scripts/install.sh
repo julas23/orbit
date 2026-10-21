@@ -43,6 +43,13 @@ install -m 644 "$ROOT/data/io.github.julas23.Orbit.Play.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Edit.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Files.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Pathfinder.desktop" "$APPS/"
+# The Ferdium recipes Pathfinder reads unread counts with (MIT, see
+# data/pathfinder/recipes/LICENSE.md); your own go in
+# ~/.local/share/orbit/pathfinder/recipes and win over these.
+RECIPES=${PREFIX:-$HOME/.local}/share/orbit-pathfinder/recipes
+rm -rf "$RECIPES"
+mkdir -p "$(dirname "$RECIPES")"
+cp -r "$ROOT/data/pathfinder/recipes" "$RECIPES"
 
 echo "installed orbit-panel, orbit-dock, orbit-notify, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-pathfinder and orbit-session in $DEST"
 echo "and the Orbit-Calc, Orbit-Clip, Orbit-Blink, Orbit-View, Orbit-Read, Orbit-Play, Orbit-Edit and Orbit-Files menu entries in $APPS"
