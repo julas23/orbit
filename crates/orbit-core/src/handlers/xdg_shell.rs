@@ -20,7 +20,7 @@ use smithay::{
     wayland::shell::xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState},
 };
 
-use crate::{state::Orbit, workspace::info};
+use crate::state::Orbit;
 
 impl XdgShellHandler for Orbit {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
@@ -28,32 +28,12 @@ impl XdgShellHandler for Orbit {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = Window::new_wayland_window(surface);
-        info(&window).borrow_mut().id = self.next_window_id;
-        self.next_window_id += 1;
-        // On the monitor under the pointer, in the workspace it shows.
-        let num = self.pointer_output().and_then(|o| self.visible.get(&o.name()).copied()).unwrap_or(self.current);
-        let i = self.ensure_ws(num);
-        self.workspaces[i].windows.push(window.clone());
-        self.space.map_element(window.clone(), (0, 0), false);
-        self.arrange();
-        self.window_event("new", &window);
-        self.focus_window(Some(window));
+        self.add_window(Window::new_wayland_window(surface));
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        let Some(window) = self.window_for(surface.wl_surface()) else { return };
-        let had_focus = self.focused_window().as_ref() == Some(&window) || self.focused_window().is_none();
-        let index = self.workspace_of(&window).and_then(|n| self.windows_of(n).iter().position(|w| w == &window)).unwrap_or(0);
-        if self.dragging.as_ref() == Some(&window) {
-            self.dragging = None;
-        }
-        let Some(num) = self.forget(&window) else { return };
-        self.arrange();
-        if had_focus {
-            // The neighbour on the left, as i3 does; or the first.
-            let next = self.windows_of(num).get(index.saturating_sub(1)).cloned();
-            self.focus_window(next);
+        if let Some(window) = self.window_for(surface.wl_surface()) {
+            self.remove_window(&window);
         }
     }
 
@@ -110,7 +90,7 @@ impl XdgShellHandler for Orbit {
         if self.window_for(&root).is_none() && self.layer_for(&root).is_none() {
             return;
         }
-        let Ok(mut grab) = self.popups.grab_popup::<Self>(root, kind, &seat, serial) else { return };
+        let Ok(mut grab) = self.popups.grab_popup::<Self>(root.into(), kind, &seat, serial) else { return };
         if let Some(keyboard) = seat.get_keyboard() {
             if keyboard.is_grabbed() && !(keyboard.has_grab(serial) || keyboard.has_grab(grab.previous_serial().unwrap_or(serial))) {
                 grab.ungrab(PopupUngrabStrategy::All);

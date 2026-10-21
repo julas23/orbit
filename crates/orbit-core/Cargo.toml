@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-smithay = { workspace = true, features = ["backend_winit", "backend_egl", "backend_drm", "backend_gbm", "backend_libinput", "backend_udev", "backend_session_libseat", "renderer_gl", "wayland_frontend", "desktop", "use_system_lib"] }
+smithay = { workspace = true, features = ["backend_winit", "backend_egl", "backend_drm", "backend_gbm", "backend_libinput", "backend_udev", "backend_session_libseat", "renderer_gl", "wayland_frontend", "desktop", "use_system_lib", "xwayland"] }
 tracing.workspace = true
 orbit-ipc.workspace = true
 serde_json.workspace = true

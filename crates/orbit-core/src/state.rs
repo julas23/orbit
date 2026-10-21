@@ -35,13 +35,17 @@ use smithay::{
             xdg::{XdgShellState, decoration::XdgDecorationState},
         },
         shm::ShmState,
+        seat::WaylandFocus,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
+        xwayland_shell::XWaylandShellState,
     },
+    xwayland::X11Wm,
 };
 
 use crate::{
     config::Config,
+    focus::KeyboardFocus,
     ipc::Ipc,
     tile,
     workspace::info,
@@ -108,6 +112,11 @@ pub struct Orbit {
     pub suppressed: Vec<smithay::input::keyboard::Keycode>,
     /// Whether the session is shown (`lock`).
     pub lock: crate::lock::Lock,
+    /// XWayland's display number, from when it is spawned, and its window
+    /// manager, once it is ready (`xwayland`).
+    pub xdisplay: Option<u32>,
+    pub xwm: Option<X11Wm>,
+    pub xwayland_shell_state: XWaylandShellState,
 }
 
 impl Orbit {
@@ -125,6 +134,7 @@ impl Orbit {
         // orbit-clip reads and sets the clipboard through it.
         let data_control_state = DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
         let viewporter_state = ViewporterState::new::<Self>(&dh);
+        let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "seat0");
@@ -174,6 +184,9 @@ impl Orbit {
             shaders: None,
             layouts: (Vec::new(), 0),
             lock: crate::lock::Lock::default(),
+            xdisplay: None,
+            xwm: None,
+            xwayland_shell_state,
         }
     }
 
@@ -241,9 +254,59 @@ impl Orbit {
         }
     }
 
-    /// The window of a toplevel surface, wherever it is.
+    /// The window of a toplevel surface (Wayland or X), wherever it is.
     pub fn window_for(&self, surface: &WlSurface) -> Option<Window> {
-        self.all_windows().find(|w| w.toplevel().is_some_and(|t| t.wl_surface() == surface)).cloned()
+        self.all_windows().find(|w| w.wl_surface().as_deref() == Some(surface)).cloned()
+    }
+
+    /// A new window, Wayland or X: on the monitor under the pointer, in
+    /// the workspace it shows, with the keyboard.
+    pub fn add_window(&mut self, window: Window) {
+        info(&window).borrow_mut().id = self.next_window_id;
+        self.next_window_id += 1;
+        let num = self.pointer_output().and_then(|o| self.visible.get(&o.name()).copied()).unwrap_or(self.current);
+        let i = self.ensure_ws(num);
+        self.workspaces[i].windows.push(window.clone());
+        self.space.map_element(window.clone(), (0, 0), false);
+        self.arrange();
+        self.window_event("new", &window);
+        self.focus_window(Some(window));
+    }
+
+    /// A window closed: the others take its room, and the keyboard goes to
+    /// its neighbour if it had it.
+    pub fn remove_window(&mut self, window: &Window) {
+        let had_focus = self.focused_window().as_ref() == Some(window) || self.focused_window().is_none();
+        let index = self.workspace_of(window).and_then(|n| self.windows_of(n).iter().position(|w| w == window)).unwrap_or(0);
+        if self.dragging.as_ref() == Some(window) {
+            self.dragging = None;
+        }
+        let Some(num) = self.forget(window) else { return };
+        self.arrange();
+        if had_focus {
+            // The neighbour on the left, as i3 does; or the first.
+            let next = self.windows_of(num).get(index.saturating_sub(1)).cloned();
+            self.focus_window(next);
+        }
+    }
+
+    /// Asks a window to close.
+    pub fn close_window(&self, window: &Window) {
+        if let Some(t) = window.toplevel() {
+            t.send_close();
+        } else if let Some(x) = window.x11_surface()
+            && let Err(err) = x.close()
+        {
+            tracing::warn!("closing X window {}: {err}", x.window_id());
+        }
+    }
+
+    /// What gets the keyboard when `window` has it.
+    fn keyboard_target(window: &Window) -> Option<KeyboardFocus> {
+        match window.x11_surface() {
+            Some(x) => Some(KeyboardFocus::X11(x.clone())),
+            None => window.toplevel().map(|t| KeyboardFocus::Surface(t.wl_surface().clone())),
+        }
     }
 
     /// The area windows are laid out in on `output`: the monitor without
@@ -280,6 +343,17 @@ impl Orbit {
         tracing::debug!(num, ?area, ?rects, "arrange");
         for (window, (x, y, w, h)) in windows.into_iter().zip(rects) {
             info(&window).borrow_mut().rect = (x, y, w, h);
+            if let Some(surface) = window.x11_surface() {
+                // X windows are placed in the root window's coordinates,
+                // which are the core's.
+                if let Err(err) = surface.configure(smithay::utils::Rectangle::new((x, y).into(), (w, h).into())) {
+                    tracing::warn!("X window {}: {err}", surface.window_id());
+                }
+                if self.dragging.as_ref() != Some(&window) {
+                    self.space.map_element(window, (x, y), false);
+                }
+                continue;
+            }
             let Some(toplevel) = window.toplevel() else { continue };
             toplevel.with_pending_state(|state| {
                 state.size = Some((w, h).into());
@@ -325,9 +399,15 @@ impl Orbit {
                 t.send_pending_configure();
             }
         }
-        let surface = window.as_ref().and_then(|w| w.toplevel()).map(|t| t.wl_surface().clone());
+        // An X window goes on top of the other X windows, for the X server.
+        if let (Some(xwm), Some(x)) = (self.xwm.as_mut(), window.as_ref().and_then(|w| w.x11_surface()))
+            && let Err(err) = xwm.raise_window(x)
+        {
+            tracing::warn!("raising X window {}: {err}", x.window_id());
+        }
+        let target = window.as_ref().and_then(Self::keyboard_target);
         if let Some(keyboard) = self.seat.get_keyboard() {
-            keyboard.set_focus(self, surface, serial);
+            keyboard.set_focus(self, target, serial);
         }
         if let Some(w) = &window
             && before.as_ref() != Some(w)
@@ -346,14 +426,16 @@ impl Orbit {
         let serial = SERIAL_COUNTER.next_serial();
         let surface = layer.wl_surface().clone();
         if let Some(keyboard) = self.seat.get_keyboard() {
-            keyboard.set_focus(self, Some(surface), serial);
+            keyboard.set_focus(self, Some(KeyboardFocus::Surface(surface)), serial);
         }
     }
 
     /// The window with the keyboard, if a window has it.
     pub fn focused_window(&self) -> Option<Window> {
-        let focus = self.seat.get_keyboard()?.current_focus()?;
-        self.window_for(&focus)
+        match self.seat.get_keyboard()?.current_focus()? {
+            KeyboardFocus::X11(x) => self.x11_window(&x),
+            KeyboardFocus::Surface(s) => self.window_for(&s),
+        }
     }
 
     /// Kills the client of the focused window (SIGKILL), as sway's
@@ -363,17 +445,25 @@ impl Orbit {
             rustix::process::{Pid, Signal, kill_process},
             wayland_server::Resource,
         };
-        let Some(surface) = self.focused_window().and_then(|w| w.toplevel().map(|t| t.wl_surface().clone())) else { return };
-        let Some(client) = surface.client() else { return };
-        match client.get_credentials(&self.display_handle) {
-            Ok(creds) if creds.pid > 0 && creds.pid as u32 != std::process::id() => {
-                tracing::info!("killing client {}", creds.pid);
-                if let Some(Err(err)) = Pid::from_raw(creds.pid).map(|pid| kill_process(pid, Signal::KILL)) {
-                    tracing::warn!("kill {}: {err}", creds.pid);
+        let Some(window) = self.focused_window() else { return };
+        // An X window's client is XWayland: the program is the window's own
+        // process (_NET_WM_PID), never XWayland.
+        let pid = match window.x11_surface() {
+            Some(x) => x.pid().map(|pid| pid as i32).ok_or_else(|| "the X window gives no pid".to_string()),
+            None => match window.toplevel().and_then(|t| t.wl_surface().client()) {
+                Some(client) => client.get_credentials(&self.display_handle).map(|c| c.pid).map_err(|e| e.to_string()),
+                None => return,
+            },
+        };
+        match pid {
+            Ok(pid) if pid > 0 && pid as u32 != std::process::id() => {
+                tracing::info!("killing client {pid}");
+                if let Some(Err(err)) = Pid::from_raw(pid).map(|p| kill_process(p, Signal::KILL)) {
+                    tracing::warn!("kill {pid}: {err}");
                 }
             }
             Ok(_) => {}
-            Err(err) => tracing::warn!("no credentials for the focused client: {err}"),
+            Err(err) => tracing::warn!("no pid for the focused client: {err}"),
         }
     }
 
@@ -427,8 +517,12 @@ impl Orbit {
             .env("WAYLAND_DISPLAY", &self.socket_name)
             .env("XDG_SESSION_TYPE", "wayland")
             .env("XCURSOR_THEME", &self.config.cursor_theme)
-            .env("XCURSOR_SIZE", self.config.cursor_size.to_string())
-            .env_remove("DISPLAY");
+            .env("XCURSOR_SIZE", self.config.cursor_size.to_string());
+        // X programs reach the core's XWayland, never the host's X.
+        match self.xdisplay {
+            Some(n) => child.env("DISPLAY", format!(":{n}")),
+            None => child.env_remove("DISPLAY"),
+        };
         // Clients find the core's IPC under every name they look for, and
         // never the outer sway's.
         match &self.ipc.path {

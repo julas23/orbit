@@ -20,11 +20,12 @@ use smithay::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{Resource, protocol::wl_surface::WlSurface},
     },
+    wayland::seat::WaylandFocus,
     utils::Serial,
     wayland::{
         output::OutputHandler,
         selection::{
-            SelectionHandler,
+            SelectionHandler, SelectionSource, SelectionTarget,
             data_device::{DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler, set_data_device_focus},
             primary_selection::{PrimarySelectionHandler, PrimarySelectionState, set_primary_focus},
             wlr_data_control::{DataControlHandler, DataControlState},
@@ -39,10 +40,13 @@ use smithay::{
     wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
 };
 
-use crate::state::{Backend, Orbit};
+use crate::{
+    focus::KeyboardFocus,
+    state::{Backend, Orbit},
+};
 
 impl SeatHandler for Orbit {
-    type KeyboardFocus = WlSurface;
+    type KeyboardFocus = KeyboardFocus;
     type PointerFocus = WlSurface;
     type TouchFocus = WlSurface;
 
@@ -60,16 +64,34 @@ impl SeatHandler for Orbit {
     }
 
     /// The clipboard follows the keyboard: the focused client may read it.
-    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
+    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&KeyboardFocus>) {
         let dh = &self.display_handle;
-        let client = focused.and_then(|s| dh.get_client(s.id()).ok());
+        let client = focused.and_then(|f| f.wl_surface()).and_then(|s| dh.get_client(s.id()).ok());
         set_data_device_focus(dh, seat, client.clone());
         set_primary_focus(dh, seat, client);
     }
 }
 
+/// A Wayland client's selection goes to the X programs too; the X
+/// programs' own reach Wayland through `xwayland`.
 impl SelectionHandler for Orbit {
     type SelectionUserData = ();
+
+    fn new_selection(&mut self, ty: SelectionTarget, source: Option<SelectionSource>, _seat: Seat<Self>) {
+        if let Some(xwm) = self.xwm.as_mut()
+            && let Err(err) = xwm.new_selection(ty, source.map(|s| s.mime_types()))
+        {
+            tracing::warn!("the {ty:?} for X: {err}");
+        }
+    }
+
+    fn send_selection(&mut self, ty: SelectionTarget, mime_type: String, fd: std::os::unix::io::OwnedFd, _seat: Seat<Self>, _user_data: &()) {
+        if let Some(xwm) = self.xwm.as_mut()
+            && let Err(err) = xwm.send_selection(ty, mime_type, fd)
+        {
+            tracing::warn!("the X {ty:?} for Wayland: {err}");
+        }
+    }
 }
 
 impl DataDeviceHandler for Orbit {

@@ -349,17 +349,30 @@ impl Orbit {
             None => (String::new(), String::new(), None),
         };
         let on = self.workspace_of(window);
+        // As sway: an X window has no app_id, but its class and instance.
+        if let Some(x) = window.x11_surface() {
+            let mut con = self.con_json(window, info.id, info.rect, on, &x.title(), None, x.pid().map(|p| p as i32), "xwayland");
+            con["window"] = json!(x.window_id());
+            con["window_properties"] = json!({ "class": x.class(), "instance": x.instance(), "title": x.title() });
+            return con;
+        }
+        self.con_json(window, info.id, info.rect, on, &title, Some(&app_id), pid, "xdg_shell")
+    }
+
+    /// A window's node of the tree.
+    #[allow(clippy::too_many_arguments)]
+    fn con_json(&self, window: &Window, id: u64, r: (i32, i32, i32, i32), on: Option<i32>, title: &str, app_id: Option<&str>, pid: Option<i32>, shell: &str) -> Value {
         json!({
-            "id": info.id,
+            "id": id,
             "type": "con",
             "name": title,
             "app_id": app_id,
             "pid": pid,
-            "shell": "xdg_shell",
-            "rect": rect(info.rect),
-            "window_rect": rect((0, 0, info.rect.2, info.rect.3)),
+            "shell": shell,
+            "rect": rect(r),
+            "window_rect": rect((0, 0, r.2, r.3)),
             "deco_rect": rect((0, 0, 0, 0)),
-            "geometry": rect((0, 0, info.rect.2, info.rect.3)),
+            "geometry": rect((0, 0, r.2, r.3)),
             "focused": self.focused_window().as_ref() == Some(window),
             "visible": on.is_some_and(|n| self.is_visible(n)),
             "urgent": false,

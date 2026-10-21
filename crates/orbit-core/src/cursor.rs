@@ -49,6 +49,11 @@ impl Cursor {
         Self { icons, size, buffer: None }
     }
 
+    /// The image at its start, for XWayland's root window.
+    pub fn image(&self) -> Image {
+        frame(0, self.size, &self.icons)
+    }
+
     /// The image to show at `time` (themes may animate it) and its hotspot.
     pub fn buffer(&mut self, time: Duration) -> (MemoryRenderBuffer, Point<i32, Physical>) {
         let image = frame(time.as_millis() as u32, self.size, &self.icons);

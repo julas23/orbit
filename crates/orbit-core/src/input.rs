@@ -109,7 +109,7 @@ impl Orbit {
                     && event.button_code() == crate::grab::BTN_LEFT
                     && !pointer.is_grabbed()
                     && self.modifier_held()
-                    && let Some((window, _)) = self.space.element_under(pointer.current_location()).map(|(w, l)| (w.clone(), l))
+                    && let Some(window) = self.window_under(pointer.current_location())
                 {
                     self.start_move(window, serial, None);
                     return;
@@ -179,8 +179,8 @@ impl Orbit {
                 self.spawn(&launcher);
             }
             Action::Close => {
-                if let Some(t) = self.focused_window().as_ref().and_then(|w| w.toplevel()) {
-                    t.send_close();
+                if let Some(window) = self.focused_window() {
+                    self.close_window(&window);
                 }
             }
             Action::Kill => self.kill_focused(),
@@ -271,7 +271,7 @@ impl Orbit {
         let serial = SERIAL_COUNTER.next_serial();
         let under = if self.locked() { None } else { self.surface_under(pos) };
         if !self.locked() && self.config.focus_follows_mouse && !pointer.is_grabbed() && self.exclusive_layer().is_none() {
-            let window = self.space.element_under(pos).map(|(w, _)| w.clone());
+            let window = self.window_under(pos);
             let over_layer = self.layer_at(pos, &[WlrLayer::Overlay, WlrLayer::Top]);
             if !over_layer && window.is_some() && window != self.focused_window() {
                 self.focus_window(window);
@@ -304,11 +304,18 @@ impl Orbit {
             Some(layer) if layer.can_receive_keyboard_focus() => self.focus_layer(&layer),
             Some(layer) if matches!(layer.layer(), WlrLayer::Overlay | WlrLayer::Top) => {}
             _ => {
-                if let Some((window, _)) = self.space.element_under(pos).map(|(w, l)| (w.clone(), l)) {
+                if let Some(window) = self.window_under(pos) {
                     self.focus_window(Some(window));
                 }
             }
         }
+    }
+
+    /// The window under `pos` that can be focused and moved: not an X menu
+    /// or tooltip.
+    fn window_under(&self, pos: Point<f64, Logical>) -> Option<smithay::desktop::Window> {
+        let (window, _) = self.space.element_under(pos)?;
+        self.all_windows().any(|w| w == window).then(|| window.clone())
     }
 
     fn layer_at(&self, pos: Point<f64, Logical>, layers: &[WlrLayer]) -> bool {

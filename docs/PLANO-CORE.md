@@ -355,7 +355,7 @@ desta fase — sem esperar o aninhado ficar completo.
   - Testado: painel com `workspaces`, `windows` e `keyboard` dentro do core
     (clique na área 2 troca; minimizar/restaurar), `swaymsg` do sistema contra o
     core, eventos na ordem do sway.
-  - Ainda não: árvore/tabbed/flutuantes, regras `for_window`, XWayland,
+  - Ainda não: árvore/tabbed/flutuantes, regras `for_window`,
     estado `Locked` / greet, testes headless automáticos; migrar painel/blink
     para os protocolos padrão (§5).
 - **2026-10-21 — backend DRM/KMS** (`udev.rs`, portado do anvil, MIT): sessão
@@ -407,6 +407,28 @@ desta fase — sem esperar o aninhado ficar completo.
   - Ainda não: redimensionar com Mod + botão direito (não faz sentido nas
     colunas; vem com as flutuantes), monitor girado (cantos supõem
     `Transform::Normal` da saída — o do buffer é tratado).
+- **2026-10-21 — XWayland integrado** (`xwayland.rs`, `focus.rs`, portados
+  do anvil, MIT). Motivo: o Bambu Studio (wxWidgets) força X11 e saía com
+  255 sem servidor X.
+  - O core sobe o `Xwayland` (rootless) logo após o backend e é o gerenciador
+    de janelas dele (`X11Wm` do Smithay). `DISPLAY` é conhecido já no spawn
+    (o core segura o socket), então todo programa iniciado pelo core o
+    recebe, inclusive os do `startup:`.
+  - Janela X normal entra nas colunas como uma Wayland (`add_window` /
+    `remove_window`, comuns às duas); o tamanho que ela pede é ignorado e o
+    ladrilho reenviado. Menus e tooltips (override-redirect) vão onde pedem,
+    por cima, sem borda nem cantos, e nunca pegam foco nem arraste.
+  - Foco: o teclado do seat passou de `WlSurface` para `KeyboardFocus`
+    (superfície Wayland ou `X11Surface`), para o X receber o foco de entrada
+    (`SetInputFocus`/`WM_TAKE_FOCUS`) mesmo antes da janela ter superfície.
+  - Clipboard e seleção primária X ↔ Wayland; fechar (`WM_DELETE_WINDOW`),
+    matar pelo `_NET_WM_PID` (nunca o XWayland), arrastar pela barra de
+    título; IPC como o sway (`shell: xwayland`, `window_properties`).
+  - Testado aninhado: xterm e Bambu Studio lado a lado e focados, clipboard
+    nos dois sentidos, `kill` pelo IPC fecha e reorganiza.
+  - Ainda não: diálogos X entram nas colunas (vêm com as flutuantes);
+    redimensionar/maximizar/tela cheia pedidos pela janela X; escala do
+    XWayland em monitor HiDPI.
 
 ### Fase 2 — sessão real de uso diário
 

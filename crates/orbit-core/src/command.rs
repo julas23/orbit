@@ -204,9 +204,7 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
         }
         ["kill"] => {
             for window in windows() {
-                if let Some(t) = window.toplevel() {
-                    t.send_close();
-                }
+                state.close_window(&window);
             }
             Ok(())
         }

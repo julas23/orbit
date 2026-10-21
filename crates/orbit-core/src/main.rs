@@ -1,8 +1,8 @@
 //! Orbit-Core: the compositor of the Orbit desktop, on Smithay. For now
 //! (PLANO-CORE Phase 1, its first step) it runs nested — a window inside the
 //! current Wayland session — tiles windows side by side, hosts the panel
-//! and dock (layer shell), and speaks the clipboard protocols orbit-clip
-//! uses.
+//! and dock (layer shell), speaks the clipboard protocols orbit-clip
+//! uses, and runs X programs through its own XWayland (`xwayland`).
 //!
 //!   orbit-core [-c CONFIG] [--nested | --drm] [--locked] [-- COMMAND…]
 //!
@@ -22,6 +22,7 @@
 mod command;
 mod config;
 mod cursor;
+mod focus;
 mod grab;
 mod handlers;
 mod input;
@@ -35,6 +36,7 @@ mod tile;
 mod udev;
 mod winit;
 mod workspace;
+mod xwayland;
 
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 
@@ -81,6 +83,8 @@ fn main() -> anyhow::Result<()> {
         tracing::error!("no IPC: {err:#}");
     }
     tracing::info!("listening on {:?}", state.socket_name);
+    // Before any program starts, so each gets DISPLAY.
+    state.start_xwayland();
 
     for line in state.config.startup.clone() {
         state.spawn(&line);

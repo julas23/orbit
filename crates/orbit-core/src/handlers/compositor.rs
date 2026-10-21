@@ -29,6 +29,10 @@ impl CompositorHandler for Orbit {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
+        // XWayland is a client with its own data.
+        if let Some(xwayland) = client.get_data::<smithay::xwayland::XWaylandClientData>() {
+            return &xwayland.compositor_state;
+        }
         &client.get_data::<ClientState>().unwrap().compositor_state
     }
 

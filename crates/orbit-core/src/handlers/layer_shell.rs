@@ -70,7 +70,7 @@ impl WlrLayerShellHandler for Orbit {
             map.layers().find(|l| l.layer_surface() == &surface).cloned().map(|l| (o.clone(), l))
         });
         let Some((output, layer)) = gone else { return };
-        let had_keyboard = self.seat.get_keyboard().and_then(|k| k.current_focus()).as_ref() == Some(layer.wl_surface());
+        let had_keyboard = self.seat.get_keyboard().and_then(|k| k.current_focus()).is_some_and(|f| f.is(layer.wl_surface()));
         layer_map_for_output(&output).unmap_layer(&layer);
         // Its room goes back to the windows.
         self.arrange();

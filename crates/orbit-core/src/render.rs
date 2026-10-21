@@ -25,8 +25,9 @@ use smithay::{
     input::pointer::{CursorImageStatus, CursorImageSurfaceData},
     output::Output,
     render_elements,
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Logical, Physical, Point, Rectangle, Scale},
-    wayland::{compositor::with_states, shell::wlr_layer::Layer as WlrLayer},
+    wayland::{compositor::with_states, seat::WaylandFocus, shell::wlr_layer::Layer as WlrLayer},
 };
 
 use crate::{
@@ -145,12 +146,23 @@ fn layer_elements(output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64
 /// A window on the output at `out`: its menus, its surfaces (rounded) and
 /// its border.
 fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: Option<&Shaders>, elements: &mut Vec<OutputElement>) {
-    let Some(toplevel) = window.toplevel() else { return };
+    // An X window has its surface once XWayland gives it one.
+    let Some(surface) = window.wl_surface() else { return };
+    let surface: &WlSurface = &surface;
     let Some(mut rect) = state.space.element_geometry(window) else { return };
     rect.loc -= out.loc;
     let geometry = window.geometry();
     let at = (rect.loc - geometry.loc).to_physical_precise_round(scale);
-    let surface = toplevel.wl_surface();
+
+    // An X menu or tooltip is drawn as it is: no corners, no border.
+    if window.x11_surface().is_some_and(|x| x.is_override_redirect()) {
+        elements.extend(
+            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, surface, at, scale, 1.0, Kind::Unspecified)
+                .into_iter()
+                .map(OutputElement::Surface),
+        );
+        return;
+    }
 
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (geometry.loc + offset - popup.geometry().loc).to_physical_precise_round(scale);
