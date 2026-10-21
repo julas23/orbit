@@ -24,7 +24,9 @@ session-choose = O que deseja fazer?
 
 ## Menu de aplicativos
 
-menu-label = APPS
+menu-label = Aplicativos
+menu-sublabel = Buscar e abrir
+menu-command = Executar comando
 menu-search = Buscar aplicativos…
 menu-power = Desligar, reiniciar ou encerrar a sessão
 menu-run = Nenhum aplicativo encontrado. Enter executa “{ $command }”.

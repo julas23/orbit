@@ -67,7 +67,8 @@ window.orbit button {
 .panel.grid > .drop-left  { box-shadow: inset 3px 0 0 0 @orbit_accent; }
 .panel.grid > .drop-right { box-shadow: inset -3px 0 0 0 @orbit_accent; }
 
-/* 30 px icon + 5 + 5 = 40 px: one column. `button.menu`, not `.menu`: GTK's
+/* 30 px icon (or the Tux glyph) + 5 + 5 = 40 px: one column, then a title
+ * and a muted line under it (16 + 12 = 28 px). `button.menu`, not `.menu`: GTK's
  * menus are `popover.menu` nodes, and those inside the panel would take the
  * hover fill too, over their whole surface. */
 .panel button.menu {
@@ -75,10 +76,9 @@ window.orbit button {
   padding: 5px;
   border-radius: 5px;
 }
-.panel button.menu .label {
-  font-weight: bold;
-  font-size: 15px;
-}
+.panel button.menu .glyph    { font-size: 24px; min-width: 30px; }
+.panel button.menu .title    { font-weight: bold; font-size: 14px; min-height: 16px; }
+.panel button.menu .subtitle { font-size: 10px; color: @orbit_muted; min-height: 12px; }
 .panel button.menu:hover {
   background-color: alpha(@orbit_accent, 0.25);
 }

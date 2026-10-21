@@ -35,8 +35,11 @@ use crate::session::{self, SessionConfig};
 pub struct MenuConfig {
     /// Run on click instead of opening the menu, e.g. `rofi -show drun`.
     pub command: Option<String>,
-    /// Icon name from the theme, or a path to an image file.
+    /// Icon name from the theme, or a path to an image file; in place of
+    /// the glyph.
     pub icon: Option<String>,
+    /// A character of the panel's font, drawn in its accent colour (Tux).
+    pub glyph: Option<String>,
     pub tooltip: Option<String>,
 }
 
@@ -44,7 +47,8 @@ impl Default for MenuConfig {
     fn default() -> Self {
         Self {
             command: None,
-            icon: Some("start-here".into()),
+            icon: None,
+            glyph: Some("\u{f17c}".into()), // 
             tooltip: None,
         }
     }
@@ -75,21 +79,33 @@ const CATEGORIES: &[(&str, &str, &[&str])] = &[
 
 pub fn new(config: &MenuConfig, edge: Edge, session: SessionConfig) -> gtk::Widget {
     let button = gtk::Button::builder().css_classes(["menu"]).build();
-    // The icon at the start, the label beside it.
+    // The icon at the start; beside it, what the button opens and what the
+    // menu does, in two lines.
     let content = gtk::Box::builder()
-        .spacing(10)
+        .spacing(8)
         .halign(gtk::Align::Start)
         .build();
     if let Some(icon) = &config.icon {
         // 30 px + 5 px padding each side = 40 px, one column of the grid.
         content.append(&orbit_app::icon(icon, 30));
+    } else if let Some(glyph) = &config.glyph {
+        content.append(&gtk::Label::builder().label(glyph.as_str()).css_classes(["glyph"]).build());
     }
-    content.append(
-        &gtk::Label::builder()
-            .label(tr("menu-label"))
-            .css_classes(["label"])
-            .build(),
-    );
+    let lines = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .valign(gtk::Align::Center)
+        .build();
+    for (id, class) in [("menu-label", "title"), ("menu-sublabel", "subtitle")] {
+        lines.append(
+            &gtk::Label::builder()
+                .label(tr(id))
+                .css_classes([class])
+                .xalign(0.0)
+                .ellipsize(gtk::pango::EllipsizeMode::End)
+                .build(),
+        );
+    }
+    content.append(&lines);
     button.set_child(Some(&content));
     button.set_tooltip_text(config.tooltip.as_deref());
 
@@ -114,6 +130,18 @@ pub fn new(config: &MenuConfig, edge: Edge, session: SessionConfig) -> gtk::Widg
         *open.borrow_mut() = Rc::downgrade(&menu);
         menu.window.present();
     });
+    // `gapplication action io.github.julas23.Orbit.Panel menu` (the core's
+    // Mod+Space) does what the button does.
+    if let Some(app) = gio::Application::default() {
+        let action = gio::SimpleAction::new("menu", None);
+        let button = button.downgrade();
+        action.connect_activate(move |_, _| {
+            if let Some(button) = button.upgrade() {
+                button.emit_clicked();
+            }
+        });
+        app.add_action(&action);
+    }
     button.upcast()
 }
 
@@ -132,6 +160,13 @@ struct Menu {
     /// Shown when nothing matches: Enter runs what was typed.
     hint: gtk::Label,
     apps: HashMap<gtk::ListBoxRow, App>,
+    /// The programs on `$PATH`, as Rofi's run mode offers them.
+    programs: Vec<String>,
+    /// Rows for the programs the search matches, after the applications:
+    /// the row and its name label.
+    commands: Vec<(gtk::ListBoxRow, gtk::Label)>,
+    /// The programs those rows show now.
+    matches: RefCell<Vec<String>>,
     /// `None`: all.
     category: RefCell<Option<usize>>,
     query: RefCell<String>,
@@ -162,6 +197,7 @@ impl Menu {
             .css_classes(["apps"])
             .build();
         let apps = collect(&list);
+        let commands = (0..COMMANDS).map(|_| command_row(&list)).collect();
         let hint = gtk::Label::builder()
             .wrap(true)
             .css_classes(["hint"])
@@ -239,6 +275,9 @@ impl Menu {
             list,
             hint,
             apps,
+            programs: programs(),
+            commands,
+            matches: RefCell::default(),
             category: RefCell::new(None),
             query: RefCell::default(),
             session,
@@ -301,6 +340,7 @@ impl Menu {
             if let Some(m) = weak.upgrade() {
                 *m.query.borrow_mut() = fold(&entry.text());
                 let typed = entry.text();
+                m.match_programs(&typed);
                 m.hint.set_label(&if typed.trim().is_empty() {
                     String::new()
                 } else {
@@ -377,7 +417,32 @@ impl Menu {
         GtkWindowExt::set_focus(&self.window, Some(&self.search));
     }
 
+    /// Which of the command rows `row` is.
+    fn command(&self, row: &gtk::ListBoxRow) -> Option<usize> {
+        self.commands.iter().position(|(r, _)| r == row)
+    }
+
+    /// Fills the command rows with the programs whose name has the first
+    /// word typed: those it starts with first, then the shorter.
+    fn match_programs(&self, typed: &str) {
+        let word = typed.split_whitespace().next().unwrap_or_default();
+        let mut found: Vec<&String> = if word.is_empty() {
+            Vec::new()
+        } else {
+            self.programs.iter().filter(|p| p.contains(word)).collect()
+        };
+        found.sort_by_key(|p| (!p.starts_with(word), p.len(), p.as_str()));
+        found.truncate(COMMANDS);
+        for (i, (_, label)) in self.commands.iter().enumerate() {
+            label.set_label(found.get(i).map_or("", |p| p.as_str()));
+        }
+        *self.matches.borrow_mut() = found.into_iter().cloned().collect();
+    }
+
     fn shows(&self, row: &gtk::ListBoxRow) -> bool {
+        if let Some(i) = self.command(row) {
+            return i < self.matches.borrow().len();
+        }
         let Some(app) = self.apps.get(row) else {
             return false;
         };
@@ -391,6 +456,13 @@ impl Menu {
 
     /// Searching, names that start with the query first; otherwise by name.
     fn order(&self, a: &gtk::ListBoxRow, b: &gtk::ListBoxRow) -> gtk::Ordering {
+        // The programs after the applications, in their own order.
+        match (self.command(a), self.command(b)) {
+            (Some(a), Some(b)) => return a.cmp(&b).into(),
+            (Some(_), None) => return gtk::Ordering::Larger,
+            (None, Some(_)) => return gtk::Ordering::Smaller,
+            (None, None) => {}
+        }
         let (Some(a), Some(b)) = (self.apps.get(a), self.apps.get(b)) else {
             return gtk::Ordering::Equal;
         };
@@ -431,6 +503,18 @@ impl Menu {
     }
 
     fn launch(&self, row: &gtk::ListBoxRow) {
+        if let Some(i) = self.command(row) {
+            let Some(program) = self.matches.borrow().get(i).cloned() else { return };
+            // What was typed after the program goes with it, as arguments.
+            let typed = self.search.text();
+            let mut words = typed.split_whitespace();
+            let command = match words.next() {
+                Some(first) if first == program => typed.trim().to_owned(),
+                _ => program,
+            };
+            self.run(&command);
+            return;
+        }
         let Some(app) = self.apps.get(row) else { return };
         let context = WidgetExt::display(&self.window).app_launch_context();
         if let Err(err) = app.info.launch(&[], Some(&context)) {
@@ -524,6 +608,56 @@ fn collect(list: &gtk::ListBox) -> HashMap<gtk::ListBoxRow, App> {
         );
     }
     apps
+}
+
+/// How many programs a search lists, after the applications.
+const COMMANDS: usize = 20;
+
+/// A row for a program on `$PATH`, its name filled in by the search.
+fn command_row(list: &gtk::ListBox) -> (gtk::ListBoxRow, gtk::Label) {
+    let content = gtk::Box::builder().spacing(10).build();
+    content.append(&gtk::Image::builder().icon_name("utilities-terminal").pixel_size(30).build());
+    let labels = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .valign(gtk::Align::Center)
+        .build();
+    let name = gtk::Label::builder()
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .css_classes(["name"])
+        .build();
+    labels.append(&name);
+    labels.append(
+        &gtk::Label::builder()
+            .label(tr("menu-command"))
+            .xalign(0.0)
+            .css_classes(["comment"])
+            .build(),
+    );
+    content.append(&labels);
+    let row = gtk::ListBoxRow::builder().child(&content).build();
+    list.append(&row);
+    (row, name)
+}
+
+/// Every executable on `$PATH`, by name, once each.
+fn programs() -> Vec<String> {
+    use std::os::unix::fs::PermissionsExt;
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let mut names: Vec<String> = std::env::split_paths(&path)
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            entry
+                .metadata()
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        })
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    names.dedup();
+    names
 }
 
 fn category_of(categories: &str) -> usize {

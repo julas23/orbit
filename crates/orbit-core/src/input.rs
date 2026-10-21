@@ -27,6 +27,8 @@ use crate::{config::Modifier, state::Orbit};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Terminal,
+    /// Mod+Space: the application launcher (`launcher`).
+    Launcher,
     /// Mod+Q: asks the focused window to close.
     Close,
     /// Mod+Shift+Q: kills the focused window's client (`kill -9`), for one
@@ -63,6 +65,7 @@ pub fn shortcut(modifier: Modifier, mods: &ModifiersState, sym: Keysym) -> Optio
     }
     Some(match (mods.shift, sym) {
         (false, Keysym::Return) => Action::Terminal,
+        (false, Keysym::space) => Action::Launcher,
         (false, Keysym::q) => Action::Close,
         (true, Keysym::q) => Action::Kill,
         (true, Keysym::e) => Action::Quit,
@@ -170,6 +173,10 @@ impl Orbit {
             Action::Terminal => {
                 let terminal = self.config.terminal.clone();
                 self.spawn(&terminal);
+            }
+            Action::Launcher => {
+                let launcher = self.config.launcher.clone();
+                self.spawn(&launcher);
             }
             Action::Close => {
                 if let Some(t) = self.focused_window().as_ref().and_then(|w| w.toplevel()) {
@@ -349,6 +356,7 @@ mod tests {
     fn shortcuts() {
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::Return), Some(Action::Terminal));
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::q), Some(Action::Close));
+        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::space), Some(Action::Launcher));
         assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Q), Some(Action::Kill));
         assert_eq!(shortcut(Modifier::Super, &mods(false, true), Keysym::Q), None);
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::x), None);

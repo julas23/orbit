@@ -6,6 +6,7 @@
 //! keyboard: { layout: us, variant: alt-intl }
 //! modifier: super        # or alt (nested in a session that takes Super)
 //! terminal: kitty
+//! launcher: gapplication action io.github.julas23.Orbit.Panel menu
 //! gaps: 6
 //! border: 2
 //! corner_radius: 10
@@ -27,6 +28,8 @@ pub struct Config {
     pub modifier: Modifier,
     /// What Mod+Return opens.
     pub terminal: String,
+    /// What Mod+Space runs: the panel's application menu, at its search.
+    pub launcher: String,
     /// Space between windows, and between them and the screen's edges.
     pub gaps: i32,
     /// Width of the border drawn around each window.
@@ -84,6 +87,7 @@ impl Default for Config {
             keyboard: Keyboard::default(),
             modifier: Modifier::Super,
             terminal: "kitty".into(),
+            launcher: "gapplication action io.github.julas23.Orbit.Panel menu".into(),
             gaps: 6,
             border: 2,
             corner_radius: 10,

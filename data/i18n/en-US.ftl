@@ -29,7 +29,9 @@ session-choose = What do you want to do?
 
 ## Application menu
 
-menu-label = APPS
+menu-label = Applications
+menu-sublabel = Search and launch
+menu-command = Run command
 menu-search = Search applications…
 menu-power = Power off, reboot or log out
 menu-run = No application found. Enter runs “{ $command }”.
