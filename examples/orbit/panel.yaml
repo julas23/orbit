@@ -1,7 +1,7 @@
 # Orbit-Panel — ~/.config/orbit/panel.yaml. Every key is optional.
 
 edge: left          # left | right | top | bottom
-size: 150           # thickness in logical pixels
+size: 154           # thickness in logical pixels
 monitor: 0          # index, or an output name such as HDMI-A-1
 reserve: true       # keep tiled windows out of the panel's area
 maintenance: false  # true draws the 5 px layout grid behind the panel

@@ -9,13 +9,15 @@
 
 /* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
  * (see docs/PLANO-PAINEL.md). The vertical panel is a grid of 30 px cells,
- * 10 px apart, 4 across (board.rs): a module is 30, 70, 110 or 150 px wide
+ * 10 px apart, 4 across, 2 px in from each side — 154 px (board.rs): a module is 30, 70, 110 or 150 px wide
  * and 30, 70, 110, 150… px tall, and its sizes below are counted to fill
  * that exactly. A one-row card is a 1 px border around 28 px of content, so
  * it has no vertical padding. Borders count toward a box's size in GTK, so a
  * 1 px border always pairs with 4 px of padding: the content then starts
  * exactly 5 px in. Font sizes are free; a text line gets a min-height on the
  * grid so the box around it still lands on a multiple of 5.
+ * Stacked modules are drawn 5 px apart, not 10 (board.rs, `tops`); their
+ * sizes stay the grid's.
  * `maintenance: true` draws the grid behind the panel to check this. */
 
 /* The windows themselves are transparent; the visible shape is drawn by
@@ -42,11 +44,16 @@ window.orbit button {
   padding: 4px;            /* + 1 px border = 5 */
 }
 /* The grid places its modules itself, 5 px from the top and the bottom and
- * edge to edge across: no padding, and an outline that takes no room. */
+ * 2 px from the sides: no padding. The grid is fully transparent; every
+ * module carries the panel's surface itself. */
 .panel.grid {
+  background: none;
   border: none;
   padding: 0;
-  box-shadow: inset 0 0 0 1px @orbit_edge;
+}
+.panel.grid > * {
+  background-color: @orbit_bg;
+  border-radius: 5px;
 }
 
 /* 30 px icon + 5 + 5 = 40 px: one column. `button.menu`, not `.menu`: GTK's
@@ -96,16 +103,15 @@ window.orbit button {
 .clock.normal .time,
 .clock.mini .time  { font-size: 22px; min-height: 28px; }
 
-/* Calendar: black card, header + 6 weeks, every row 20 px on the grid —
+/* Calendar: a card like the others, header + 6 weeks, every row 20 px on the grid —
  * 5 + 20 + 6 × 20 + 5 = 150 px. Seven columns cannot split the card's 130 px
  * into multiples of 5, so columns are 18–19 px and only the card is on the
  * grid. The lines take the colour of .lines (white at 35%; brighter read as
  * too loud); no CSS borders, which would add to the cell sizes. */
-.calendar             { background-color: @orbit_calendar_bg; }
-.calendar .title      { font-size: 12px; font-weight: bold; color: @orbit_calendar_fg; min-height: 20px; }
-.calendar .head       { font-size: 11px; font-weight: bold; color: @orbit_calendar_fg; min-height: 20px; }
+.calendar .title      { font-size: 12px; font-weight: bold; color: @orbit_fg; min-height: 20px; }
+.calendar .head       { font-size: 11px; font-weight: bold; color: @orbit_fg; min-height: 20px; }
 .calendar .head.weekend { color: @orbit_alert; }
-.calendar .day        { font-size: 11px; color: @orbit_calendar_fg; min-height: 20px; }
+.calendar .day        { font-size: 11px; color: @orbit_fg; min-height: 20px; }
 .calendar .day.weekend { color: @orbit_muted; }
 .calendar .day.today  { color: @orbit_today; font-weight: bold; }
 .calendar .lines      { color: @orbit_lines; }
@@ -124,14 +130,14 @@ window.orbit button {
 .calendar.normal .day { min-height: 15px; }
 .calendar.full .day   { min-height: 15px; }
 .calendar .day.other  { color: @orbit_muted; }
-.calendar-mini        { padding: 0 4px; font-size: 13px; font-weight: bold; color: @orbit_calendar_fg; background-color: @orbit_calendar_bg; }
+.calendar-mini        { padding: 0 4px; font-size: 13px; font-weight: bold; color: @orbit_fg; }
 
 /* Workspaces: one fixed colour per area, black label. The focused area only
  * turns its label white and bold; an occupied one is semi-bold. Hover: white
  * background, black label. On the grid each button is a block of 2 × 1
  * cells, 70 × 30 px, and the four are 4 × 2 cells: no card around them.
  * Areas past the fourth reuse the fourth colour. */
-.panel.grid .workspaces.card { border: none; padding: 0; }
+.panel.grid .workspaces.card { border: none; padding: 0; background: none; }
 .workspaces .area {
   font-size: 13px;
   color: #000000;
@@ -150,7 +156,9 @@ window.orbit button {
 
 /* Session: three cards side by side, one grid column each — 3 × 40 + 2 × 10
  * = 140 px — and 30 px tall. The colour names the action; hover fills the
- * card with it. */
+ * card with it. On the grid the row itself is transparent and each card
+ * carries the modules' surface. */
+.panel.grid > .session { background: none; }
 .session .action {
   font-size: 16px;
   min-height: 30px;
@@ -164,6 +172,7 @@ window.orbit button {
   border-radius: 5px;
   min-height: 28px;
 }
+.panel.grid .session .action { background-color: @orbit_bg; }
 .session .action.poweroff { color: @orbit_alert; }
 .session .action.reboot   { color: @orbit_warn; }
 .session .action.logout   { color: @orbit_fg; }
@@ -283,7 +292,16 @@ window.orbit-menu { background: transparent; }
  * left in the light colour of the window's area. Focused: bold on a light
  * background, no colour of its own (it would hide the area's). Minimized:
  * faded, italic — opacity on purpose, to fade the icon too. Entries are
- * 20 px tall, 5 px apart. */
+ * 20 px tall, 5 px apart. On the grid the list itself is transparent and
+ * each entry is a small card: the modules' surface and outline (GTK's
+ * min-height already counts the border), the focus tint on top. */
+.panel.grid > .windows { background: none; }
+.panel.grid .windows .window {
+  background-color: @orbit_bg;
+  border-top: 1px solid @orbit_border;     /* left stays the area's tab */
+  border-right: 1px solid @orbit_border;
+  border-bottom: 1px solid @orbit_border;
+}
 .windows .window {
   font-size: 11px;
   color: @orbit_muted;
@@ -299,12 +317,12 @@ window.orbit-menu { background: transparent; }
 .windows .window.area-4 { border-left-color: @orbit_area4_light; }
 .windows .window:hover  { box-shadow: inset 0 0 0 999px @orbit_hover; }
 .windows .window.focused   { font-weight: bold; color: @orbit_fg; background-color: @orbit_selected; }
+.panel.grid .windows .window.focused { background-image: linear-gradient(@orbit_selected, @orbit_selected); }
 .windows .window.minimized { opacity: 0.5; font-style: italic; }
 
-/* System tray (tray.rs): a card with a faint fill; 20 px icons, 5 per line
+/* System tray (tray.rs): a card like the others; 20 px icons, 5 per line
  * with 5 px between them (5 × 20 + 4 × 5 = 120 of 130 px). Lines grow the
  * card downwards: 5 + 20 + 5 = 30 px for one line, +25 per extra line. */
-.tray.card { background-color: @orbit_faint; }
 .tray flowbox, .tray flowboxchild { padding: 0; margin: 0; min-height: 20px; }
 .tray .tray-item { padding: 0; min-width: 20px; min-height: 20px; border-radius: 5px; }
 .tray .tray-item:hover { background-color: @orbit_hover; }
@@ -356,6 +374,22 @@ window.orbit-menu { background: transparent; }
 /* The bell (notifications.rs): the accent while there are new ones. */
 .notifications:hover        { background-color: @orbit_hover; }
 .notifications.unread .icon { color: @orbit_accent; }
+
+/* Bluetooth and monitors (bluetooth.rs, monitors.rs): the status shape;
+ * their quick parts and the monitors' editor open in popovers. */
+.bluetooth-quick,
+.monitors-quick          { padding: 5px; min-width: 200px; }
+.monitors-quick .arrow   { font-size: 16px; min-width: 30px; min-height: 30px; border-radius: 5px; }
+.monitors-quick .arrow:hover { background-color: @orbit_hover; }
+.monitors-full           { padding: 5px; }
+.monitors-editor         { color: @orbit_accent; }
+.monitors-full .hint     { color: @orbit_muted; font-size: 11px; }
+.monitors-full .apply {
+  background-color: alpha(@orbit_accent, 0.35);
+  border-radius: 5px;
+  padding: 5px 15px;
+}
+.monitors-full .apply:hover { background-color: alpha(@orbit_accent, 0.55); }
 
 /* Popovers and context menus (window list, tray, network, calendar, volume):
  * the panel's dark background and light text. They live in the panel's

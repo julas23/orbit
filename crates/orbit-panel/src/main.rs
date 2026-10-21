@@ -4,6 +4,7 @@
 //! listing a module turns it on. Each module reads its own options from
 //! `modules/<name>.yaml`.
 
+mod bluetooth;
 mod board;
 mod brightness;
 mod calendar;
@@ -14,6 +15,7 @@ mod dbusmenu;
 mod forecast;
 mod maintenance;
 mod menu;
+mod monitors;
 mod notifications;
 mod pulse;
 mod session;
@@ -122,7 +124,7 @@ fn shapes(name: &str) -> &'static [(Form, i32, i32)] {
         "clock" => &[(Full, 4, 2), (Normal, 4, 1), (Mini, 3, 1)],
         "calendar" | "weather" => &[(Full, 4, 4), (Normal, 4, 2), (Mini, 3, 1)],
         "volume" | "brightness" => &[(Normal, 2, 1), (Full, 4, 1), (Mini, 1, 1)],
-        "network" | "keyboard" | "battery" | "notifications" => {
+        "network" | "keyboard" | "battery" | "notifications" | "bluetooth" | "monitors" => {
             &[(Normal, 4, 1), (Full, 4, 2), (Mini, 1, 1)]
         }
         "workspaces" => &[(Normal, 4, 2)],
@@ -169,15 +171,13 @@ fn module(name: &str, dir: &ConfigDir, edge: Edge, form: Form) -> Option<gtk::Wi
         }),
         "session" => dir.module("session").map(|c| session::new(&c, vertical)),
         "volume" => dir.module("volume").map(|c| volume::new(&c, form)),
-        "brightness" => dir
-            .module("brightness")
-            .map(|c| brightness::new(&c, form)),
+        "brightness" => dir.module("brightness").map(|c| brightness::new(&c, form)),
         "tray" => dir.module("tray").map(|c| tray::new(&c, vertical)),
         "network" => dir.module("network").map(|c| status::network(&c, form)),
-        "keyboard" => dir
-            .module("keyboard")
-            .map(|c| status::keyboard(&c, form)),
+        "keyboard" => dir.module("keyboard").map(|c| status::keyboard(&c, form)),
         "battery" => dir.module("battery").map(|c| status::battery(&c, form)),
+        "bluetooth" => dir.module("bluetooth").map(|c| bluetooth::new(&c, form)),
+        "monitors" => dir.module("monitors").map(|c| monitors::new(&c, form)),
         "notifications" => dir
             .module("notifications")
             .map(|c| notifications::new(&c, form)),

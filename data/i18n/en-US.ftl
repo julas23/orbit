@@ -581,3 +581,31 @@ notifications-dnd = do not disturb
 notifications-on = notifications on
 notifications-off = no server
 notifications-tooltip = Click: notification centre · Right click: do not disturb
+
+## Bluetooth and monitors on the panel
+
+bluetooth-name = Bluetooth
+bluetooth-none = no adapter
+bluetooth-off = off
+bluetooth-on = on
+bluetooth-connected = connected
+bluetooth-battery = battery { $percent }%
+bluetooth-devices = { $count } connected
+bluetooth-paired-none = No paired devices
+bluetooth-tooltip = Click: power and connect · Right click: manager
+monitors-count = { $count ->
+    [one] 1 monitor
+   *[other] { $count } monitors
+}
+monitors-above = { $name } above
+monitors-below = { $name } below
+monitors-left = { $name } on the left
+monitors-right = { $name } on the right
+monitors-put-above = Above { $main }
+monitors-put-below = Below { $main }
+monitors-put-left = Left of { $main }
+monitors-put-right = Right of { $main }
+monitors-single = Only one monitor
+monitors-editor-hint = Drag a monitor beside another
+monitors-apply = Apply
+monitors-tooltip = Click: quick layout · Right click: editor

@@ -25,7 +25,10 @@ use serde::Deserialize;
 
 use orbit_app::i18n::{number, text, tr, tr_args};
 
-use crate::{board::Form, dbusmenu, sway};
+use crate::{
+    board::{self, Form},
+    dbusmenu, sway,
+};
 
 /// None of the status modules has options yet; their files may be empty.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -55,7 +58,12 @@ impl Row {
                 .ellipsize(gtk::pango::EllipsizeMode::End)
                 .build()
         };
-        let lines = vec![line("first"), line("second"), line("second"), line("second")];
+        let lines = vec![
+            line("first"),
+            line("second"),
+            line("second"),
+            line("second"),
+        ];
         let root = gtk::Box::builder()
             .spacing(5)
             .css_classes(if form.vertical() {
@@ -73,6 +81,7 @@ impl Row {
         };
         if form == Form::Mini {
             icon.set_hexpand(true);
+            board::centre_glyph(&icon);
         }
         if form.vertical() && shown > 0 {
             let column = gtk::Box::builder()
@@ -124,7 +133,7 @@ impl Row {
 }
 
 /// Reads one D-Bus property.
-fn property(
+pub(crate) fn property(
     conn: &gio::DBusConnection,
     dest: &str,
     path: &str,
@@ -149,7 +158,7 @@ fn property(
 
 /// Calls `refresh` once, on the next idle, after any PropertiesChanged from
 /// `sender` — NetworkManager sends them in bursts.
-fn on_changes(
+pub(crate) fn on_changes(
     conn: &gio::DBusConnection,
     sender: &str,
     path: Option<&str>,
@@ -177,14 +186,14 @@ fn on_changes(
     )
 }
 
-fn system_bus() -> Option<gio::DBusConnection> {
+pub(crate) fn system_bus() -> Option<gio::DBusConnection> {
     gio::bus_get_sync(gio::BusType::System, gio::Cancellable::NONE)
         .inspect_err(|err| log::error!("status: no system bus: {err}"))
         .ok()
 }
 
 /// Keeps `keep` alive as long as `widget` exists.
-fn hold<T: 'static>(widget: &gtk::Widget, keep: T) {
+pub(crate) fn hold<T: 'static>(widget: &gtk::Widget, keep: T) {
     widget.connect_destroy(move |_| {
         let _ = &keep;
     });
@@ -257,7 +266,7 @@ fn network_clicks(icon: &gtk::Label, config: &NetworkConfig, system: &gio::DBusC
 }
 
 /// Focuses the program's window if it is open (sway), or starts it.
-fn open_or_focus(command: &str) {
+pub(crate) fn open_or_focus(command: &str) {
     let program = command.split_whitespace().next().unwrap_or_default();
     let name = program.rsplit('/').next().unwrap_or(program);
     if sway::available() && !name.is_empty() {

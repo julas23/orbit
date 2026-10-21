@@ -51,7 +51,7 @@ fn cells(cr: &gtk::cairo::Context, _width: i32, height: i32) {
     cr.set_font_size(9.0);
     for row in 0..board::rows_in(height) {
         for col in 0..board::COLUMNS {
-            let x = f64::from(col * board::PITCH);
+            let x = f64::from(board::SIDE + col * board::PITCH);
             let y = f64::from(board::PAD + row * board::PITCH);
             let side = f64::from(board::CELL);
             // On pixel centres (+0.5) so a 1 px line stays crisp.

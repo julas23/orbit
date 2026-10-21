@@ -6,7 +6,7 @@
 # A module takes its default size, or the one given: `- clock: mini`.
 
 edge: left
-size: 150
+size: 154
 monitor: HDMI-A-1   # output name (see `swaymsg -t get_outputs`) or an index
 maintenance: true
 
@@ -24,5 +24,7 @@ end:
   - keyboard: mini
   - battery: mini
   - notifications: mini
+  - bluetooth: mini
+  - monitors: mini
   - workspaces
   - session

@@ -13,7 +13,7 @@ use std::{cell::Cell, rc::Rc};
 
 use gtk::{glib, prelude::*};
 
-use crate::board::Form;
+use crate::board::{self, Form};
 
 pub struct Control {
     pub root: gtk::Widget,
@@ -118,6 +118,9 @@ impl Control {
                 };
                 let root = gtk::Box::builder().css_classes(classes).build();
                 icon.set_hexpand(true);
+                if form == Form::Mini {
+                    board::centre_glyph(&icon);
+                }
                 root.append(&icon);
                 popover.set_parent(&root);
                 left.connect_released(move |_, _, _, _| popover.popup());

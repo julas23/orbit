@@ -66,15 +66,20 @@ No **modo linha**, o que não cabe numa linha vai para o **tooltip** ou para um
 
 ### 2.1 Grade de 4 colunas (decidido em 2026-10-21)
 
-Substitui as 3 colunas de 40 px no painel vertical. A largura continua **150 px**:
+Substitui as 3 colunas de 40 px no painel vertical. A grade tem 150 px, e o painel 154 com as margens:
 
 | Medida | Valor |
 |---|---|
 | Célula | **30 × 30 px** |
 | Vão entre colunas e entre linhas | **10 px** |
-| Padding lateral | 0 (4 × 30 + 3 × 10 = 150) |
+| Margem lateral | 2 px de cada lado: 2 + 4 × 30 + 3 × 10 + 2 = **154 px** (`size: 154`) |
 | Padding em cima e embaixo | 5 px |
 | Linhas | quantas couberem: **27** em 1080 px (5 + 27 × 30 + 26 × 10 + 5 = 1080) |
+
+A grade dá o tamanho dos módulos, mas o desenho é mais justo (2026-10-21): módulos
+empilhados ficam **5 px** um do outro (onde nenhum módulo atravessa a fronteira entre
+duas linhas), e os de 1 coluna têm **34 px** de largura, os quatro de uma fila a 5, 4
+e 5 px. O fundo do painel é transparente; cada módulo leva o seu.
 
 Um módulo ocupa um bloco de células inteiras: 30, 70, 110 ou 150 px de largura;
 30, 70, 110, 150… px de altura. Colunas `a`–`d`, linhas a partir de 1: a primeira
@@ -90,7 +95,7 @@ Cada módulo vem em até três tamanhos (`Mini`, `Normal`, `Full`), escolhidos n
 | `calendar` | **4×4**: estação/ano, cabeçalho, mês | 4×2: estação/ano, cabeçalho, esta semana e a próxima | 3×1: "qua 21 out" |
 | `weather` | **4×4**: tudo + previsão dos próximos dias | 4×2: figura, temperaturas, descrição | 3×1: figura + temperatura |
 | `volume`, `brightness` | 4×1: ícone + slider horizontal | **2×1**: ícone + slider vertical | 1×1: ícone |
-| `network`, `keyboard`, `battery`, `notifications` | 4×2: ícone + até 4 linhas | **4×1**: ícone + 2 linhas | 1×1: ícone |
+| `network`, `keyboard`, `battery`, `notifications`, `bluetooth`, `monitors` | 4×2: ícone + até 4 linhas | **4×1**: ícone + 2 linhas | 1×1: ícone |
 
 Em negrito, o padrão (o tamanho de hoje). `windows`, `workspaces` (4×2), `tray`,
 `session` e `menu` têm um tamanho só; `windows` e `tray` crescem com o conteúdo.
@@ -106,8 +111,19 @@ Interação, para todos os módulos e botões: hover mostra o que o tamanho esco
 clique esquerdo, ações rápidas; clique direito, opções completas; roda do mouse
 ajusta o valor quando há um (volume, brilho). Já feito no Mini de volume e brilho
 (esquerdo: slider num popover; direito: o mixer) e nos tooltips de todos os
-tamanhos menores. Falta padronizar os cliques dos status e criar os módulos
-`bluetooth` e `monitors`.
+tamanhos menores, e nos módulos `bluetooth` e `monitors` (2026-10-21):
+
+- `bluetooth` (BlueZ pelo D-Bus do sistema, por evento): esquerdo abre o switch do
+  adaptador e um switch por dispositivo pareado (conectar/desconectar); direito, o
+  `blueman-manager` (`manager:` em `modules/bluetooth.yaml`).
+- `monitors` (IPC do compositor, evento `output`): esquerdo põe cada monitor acima,
+  abaixo ou de um lado do principal (o do notebook), centrado; direito abre o editor,
+  o layout em escala, onde o monitor arrastado encaixa no lado mais próximo de outro,
+  e "Aplicar" envia. Os dois mandam `output NOME pos X Y`, que o orbit-core aplica na
+  hora e guarda em `~/.local/state/orbit/core/outputs.yaml` para a próxima sessão.
+  Espelhar e desligar monitor ainda não existem no core.
+
+Falta padronizar os cliques dos status antigos (rede, teclado, bateria, notificações).
 
 ## 3. Os módulos
 

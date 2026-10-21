@@ -573,3 +573,31 @@ notifications-dnd = não perturbe
 notifications-on = avisos ligados
 notifications-off = sem servidor
 notifications-tooltip = Clique: central de notificações · Botão direito: não perturbe
+
+## Bluetooth e monitores no painel
+
+bluetooth-name = Bluetooth
+bluetooth-none = sem adaptador
+bluetooth-off = desligado
+bluetooth-on = ligado
+bluetooth-connected = conectado
+bluetooth-battery = bateria { $percent }%
+bluetooth-devices = { $count } conectados
+bluetooth-paired-none = Nenhum dispositivo pareado
+bluetooth-tooltip = Clique: ligar e conectar · Botão direito: gerenciador
+monitors-count = { $count ->
+    [one] 1 monitor
+   *[other] { $count } monitores
+}
+monitors-above = { $name } acima
+monitors-below = { $name } abaixo
+monitors-left = { $name } à esquerda
+monitors-right = { $name } à direita
+monitors-put-above = Acima do { $main }
+monitors-put-below = Abaixo do { $main }
+monitors-put-left = À esquerda do { $main }
+monitors-put-right = À direita do { $main }
+monitors-single = Só um monitor
+monitors-editor-hint = Arraste um monitor para o lado de outro
+monitors-apply = Aplicar
+monitors-tooltip = Clique: posição rápida · Botão direito: editor
