@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// The configuration directory.
 #[derive(Debug, Clone)]
@@ -56,6 +56,52 @@ impl ConfigDir {
 
     pub fn panel(&self) -> anyhow::Result<PanelConfig> {
         self.load(&self.path.join("panel.yaml"))
+    }
+
+    /// Writes the panel's module lists into `panel.yaml`, in place of the
+    /// `start:`, `center:` and `end:` it has; every other line, comments
+    /// included, stays. The file before the first write of a run is kept
+    /// as `panel.yaml.bak`.
+    pub fn save_panel_modules(
+        &self,
+        start: &[ModuleEntry],
+        center: &[ModuleEntry],
+        end: &[ModuleEntry],
+        first: bool,
+    ) -> anyhow::Result<()> {
+        let lists = module_lists(start, center, end);
+        self.rewrite("panel.yaml", &["start", "center", "end"], &lists, first)
+    }
+
+    /// Writes the dock's launchers into `dock.yaml`, in place of its
+    /// `apps:`; the rest stays, and the first write of a run keeps the old
+    /// file as `dock.yaml.bak`.
+    pub fn save_dock_apps(&self, apps: &[DockApp], first: bool) -> anyhow::Result<()> {
+        let list = if apps.is_empty() {
+            "apps: []\n".to_owned()
+        } else {
+            format!("apps:\n{}", serde_yaml_ng::to_string(apps)?)
+        };
+        self.rewrite("dock.yaml", &["apps"], &list, first)
+    }
+
+    /// File `name` with its top-level `keys` replaced by `blocks`.
+    fn rewrite(&self, name: &str, keys: &[&str], blocks: &str, first: bool) -> anyhow::Result<()> {
+        let path = self.path.join(name);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
+        };
+        if first && !text.is_empty() {
+            std::fs::write(path.with_extension("yaml.bak"), &text)
+                .with_context(|| format!("backing up {}", path.display()))?;
+        }
+        std::fs::create_dir_all(&self.path)?;
+        let temp = path.with_extension("yaml.new");
+        std::fs::write(&temp, with_blocks(&text, keys, blocks))
+            .and_then(|()| std::fs::rename(&temp, &path))
+            .with_context(|| format!("writing {}", path.display()))
     }
 
     pub fn dock(&self) -> anyhow::Result<DockConfig> {
@@ -172,6 +218,77 @@ pub enum Size {
     Full,
 }
 
+impl Size {
+    /// Its name in `panel.yaml`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Size::Mini => "mini",
+            Size::Normal => "normal",
+            Size::Full => "full",
+        }
+    }
+}
+
+/// `panel.yaml`'s `start:`, `center:` and `end:`, as YAML.
+fn module_lists(start: &[ModuleEntry], center: &[ModuleEntry], end: &[ModuleEntry]) -> String {
+    let mut lists = String::new();
+    for (key, entries) in [("start", start), ("center", center), ("end", end)] {
+        if entries.is_empty() {
+            lists.push_str(&format!("{key}: []\n"));
+            continue;
+        }
+        lists.push_str(&format!("{key}:\n"));
+        for entry in entries {
+            match entry.size {
+                Some(size) => lists.push_str(&format!("  - {}: {}\n", entry.name, size.name())),
+                None => lists.push_str(&format!("  - {}\n", entry.name)),
+            }
+        }
+    }
+    lists
+}
+
+/// `text` (a YAML file) with its top-level `keys` taken out and `blocks`
+/// written where the first of them was (or at the end). A key's block runs
+/// to the first line that is blank or starts in the first column with
+/// anything but `- `.
+fn with_blocks(text: &str, keys: &[&str], blocks: &str) -> String {
+    let is_key = |line: &str| {
+        keys.iter()
+            .any(|key| line.strip_prefix(key).is_some_and(|rest| rest.trim_start().starts_with(':')))
+    };
+    let mut kept: Vec<&str> = Vec::new();
+    let mut at = None;
+    let mut inside = false;
+    for line in text.lines() {
+        if is_key(line) {
+            at.get_or_insert(kept.len());
+            inside = true;
+            continue;
+        }
+        if inside && !line.trim().is_empty() && (line.starts_with([' ', '\t']) || line.starts_with('-')) {
+            continue;
+        }
+        inside = false;
+        kept.push(line);
+    }
+    let at = at.unwrap_or(kept.len());
+    let mut out = String::new();
+    for line in &kept[..at] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    if at == kept.len() && !out.is_empty() && !out.ends_with("\n\n") {
+        out.push('\n');
+    }
+    out.push_str(blocks);
+    for line in &kept[at..] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum RawEntry {
@@ -257,17 +374,26 @@ impl Default for DockConfig {
 /// Either point `desktop` at a `.desktop` file (a path, or an id such as
 /// `firefox.desktop` looked up in the XDG application directories), or give
 /// `name`/`exec`/`icon` directly. Explicit fields override the desktop file.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DockApp {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desktop: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exec: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
     /// Neighbouring apps with different groups get a separator between them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub show: bool,
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 fn default_true() -> bool {
@@ -300,5 +426,42 @@ mod tests {
         );
         assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: huge}]").is_err());
         assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: mini, volume: full}]").is_err());
+    }
+
+    #[test]
+    fn module_lists_are_replaced_in_place() {
+        const KEYS: &[&str] = &["start", "center", "end"];
+        let lists = |start: &[&str], end: &[ModuleEntry]| {
+            let start: Vec<ModuleEntry> = start.iter().map(|&n| n.into()).collect();
+            module_lists(&start, &[], end)
+        };
+        let text = "# Panel\nedge: left\n# The modules:\nstart:\n  - menu\n  # old\n  - windows\nend: [clock]\n\nsize: 154\n";
+        let out = with_blocks(
+            text,
+            KEYS,
+            &lists(&["windows"], &["clock".into(), ModuleEntry { name: "volume".into(), size: Some(Size::Mini) }]),
+        );
+        assert_eq!(
+            out,
+            "# Panel\nedge: left\n# The modules:\nstart:\n  - windows\ncenter: []\nend:\n  - clock\n  - volume: mini\n\nsize: 154\n"
+        );
+        let panel: PanelConfig = serde_yaml_ng::from_str(&out).unwrap();
+        assert_eq!(panel.end[1].size, Some(Size::Mini));
+        // Lists at column 0, and a file without any.
+        let out = with_blocks("start:\n- menu\nedge: left\n", KEYS, &lists(&["clock"], &[]));
+        assert_eq!(out, "start:\n  - clock\ncenter: []\nend: []\nedge: left\n");
+        assert_eq!(
+            with_blocks("edge: left\n", KEYS, &lists(&[], &[])),
+            "edge: left\n\nstart: []\ncenter: []\nend: []\n"
+        );
+    }
+
+    #[test]
+    fn dock_apps_round_trip() {
+        let text = "# Dock\nedge: top\napps:\n- desktop: a.desktop\n  group: web\n- desktop: b.desktop\n  show: false\nsize: 36\n";
+        let dock: DockConfig = serde_yaml_ng::from_str(text).unwrap();
+        let list = format!("apps:\n{}", serde_yaml_ng::to_string(&dock.apps).unwrap());
+        let out = with_blocks(text, &["apps"], &list);
+        assert_eq!(out, text);
     }
 }

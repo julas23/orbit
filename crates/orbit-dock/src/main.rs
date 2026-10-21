@@ -6,9 +6,10 @@
 //! file has none — and its recent files, which open in it.
 //!
 //! A launcher shows the unread count its application announces (see
-//! `badges`).
+//! `badges`). The dock is edited in place (see `edit`).
 
 mod badges;
+mod edit;
 
 use std::{collections::HashMap, rc::Rc};
 
@@ -41,10 +42,10 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> orbit_app::Built {
         reserve: dock.reserve,
         namespace: "orbit-dock",
     };
-    Ok(Some((window(app, &dock), placement)))
+    Ok(Some((window(app, dir, &dock), placement)))
 }
 
-fn window(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
+fn window(app: &gtk::Application, dir: &ConfigDir, config: &DockConfig) -> gtk::Window {
     let orientation = if config.edge.is_vertical() {
         gtk::Orientation::Vertical
     } else {
@@ -71,25 +72,22 @@ fn window(app: &gtk::Application, config: &DockConfig) -> gtk::Window {
         })
         .build();
 
-    let badges = badges::Badges::new(&launchers);
-    let system = SystemApps::load();
-    let mut last_group: Option<&str> = None;
-    for entry in config.apps.iter().filter(|entry| entry.show) {
-        let Some(launcher) = Launcher::resolve(entry, &system) else {
-            continue;
-        };
-        let group = entry.group.as_deref();
-        if last_group.is_some() && group != last_group {
-            launchers.append(&gtk::Box::builder().css_classes(["separator"]).build());
-        }
-        last_group = group;
-        launchers.append(&launcher.button(config.icon_size, &badges));
-    }
-
     let root = gtk::Box::builder().css_classes(["dock"]).build();
     root.append(&launchers);
     launchers.set_hexpand(true);
     launchers.set_vexpand(true);
+    let editor = edit::Editor::new(
+        dir,
+        &config.apps,
+        config.icon_size,
+        config.edge.is_vertical(),
+        &root,
+        &launchers,
+    );
+    // The editor's gestures hold it weakly; the dock holds it for good.
+    root.connect_destroy(move |_| {
+        let _ = &editor;
+    });
 
     gtk::ApplicationWindow::builder()
         .application(app)
@@ -246,7 +244,8 @@ impl Launcher {
         })
     }
 
-    fn button(self, icon_size: i32, badges: &badges::Badges) -> gtk::Button {
+    /// The launcher's button; its menu offers `edit` (editing the dock).
+    fn button(self, icon_size: i32, badges: &badges::Badges, edit: Rc<dyn Fn()>) -> gtk::Button {
         let this = Rc::new(self);
         let image = match &this.icon {
             Some(IconSource::Spec(spec)) => orbit_app::icon(spec, icon_size),
@@ -271,7 +270,7 @@ impl Launcher {
         let anchor = button.downgrade();
         right.connect_pressed(move |_, _, x, y| {
             if let Some(anchor) = anchor.upgrade() {
-                menu(&this, &anchor, Some((x, y)));
+                menu(&this, &anchor, Some((x, y)), &edit);
             }
         });
         button.add_controller(right);
@@ -324,7 +323,7 @@ impl Launcher {
 }
 
 /// The right-click menu of a launcher.
-fn menu(launcher: &Rc<Launcher>, anchor: &gtk::Button, at: orbit_app::popup::Point) {
+fn menu(launcher: &Rc<Launcher>, anchor: &gtk::Button, at: orbit_app::popup::Point, edit: &Rc<dyn Fn()>) {
     let model = gio::Menu::new();
     let group = gio::SimpleActionGroup::new();
     let add = |section: &gio::Menu, label: &str, name: &str, act: Box<dyn Fn(&gtk::Button)>| {
@@ -381,6 +380,11 @@ fn menu(launcher: &Rc<Launcher>, anchor: &gtk::Button, at: orbit_app::popup::Poi
         }
         model.append_section(Some(&tr("dock-recent")), &section);
     }
+
+    let last = gio::Menu::new();
+    let edit = edit.clone();
+    add(&last, &tr("dock-edit"), "edit", Box::new(move |_| edit()));
+    model.append_section(None, &last);
 
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("d", Some(&group));

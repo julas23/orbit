@@ -13,5 +13,6 @@ orbit-app.workspace = true
 orbit-common.workspace = true
 gtk.workspace = true
 gio-unix.workspace = true
+gtk4-layer-shell.workspace = true
 log.workspace = true
 anyhow.workspace = true

@@ -150,6 +150,8 @@ pub fn new(config: &ClockConfig, form: Form) -> gtk::Widget {
         }
         Form::Mini => {
             let card = card();
+            // The time alone: out of the zone's box.
+            now.remove(&time);
             time.set_vexpand(true);
             time.set_valign(gtk::Align::Center);
             card.append(&time);

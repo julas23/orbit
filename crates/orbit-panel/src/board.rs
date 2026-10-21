@@ -118,6 +118,8 @@ pub enum Part {
 }
 
 struct Item {
+    /// The editor's name for it (`edit`).
+    id: u64,
     widget: gtk::Widget,
     name: String,
     part: Part,
@@ -219,6 +221,14 @@ mod imp {
                     }
                 }
             }
+            // The editor's menus hang on the board itself.
+            let mut child = self.obj().first_child();
+            while let Some(widget) = child {
+                if let Some(popover) = widget.downcast_ref::<gtk::Popover>() {
+                    popover.present();
+                }
+                child = widget.next_sibling();
+            }
         }
     }
 }
@@ -236,13 +246,14 @@ impl Default for Board {
 }
 
 impl Board {
-    /// Adds module `name` to `part`, after the ones already there, taking
-    /// `cols` columns and at least `rows` rows.
-    pub fn add(&self, widget: &gtk::Widget, name: &str, part: Part, cols: i32, rows: i32) {
+    /// Adds module `name` (`id` to the editor) to `part`, after the ones
+    /// already there, taking `cols` columns and at least `rows` rows.
+    pub fn add(&self, id: u64, widget: &gtk::Widget, name: &str, part: Part, cols: i32, rows: i32) {
         widget.set_parent(self);
         // A module never spills over the block it was given.
         widget.set_overflow(gtk::Overflow::Hidden);
         self.imp().items.borrow_mut().push(Item {
+            id,
             widget: widget.clone(),
             name: name.into(),
             part,
@@ -251,6 +262,92 @@ impl Board {
             measured: Cell::new(0),
             cells: RefCell::default(),
         });
+    }
+
+    /// Takes every module off, to be added again in a new order.
+    pub fn clear(&self) {
+        for item in self.imp().items.take() {
+            item.widget.unparent();
+        }
+        self.queue_resize();
+    }
+
+    /// Each module's id and where it is drawn, in the board's coordinates.
+    fn rects(&self) -> Vec<(u64, gtk::graphene::Rect)> {
+        self.imp()
+            .items
+            .borrow()
+            .iter()
+            .filter(|item| item.widget.should_layout())
+            .filter_map(|item| Some((item.id, item.widget.compute_bounds(self)?)))
+            .collect()
+    }
+
+    /// The module at (`x`, `y`).
+    pub fn at(&self, x: f64, y: f64) -> Option<u64> {
+        let point = gtk::graphene::Point::new(x as f32, y as f32);
+        self.rects()
+            .into_iter()
+            .find(|(_, rect)| rect.contains_point(&point))
+            .map(|(id, _)| id)
+    }
+
+    /// The module nearest to (`x`, `y`), but `except`, and the side of it
+    /// the point is on: across for one narrower than the panel, else down.
+    pub fn nearest(&self, x: f64, y: f64, except: Option<u64>) -> Option<(u64, Side)> {
+        let (x, y) = (x as f32, y as f32);
+        let distance = |r: &gtk::graphene::Rect| {
+            let dx = (r.x() - x).max(x - (r.x() + r.width())).max(0.0);
+            let dy = (r.y() - y).max(y - (r.y() + r.height())).max(0.0);
+            dx * dx + dy * dy
+        };
+        let full = span(COLUMNS) as f32;
+        self.rects()
+            .into_iter()
+            .filter(|(id, _)| Some(*id) != except)
+            .min_by(|(_, a), (_, b)| distance(a).total_cmp(&distance(b)))
+            .map(|(id, r)| {
+                let side = if r.width() < full {
+                    if x < r.x() + r.width() / 2.0 { Side::Left } else { Side::Right }
+                } else if y < r.y() + r.height() / 2.0 {
+                    Side::Above
+                } else {
+                    Side::Below
+                };
+                (id, side)
+            })
+    }
+
+    /// The widget of module `id`.
+    pub fn widget(&self, id: u64) -> Option<gtk::Widget> {
+        let items = self.imp().items.borrow();
+        items.iter().find(|item| item.id == id).map(|item| item.widget.clone())
+    }
+}
+
+/// Which side of a module a point is on.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Side {
+    Above,
+    Below,
+    Left,
+    Right,
+}
+
+impl Side {
+    /// Whether what is dropped there goes after the module.
+    pub fn after(self) -> bool {
+        matches!(self, Side::Below | Side::Right)
+    }
+
+    /// The CSS class that marks the module while something is dragged there.
+    pub fn class(self) -> &'static str {
+        match self {
+            Side::Above => "drop-above",
+            Side::Below => "drop-below",
+            Side::Left => "drop-left",
+            Side::Right => "drop-right",
+        }
     }
 }
 

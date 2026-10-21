@@ -51,10 +51,21 @@ window.orbit button {
   border: none;
   padding: 0;
 }
-.panel.grid > * {
+.panel.grid > :not(popover) {
   background-color: @orbit_bg;
   border-radius: 5px;
 }
+
+/* Editing the panel (edit.rs): the panel shows its whole area, every
+ * module a dashed outline; the one dragged fades, and an accent bar marks
+ * the side of the module it would be dropped by. */
+.panel.grid.editing { background-color: alpha(@orbit_accent, 0.12); }
+.panel.grid.editing > :not(popover) { outline: 1px dashed alpha(@orbit_accent, 0.8); outline-offset: -1px; }
+.panel.grid > .dragged { opacity: 0.4; }
+.panel.grid > .drop-above { box-shadow: inset 0 3px 0 0 @orbit_accent; }
+.panel.grid > .drop-below { box-shadow: inset 0 -3px 0 0 @orbit_accent; }
+.panel.grid > .drop-left  { box-shadow: inset 3px 0 0 0 @orbit_accent; }
+.panel.grid > .drop-right { box-shadow: inset -3px 0 0 0 @orbit_accent; }
 
 /* 30 px icon + 5 + 5 = 40 px: one column. `button.menu`, not `.menu`: GTK's
  * menus are `popover.menu` nodes, and those inside the panel would take the
@@ -429,6 +440,22 @@ window.orbit popover radio { color: @orbit_fg; }
 .dock .app:hover {
   background-color: alpha(@orbit_accent, 0.30);
 }
+
+/* Editing the dock (orbit-dock's edit.rs): the dock shows its whole area,
+ * each launcher and separator a dashed outline; the one dragged fades, an
+ * accent bar marks where it would go, and off the dock it turns red: it
+ * is removed there. */
+.dock.editing { background-color: alpha(@orbit_accent, 0.12); border-radius: 10px; }
+.dock.editing .app,
+.dock.editing .separator { outline: 1px dashed alpha(@orbit_accent, 0.8); outline-offset: 1px; }
+.dock .dragged    { opacity: 0.4; }
+.dock .drop-left  { box-shadow: -3px 0 0 0 @orbit_accent; }
+.dock .drop-right { box-shadow: 3px 0 0 0 @orbit_accent; }
+.dock .drop-above { box-shadow: 0 -3px 0 0 @orbit_accent; }
+.dock .drop-below { box-shadow: 0 3px 0 0 @orbit_accent; }
+.dock .drop-off   { opacity: 0.6; background-color: alpha(@orbit_alert, 0.6); }
+.dock-chooser     { padding: 5px; }
+.dock-chooser row { padding: 3px 5px; border-radius: 5px; }
 
 /* An application's unread count, on its launcher's corner. */
 .dock .app .badge {

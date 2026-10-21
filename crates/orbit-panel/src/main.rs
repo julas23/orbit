@@ -12,6 +12,7 @@ mod clock;
 mod confirm;
 mod control;
 mod dbusmenu;
+mod edit;
 mod forecast;
 mod maintenance;
 mod menu;
@@ -35,7 +36,7 @@ use orbit_common::{
     config::{Edge, ModuleEntry, PanelConfig},
 };
 
-use board::{Form, Part};
+use board::Form;
 
 fn main() -> glib::ExitCode {
     orbit_app::run(orbit_app::Surface {
@@ -63,25 +64,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> orbit_app::Built {
 
 fn window(app: &gtk::Application, dir: &ConfigDir, config: &PanelConfig) -> gtk::Window {
     let root: gtk::Widget = if config.edge.is_vertical() {
-        let board = board::Board::default();
-        board.set_css_classes(&["panel", "grid"]);
-        for (part, entries) in [
-            (Part::Start, &config.start),
-            (Part::Center, &config.center),
-            (Part::End, &config.end),
-        ] {
-            for entry in entries {
-                let (size, cols, rows) = shape(entry);
-                let Some(module) = module(&entry.name, dir, config.edge, size) else {
-                    continue;
-                };
-                if !module.is_visible() {
-                    continue; // e.g. brightness on a machine without a backlight
-                }
-                board.add(&module, &entry.name, part, cols, rows);
-            }
-        }
-        board.upcast()
+        edit::new(dir, config)
     } else {
         let part = |entries: &[ModuleEntry]| {
             // 5 px between modules: the panel grid step.

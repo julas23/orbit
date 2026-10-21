@@ -2965,6 +2965,7 @@ dependencies = [
  "anyhow",
  "gio-unix",
  "gtk4",
+ "gtk4-layer-shell",
  "log",
  "orbit-app",
  "orbit-common",

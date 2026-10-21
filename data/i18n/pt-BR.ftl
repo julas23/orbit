@@ -150,6 +150,11 @@ season-autumn = outono
 
 dock-open = Abrir
 dock-recent = Recentes
+dock-edit = Editar dock
+dock-edit-done = Concluir edição
+dock-add-launcher = Adicionar atalho…
+dock-add-separator = Adicionar separador
+dock-search = Buscar aplicativo
 
 ## Calculadora
 
@@ -601,3 +606,35 @@ monitors-single = Só um monitor
 monitors-editor-hint = Arraste um monitor para o lado de outro
 monitors-apply = Aplicar
 monitors-tooltip = Clique: posição rápida · Botão direito: editor
+
+## Edição do painel
+
+panel-edit = Editar painel
+panel-edit-done = Concluir edição
+panel-add = Adicionar módulo
+panel-size-mini = Mini
+panel-size-normal = Normal
+panel-size-full = Completo
+panel-move-up = Mover para cima
+panel-move-down = Mover para baixo
+panel-part-start = No topo
+panel-part-center = No meio
+panel-part-end = Embaixo
+panel-remove = Remover do painel
+panel-module-menu = Menu
+panel-module-windows = Lista de janelas
+panel-module-clock = Relógio
+panel-module-calendar = Calendário
+panel-module-weather = Clima
+panel-module-forecast = Previsão
+panel-module-tray = Bandeja do sistema
+panel-module-volume = Volume
+panel-module-brightness = Brilho
+panel-module-network = Rede
+panel-module-keyboard = Teclado
+panel-module-battery = Bateria
+panel-module-notifications = Notificações
+panel-module-bluetooth = Bluetooth
+panel-module-monitors = Monitores
+panel-module-workspaces = Áreas de trabalho
+panel-module-session = Sessão
