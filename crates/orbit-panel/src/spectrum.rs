@@ -2,7 +2,7 @@
 //!
 //!   Mini    (2 × 1)  one line across the bands
 //!   Normal  (4 × 2)  12 bars
-//!   Full    (4 × 4)  thin bars in a red–orange–yellow gradient, on a grid
+//!   Full    (4 × 2)  thin bars in a red–orange–yellow gradient, on a grid
 //!
 //! The sound is the default sink's monitor, recorded through PulseAudio
 //! (`pulse::record_monitor`, served by pipewire-pulse) on a thread of its
@@ -410,16 +410,20 @@ fn draw_bars(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gd
 fn draw_full(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gdk::RGBA) -> Result<(), cairo::Error> {
     let (left, right) = (PAD, w - PAD);
     let (top, bottom) = (PAD, h - PAD);
-    // The grid: 8 × 8, on whole pixels so its lines are sharp.
+    // The grid: 8 columns, and rows as many as keep its cells square, on
+    // whole pixels so its lines are sharp.
     set_colour(cr, colour, 0.12);
     cr.set_line_width(1.0);
+    let rows = (8.0 * (bottom - top) / (right - left)).round().max(1.0);
     for k in 0..=8 {
-        let y = (top + (bottom - top) * f64::from(k) / 8.0).round() - 0.5;
-        cr.move_to(left, y);
-        cr.line_to(right, y);
         let x = (left + (right - left) * f64::from(k) / 8.0).round() - 0.5;
         cr.move_to(x, top);
         cr.line_to(x, bottom);
+    }
+    for k in 0..=rows as i32 {
+        let y = (top + (bottom - top) * f64::from(k) / rows).round() - 0.5;
+        cr.move_to(left, y);
+        cr.line_to(right, y);
     }
     cr.stroke()?;
 
@@ -584,9 +588,9 @@ mod tests {
             frame
         };
         let (scale, gap) = (4.0, 10.0);
-        let sizes = [(Form::Mini, 70.0, 30.0, LINE_POINTS), (Form::Normal, 150.0, 70.0, NORMAL_BARS), (Form::Full, 150.0, 150.0, FULL_BARS)];
+        let sizes = [(Form::Mini, 70.0, 30.0, LINE_POINTS), (Form::Normal, 150.0, 70.0, NORMAL_BARS), (Form::Full, 150.0, 70.0, FULL_BARS)];
         let width = sizes.iter().map(|s| s.1).sum::<f64>() + gap * 4.0;
-        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, (width * scale) as i32, ((150.0 + 2.0 * gap) * scale) as i32).unwrap();
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, (width * scale) as i32, ((70.0 + 2.0 * gap) * scale) as i32).unwrap();
         let cr = cairo::Context::new(&surface).unwrap();
         cr.scale(scale, scale);
         cr.set_source_rgb(0.08, 0.09, 0.11);

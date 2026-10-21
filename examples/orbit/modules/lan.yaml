@@ -1,0 +1,5 @@
+# Orbit-Panel LAN module — ~/.config/orbit/modules/lan.yaml. Every key is
+# optional; cpu.yaml, ram.yaml and gpu.yaml take `interval` too.
+
+interval: 1            # seconds between readings
+# interface: eth0      # default: the interface of the default route

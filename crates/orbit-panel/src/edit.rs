@@ -40,9 +40,17 @@ const MODULES: &[&str] = &[
     "bluetooth",
     "monitors",
     "spectrum",
+    "cpu",
+    "ram",
+    "gpu",
+    "lan",
+    "disk",
     "workspaces",
     "session",
 ];
+
+/// Modules that may be listed more than once, each showing something else.
+const REPEATABLE: &[&str] = &["disk"];
 
 const PARTS: [Part; 3] = [Part::Start, Part::Center, Part::End];
 
@@ -207,7 +215,7 @@ impl Editor {
                 let module = built.entry(slot.id).or_insert_with(|| Built { form, widget: None });
                 if module.form != form || module.widget.is_none() {
                     module.form = form;
-                    module.widget = crate::module(&slot.entry.name, &self.dir, self.edge, form)
+                    module.widget = crate::module(&slot.entry, &self.dir, self.edge, form)
                         // e.g. brightness on a machine without a backlight
                         .filter(|widget| widget.is_visible());
                 }
@@ -344,7 +352,7 @@ fn panel_menu(editor: &Rc<Editor>, x: f64, y: f64) {
         MODULES
             .iter()
             .copied()
-            .filter(|name| !slots.iter().any(|slot| slot.entry.name == *name))
+            .filter(|name| REPEATABLE.contains(name) || !slots.iter().any(|slot| slot.entry.name == *name))
             .collect()
     };
     if !missing.is_empty() {
@@ -360,7 +368,13 @@ fn panel_menu(editor: &Rc<Editor>, x: f64, y: f64) {
             let Some(name) = name.and_then(|n| n.str().map(str::to_owned)) else { return };
             // After the module nearest to the click, else at the top.
             let near = editor.board.nearest(x, y, None);
-            let id = editor.push(Part::Start, name.as_str().into());
+            let mut entry = ModuleEntry::from(name.as_str());
+            if name == "disk" {
+                // Another disk shows a filesystem none shows yet.
+                let shown: Vec<String> = editor.slots.borrow().iter().filter(|s| s.entry.name == "disk").map(|s| s.entry.path.clone().unwrap_or_else(|| "/".into())).collect();
+                entry.path = crate::disk::mounts().into_iter().find(|m| !shown.contains(m));
+            }
+            let id = editor.push(Part::Start, entry);
             match near {
                 Some((target, side)) => editor.move_by(id, target, side.after()),
                 None => {
@@ -422,6 +436,10 @@ fn module_menu(editor: &Rc<Editor>, id: u64, x: f64, y: f64) {
         group.add_action(&action);
         model.append_section(Some(&tr(&format!("panel-module-{name}"))), &first);
         first = gio::Menu::new();
+    }
+
+    if name == "disk" {
+        filesystems(editor, id, &model, &group);
     }
 
     let simple = |menu: &gio::Menu, label: &str, name: &str, act: Box<dyn Fn(&Editor)>| {
@@ -507,4 +525,34 @@ fn open(editor: &Editor, model: &gio::Menu, group: &gio::SimpleActionGroup, x: f
     let popover = gtk::PopoverMenu::from_model(Some(model));
     popover.insert_action_group("edit", Some(group));
     orbit_app::popup::open(&popover, &editor.board, Some((x, y)));
+}
+
+/// The disk module's filesystems, the one it shows ticked; picking one
+/// shows it there and keeps it in `panel.yaml`.
+fn filesystems(editor: &Rc<Editor>, id: u64, model: &gio::Menu, group: &gio::SimpleActionGroup) {
+    let Some(i) = editor.index(id) else { return };
+    let current = editor.slots.borrow()[i].entry.path.clone().unwrap_or_else(|| "/".into());
+    let mut mounts = crate::disk::mounts();
+    if !mounts.contains(&current) {
+        mounts.insert(0, current.clone());
+    }
+    let menu = gio::Menu::new();
+    for mount in &mounts {
+        let item = gio::MenuItem::new(Some(mount), None);
+        item.set_action_and_target_value(Some("edit.path"), Some(&mount.to_variant()));
+        menu.append_item(&item);
+    }
+    let action = gio::SimpleAction::new_stateful("path", Some(glib::VariantTy::STRING), &current.to_variant());
+    let weak = Rc::downgrade(editor);
+    action.connect_activate(move |_, path| {
+        let Some(editor) = weak.upgrade() else { return };
+        let Some(path) = path.and_then(|p| p.str().map(str::to_owned)) else { return };
+        let Some(i) = editor.index(id) else { return };
+        editor.slots.borrow_mut()[i].entry.path = Some(path);
+        // Built again, showing the new one.
+        editor.built.borrow_mut().remove(&id);
+        editor.changed();
+    });
+    group.add_action(&action);
+    model.append_section(Some(&tr("panel-filesystem")), &menu);
 }

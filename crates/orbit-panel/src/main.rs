@@ -12,10 +12,12 @@ mod clock;
 mod confirm;
 mod control;
 mod dbusmenu;
+mod disk;
 mod edit;
 mod forecast;
 mod maintenance;
 mod menu;
+mod meters;
 mod monitors;
 mod notifications;
 mod pulse;
@@ -71,7 +73,7 @@ fn window(app: &gtk::Application, dir: &ConfigDir, config: &PanelConfig) -> gtk:
             // 5 px between modules: the panel grid step.
             let part = gtk::Box::new(gtk::Orientation::Horizontal, 5);
             for entry in entries {
-                if let Some(module) = module(&entry.name, dir, config.edge, Form::Line) {
+                if let Some(module) = module(entry, dir, config.edge, Form::Line) {
                     part.append(&module);
                 }
             }
@@ -112,7 +114,8 @@ fn shapes(name: &str) -> &'static [(Form, i32, i32)] {
             &[(Normal, 4, 1), (Full, 4, 2), (Mini, 1, 1)]
         }
         "workspaces" => &[(Normal, 4, 2)],
-        "spectrum" => &[(Normal, 4, 2), (Full, 4, 4), (Mini, 2, 1)],
+        "spectrum" => &[(Normal, 4, 2), (Full, 4, 2), (Mini, 2, 1)],
+        "cpu" | "ram" | "lan" | "gpu" | "disk" => &[(Normal, 4, 1), (Full, 4, 2), (Mini, 2, 1)],
         _ => &[(Normal, 4, 1)],
     }
 }
@@ -137,10 +140,11 @@ fn shape(entry: &ModuleEntry) -> (Form, i32, i32) {
     }
 }
 
-/// Builds module `name`. A module that is unknown or whose file does not
-/// parse is left out with an error in the log, instead of taking the whole
-/// panel down.
-fn module(name: &str, dir: &ConfigDir, edge: Edge, form: Form) -> Option<gtk::Widget> {
+/// Builds the module of `entry`. A module that is unknown or whose file does
+/// not parse is left out with an error in the log, instead of taking the
+/// whole panel down.
+fn module(entry: &ModuleEntry, dir: &ConfigDir, edge: Edge, form: Form) -> Option<gtk::Widget> {
+    let name = entry.name.as_str();
     let vertical = edge.is_vertical();
     let built = match name {
         // The menu's power button offers the session module's actions.
@@ -164,6 +168,17 @@ fn module(name: &str, dir: &ConfigDir, edge: Edge, form: Form) -> Option<gtk::Wi
         "bluetooth" => dir.module("bluetooth").map(|c| bluetooth::new(&c, form)),
         "monitors" => dir.module("monitors").map(|c| monitors::new(&c, form)),
         "spectrum" => dir.module("spectrum").map(|c| spectrum::new(&c, form)),
+        "cpu" => dir.module("cpu").map(|c| meters::cpu(&c, form)),
+        "ram" => dir.module("ram").map(|c| meters::ram(&c, form)),
+        "lan" => dir.module("lan").map(|c| meters::lan(&c, form)),
+        "gpu" => dir.module("gpu").map(|c| meters::gpu(&c, form)),
+        // Each entry may show a filesystem of its own.
+        "disk" => dir.module::<disk::DiskConfig>("disk").map(|mut c| {
+            if let Some(path) = &entry.path {
+                c.path = path.clone();
+            }
+            disk::new(&c, form)
+        }),
         "notifications" => dir
             .module("notifications")
             .map(|c| notifications::new(&c, form)),
@@ -186,3 +201,52 @@ fn module(name: &str, dir: &ConfigDir, edge: Edge, form: Form) -> Option<gtk::Wi
         .inspect_err(|err| log::error!("panel: module {name}: {err:#}, leaving it out"))
         .ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The meters and disk in every size, drawn by GTK to
+    /// `$ORBIT_PANEL_LOOK` (PNG), a few seconds after they start. Run it
+    /// on a display of its own: `gtk4-broadwayd :5 &`, then
+    /// `GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 ORBIT_PANEL_LOOK=x.png
+    /// cargo test -p orbit-panel look -- --ignored`.
+    #[test]
+    #[ignore]
+    fn look() {
+        let Ok(path) = std::env::var("ORBIT_PANEL_LOOK") else { return };
+        gtk::init().expect("a display");
+        let display = gtk::gdk::Display::default().unwrap();
+        let _theme = orbit_app::theme::install(&display);
+        let css = gtk::CssProvider::new();
+        css.load_from_string(&format!("{}\nwindow {{ background: #1b1f27; }}", include_str!("../../../data/style.css")));
+        gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        let dir = ConfigDir::new(std::path::Path::new("/nonexistent"));
+        let grid = gtk::Grid::builder().row_spacing(10).column_spacing(10).margin_start(10).margin_end(10).margin_top(10).margin_bottom(10).build();
+        for (col, form) in [Form::Mini, Form::Normal, Form::Full].into_iter().enumerate() {
+            for (row, name) in ["cpu", "ram", "lan", "gpu", "disk"].into_iter().enumerate() {
+                let &(_, cols, rows) = shapes(name).iter().find(|s| s.0 == form).unwrap();
+                let Some(module) = module(&name.into(), &dir, Edge::Left, form) else { continue };
+                let cell = gtk::Box::builder().css_classes(["panel", "grid"]).valign(gtk::Align::Start).halign(gtk::Align::Start).build();
+                module.set_size_request(board::span(cols), board::span(rows));
+                cell.append(&module);
+                grid.attach(&cell, col as i32, row as i32, 1, 1);
+            }
+        }
+        let window = gtk::Window::builder().css_classes(["orbit", "orbit-panel"]).child(&grid).build();
+        window.present();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(8);
+        while std::time::Instant::now() < until {
+            glib::MainContext::default().iteration(false);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let (w, h) = (window.width(), window.height());
+        let paintable = gtk::WidgetPaintable::new(Some(&window));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(w), f64::from(h));
+        let node = snapshot.to_node().unwrap();
+        let texture = window.renderer().unwrap().render_texture(&node, None);
+        texture.save_to_png(&path).unwrap();
+    }
+}
+

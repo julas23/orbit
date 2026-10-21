@@ -1,0 +1,5 @@
+# Orbit-Panel disk module — ~/.config/orbit/modules/disk.yaml. Every key is
+# optional.
+
+path: /                # any path on the filesystem to show
+interval: 30           # seconds between readings

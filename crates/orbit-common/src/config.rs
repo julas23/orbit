@@ -198,14 +198,19 @@ pub struct PanelConfig {
     pub end: Vec<ModuleEntry>,
 }
 
-/// A module in `panel.yaml`'s lists: `- clock`, or with a size,
-/// `- clock: mini`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+/// A module in `panel.yaml`'s lists: `- clock`, with a size,
+/// `- clock: mini`, or with what that one module shows as well,
+/// `- disk: { size: full, path: /home }` — so a module may be listed more
+/// than once, each showing something else.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 #[serde(try_from = "RawEntry")]
 pub struct ModuleEntry {
     pub name: String,
     /// The module's own default when left out.
     pub size: Option<Size>,
+    /// What this entry shows (disk: its filesystem), over the module's
+    /// own file.
+    pub path: Option<String>,
 }
 
 /// How much of a vertical panel's grid a module takes; each module says
@@ -239,9 +244,14 @@ fn module_lists(start: &[ModuleEntry], center: &[ModuleEntry], end: &[ModuleEntr
         }
         lists.push_str(&format!("{key}:\n"));
         for entry in entries {
-            match entry.size {
-                Some(size) => lists.push_str(&format!("  - {}: {}\n", entry.name, size.name())),
-                None => lists.push_str(&format!("  - {}\n", entry.name)),
+            match (entry.size, &entry.path) {
+                (_, Some(path)) => {
+                    // Quoted as JSON is, which YAML reads the same.
+                    let size = entry.size.map(|s| format!("size: {}, ", s.name())).unwrap_or_default();
+                    lists.push_str(&format!("  - {}: {{ {size}path: {path:?} }}\n", entry.name));
+                }
+                (Some(size), None) => lists.push_str(&format!("  - {}: {}\n", entry.name, size.name())),
+                (None, None) => lists.push_str(&format!("  - {}\n", entry.name)),
             }
         }
     }
@@ -293,7 +303,21 @@ fn with_blocks(text: &str, keys: &[&str], blocks: &str) -> String {
 #[serde(untagged)]
 enum RawEntry {
     Name(String),
-    Sized(std::collections::BTreeMap<String, Size>),
+    Sized(std::collections::BTreeMap<String, RawOptions>),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawOptions {
+    Size(Size),
+    Options(EntryOptions),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EntryOptions {
+    size: Option<Size>,
+    path: Option<String>,
 }
 
 impl TryFrom<RawEntry> for ModuleEntry {
@@ -303,23 +327,26 @@ impl TryFrom<RawEntry> for ModuleEntry {
         match raw {
             RawEntry::Name(name) => Ok(name.into()),
             RawEntry::Sized(map) if map.len() == 1 => {
-                let (name, size) = map.into_iter().next().expect("one entry");
-                Ok(Self { name, size: Some(size) })
+                let (name, options) = map.into_iter().next().expect("one entry");
+                Ok(match options {
+                    RawOptions::Size(size) => Self { name, size: Some(size), path: None },
+                    RawOptions::Options(o) => Self { name, size: o.size, path: o.path },
+                })
             }
-            RawEntry::Sized(_) => Err("a module entry is `name` or `name: size`".into()),
+            RawEntry::Sized(_) => Err("a module entry is `name`, `name: size` or `name: { size, path }`".into()),
         }
     }
 }
 
 impl From<&str> for ModuleEntry {
     fn from(name: &str) -> Self {
-        Self { name: name.into(), size: None }
+        Self { name: name.into(), ..Default::default() }
     }
 }
 
 impl From<String> for ModuleEntry {
     fn from(name: String) -> Self {
-        Self { name, size: None }
+        Self { name, ..Default::default() }
     }
 }
 
@@ -420,10 +447,15 @@ mod tests {
             panel.end,
             vec![
                 ModuleEntry::from("clock"),
-                ModuleEntry { name: "volume".into(), size: Some(Size::Mini) },
-                ModuleEntry { name: "calendar".into(), size: Some(Size::Normal) },
+                ModuleEntry { name: "volume".into(), size: Some(Size::Mini), path: None },
+                ModuleEntry { name: "calendar".into(), size: Some(Size::Normal), path: None },
             ]
         );
+        let panel: PanelConfig =
+            serde_yaml_ng::from_str("end: [{disk: {size: full, path: /home}}, {disk: {path: /}}]").unwrap();
+        assert_eq!(panel.end[0], ModuleEntry { name: "disk".into(), size: Some(Size::Full), path: Some("/home".into()) });
+        assert_eq!(panel.end[1].path.as_deref(), Some("/"));
+        assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{disk: {colour: red}}]").is_err());
         assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: huge}]").is_err());
         assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: mini, volume: full}]").is_err());
     }
@@ -439,14 +471,22 @@ mod tests {
         let out = with_blocks(
             text,
             KEYS,
-            &lists(&["windows"], &["clock".into(), ModuleEntry { name: "volume".into(), size: Some(Size::Mini) }]),
+            &lists(
+                &["windows"],
+                &[
+                    "clock".into(),
+                    ModuleEntry { name: "volume".into(), size: Some(Size::Mini), path: None },
+                    ModuleEntry { name: "disk".into(), size: Some(Size::Full), path: Some("/mnt/my disk".into()) },
+                ],
+            ),
         );
         assert_eq!(
             out,
-            "# Panel\nedge: left\n# The modules:\nstart:\n  - windows\ncenter: []\nend:\n  - clock\n  - volume: mini\n\nsize: 154\n"
+            "# Panel\nedge: left\n# The modules:\nstart:\n  - windows\ncenter: []\nend:\n  - clock\n  - volume: mini\n  - disk: { size: full, path: \"/mnt/my disk\" }\n\nsize: 154\n"
         );
         let panel: PanelConfig = serde_yaml_ng::from_str(&out).unwrap();
         assert_eq!(panel.end[1].size, Some(Size::Mini));
+        assert_eq!(panel.end[2].path.as_deref(), Some("/mnt/my disk"));
         // Lists at column 0, and a file without any.
         let out = with_blocks("start:\n- menu\nedge: left\n", KEYS, &lists(&["clock"], &[]));
         assert_eq!(out, "start:\n  - clock\ncenter: []\nend: []\nedge: left\n");

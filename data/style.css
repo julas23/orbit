@@ -406,6 +406,24 @@ window.orbit-menu { background: transparent; }
  * take this colour, the Full grid a faint wash of it. */
 .spectrum { color: @orbit_accent; }
 
+/* CPU, RAM, LAN and GPU (meters.rs): a graph on a 4 × 8 grid, in the
+ * module's colour, with the part's name and value on top of it and, Full,
+ * a line of details at the bottom; the text keeps a dark halo so
+ * the graph never hides it. Disk (disk.rs): a pie, the numbers beside. */
+.meter { color: @orbit_accent; }
+.meter label {
+  font-size: 9px;
+  color: @orbit_fg;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+  padding: 1px 4px;
+}
+.meter .name   { font-weight: bold; }
+.meter .detail { color: alpha(@orbit_fg, 0.75); }
+.disk          { padding: 0 4px; }
+.disk label    { font-size: 10px; }
+.disk.normal label { font-size: 9px; }
+.disk .head    { font-weight: bold; }
+
 /* Popovers and context menus (window list, tray, network, calendar, volume):
  * the panel's dark background and light text. They live in the panel's
  * widget tree, so they inherit its colour; their background has to be set

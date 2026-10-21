@@ -649,3 +649,15 @@ panel-module-bluetooth = Bluetooth
 panel-module-monitors = Monitors
 panel-module-workspaces = Workspaces
 panel-module-session = Session
+panel-module-spectrum = Spectrum
+panel-module-cpu = CPU
+panel-module-ram = RAM
+panel-module-gpu = GPU
+panel-module-lan = LAN
+panel-module-disk = Disk
+panel-filesystem = Filesystem
+
+# Disk module (orbit-panel)
+disk-total = TOTAL
+disk-used = USED
+disk-free = FREE
