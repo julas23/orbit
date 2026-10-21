@@ -113,8 +113,6 @@ impl Viewer {
             .default_height(700)
             .css_classes(["orbit-view"])
             .build();
-        // No title bar: the controls carry the window's buttons.
-        window.set_titlebar(Some(&gtk::Box::builder().visible(false).build()));
 
         let canvas = Canvas::new();
         let strip = Strip::new();
@@ -235,7 +233,6 @@ impl Viewer {
         // Dragging the bar moves the window.
         let handle = gtk::WindowHandle::builder().child(&bar).build();
         let top = gtk::Revealer::builder()
-            .child(&handle)
             .transition_type(gtk::RevealerTransitionType::Crossfade)
             .valign(gtk::Align::Start)
             .reveal_child(true)
@@ -263,6 +260,23 @@ impl Viewer {
         overlay.add_overlay(&bottom);
         overlay.add_overlay(&toast);
         window.set_child(Some(&overlay));
+        // In a window the bar is the title bar, as in the other apps; full
+        // screen has none, so there it floats over the image and hides with
+        // the strip.
+        let place_bar = {
+            let top = top.clone();
+            move |window: &gtk::ApplicationWindow| {
+                if window.is_fullscreen() {
+                    window.set_titlebar(Some(&gtk::Box::builder().visible(false).build()));
+                    top.set_child(Some(&handle));
+                } else {
+                    top.set_child(None::<&gtk::Widget>);
+                    window.set_titlebar(Some(&handle));
+                }
+            }
+        };
+        place_bar(&window);
+        window.connect_fullscreened_notify(place_bar);
 
         let for_image: Vec<gtk::Widget> = [
             zoom_out.upcast_ref::<gtk::Widget>(),
