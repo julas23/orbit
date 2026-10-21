@@ -18,23 +18,27 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 | Component | What it is | Status |
 | --- | --- | --- |
-| **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay) | planned |
+| **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay): runs nested for now, tiles windows, hosts the panel and dock | in progress |
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
-| **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | in progress |
+| **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | **working** |
 | **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
 | **orbit-read** | PDF, Markdown and plain-text reader: outline, thumbnails, search, night mode | **working** |
 | **orbit-files** | File manager: Yazi's speed, three views, two panes, preview, bulk rename, actions, archives, network | **working** |
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts (Ferdium recipes) and notifications, EasyList/EasyPrivacy blocking, idle services hibernated, tracking parameters stripped, no telemetry | **working** |
+| **orbitctl** | Commands and queries to orbit-core (and sway), as `swaymsg`: `orbitctl workspace number 2`, `orbitctl -t get_tree` | **working** |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | **orbit-edit** | Text and code editor: several cursors, column selection, indent guides and folding, folder sidebar, session | **working** |
 
-Orbit is a clean reimplementation: existing desktops and compositors are
-studied as references, but no code is copied from them.
+Orbit is its own code. Existing desktops and compositors are studied as
+references; where orbit-core takes code from one (cosmic-comp, niri, anvil,
+sway), the file says where it came from and keeps that project's licence —
+code from cosmic-comp is GPL-3.0-only, so the orbit-core binary is too, while
+the rest of Orbit stays GPL-3.0-or-later (see `docs/PLANO-CORE.md`, section 9).
 
 ## Principles
 

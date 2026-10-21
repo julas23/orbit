@@ -1,0 +1,23 @@
+# Orbit-Core (the compositor). Every line is optional: with no file the core
+# comes up with these defaults, taken from the sway configuration Orbit grew on.
+
+keyboard:
+  layout: us
+  variant: alt-intl
+  model: pc105
+  options: ""
+  repeat_delay: 200     # ms before a held key repeats
+  repeat_rate: 25       # repeats per second
+
+modifier: super         # super, alt or ctrl: the core's own shortcuts
+terminal: kitty         # Mod+Return
+
+gaps: 6
+border: 2
+focused_color: "#4682b4"
+unfocused_color: "#4c566a"
+focus_follows_mouse: true
+
+# Run once the core is up (through sh -c), as its clients.
+startup:
+  - orbit-session

@@ -1,6 +1,6 @@
 # Plano do Orbit-Core
 
-Status: **rascunho para validação** (2026-10-20).
+Status: **Fase 1 em andamento** (2026-10-21) — plano validado; primeiro passo feito (abaixo, "Andamento").
 Origem: a decisão de 2026-10-20 de que o sway sai e o **orbit-core** assume a
 tarefa: um WM-DE próprio, sobre Smithay, que junta o melhor de i3/sway, bspwm,
 xmonad, dwm, spectrwm, awesome, Hyprland e niri, e o que um DE (GNOME, KDE)
@@ -282,6 +282,60 @@ desta fase — sem esperar o aninhado ficar completo.
   responde; a suíte de testes headless passa (abrir, fechar, dividir, mover para
   workspace, flutuar, scratchpad, regras); e a sessão `orbit` sobe num TTY do hp
   com painel e um terminal, mesmo que ainda sem monitor externo.
+
+**Andamento da Fase 1**
+
+- **2026-10-21 — esqueleto aninhado** (`crates/orbit-core`). Decidido com o
+  Juliano: porta-se com origem (seção 9; README ajustado) e começa-se pelo
+  esqueleto aninhado. Smithay fixado no commit `24647fc` (git), o mesmo em que
+  o smallvil/anvil foram lidos. Base no **smallvil** (MIT) + layer shell,
+  decoração, seleções e dmabuf do **anvil**; cada arquivo diz de onde veio.
+  - Feito: janelas `xdg-shell` lado a lado em colunas iguais (`tile.rs`, com
+    teste; a árvore do i3 vem no `orbit-layout`), bordas desenhadas pelo core
+    (`#4682b4`/`#4c566a`, 2 px, gaps 6 — da config do sway), decoração no
+    servidor, popups com grab (menus do painel), **layer shell** (o painel do
+    Orbit sobe e reserva a borda), teclado `us alt-intl` com teclas mortas,
+    foco por clique e `focus_follows_mouse`, atalhos Mod+Return / Mod+Shift+Q /
+    Mod+Shift+E / Mod+setas (Shift move), clipboard (`wl-data-device`,
+    `primary-selection`, `wlr-data-control`), `xdg-output`, viewporter,
+    `core.yaml` com padrões (vazio = sessão usável), desenho só quando algo
+    muda (§1.3).
+  - Testado no sway aninhado: painel + orbit-calc + foot + kitty; acento morto
+    (`'a` → á), clique chega ao app, Super+Return abre e Super+Shift+Q fecha com
+    o foco indo ao vizinho.
+  - **Armadilhas:** (1) o smallvil só faz `flush_clients` dentro do desenho, que
+    lá é contínuo; com desenho sob demanda os clientes ficavam sem resposta do
+    registry — o flush vai a cada volta do loop. (2) Smithay nesse commit
+    anuncia **linux-dmabuf v6** sempre que há feedback, e o **GTK 4.18 do Debian
+    cai** (SIGSEGV ao abrir o display: v6 não manda `main_device`). Contorno:
+    dmabuf v3 + wl_drm do EGL (`use_system_lib`). Voltar ao v4+ quando o GTK
+    aceitar (o cosmic-comp usa o mesmo v6). (3) `EGL BAD_SURFACE` logo após
+    redimensionar a janela aninhada: só um quadro inteiro, inofensivo. (4) No
+    teste, a 1ª tecla de cada execução do `vptr` se perde (troca de keymap do
+    teclado virtual), não é do core.
+- **2026-10-21 — IPC, áreas de trabalho e `orbitctl`.**
+  - Crate `orbit-ipc` (protocolo i3 + cliente): o `orbit-common::sway` virou
+    reexportação dele e procura `ORBIT_SOCK` → `SWAYSOCK` → `I3SOCK` (painel e
+    blink sem mudança). Crate `orbitctl` (o `swaymsg` do Orbit: `-t`, `-r`,
+    `-m`).
+  - No core: socket `$XDG_RUNTIME_DIR/orbit-ipc.<uid>.<pid>.sock` exportado nas
+    três variáveis; `GET_WORKSPACES/OUTPUTS/TREE/INPUTS/VERSION/SEATS`,
+    `SUBSCRIBE` com eventos `workspace` (init/focus/empty), `window`
+    (new/close/focus/title/move) e `input`; `RUN_COMMAND` com `;`/`,`,
+    critérios `con_id`/`app_id`/`title`/`workspace` (regex) e os comandos do
+    dia 1 da seção 5 (workspace number/next/prev/back_and_forth, focus [dir |
+    output], kill, move to workspace/scratchpad/left/right, scratchpad show,
+    floating disable, xkb_switch_layout, exec, reload, exit). O que ainda não
+    existe (split, layout, floating enable, fullscreen, resize, gaps, border)
+    responde `success: false` com o motivo.
+  - Áreas de trabalho numeradas (uma por vez, Mod+1…0 / Mod+Shift+1…0) e
+    scratchpad ("minimizar" do painel); ids de janela estáveis (`con_id`).
+  - Testado: painel com `workspaces`, `windows` e `keyboard` dentro do core
+    (clique na área 2 troca; minimizar/restaurar), `swaymsg` do sistema contra o
+    core, eventos na ordem do sway.
+  - Ainda não: árvore/tabbed/flutuantes, regras `for_window`, XWayland,
+    backend DRM, estado `Locked` / greet, testes headless automáticos; migrar
+    painel/blink para os protocolos padrão (§5).
 
 ### Fase 2 — sessão real de uso diário
 

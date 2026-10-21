@@ -15,6 +15,7 @@ orbit-common = { path = "crates/orbit-common" }
 orbit-app = { path = "crates/orbit-app" }
 orbit-backend-x11 = { path = "crates/orbit-backend-x11" }
 orbit-backend-wayland = { path = "crates/orbit-backend-wayland" }
+orbit-ipc = { path = "crates/orbit-ipc" }
 
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 # Only to enable GLib 2.68 APIs (TimeZone::from_identifier); the code uses the
@@ -76,5 +77,13 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha1 = "0.10"
 libloading = "0.8"
 anyhow = "1"
+# orbit-core: the criteria of sway commands ([app_id="(?i)…"]).
+regex = "1"
+# orbit-core: the compositor library, at an exact commit (its API changes
+# between versions; updated on purpose, as with glycin). The commit the
+# ported smallvil/anvil code was read at.
+smithay = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d00131eb7f388efed26e35ea316b0018", default-features = false }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4"
 env_logger = "0.11"

@@ -1,0 +1,146 @@
+//! `~/.config/orbit/core.yaml`. Every field has a default, so the core
+//! comes up usable with no file at all (PLANO-CORE §1.4); the defaults are
+//! those of the sway configuration Orbit grew on.
+//!
+//! ```yaml
+//! keyboard: { layout: us, variant: alt-intl }
+//! modifier: super        # or alt (nested in a session that takes Super)
+//! terminal: kitty
+//! gaps: 6
+//! border: 2
+//! startup: [orbit-session]
+//! ```
+
+use std::path::PathBuf;
+
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Config {
+    pub keyboard: Keyboard,
+    /// The key the core's own shortcuts are held with.
+    pub modifier: Modifier,
+    /// What Mod+Return opens.
+    pub terminal: String,
+    /// Space between windows, and between them and the screen's edges.
+    pub gaps: i32,
+    /// Width of the border drawn around each window.
+    pub border: i32,
+    /// RGB colours of the border: the focused window's and the others'.
+    pub focused_color: String,
+    pub unfocused_color: String,
+    /// The window the pointer enters takes the keyboard.
+    pub focus_follows_mouse: bool,
+    /// Commands run once the core is up (through `sh -c`).
+    pub startup: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Keyboard {
+    pub layout: String,
+    pub variant: String,
+    pub model: String,
+    pub options: String,
+    /// Milliseconds before a held key repeats, and repeats per second.
+    pub repeat_delay: i32,
+    pub repeat_rate: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Modifier {
+    Super,
+    Alt,
+    Ctrl,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            keyboard: Keyboard::default(),
+            modifier: Modifier::Super,
+            terminal: "kitty".into(),
+            gaps: 6,
+            border: 2,
+            focused_color: "#4682b4".into(),
+            unfocused_color: "#4c566a".into(),
+            focus_follows_mouse: true,
+            startup: Vec::new(),
+        }
+    }
+}
+
+impl Default for Keyboard {
+    fn default() -> Self {
+        Self {
+            layout: "us".into(),
+            variant: "alt-intl".into(),
+            model: "pc105".into(),
+            options: String::new(),
+            repeat_delay: 200,
+            repeat_rate: 25,
+        }
+    }
+}
+
+impl Config {
+    /// `$XDG_CONFIG_HOME/orbit/core.yaml`, or `~/.config/orbit/core.yaml`.
+    pub fn path() -> PathBuf {
+        let base = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
+        base.join("orbit").join("core.yaml")
+    }
+
+    /// The file at `path`; the defaults when it is missing. An error in it
+    /// is reported and the defaults are used: a bad file never stops the
+    /// session from coming up (§1.5).
+    pub fn load(path: &std::path::Path) -> Self {
+        match std::fs::read_to_string(path) {
+            Ok(text) if text.trim().is_empty() => Self::default(),
+            Ok(text) => serde_yaml_ng::from_str(&text).unwrap_or_else(|err| {
+                tracing::error!("{}: {err}; using the defaults", path.display());
+                Self::default()
+            }),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Self::default(),
+            Err(err) => {
+                tracing::error!("{}: {err}; using the defaults", path.display());
+                Self::default()
+            }
+        }
+    }
+}
+
+/// "#4682b4" → [r, g, b, 1.0]; a grey for anything else.
+pub fn color(text: &str) -> [f32; 4] {
+    let hex = text.trim().trim_start_matches('#');
+    let channel = |i: usize| hex.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()).map(|v| v as f32 / 255.0);
+    match (hex.len(), channel(0), channel(2), channel(4)) {
+        (6, Some(r), Some(g), Some(b)) => [r, g, b, 1.0],
+        _ => [0.3, 0.34, 0.42, 1.0],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_and_partial_files() {
+        let config: Config = serde_yaml_ng::from_str("gaps: 10\nkeyboard: { variant: intl }").unwrap();
+        assert_eq!(config.gaps, 10);
+        assert_eq!(config.keyboard.layout, "us");
+        assert_eq!(config.keyboard.variant, "intl");
+        assert_eq!(config.modifier, Modifier::Super);
+        assert!(serde_yaml_ng::from_str::<Config>("gapz: 1").is_err());
+    }
+
+    #[test]
+    fn colours() {
+        assert_eq!(color("#ff0000"), [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(color("nope")[3], 1.0);
+    }
+}

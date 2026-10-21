@@ -1,0 +1,20 @@
+[package]
+name = "orbit-core"
+description = "Orbit-Core: the Wayland compositor of the Orbit desktop, on Smithay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+smithay = { workspace = true, features = ["backend_winit", "backend_egl", "backend_drm", "renderer_gl", "wayland_frontend", "desktop", "use_system_lib"] }
+tracing.workspace = true
+orbit-ipc.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_yaml_ng.workspace = true
+anyhow.workspace = true

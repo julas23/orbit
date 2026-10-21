@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+orbit-ipc.workspace = true
 gtk.workspace = true
 serde.workspace = true
 serde_json.workspace = true

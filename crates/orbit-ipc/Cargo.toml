@@ -1,0 +1,13 @@
+[package]
+name = "orbit-ipc"
+description = "The i3/sway IPC protocol for Orbit: served by Orbit-Core, spoken by the panel, the apps and orbitctl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
