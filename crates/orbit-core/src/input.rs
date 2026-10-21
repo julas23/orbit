@@ -189,7 +189,7 @@ impl Orbit {
                 }
             }
             Action::MoveNext | Action::MovePrevious => self.move_focused(action == Action::MoveNext),
-            Action::Workspace(n) => self.switch_workspace(n),
+            Action::Workspace(n) => self.switch_workspace(self.resolve(n)),
             Action::Vt(n) => {
                 if let crate::state::Backend::Drm(drm) = &mut self.backend {
                     drm.change_vt(n);
@@ -197,7 +197,8 @@ impl Orbit {
             }
             Action::MoveToWorkspace(n) => {
                 if let Some(window) = self.focused_window() {
-                    self.move_to_workspace(&window, n);
+                    let num = self.resolve_for(&window, n);
+                    self.move_to_workspace(&window, num);
                 }
             }
         }

@@ -4,6 +4,12 @@
 //! exists while it is shown or holds windows. The scratchpad holds windows
 //! taken off every workspace — the panel's "minimise".
 //!
+//! Workspaces come in areas shared by every monitor, which switch together
+//! (the panel's convention, after `~/.config/sway/areas.sh`): area N is
+//! workspace N on the first monitor, stride+N on the second, 2·stride+N on
+//! the third (see `monitors` for the order). A plain area number (up to the
+//! stride) in a command means that area on the focused monitor.
+//!
 //! Every change is told to the IPC's subscribers (`workspace` and `window`
 //! events), as sway does.
 
@@ -86,13 +92,50 @@ impl Orbit {
             .unwrap_or_default()
     }
 
+    /// The area of workspace `num` (1…stride) and its monitor's place in
+    /// `monitors`.
+    pub fn area_of(&self, num: i32) -> (i32, usize) {
+        let stride = self.config.stride.max(1);
+        let n = num.max(1) - 1;
+        (n % stride + 1, (n / stride) as usize)
+    }
+
+    /// The workspace of `area` on the `monitor`-th monitor.
+    pub fn ws_number(&self, area: i32, monitor: usize) -> i32 {
+        monitor as i32 * self.config.stride.max(1) + area
+    }
+
+    /// The workspace a command's `num` names when the keyboard is on the
+    /// `monitor`-th monitor: a plain area number is that area there; a
+    /// larger one stands, unless its monitor is missing.
+    pub fn resolve_on(&self, num: i32, monitor: usize) -> i32 {
+        let (area, on) = self.area_of(num);
+        if num <= self.config.stride.max(1) || on >= self.monitors().len() { self.ws_number(area, monitor) } else { num }
+    }
+
+    /// `resolve_on` the focused monitor.
+    pub fn resolve(&self, num: i32) -> i32 {
+        let focused = self.focused_output_name();
+        self.resolve_on(num, self.monitors().iter().position(|o| *o == focused).unwrap_or(0))
+    }
+
+    /// `resolve_on` the monitor `window` is on (the focused one from the
+    /// scratchpad).
+    pub fn resolve_for(&self, window: &Window, num: i32) -> i32 {
+        match self.workspace_of(window) {
+            Some(on) => self.resolve_on(num, self.area_of(on).1),
+            None => self.resolve(num),
+        }
+    }
+
     /// The index of workspace `num`, made (and announced) when missing, on
-    /// the focused monitor; the list stays in number order.
+    /// its monitor (the focused one when that is missing); the list stays
+    /// in number order.
     pub fn ensure_ws(&mut self, num: i32) -> usize {
         if let Some(i) = self.workspaces.iter().position(|w| w.num == num) {
             return i;
         }
-        let output = self.focused_output_name();
+        let output = self.monitors().get(self.area_of(num).1).cloned().unwrap_or_else(|| self.focused_output_name());
         let i = self.workspaces.iter().position(|w| w.num > num).unwrap_or(self.workspaces.len());
         self.workspaces.insert(i, Workspace::new(num, output));
         self.workspace_event("init", num, None);
@@ -107,6 +150,9 @@ impl Orbit {
     /// Puts workspace `num` on monitor `output` in place of the one it
     /// showed, whose windows leave the screen. Nothing is laid out yet.
     pub fn show_on(&mut self, output: &str, num: i32) {
+        if self.visible.get(output) == Some(&num) {
+            return;
+        }
         if let Some(old) = self.visible.get(output).copied().filter(|old| *old != num) {
             for window in self.windows_of(old) {
                 self.space.unmap_elem(&window);
@@ -122,18 +168,38 @@ impl Orbit {
         }
     }
 
-    /// Focuses workspace `num`: shown on another monitor, the keyboard goes
-    /// there; hidden, it comes to its own monitor (a new one, to the
-    /// focused monitor) in place of what that showed.
+    /// Every monitor shows its workspace of `area`.
+    pub fn show_area(&mut self, area: i32) {
+        for (k, output) in self.monitors().into_iter().enumerate() {
+            let num = self.ws_number(area, k);
+            self.show_on(&output, num);
+        }
+    }
+
+    /// Focuses workspace `num`: every monitor goes to its area, and the
+    /// keyboard to `num`'s monitor.
     pub fn switch_workspace(&mut self, num: i32) {
         if num == self.current {
             return;
         }
+        self.show_area(self.area_of(num).0);
+        self.enter(num);
+    }
+
+    /// The keyboard goes to monitor `output`, on the workspace it shows.
+    pub fn focus_output(&mut self, output: &str) {
+        if let Some(num) = self.visible.get(output).copied().filter(|n| *n != self.current) {
+            self.enter(num);
+        }
+    }
+
+    /// Workspace `num`, shown, becomes the focused one, with the window it
+    /// last had focused.
+    fn enter(&mut self, num: i32) {
         let old = self.current;
-        self.previous_ws = Some(old);
-        if !self.is_visible(num) {
-            let output = self.ws_output(num).filter(|o| self.visible.contains_key(o)).unwrap_or_else(|| self.focused_output_name());
-            self.show_on(&output, num);
+        // `back_and_forth` goes back to the area before, not the monitor.
+        if self.area_of(num).0 != self.area_of(old).0 {
+            self.previous_ws = Some(old);
         }
         self.current = num;
         let i = self.ensure_ws(num);
@@ -152,9 +218,54 @@ impl Orbit {
             return;
         }
         let old = self.current;
-        self.previous_ws = Some(old);
         self.current = num;
         self.workspace_event("focus", num, Some(old));
+        self.drop_empty();
+    }
+
+    /// Monitors came or went, or changed order: each workspace takes the
+    /// number of its area on its monitor (the first one, when its own is
+    /// gone), merging with any that has it already, and every monitor shows
+    /// the focused area.
+    pub fn renumber(&mut self) {
+        let monitors = self.monitors();
+        if monitors.is_empty() {
+            return;
+        }
+        for num in self.visible.values().copied().collect::<Vec<_>>() {
+            for window in self.windows_of(num) {
+                self.space.unmap_elem(&window);
+            }
+        }
+        self.visible.clear();
+        let wanted = |state: &Self, ws: &Workspace| {
+            let k = monitors.iter().position(|o| *o == ws.output).unwrap_or(0);
+            (state.ws_number(state.area_of(ws.num).0, k), monitors[k].clone())
+        };
+        let current = self.workspaces.iter().find(|w| w.num == self.current).map(|w| wanted(self, w).0).unwrap_or(self.current);
+        let before: Vec<i32> = self.workspaces.iter().map(|w| w.num).collect();
+        let mut merged: Vec<Workspace> = Vec::new();
+        for ws in std::mem::take(&mut self.workspaces) {
+            let (num, output) = wanted(self, &ws);
+            match merged.iter_mut().find(|w| w.num == num) {
+                Some(into) => {
+                    into.windows.extend(ws.windows);
+                    into.last_focus = into.last_focus.take().or(ws.last_focus);
+                }
+                None => merged.push(Workspace { num, output, ..ws }),
+            }
+        }
+        merged.sort_by_key(|w| w.num);
+        self.workspaces = merged;
+        for num in before.iter().copied().filter(|n| !self.workspaces.iter().any(|w| w.num == *n)).collect::<Vec<_>>() {
+            self.workspace_event("empty", num, None);
+        }
+        for num in self.workspaces.iter().map(|w| w.num).filter(|n| !before.contains(n)).collect::<Vec<_>>() {
+            self.workspace_event("init", num, None);
+        }
+        self.current = current;
+        self.show_area(self.area_of(current).0);
+        self.ensure_ws(current);
         self.drop_empty();
     }
 

@@ -109,47 +109,38 @@ impl Orbit {
         }
     }
 
-    /// A monitor came: it takes its place and shows a workspace — one
-    /// that was its own before, or the lowest number free.
+    /// A monitor came: it takes its place and shows the focused area.
     pub fn add_output(&mut self, output: &Output) {
         self.space.map_output(output, (0, 0));
         self.place_outputs();
-        let name = output.name();
-        if !self.visible.contains_key(&name) {
-            let num = self
-                .workspaces
-                .iter()
-                .find(|w| w.output == name && !self.is_visible(w.num))
-                .map(|w| w.num)
-                .unwrap_or_else(|| (1..).find(|n| !self.workspaces.iter().any(|w| w.num == *n)).unwrap_or(1));
-            self.show_on(&name, num);
-            if self.visible.len() == 1 {
-                self.current = num;
-            }
-        }
+        self.renumber();
         self.arrange();
     }
 
-    /// A monitor went: its workspaces go to one that is left, hidden.
+    /// A monitor went: its windows go to the first one left, in the same
+    /// areas.
     pub fn remove_output(&mut self, output: &Output) {
-        let name = output.name();
         self.space.unmap_output(output);
-        let Some(gone) = self.visible.remove(&name) else { return };
-        for window in self.windows_of(gone) {
-            self.space.unmap_elem(&window);
-        }
-        if let Some(other) = self.space.outputs().next().map(|o| o.name()) {
-            for ws in self.workspaces.iter_mut().filter(|w| w.output == name) {
-                ws.output = other.clone();
-            }
-            if self.current == gone {
-                self.current = self.visible.get(&other).copied().unwrap_or(gone);
-            }
-        }
         self.place_outputs();
+        self.renumber();
         self.arrange();
         let focus = self.current_ws().last_focus.clone();
         self.focus_window(focus);
+    }
+
+    /// The monitors in area order: the laptop's panel first, then top to
+    /// bottom, left to right (the panel's order too).
+    pub fn monitors(&self) -> Vec<String> {
+        let mut list: Vec<(String, (bool, i32, i32))> = self
+            .space
+            .outputs()
+            .map(|o| {
+                let loc = self.space.output_geometry(o).map(|g| g.loc).unwrap_or_default();
+                (o.name(), (!internal(&o.name()), loc.y, loc.x))
+            })
+            .collect();
+        list.sort_by_key(|(_, key)| *key);
+        list.into_iter().map(|(name, _)| name).collect()
     }
 }
 

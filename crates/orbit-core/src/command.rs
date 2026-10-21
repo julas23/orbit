@@ -172,7 +172,7 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
         }
         ["workspace", rest @ ..] => {
             let num = workspace_number(state, rest)?;
-            state.switch_workspace(num);
+            state.switch_workspace(state.resolve(num));
             Ok(())
         }
         ["focus"] => {
@@ -189,9 +189,7 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
         }
         ["focus", "output", which] => {
             let target = state.output_toward(which).ok_or_else(|| format!("There is no output called {which}"))?;
-            if let Some(num) = state.visible.get(&target).copied() {
-                state.switch_workspace(num);
-            }
+            state.focus_output(&target);
             Ok(())
         }
         ["kill"] => {
@@ -217,6 +215,7 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             let at = rest.iter().position(|w| *w == "workspace").unwrap_or(0);
             let num = workspace_number(state, &rest[at + 1..])?;
             for window in windows() {
+                let num = state.resolve_for(&window, num);
                 state.move_to_workspace(&window, num);
             }
             Ok(())
@@ -238,16 +237,19 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
     }
 }
 
-/// `number 3`, `3`, `next`, `prev`, `back_and_forth`.
+/// `number 3`, `3`, `next`, `prev`, `back_and_forth`; `next` and `prev`
+/// go through the areas in use, and give an area number.
 fn workspace_number(state: &Orbit, rest: &[&str]) -> Result<i32, String> {
-    let nums: Vec<i32> = state.workspaces.iter().map(|w| w.num).collect();
-    let pos = nums.iter().position(|n| *n == state.current).unwrap_or(0);
+    let mut nums: Vec<i32> = state.workspaces.iter().map(|w| state.area_of(w.num).0).collect();
+    nums.sort();
+    nums.dedup();
+    let pos = nums.iter().position(|n| *n == state.area_of(state.current).0).unwrap_or(0);
     let pick = |s: &str| s.split(':').next().and_then(|n| n.parse::<i32>().ok());
     match rest {
         ["number", n, ..] => pick(n).ok_or_else(|| format!("not a workspace number: {n}")),
         ["next" | "next_on_output"] => Ok(nums[(pos + 1) % nums.len().max(1)]),
         ["prev" | "prev_on_output"] => Ok(nums[(pos + nums.len().max(1) - 1) % nums.len().max(1)]),
-        ["back_and_forth"] => Ok(state.previous_ws.unwrap_or(state.current)),
+        ["back_and_forth"] => Ok(state.area_of(state.previous_ws.unwrap_or(state.current)).0),
         [n] => pick(n).ok_or_else(|| format!("named workspaces are not in orbit-core yet: {n}")),
         _ => Err("workspace: which?".into()),
     }

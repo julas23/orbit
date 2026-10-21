@@ -10,6 +10,7 @@
 //! border: 2
 //! corner_radius: 10
 //! startup: [orbit-session]
+//! stride: 10             # area N: workspace N, 10+N, 20+N… down the monitors
 //! outputs:               # where each monitor sits; unnamed ones stack
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
 //! ```
@@ -45,6 +46,9 @@ pub struct Config {
     pub cursor_size: u32,
     /// Monitors by connector name (`eDP-1`, `HDMI-A-1`).
     pub outputs: HashMap<String, OutputConfig>,
+    /// Workspace-number distance between the same area on two monitors
+    /// (the panel's `stride`; see `workspace`).
+    pub stride: i32,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -90,6 +94,7 @@ impl Default for Config {
             cursor_theme: "Breeze_Light".into(),
             cursor_size: 24,
             outputs: HashMap::new(),
+            stride: 10,
         }
     }
 }
