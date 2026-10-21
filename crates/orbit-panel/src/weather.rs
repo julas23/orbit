@@ -205,6 +205,7 @@ fn show(card: &Card, config: &WeatherConfig, w: &Weather) {
         }
     }
     card.temp.set_label(&format!("{:.0}°C", w.temperature));
+    weather_data::colour_temp(&card.temp, w.temperature);
     if let (Some(min), Some(max)) = (&card.min, &card.max) {
         min.set_label(&format!("{:.0}°", today.min));
         max.set_label(&format!("{:.0}°", today.max));

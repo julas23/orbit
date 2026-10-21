@@ -104,6 +104,7 @@ fn show(cards: &[DayCard], config: &WeatherConfig, w: &Weather) {
             }
         }
         card.max.set_label(&format!("{:.0}°", day.max));
+        weather_data::colour_temp(&card.max, day.max);
         card.root.set_tooltip_text(Some(&tooltip(day)));
     }
 }

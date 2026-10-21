@@ -327,6 +327,54 @@ pub fn brweather_code(code: i32) -> &'static str {
     }
 }
 
+/// The colour classes of temperatures, coldest first (style.css gives each
+/// its colour; `temp_class` picks one).
+const TEMP_CLASSES: [&str; 10] = [
+    "temp-bitter", "temp-m30", "temp-m20", "temp-m10", "temp-zero", "temp-0", "temp-10", "temp-20", "temp-30", "temp-40",
+];
+
+/// The colour class of `celsius` as shown (rounded), on the user's scale:
+/// −30 and below black and bold, to −20 purple, to −10 blue, below 0
+/// green, 0 white, below 10 light blue, below 20 light green, below 30
+/// yellow, below 40 orange, 40 and above red and bold. Fahrenheit, when
+/// it comes, is converted first and takes the same colours.
+pub fn temp_class(celsius: f64) -> &'static str {
+    let t = celsius.round();
+    let i = if t <= -30.0 {
+        0
+    } else if t <= -20.0 {
+        1
+    } else if t <= -10.0 {
+        2
+    } else if t < 0.0 {
+        3
+    } else if t == 0.0 {
+        4
+    } else if t < 10.0 {
+        5
+    } else if t < 20.0 {
+        6
+    } else if t < 30.0 {
+        7
+    } else if t < 40.0 {
+        8
+    } else {
+        9
+    };
+    TEMP_CLASSES[i]
+}
+
+/// Gives `label` the colour of `celsius`, instead of the one it had.
+pub fn colour_temp(label: &gtk::Label, celsius: f64) {
+    use gtk::prelude::WidgetExt;
+
+    let class = temp_class(celsius);
+    for other in TEMP_CLASSES.iter().filter(|c| **c != class) {
+        label.remove_css_class(other);
+    }
+    label.add_css_class(class);
+}
+
 /// WMO weather code -> Nerd Font glyph, when there are no picture icons.
 pub fn glyph(code: i32) -> &'static str {
     match code {
@@ -441,6 +489,15 @@ fn season_id(month: i32, day: i32, lat: f64) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn temperatures_take_the_scale_colours() {
+        let c = |t| temp_class(t);
+        assert_eq!([c(-35.0), c(-30.0), c(-25.0), c(-20.0), c(-15.0), c(-10.0), c(-3.0)], ["temp-bitter", "temp-bitter", "temp-m30", "temp-m30", "temp-m20", "temp-m20", "temp-m10"]);
+        // As shown, rounded: −0.4 and 0.3 are 0°.
+        assert_eq!([c(-0.4), c(0.3), c(0.6), c(9.4), c(10.0)], ["temp-zero", "temp-zero", "temp-0", "temp-0", "temp-10"]);
+        assert_eq!([c(19.6), c(25.0), c(30.0), c(39.4), c(39.6), c(45.0)], ["temp-20", "temp-20", "temp-30", "temp-30", "temp-40", "temp-40"]);
+    }
 
     #[test]
     fn compass_points() {

@@ -363,6 +363,19 @@ window.orbit-menu { background: transparent; }
 .forecast .day .max   { font-size: 10px; min-height: 15px; }
 .forecast .day .glyph { font-size: 14px; color: @orbit_accent; min-height: 20px; }
 .forecast .day        { padding-left: 0; padding-right: 0; }
+/* Temperatures (the current one and each day's maximum) coloured on the
+ * user's scale (weather_data::temp_class). The black of −30 and below
+ * keeps a light halo so it shows on the dark panel. */
+.orbit-panel label.temp-bitter { color: #000000; font-weight: bold; text-shadow: 0 0 2px rgba(255, 255, 255, 0.9); }
+.orbit-panel label.temp-m30    { color: #a855f7; }
+.orbit-panel label.temp-m20    { color: #3b82f6; }
+.orbit-panel label.temp-m10    { color: #22c55e; }
+.orbit-panel label.temp-zero   { color: #ffffff; }
+.orbit-panel label.temp-0      { color: #7dd3fc; }
+.orbit-panel label.temp-10     { color: #86efac; }
+.orbit-panel label.temp-20     { color: #facc15; }
+.orbit-panel label.temp-30     { color: #fb923c; }
+.orbit-panel label.temp-40     { color: #ef4444; font-weight: bold; }
 
 /* Status modules (status.rs): network, keyboard, battery, notifications.
  * Normal, one row: a 20 px glyph in a 28 px box beside two 14 px lines —
