@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use orbit_app::i18n::{number, tr, tr_args};
 
-use crate::status::Row;
+use crate::{board::Form, status::Row};
 
 const NAME: &str = "io.github.julas23.Orbit.Notify";
 const PATH: &str = "/io/github/julas23/Orbit/Notify";
@@ -33,8 +33,8 @@ struct Module {
     keep: RefCell<Vec<Box<dyn std::any::Any>>>,
 }
 
-pub fn new(_config: &NotificationsConfig, vertical: bool) -> gtk::Widget {
-    let row = Row::new("notifications", vertical);
+pub fn new(_config: &NotificationsConfig, form: Form) -> gtk::Widget {
+    let row = Row::new("notifications", form);
     let conn = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
         .inspect_err(|err| log::error!("notifications: no session bus: {err}"))
         .ok();
@@ -90,7 +90,7 @@ impl Module {
         let tooltip = tr("notifications-tooltip");
         let Some((unread, dnd)) = state else {
             self.row.root.remove_css_class("unread");
-            self.row.show("󰂜", &tr("notifications-none"), &tr("notifications-off"), &tooltip);
+            self.row.show("󰂜", &[&tr("notifications-none"), &tr("notifications-off")], &tooltip);
             return;
         };
         self.dnd.set(dnd);
@@ -105,7 +105,7 @@ impl Module {
         } else {
             self.row.root.remove_css_class("unread");
         }
-        self.row.show(glyph, &first, &second, &tooltip);
+        self.row.show(glyph, &[&first, &second], &tooltip);
     }
 
     /// Reads the server's state, when it shows up.

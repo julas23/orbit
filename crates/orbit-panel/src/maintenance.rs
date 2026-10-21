@@ -1,10 +1,13 @@
-//! Maintenance mode: a 5 px grid drawn behind the panel, for checking that
-//! every size, gap and padding lands on the grid.
+//! Maintenance mode: the layout grid drawn behind the panel.
 //!
-//! Every tenth line (50 px) is drawn brighter so distances can be counted
-//! at a glance.
+//! Vertical panel: the cells of the grid (see `board`), each with its name —
+//! columns a–d, rows from 1, so a1 is the top-left cell — to see and name
+//! where every module sits. Horizontal panel: a 5 px grid, every tenth line
+//! (50 px) brighter, for checking that sizes, gaps and paddings land on it.
 
 use gtk::prelude::*;
+
+use crate::board;
 
 /// The layout step: every measure in the panel is a multiple of this.
 const STEP: i32 = 5;
@@ -18,9 +21,13 @@ const MINOR: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.22);
 const MAJOR: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.45);
 
 /// Puts `content` on top of the grid.
-pub fn wrap(content: &impl IsA<gtk::Widget>) -> gtk::Overlay {
+pub fn wrap(content: &impl IsA<gtk::Widget>, vertical: bool) -> gtk::Overlay {
     let grid = gtk::DrawingArea::new();
-    grid.set_draw_func(|_, cr, width, height| draw(cr, width, height));
+    if vertical {
+        grid.set_draw_func(|_, cr, width, height| cells(cr, width, height));
+    } else {
+        grid.set_draw_func(|_, cr, width, height| lines(cr, width, height));
+    }
 
     let overlay = gtk::Overlay::builder()
         .css_classes(["maintenance"])
@@ -32,7 +39,36 @@ pub fn wrap(content: &impl IsA<gtk::Widget>) -> gtk::Overlay {
     overlay
 }
 
-fn draw(cr: &gtk::cairo::Context, width: i32, height: i32) {
+/// Every cell outlined, its name in its top-left corner.
+fn cells(cr: &gtk::cairo::Context, _width: i32, height: i32) {
+    let (r, g, b, a) = MAJOR;
+    cr.set_line_width(1.0);
+    cr.select_font_face(
+        "monospace",
+        gtk::cairo::FontSlant::Normal,
+        gtk::cairo::FontWeight::Normal,
+    );
+    cr.set_font_size(9.0);
+    for row in 0..board::rows_in(height) {
+        for col in 0..board::COLUMNS {
+            let x = f64::from(col * board::PITCH);
+            let y = f64::from(board::PAD + row * board::PITCH);
+            let side = f64::from(board::CELL);
+            // On pixel centres (+0.5) so a 1 px line stays crisp.
+            cr.rectangle(x + 0.5, y + 0.5, side - 1.0, side - 1.0);
+            cr.set_source_rgba(r, g, b, a);
+            let _ = cr.stroke();
+            cr.move_to(x + 3.0, y + 11.0);
+            cr.set_source_rgba(r, g, b, 0.7);
+            if let Err(err) = cr.show_text(&board::cell_name(col, row)) {
+                log::warn!("maintenance grid: {err}");
+                return;
+            }
+        }
+    }
+}
+
+fn lines(cr: &gtk::cairo::Context, width: i32, height: i32) {
     cr.set_line_width(1.0);
     // Minor lines first, major on top. Lines sit on pixel centres (+0.5) so
     // a 1 px line stays crisp.

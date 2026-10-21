@@ -49,7 +49,7 @@ pub fn new(config: &WorkspacesConfig, vertical: bool) -> gtk::Widget {
         .column_homogeneous(true)
         .row_homogeneous(true)
         .column_spacing(10)
-        .row_spacing(5)
+        .row_spacing(if vertical { 10 } else { 5 })
         .build();
     let card = gtk::Box::builder()
         .css_classes(if vertical {

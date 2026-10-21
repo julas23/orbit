@@ -7,8 +7,13 @@
 //!   sunrise   moon of the day   sunset
 //!   humidity                    wind
 //!
-//! Pressure, clouds, UV, the moon's name and the season go to the tooltip.
-//! Line form: icon + temperature, everything else in the tooltip.
+//!   the next days (the forecast module's row)
+//!
+//! That is Full (4 × 4 cells). Normal (4 × 2) keeps the picture, the
+//! temperatures and the description; Mini (3 × 1) and the line form only a
+//! small picture and the temperature. Pressure, clouds, UV, the moon's name
+//! and the season — and in the smaller forms everything they leave out — go
+//! to the tooltip.
 //!
 //! Icons: brweather's pictures (`icon_dir`/tema<N>/<code>.png, night versions
 //! with a "2" suffix where the theme has one) and its 36 moon phases
@@ -23,7 +28,11 @@ use gtk::{glib, prelude::*};
 pub use crate::weather_data::WeatherConfig;
 use orbit_app::i18n::{text, tr_args};
 
-use crate::weather_data::{self, Weather};
+use crate::{
+    board::Form,
+    forecast::{self, ForecastConfig},
+    weather_data::{self, Weather},
+};
 
 struct Card {
     root: gtk::Widget,
@@ -40,8 +49,8 @@ struct Card {
     wind: Option<gtk::Label>,
 }
 
-pub fn new(config: &WeatherConfig, vertical: bool) -> gtk::Widget {
-    let card = Rc::new(build(config, vertical));
+pub fn new(config: &WeatherConfig, form: Form) -> gtk::Widget {
+    let card = Rc::new(build(config, form));
     let root = card.root.clone();
     let shown = config.clone();
     weather_data::subscribe(config, move |weather| show(&card, &shown, weather));
@@ -52,19 +61,31 @@ fn label(class: &str) -> gtk::Label {
     gtk::Label::builder().css_classes([class]).build()
 }
 
-fn build(config: &WeatherConfig, vertical: bool) -> Card {
+fn build(config: &WeatherConfig, form: Form) -> Card {
     let icon = gtk::Image::builder()
-        .pixel_size(if vertical { 55 } else { 30 })
+        .pixel_size(match form {
+            Form::Full | Form::Normal => 40,
+            Form::Mini => 25,
+            Form::Line => 30,
+        })
         .build();
     let glyph = label("glyph");
     glyph.set_visible(false);
     let temp = label("temp");
 
-    if !vertical {
+    if matches!(form, Form::Mini | Form::Line) {
         let line = gtk::Box::builder()
             .spacing(5)
-            .css_classes(["weather-line"])
+            .css_classes(if form == Form::Mini {
+                vec!["card", "weather-line", "mini"]
+            } else {
+                vec!["weather-line"]
+            })
             .build();
+        if form == Form::Mini {
+            line.set_halign(gtk::Align::Fill);
+            temp.set_hexpand(true);
+        }
         line.append(&icon);
         line.append(&glyph);
         line.append(&temp);
@@ -107,6 +128,28 @@ fn build(config: &WeatherConfig, vertical: bool) -> Card {
     top.append(&numbers);
 
     let desc = Marquee::new(config.marquee);
+    let card = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["card", "weather", form.class()])
+        .build();
+    card.append(&top);
+    card.append(&desc.label);
+    if form == Form::Normal {
+        return Card {
+            root: card.upcast(),
+            icon,
+            glyph,
+            temp,
+            min: Some(min),
+            max: Some(max),
+            desc: Some(desc),
+            sunrise: None,
+            sunset: None,
+            moon: None,
+            humidity: None,
+            wind: None,
+        };
+    }
 
     let (sunrise, sunset) = (label("sun"), label("sun"));
     let moon = gtk::Image::builder().pixel_size(20).build();
@@ -124,14 +167,12 @@ fn build(config: &WeatherConfig, vertical: bool) -> Card {
         .end_widget(&wind)
         .build();
 
-    let card = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .css_classes(["card", "weather"])
-        .build();
-    card.append(&top);
-    card.append(&desc.label);
     card.append(&sun);
     card.append(&info);
+    let days = forecast::new(&ForecastConfig::default(), config, true);
+    days.set_vexpand(true);
+    days.set_valign(gtk::Align::End);
+    card.append(&days);
 
     Card {
         root: card.upcast(),
@@ -195,11 +236,15 @@ fn show(card: &Card, config: &WeatherConfig, w: &Weather) {
     let uv = w.uv.map_or("—".to_string(), |uv| format!("{uv:.0}"));
     // Numbers go in already rounded: Fluent would print 22.3 as "22.3".
     let n = |v: f64| text(format!("{v:.0}"));
-    card.root.set_tooltip_text(Some(&tr_args(
+    let mut tooltip = tr_args(
         "weather-tooltip",
         &[
             ("description", text(description.clone())),
             ("place", text(w.place.clone())),
+            ("min", n(today.min)),
+            ("max", n(today.max)),
+            ("sunrise", text(today.sunrise.clone())),
+            ("sunset", text(today.sunset.clone())),
             ("feels", n(w.feels_like)),
             ("humidity", n(w.humidity)),
             ("wind", n(w.wind_speed)),
@@ -211,7 +256,15 @@ fn show(card: &Card, config: &WeatherConfig, w: &Weather) {
             ("lit", text(moon_lit.to_string())),
             ("season", text(season)),
         ],
-    )));
+    );
+    // The forms without the next days have them in the tooltip.
+    if card.sunrise.is_none() {
+        for day in w.days.iter().skip(1) {
+            tooltip.push('\n');
+            tooltip.push_str(&forecast::tooltip(day));
+        }
+    }
+    card.root.set_tooltip_text(Some(&tooltip));
 }
 
 /// A label that scrolls its text like HTML's <marquee> when it is longer

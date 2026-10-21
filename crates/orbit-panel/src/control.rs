@@ -1,15 +1,19 @@
 //! A level control shared by the volume and brightness modules, after the
 //! "controle" of the eww panel: a slider and an icon.
 //!
-//! Block form: a half-width card — the two controls sit side by side — with
-//! the clickable icon on the left and a vertical slider (up = more) on the
-//! right. Line form:
-//! only the icon; its click opens a horizontal slider in a popover. In both
-//! forms the mouse wheel over the icon steps the level.
+//! Normal (2 × 1 cells): the clickable icon on the left and a vertical
+//! slider (up = more) on the right. Full (4 × 1): the icon and a horizontal
+//! slider. Mini (1 × 1) and the line form: only the icon; a left click opens
+//! a horizontal slider in a popover, and a right click in Mini does what the
+//! left click on the icon does in the larger forms (the mixer, for the
+//! volume). In every form the mouse wheel over the module steps the level
+//! and the tooltip has the level.
 
 use std::{cell::Cell, rc::Rc};
 
 use gtk::{glib, prelude::*};
+
+use crate::board::Form;
 
 pub struct Control {
     pub root: gtk::Widget,
@@ -20,22 +24,24 @@ pub struct Control {
     updating: Rc<Cell<bool>>,
 }
 
+type Callback = Box<dyn Fn()>;
+
 /// What the control does when the user acts on it.
 pub struct Actions {
     /// The slider moved to this percentage.
     pub set: Box<dyn Fn(u32)>,
     /// The wheel moved by this many steps (positive = up).
     pub step: Box<dyn Fn(i32)>,
-    /// Left click on the icon (block form only; in the line form the click
-    /// opens the slider).
-    pub click: Option<Box<dyn Fn()>>,
-    /// Right click on the icon.
-    pub right_click: Option<Box<dyn Fn()>>,
+    /// Left click on the icon (Normal and Full; in Mini and the line form
+    /// the click opens the slider, and in Mini a right click does this).
+    pub click: Option<Callback>,
+    /// Right click on the icon (Normal, Full and the line form).
+    pub right_click: Option<Callback>,
 }
 
 impl Control {
-    pub fn new(class: &str, vertical: bool, actions: Actions) -> Self {
-        let orientation = if vertical {
+    pub fn new(class: &str, form: Form, actions: Actions) -> Self {
+        let orientation = if form == Form::Normal {
             gtk::Orientation::Vertical
         } else {
             gtk::Orientation::Horizontal
@@ -44,7 +50,7 @@ impl Control {
         scale.set_draw_value(false);
         scale.set_hexpand(true);
         // A vertical scale grows downwards; turn it so that up is more.
-        scale.set_inverted(vertical);
+        scale.set_inverted(form == Form::Normal);
         let icon = gtk::Label::builder()
             .css_classes(["icon"])
             .valign(gtk::Align::Center)
@@ -70,56 +76,61 @@ impl Control {
                 glib::Propagation::Stop
             });
         }
-        icon.add_controller(wheel);
 
-        let right = gtk::GestureClick::builder().button(3).build();
-        {
+        let run = |action: fn(&Actions) -> &Option<Callback>| {
             let actions = actions.clone();
-            right.connect_released(move |_, _, _, _| {
-                if let Some(f) = &actions.right_click {
+            move |_: &gtk::GestureClick, _: i32, _: f64, _: f64| {
+                if let Some(f) = action(&actions) {
                     f();
                 }
-            });
-        }
-        icon.add_controller(right);
-
-        let left = gtk::GestureClick::builder().button(1).build();
-        icon.add_controller(left.clone());
-
-        let root: gtk::Widget = if vertical {
-            let card = gtk::Box::builder()
-                .css_classes(["card", "control", class])
-                .spacing(5)
-                .build();
-            card.append(&icon);
-            card.append(&scale);
-            {
-                let actions = actions.clone();
-                left.connect_released(move |_, _, _, _| {
-                    if let Some(f) = &actions.click {
-                        f();
-                    }
-                });
             }
-            if actions.click.is_some() {
-                icon.set_cursor_from_name(Some("pointer"));
-            }
-            card.upcast()
-        } else {
-            let holder = gtk::Box::builder()
-                .css_classes(["control", class, "popup"])
-                .build();
-            holder.append(&scale);
-            let popover = gtk::Popover::builder().child(&holder).build();
-            let line = gtk::Box::builder()
-                .css_classes(["control-line", class])
-                .build();
-            line.append(&icon);
-            popover.set_parent(&line);
-            left.connect_released(move |_, _, _, _| popover.popup());
-            icon.set_cursor_from_name(Some("pointer"));
-            line.upcast()
         };
+        let left = gtk::GestureClick::builder().button(1).build();
+        let right = gtk::GestureClick::builder().button(3).build();
+        icon.add_controller(left.clone());
+        icon.add_controller(right.clone());
+
+        let root: gtk::Widget = match form {
+            Form::Normal | Form::Full => {
+                let card = gtk::Box::builder()
+                    .css_classes(["card", "control", class, form.class()])
+                    .spacing(5)
+                    .build();
+                card.append(&icon);
+                card.append(&scale);
+                left.connect_released(run(|a| &a.click));
+                right.connect_released(run(|a| &a.right_click));
+                if actions.click.is_some() {
+                    icon.set_cursor_from_name(Some("pointer"));
+                }
+                card.upcast()
+            }
+            Form::Mini | Form::Line => {
+                let holder = gtk::Box::builder()
+                    .css_classes(["control", class, "popup"])
+                    .build();
+                holder.append(&scale);
+                let popover = gtk::Popover::builder().child(&holder).build();
+                let classes = if form == Form::Mini {
+                    vec!["card", "control", class, "mini"]
+                } else {
+                    vec!["control-line", class]
+                };
+                let root = gtk::Box::builder().css_classes(classes).build();
+                icon.set_hexpand(true);
+                root.append(&icon);
+                popover.set_parent(&root);
+                left.connect_released(move |_, _, _, _| popover.popup());
+                if form == Form::Mini {
+                    right.connect_released(run(|a| &a.click));
+                } else {
+                    right.connect_released(run(|a| &a.right_click));
+                }
+                icon.set_cursor_from_name(Some("pointer"));
+                root.upcast()
+            }
+        };
+        root.add_controller(wheel);
 
         Self {
             root,

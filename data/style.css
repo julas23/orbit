@@ -8,7 +8,11 @@
  * data/palette-light.css, chosen by the system's colour scheme. */
 
 /* Panel grid: every size, gap and padding of the panel is a multiple of 5 px
- * (see docs/PLANO-PAINEL.md). Borders count toward a box's size in GTK, so a
+ * (see docs/PLANO-PAINEL.md). The vertical panel is a grid of 30 px cells,
+ * 10 px apart, 4 across (board.rs): a module is 30, 70, 110 or 150 px wide
+ * and 30, 70, 110, 150… px tall, and its sizes below are counted to fill
+ * that exactly. A one-row card is a 1 px border around 28 px of content, so
+ * it has no vertical padding. Borders count toward a box's size in GTK, so a
  * 1 px border always pairs with 4 px of padding: the content then starts
  * exactly 5 px in. Font sizes are free; a text line gets a min-height on the
  * grid so the box around it still lands on a multiple of 5.
@@ -37,6 +41,13 @@ window.orbit button {
   border-radius: 10px;
   padding: 4px;            /* + 1 px border = 5 */
 }
+/* The grid places its modules itself, 5 px from the top and the bottom and
+ * edge to edge across: no padding, and an outline that takes no room. */
+.panel.grid {
+  border: none;
+  padding: 0;
+  box-shadow: inset 0 0 0 1px @orbit_edge;
+}
 
 /* 30 px icon + 5 + 5 = 40 px: one column. `button.menu`, not `.menu`: GTK's
  * menus are `popover.menu` nodes, and those inside the panel would take the
@@ -53,6 +64,8 @@ window.orbit button {
 .panel button.menu:hover {
   background-color: alpha(@orbit_accent, 0.25);
 }
+/* On the grid: one row, 30 px. */
+.panel.grid button.menu { padding: 0 5px; }
 
 .card {
   border: 1px solid @orbit_border;
@@ -74,6 +87,14 @@ window.orbit button {
 .clock .world-time { font-size: 12px; min-height: 15px; }
 /* The hourglass fill takes this color; the trough is fixed white at 15%. */
 .clock .hourglass  { color: @orbit_accent; }
+/* Full, 4 × 2 cells: 5 + 15 + 30 + 15 + 5 = 70 px. Normal (zone, time and
+ * hourglass) and Mini (the time) are one row: 1 + 28 + 1. */
+.clock.full .date  { font-size: 12px; min-height: 15px; }
+.clock.full .time  { font-size: 25px; min-height: 30px; }
+.clock.normal,
+.clock.mini        { padding: 0 4px; }
+.clock.normal .time,
+.clock.mini .time  { font-size: 22px; min-height: 28px; }
 
 /* Calendar: black card, header + 6 weeks, every row 20 px on the grid —
  * 5 + 20 + 6 × 20 + 5 = 150 px. Seven columns cannot split the card's 130 px
@@ -92,12 +113,25 @@ window.orbit button {
 .calendar.popup .day,
 .calendar.popup .head { min-width: 20px; }
 .calendar-line        { font-size: 13px; font-weight: bold; color: @orbit_fg; }
+/* On the grid. Full, 4 × 4 cells: title 15 + header 15 + six weeks sharing
+ * the 110 px left (18–19 px each) + 10 = 150. Normal, 4 × 2: title, header
+ * and two weeks, 15 px each — 5 + 60 + 5 = 70. Days of the next month, in
+ * Normal, fade. Mini: one row, 1 + 28 + 1. */
+.calendar.full .title,
+.calendar.full .head,
+.calendar.normal .title,
+.calendar.normal .head,
+.calendar.normal .day { min-height: 15px; }
+.calendar.full .day   { min-height: 15px; }
+.calendar .day.other  { color: @orbit_muted; }
+.calendar-mini        { padding: 0 4px; font-size: 13px; font-weight: bold; color: @orbit_calendar_fg; background-color: @orbit_calendar_bg; }
 
 /* Workspaces: one fixed colour per area, black label. The focused area only
  * turns its label white and bold; an occupied one is semi-bold. Hover: white
- * background, black label. Buttons 60 × 30 px — 10 px between columns, 5
- * between rows — so the 2 × 2 card is 5 + 30 + 5 + 30 + 5 = 75 px.
+ * background, black label. On the grid each button is a block of 2 × 1
+ * cells, 70 × 30 px, and the four are 4 × 2 cells: no card around them.
  * Areas past the fourth reuse the fourth colour. */
+.panel.grid .workspaces.card { border: none; padding: 0; }
 .workspaces .area {
   font-size: 13px;
   color: #000000;
@@ -211,17 +245,19 @@ window.orbit-menu { background: transparent; }
 .orbit-menu .bottom .power:hover   { background-color: alpha(@orbit_alert, 0.45); }
 .confirm-box button:focus-visible { outline: 2px solid @orbit_focus; outline-offset: -2px; }
 
-/* Volume and brightness (control.rs), side by side: two half-width cards,
- * 65 + 10 + 65 = 140 px. Each holds a vertical slider (35 px tall, up = more)
- * and the icon beside it, so a card is 5 + 35 + 5 = 45 px tall — the pair
- * takes 45 px where the two full-width cards took 85. Which one is on the
- * left is the order in panel.yaml. The slider knob is hidden: the filled
- * part of the trough is the level. */
-.control .icon              { min-width: 30px; min-height: 30px; }
-.control.volume .icon       { font-size: 24px; }
-.control.brightness .icon   { font-size: 18px; }
+/* Volume and brightness (control.rs). The slider knob is hidden: the
+ * filled part of the trough is the level. */
+.control .icon              { min-width: 28px; min-height: 28px; }
+.control.volume .icon       { font-size: 20px; }
+.control.brightness .icon   { font-size: 16px; }
 .control scale              { padding: 0; margin: 0; min-width: 0; min-height: 0; }
-.control scale.vertical     { min-height: 35px; }
+.control scale.vertical     { min-height: 28px; }
+/* One row on the grid: Normal (2 cells, icon + vertical slider) and Full
+ * (4 cells, icon + horizontal slider) are 1 + 28 + 1 px tall; Mini is the
+ * icon in one cell. */
+.control.normal,
+.control.full               { padding: 0 4px; }
+.control.mini               { padding: 0; }
 .control scale trough {
   min-width: 0;
   min-height: 0;
@@ -273,13 +309,18 @@ window.orbit-menu { background: transparent; }
 .tray .tray-item { padding: 0; min-width: 20px; min-height: 20px; border-radius: 5px; }
 .tray .tray-item:hover { background-color: @orbit_hover; }
 
-/* Weather (weather.rs), after the eww card: 55 px picture, then three text
- * lines held at 15 / 20 / 15 px — card 5 + 55 + 15 + 20 + 15 + 5 = 115 px.
+/* Weather (weather.rs), after the eww card. Full, 4 × 4 cells: 40 px
+ * picture, three text lines held at 15 / 20 / 15 px and the next days,
+ * 50 — 5 + 40 + 15 + 20 + 15 + 50 + 5 = 150 px. Normal, 4 × 2: the picture
+ * and the description, 5 + 40 + 15 + 5 = 65 of 70. Mini: one row.
  * Min in light blue, max in the alert red; sun times in the warm yellow. */
-.weather .glyph   { font-size: 40px; color: @orbit_accent; min-width: 55px; min-height: 55px; }
-.weather .temp    { font-size: 26px; font-weight: bold; }
-.weather .min     { font-size: 16px; font-weight: bold; color: @orbit_cold; }
-.weather .max     { font-size: 16px; font-weight: bold; color: @orbit_alert; }
+.weather .glyph   { font-size: 30px; color: @orbit_accent; min-width: 40px; min-height: 40px; }
+.weather .temp    { font-size: 20px; font-weight: bold; }
+.weather .min     { font-size: 13px; font-weight: bold; color: @orbit_cold; }
+.weather .max     { font-size: 13px; font-weight: bold; color: @orbit_alert; }
+/* The next days inside the Full card: no cards of their own. */
+.weather .forecast .day.card { border: none; padding: 0; }
+.weather-line.mini { padding: 0 4px; }
 .weather .desc    { font-size: 10px; min-height: 15px; }
 .weather .line    { min-height: 15px; }
 .weather .sun     { font-size: 10px; color: @orbit_warn; min-height: 20px; }
@@ -294,12 +335,19 @@ window.orbit-menu { background: transparent; }
 .forecast .day .glyph { font-size: 14px; color: @orbit_accent; min-height: 20px; }
 .forecast .day        { padding-left: 0; padding-right: 0; }
 
-/* Status modules (status.rs): network, keyboard, battery. A 24 px glyph in a
- * 30 px box beside two 15 px lines — first 11 px, second 10 px and muted —
- * so a card is 5 + 30 + 5 = 40 px. */
-.status .icon   { font-size: 24px; min-width: 30px; min-height: 30px; }
-.status .first  { font-size: 11px; min-height: 15px; }
-.status .second { font-size: 10px; color: @orbit_muted; min-height: 15px; }
+/* Status modules (status.rs): network, keyboard, battery, notifications.
+ * Normal, one row: a 20 px glyph in a 28 px box beside two 14 px lines —
+ * first 11 px, second 10 px and muted — 1 + 28 + 1 = 30 px. Full, 4 × 2: a
+ * 24 px glyph in 30 px beside up to four 15 px lines, 5 + 60 + 5 = 70.
+ * Mini: the glyph in one cell. */
+.status .icon   { font-size: 20px; min-width: 28px; min-height: 28px; }
+.status .first  { font-size: 11px; min-height: 14px; }
+.status .second { font-size: 10px; color: @orbit_muted; min-height: 14px; }
+.status.normal  { padding: 0 4px; }
+.status.mini    { padding: 0; }
+.status.full .icon   { font-size: 24px; min-width: 30px; min-height: 30px; }
+.status.full .first,
+.status.full .second { min-height: 15px; }
 /* The network icon is a button (left: editor, right: network menu). */
 .status .icon.button       { border-radius: 5px; }
 .status .icon.button:hover { background-color: @orbit_hover; }

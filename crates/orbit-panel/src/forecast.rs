@@ -89,16 +89,7 @@ pub fn new(config: &ForecastConfig, weather: &WeatherConfig, vertical: bool) -> 
 
 fn show(cards: &[DayCard], config: &WeatherConfig, w: &Weather) {
     for (card, day) in cards.iter().zip(w.days.iter().skip(1)) {
-        let date = date(&day.date);
-        let weekday = date
-            .as_ref()
-            .and_then(|d| d.format("%a").ok())
-            .map(|s| s.trim_end_matches('.').to_string())
-            .unwrap_or_default();
-        let short = date
-            .as_ref()
-            .map(|d| format!("{}/{}", d.day_of_month(), d.month()))
-            .unwrap_or_default();
+        let weekday = weekday(day);
         card.name.set_label(&weekday);
         match config.picture(day.code, false) {
             Some(file) => {
@@ -113,17 +104,33 @@ fn show(cards: &[DayCard], config: &WeatherConfig, w: &Weather) {
             }
         }
         card.max.set_label(&format!("{:.0}°", day.max));
-        card.root.set_tooltip_text(Some(&tr_args(
-            "forecast-tooltip",
-            &[
-                ("weekday", text(weekday)),
-                ("date", text(short)),
-                ("description", text(weather_data::description(day.code))),
-                ("min", text(format!("{:.0}", day.min))),
-                ("max", text(format!("{:.0}", day.max))),
-            ],
-        )));
+        card.root.set_tooltip_text(Some(&tooltip(day)));
     }
+}
+
+/// The day's short weekday name.
+fn weekday(day: &weather_data::Day) -> String {
+    date(&day.date)
+        .and_then(|d| d.format("%a").ok())
+        .map(|s| s.trim_end_matches('.').to_string())
+        .unwrap_or_default()
+}
+
+/// Weekday, date, description, minimum and maximum of `day`.
+pub fn tooltip(day: &weather_data::Day) -> String {
+    let short = date(&day.date)
+        .map(|d| format!("{}/{}", d.day_of_month(), d.month()))
+        .unwrap_or_default();
+    tr_args(
+        "forecast-tooltip",
+        &[
+            ("weekday", text(weekday(day))),
+            ("date", text(short)),
+            ("description", text(weather_data::description(day.code))),
+            ("min", text(format!("{:.0}", day.min))),
+            ("max", text(format!("{:.0}", day.max))),
+        ],
+    )
 }
 
 /// `YYYY-MM-DD` at local noon.

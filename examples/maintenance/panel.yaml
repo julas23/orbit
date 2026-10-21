@@ -2,7 +2,8 @@
 #
 #   ./target/release/orbit-panel --config examples/maintenance
 #
-# Draws the 5 px layout grid behind the panel.
+# Draws the grid behind the panel: 30 px cells named a1 … d27.
+# A module takes its default size, or the one given: `- clock: mini`.
 
 edge: left
 size: 150
@@ -16,12 +17,12 @@ end:
   - clock
   - calendar
   - weather
-  - forecast
   - tray
-  - brightness
-  - volume
-  - network
-  - keyboard
-  - battery
+  - volume: mini
+  - brightness: mini
+  - network: mini
+  - keyboard: mini
+  - battery: mini
+  - notifications: mini
   - workspaces
   - session

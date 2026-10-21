@@ -12,8 +12,11 @@
 //! The network icon is a button, as in XFCE: left click opens the connection
 //! editor, right click the network menu (nm-applet's own, when it runs).
 //!
-//! Block form: icon 30 px (glyph 24 px) next to two 15 px lines, card
-//! 5 + 30 + 5 = 40 px. Line form: icon and first line; second in the tooltip.
+//! Normal (4 × 1 cells): the icon next to two lines of text. Full (4 × 2):
+//! a larger icon next to up to four lines — the two, then what is otherwise
+//! only in the tooltip (the network's kind, the battery's state, the other
+//! keyboard layouts). Mini (1 × 1): the icon alone. Line form: icon and first
+//! line. In every form the tooltip holds whatever the form leaves out.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -22,25 +25,25 @@ use serde::Deserialize;
 
 use orbit_app::i18n::{number, text, tr, tr_args};
 
-use crate::{dbusmenu, sway};
+use crate::{board::Form, dbusmenu, sway};
 
 /// None of the status modules has options yet; their files may be empty.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct StatusConfig {}
 
-/// The shared shape: icon, first line, second line (also the bell's, in
-/// `notifications`).
+/// The shared shape: an icon and lines of text beside it (also the bell's,
+/// in `notifications`).
 pub(crate) struct Row {
     pub(crate) root: gtk::Widget,
     icon: gtk::Label,
-    first: gtk::Label,
-    second: gtk::Label,
-    vertical: bool,
+    /// First, second and the Full form's two more.
+    lines: Vec<gtk::Label>,
+    form: Form,
 }
 
 impl Row {
-    pub(crate) fn new(class: &str, vertical: bool) -> Rc<Row> {
+    pub(crate) fn new(class: &str, form: Form) -> Rc<Row> {
         let icon = gtk::Label::builder()
             .css_classes(["icon"])
             .valign(gtk::Align::Center)
@@ -52,50 +55,70 @@ impl Row {
                 .ellipsize(gtk::pango::EllipsizeMode::End)
                 .build()
         };
-        let (first, second) = (line("first"), line("second"));
+        let lines = vec![line("first"), line("second"), line("second"), line("second")];
         let root = gtk::Box::builder()
             .spacing(5)
-            .css_classes(if vertical {
-                vec!["card", "status", class]
+            .css_classes(if form.vertical() {
+                vec!["card", "status", class, form.class()]
             } else {
                 vec!["status-line", class]
             })
             .build();
         root.append(&icon);
-        if vertical {
-            let lines = gtk::Box::builder()
+        let shown = match form {
+            Form::Full => 4,
+            Form::Normal => 2,
+            Form::Line => 1,
+            Form::Mini => 0,
+        };
+        if form == Form::Mini {
+            icon.set_hexpand(true);
+        }
+        if form.vertical() && shown > 0 {
+            let column = gtk::Box::builder()
                 .orientation(gtk::Orientation::Vertical)
                 .valign(gtk::Align::Center)
                 .hexpand(true)
                 .build();
-            lines.append(&first);
-            lines.append(&second);
-            root.append(&lines);
-        } else {
-            root.append(&first);
+            for line in &lines[..shown] {
+                column.append(line);
+            }
+            root.append(&column);
+        } else if shown > 0 {
+            root.append(&lines[0]);
         }
         Rc::new(Row {
             root: root.upcast(),
             icon,
-            first,
-            second,
-            vertical,
+            lines,
+            form,
         })
     }
 
-    pub(crate) fn show(&self, glyph: &str, first: &str, second: &str, tooltip: &str) {
+    /// Shows `glyph` and `lines` — at most four; the first two are the main
+    /// ones — with `tooltip` and whatever lines the form leaves out.
+    pub(crate) fn show(&self, glyph: &str, lines: &[&str], tooltip: &str) {
         self.icon.set_label(glyph);
-        self.first.set_label(first);
-        self.second.set_label(second);
-        let tooltip = if self.vertical {
-            tooltip.to_string()
-        } else {
-            [first, second, tooltip]
-                .into_iter()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n")
+        for (i, label) in self.lines.iter().enumerate() {
+            let text = lines.get(i).copied().unwrap_or_default();
+            label.set_label(text);
+            // A Full card shows only the lines it has.
+            label.set_visible(i < 2 || !text.is_empty());
+        }
+        let shown = match self.form {
+            Form::Full => 4,
+            Form::Normal => 2,
+            Form::Line => 1,
+            Form::Mini => 0,
         };
+        let tooltip = lines
+            .iter()
+            .skip(shown)
+            .copied()
+            .chain([tooltip])
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
         self.root.set_tooltip_text(Some(&tooltip));
     }
 }
@@ -187,8 +210,8 @@ impl Default for NetworkConfig {
     }
 }
 
-pub fn network(config: &NetworkConfig, vertical: bool) -> gtk::Widget {
-    let row = Row::new("network", vertical);
+pub fn network(config: &NetworkConfig, form: Form) -> gtk::Widget {
+    let row = Row::new("network", form);
     let Some(conn) = system_bus() else {
         return row.root.clone();
     };
@@ -371,8 +394,7 @@ fn show_network(row: &Row, conn: &gio::DBusConnection) {
     let Some(active) = primary else {
         row.show(
             "\u{f05aa}",
-            &tr("network-none"),
-            "",
+            &[&tr("network-none")],
             &tr("network-none-tooltip"),
         ); // 󰖪
         return;
@@ -409,16 +431,15 @@ fn show_network(row: &Row, conn: &gio::DBusConnection) {
     };
     row.show(
         glyph,
-        &id,
-        &address,
+        &[&id, &address, &kind_name],
         &format!("{id} ({kind_name}) — {address}"),
     );
 }
 
 // ------------------------------------------------------------ keyboard
 
-pub fn keyboard(_: &StatusConfig, vertical: bool) -> gtk::Widget {
-    let row = Row::new("keyboard", vertical);
+pub fn keyboard(_: &StatusConfig, form: Form) -> gtk::Widget {
+    let row = Row::new("keyboard", form);
     if !sway::available() {
         log::warn!("keyboard: not running under sway");
         return row.root.clone();
@@ -479,7 +500,10 @@ fn show_keyboard(row: &Row, layouts: &RefCell<usize>) {
     } else {
         name.to_string()
     };
-    row.show("\u{f030c}", language, rest, &tooltip); // 󰌌
+    // Full: the other layouts under the active one.
+    let mut lines = vec![language, rest];
+    lines.extend(all.iter().copied().filter(|l| *l != name).take(2));
+    row.show("\u{f030c}", &lines, &tooltip); // 󰌌
 }
 
 /// "English (US, alt. intl.)" -> ("English", "US, alt. intl.").
@@ -495,8 +519,8 @@ fn split_layout(name: &str) -> (&str, &str) {
 const UPOWER: &str = "org.freedesktop.UPower";
 const DISPLAY: &str = "/org/freedesktop/UPower/devices/DisplayDevice";
 
-pub fn battery(_: &StatusConfig, vertical: bool) -> gtk::Widget {
-    let row = Row::new("battery", vertical);
+pub fn battery(_: &StatusConfig, form: Form) -> gtk::Widget {
+    let row = Row::new("battery", form);
     let conn = system_bus();
     let refresh = {
         let (row, conn) = (row.clone(), conn.clone());
@@ -527,8 +551,7 @@ fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) {
     if !present {
         row.show(
             "\u{f06a5}",
-            &tr("battery-none"),
-            &uptime,
+            &[&tr("battery-none"), &uptime],
             &tr_args("battery-uptime", &[("uptime", text(uptime.clone()))]),
         ); // 󰚥
         return;
@@ -565,10 +588,14 @@ fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) {
     .filter(|s| *s > 0)
     .map(|s| tr_args("battery-remaining", &[("time", text(duration(s as u64)))]))
     .unwrap_or_default();
+    let detail = [state_name.as_str(), remaining.as_str()]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ");
     row.show(
         glyph,
-        &format!("{percent:.0}%"),
-        &uptime,
+        &[&format!("{percent:.0}%"), &uptime, &detail],
         &format!(
             "{}\n{}",
             tr_args(

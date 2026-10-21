@@ -27,7 +27,10 @@ use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::{number, tr_args};
 use serde::Deserialize;
 
-use crate::control::{Actions, Control};
+use crate::{
+    board::Form,
+    control::{Actions, Control},
+};
 
 /// `modules/brightness.yaml`.
 #[derive(Debug, Clone, Deserialize)]
@@ -73,7 +76,7 @@ struct Module {
     busy: Cell<bool>,
 }
 
-pub fn new(config: &BrightnessConfig, vertical: bool) -> gtk::Widget {
+pub fn new(config: &BrightnessConfig, form: Form) -> gtk::Widget {
     let Some(device) = detect() else {
         log::info!("brightness: no backlight and no ddcutil; module hidden");
         let empty = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -106,7 +109,7 @@ pub fn new(config: &BrightnessConfig, vertical: bool) -> gtk::Widget {
     };
     let control = Control::new(
         "brightness",
-        vertical,
+        form,
         Actions {
             set: Box::new(set),
             step: Box::new(step),

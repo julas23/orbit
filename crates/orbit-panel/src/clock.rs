@@ -1,12 +1,13 @@
 //! Clock module, after the clock of the eww panel.
 //!
-//! Block form (vertical panel), three lines:
+//! Full (4 × 2 cells), three lines:
 //!   1. the date, centred;
 //!   2. local zone + `HH:MM`, centred, with the hourglass at the right edge;
 //!   3. one world clock at a time — code left, time centred, difference right.
 //!
-//! Line form (horizontal panel): zone + `HH:MM` + hourglass; the date and the
-//! world clocks go to the tooltip.
+//! Normal (4 × 1): line 2 alone. Mini (3 × 1): `HH:MM` alone. Line form
+//! (horizontal panel): zone + `HH:MM` + hourglass. Whatever a form leaves
+//! out — the date, the world clocks — is in the tooltip.
 //!
 //! The hourglass is a bar that EMPTIES over the minute — full at :00, empty
 //! at :59 — because time runs out, it does not add up. It is drawn against
@@ -18,6 +19,8 @@ use std::{cell::Cell, rc::Rc, time::Duration};
 use gtk::{glib, graphene, prelude::*};
 use orbit_app::i18n::{number, tr_args};
 use serde::Deserialize;
+
+use crate::board::Form;
 
 /// How many other time zones the clock can show.
 const MAX_WORLD_CLOCKS: usize = 4;
@@ -75,7 +78,7 @@ struct Labels {
     root: gtk::Widget,
 }
 
-pub fn new(config: &ClockConfig, vertical: bool) -> gtk::Widget {
+pub fn new(config: &ClockConfig, form: Form) -> gtk::Widget {
     let zones = zones(config);
     let second = Rc::new(Cell::new(0));
 
@@ -94,54 +97,82 @@ pub fn new(config: &ClockConfig, vertical: bool) -> gtk::Widget {
     now.append(&zone);
     now.append(&time);
 
-    let labels = if vertical {
-        now.set_hexpand(true);
-        now.set_halign(gtk::Align::Center);
-        let row = gtk::Box::builder().spacing(5).build();
-        row.append(&now);
-        row.append(&hourglass);
-
-        let date = gtk::Label::builder()
-            .css_classes(["date"])
-            .halign(gtk::Align::Center)
-            .build();
-        let card = gtk::Box::builder()
+    let card = || {
+        gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .css_classes(["card", "clock"])
-            .build();
-        card.append(&date);
-        card.append(&row);
-
-        let world = (!zones.is_empty()).then(|| {
-            let code = label("world-code", gtk::Align::Start);
-            let wtime = label("world-time", gtk::Align::Center);
-            let diff = label("world-diff", gtk::Align::End);
-            let line = gtk::CenterBox::builder()
-                .start_widget(&code)
-                .center_widget(&wtime)
-                .end_widget(&diff)
+            .valign(gtk::Align::Fill)
+            .css_classes(["card", "clock", form.class()])
+            .build()
+    };
+    let labels = match form {
+        Form::Full | Form::Normal => {
+            now.set_hexpand(true);
+            now.set_halign(gtk::Align::Center);
+            let row = gtk::Box::builder()
+                .spacing(5)
+                .vexpand(true)
+                .valign(gtk::Align::Center)
                 .build();
-            card.append(&line);
-            (code, wtime, diff)
-        });
-        Labels {
-            date: Some(date),
-            zone,
-            time,
-            world,
-            hourglass,
-            root: card.upcast(),
+            row.append(&now);
+            row.append(&hourglass);
+
+            let card = card();
+            let date = (form == Form::Full).then(|| {
+                let date = gtk::Label::builder()
+                    .css_classes(["date"])
+                    .halign(gtk::Align::Center)
+                    .build();
+                card.append(&date);
+                date
+            });
+            card.append(&row);
+
+            let world = (form == Form::Full && !zones.is_empty()).then(|| {
+                let code = label("world-code", gtk::Align::Start);
+                let wtime = label("world-time", gtk::Align::Center);
+                let diff = label("world-diff", gtk::Align::End);
+                let line = gtk::CenterBox::builder()
+                    .start_widget(&code)
+                    .center_widget(&wtime)
+                    .end_widget(&diff)
+                    .build();
+                card.append(&line);
+                (code, wtime, diff)
+            });
+            Labels {
+                date,
+                zone,
+                time,
+                world,
+                hourglass,
+                root: card.upcast(),
+            }
         }
-    } else {
-        now.append(&hourglass);
-        now.add_css_class("clock");
-        Labels {
-            date: None,
-            zone,
-            time,
-            world: None,
-            hourglass,
-            root: now.upcast(),
+        Form::Mini => {
+            let card = card();
+            time.set_vexpand(true);
+            time.set_valign(gtk::Align::Center);
+            card.append(&time);
+            Labels {
+                date: None,
+                zone,
+                time,
+                world: None,
+                hourglass,
+                root: card.upcast(),
+            }
+        }
+        Form::Line => {
+            now.append(&hourglass);
+            now.add_css_class("clock");
+            Labels {
+                date: None,
+                zone,
+                time,
+                world: None,
+                hourglass,
+                root: now.upcast(),
+            }
         }
     };
 

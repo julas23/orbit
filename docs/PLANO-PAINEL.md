@@ -64,6 +64,51 @@ lado — o cartão "rede/teclado/bateria" do eww vira 3 módulos de 1 coluna.
 No **modo linha**, o que não cabe numa linha vai para o **tooltip** ou para um
 **popup** aberto no clique (calendário do mês, slider de volume).
 
+### 2.1 Grade de 4 colunas (decidido em 2026-10-21)
+
+Substitui as 3 colunas de 40 px no painel vertical. A largura continua **150 px**:
+
+| Medida | Valor |
+|---|---|
+| Célula | **30 × 30 px** |
+| Vão entre colunas e entre linhas | **10 px** |
+| Padding lateral | 0 (4 × 30 + 3 × 10 = 150) |
+| Padding em cima e embaixo | 5 px |
+| Linhas | quantas couberem: **27** em 1080 px (5 + 27 × 30 + 26 × 10 + 5 = 1080) |
+
+Um módulo ocupa um bloco de células inteiras: 30, 70, 110 ou 150 px de largura;
+30, 70, 110, 150… px de altura. Colunas `a`–`d`, linhas a partir de 1: a primeira
+linha é a1 b1 c1 d1, a última a27 … d27. O modo manutenção desenha as células com
+os nomes, e o log diz onde cada módulo caiu (`panel: clock at a12:d13`).
+
+Cada módulo vem em até três tamanhos (`Mini`, `Normal`, `Full`), escolhidos no
+`panel.yaml` (`- clock: mini`; sem tamanho, vale o padrão):
+
+| Módulo | Full | Normal | Mini |
+|---|---|---|---|
+| `clock` | **4×2**: data, fuso + hora + ampulheta, cidades | 4×1: fuso + hora + ampulheta | 3×1: só a hora |
+| `calendar` | **4×4**: estação/ano, cabeçalho, mês | 4×2: estação/ano, cabeçalho, esta semana e a próxima | 3×1: "qua 21 out" |
+| `weather` | **4×4**: tudo + previsão dos próximos dias | 4×2: figura, temperaturas, descrição | 3×1: figura + temperatura |
+| `volume`, `brightness` | 4×1: ícone + slider horizontal | **2×1**: ícone + slider vertical | 1×1: ícone |
+| `network`, `keyboard`, `battery`, `notifications` | 4×2: ícone + até 4 linhas | **4×1**: ícone + 2 linhas | 1×1: ícone |
+
+Em negrito, o padrão (o tamanho de hoje). `windows`, `workspaces` (4×2), `tray`,
+`session` e `menu` têm um tamanho só; `windows` e `tray` crescem com o conteúdo.
+`forecast` continua existindo sozinho, mas o `weather` Full já inclui a previsão.
+
+Os módulos se encaixam em ordem, da esquerda para a direita e de cima para baixo,
+cada um no primeiro bloco livre depois do anterior; a parte `end` termina na última
+linha. Se o conteúdo pedir mais linhas do que o tamanho, o módulo ganha as linhas e
+o log avisa. **Posição livre por célula fica para depois**, junto com o modo
+manutenção interativo (mover e trocar de tamanho arrastando).
+
+Interação, para todos os módulos e botões: hover mostra o que o tamanho esconde;
+clique esquerdo, ações rápidas; clique direito, opções completas; roda do mouse
+ajusta o valor quando há um (volume, brilho). Já feito no Mini de volume e brilho
+(esquerdo: slider num popover; direito: o mixer) e nos tooltips de todos os
+tamanhos menores. Falta padronizar os cliques dos status e criar os módulos
+`bluetooth` e `monitors`.
+
 ## 3. Os módulos
 
 "Bloco" = painel vertical (colunas ocupadas, de 3); "linha" = painel horizontal.

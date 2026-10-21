@@ -146,10 +146,64 @@ pub struct PanelConfig {
     pub maintenance: bool,
     /// Modules at the start (top of a vertical panel, left of a horizontal
     /// one), in order. Listing a module turns it on.
-    pub start: Vec<String>,
-    pub center: Vec<String>,
+    pub start: Vec<ModuleEntry>,
+    pub center: Vec<ModuleEntry>,
     /// Modules at the end (bottom / right), in order.
-    pub end: Vec<String>,
+    pub end: Vec<ModuleEntry>,
+}
+
+/// A module in `panel.yaml`'s lists: `- clock`, or with a size,
+/// `- clock: mini`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "RawEntry")]
+pub struct ModuleEntry {
+    pub name: String,
+    /// The module's own default when left out.
+    pub size: Option<Size>,
+}
+
+/// How much of a vertical panel's grid a module takes; each module says
+/// which of the three it comes in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Size {
+    Mini,
+    Normal,
+    Full,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawEntry {
+    Name(String),
+    Sized(std::collections::BTreeMap<String, Size>),
+}
+
+impl TryFrom<RawEntry> for ModuleEntry {
+    type Error = String;
+
+    fn try_from(raw: RawEntry) -> Result<Self, String> {
+        match raw {
+            RawEntry::Name(name) => Ok(name.into()),
+            RawEntry::Sized(map) if map.len() == 1 => {
+                let (name, size) = map.into_iter().next().expect("one entry");
+                Ok(Self { name, size: Some(size) })
+            }
+            RawEntry::Sized(_) => Err("a module entry is `name` or `name: size`".into()),
+        }
+    }
+}
+
+impl From<&str> for ModuleEntry {
+    fn from(name: &str) -> Self {
+        Self { name: name.into(), size: None }
+    }
+}
+
+impl From<String> for ModuleEntry {
+    fn from(name: String) -> Self {
+        Self { name, size: None }
+    }
 }
 
 impl Default for PanelConfig {
@@ -224,5 +278,26 @@ pub fn expand_home(path: &Path) -> PathBuf {
     match path.strip_prefix("~") {
         Ok(rest) => gtk::glib::home_dir().join(rest),
         Err(_) => path.to_path_buf(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn module_entries_with_and_without_size() {
+        let panel: PanelConfig =
+            serde_yaml_ng::from_str("end: [clock, {volume: mini}, {calendar: normal}]").unwrap();
+        assert_eq!(
+            panel.end,
+            vec![
+                ModuleEntry::from("clock"),
+                ModuleEntry { name: "volume".into(), size: Some(Size::Mini) },
+                ModuleEntry { name: "calendar".into(), size: Some(Size::Normal) },
+            ]
+        );
+        assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: huge}]").is_err());
+        assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: mini, volume: full}]").is_err());
     }
 }

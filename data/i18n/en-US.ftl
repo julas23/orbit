@@ -99,6 +99,7 @@ battery-pending = waiting to charge
 ## Weather
 
 weather-tooltip = { $description } in { $place }
+    low { $min }°C · high { $max }°C · sun { $sunrise }–{ $sunset }
     feels like { $feels }°C · humidity { $humidity }%
     wind { $wind } km/h { $direction } · pressure { $pressure } hPa
     clouds { $clouds }% · UV index { $uv }

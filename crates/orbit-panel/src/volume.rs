@@ -13,6 +13,7 @@ use orbit_app::i18n::{number, text, tr_args};
 use serde::Deserialize;
 
 use crate::{
+    board::Form,
     control::{Actions, Control},
     pulse, sway,
 };
@@ -46,7 +47,7 @@ struct Module {
     sink: RefCell<Option<pulse::Sink>>,
 }
 
-pub fn new(config: &VolumeConfig, vertical: bool) -> gtk::Widget {
+pub fn new(config: &VolumeConfig, form: Form) -> gtk::Widget {
     let module = Rc::new(Module {
         config: config.clone(),
         control: RefCell::new(None),
@@ -86,7 +87,7 @@ pub fn new(config: &VolumeConfig, vertical: bool) -> gtk::Widget {
     };
     let control = Control::new(
         "volume",
-        vertical,
+        form,
         Actions {
             set: Box::new(set),
             step: Box::new(step),

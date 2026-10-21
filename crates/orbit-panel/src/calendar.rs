@@ -1,12 +1,14 @@
 //! Calendar module, after the calendar of the eww panel.
 //!
-//! Block form (vertical panel): the season and the year on top — the season
-//! of the hemisphere the weather module's place is in, or of `latitude` in
+//! Full (4 × 4 cells): the season and the year on top — the season of the
+//! hemisphere the weather module's place is in, or of `latitude` in
 //! `calendar.yaml` — then a weekday header and the month as a 7×6 grid
 //! — always six weeks, so the card never changes height — with thin lines
 //! around the days, like a paper calendar. The header has no lines.
-//! Line form (horizontal panel): the day of the month; the same grid opens
-//! in a popover on click.
+//! Normal (4 × 2): the same title and header over two weeks, this one and
+//! the next. Mini (3 × 1): weekday, day and month, "qua 21 out". Line form
+//! (horizontal panel): the day of the month. Mini, Normal and the line form
+//! open the whole month in a popover on click.
 //!
 //! Colour carries the meaning: plain days white, weekends grey, today orange;
 //! in the header, Saturday and Sunday red.
@@ -20,7 +22,10 @@ use gtk::{glib, prelude::*};
 use orbit_app::i18n::{text, tr_args};
 use serde::Deserialize;
 
-use crate::weather_data::{self, WeatherConfig};
+use crate::{
+    board::Form,
+    weather_data::{self, WeatherConfig},
+};
 
 /// `modules/calendar.yaml`.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -57,45 +62,74 @@ impl WeekStart {
     }
 }
 
-pub fn new(config: &CalendarConfig, weather: Option<&WeatherConfig>, vertical: bool) -> gtk::Widget {
-    let month = Rc::new(Month::new(config.week_start));
-    month.latitude.set(config.latitude);
+pub fn new(config: &CalendarConfig, weather: Option<&WeatherConfig>, form: Form) -> gtk::Widget {
+    let weeks = if form == Form::Normal { 2 } else { 6 };
+    let month = Rc::new(Month::new(config.week_start, weeks));
+    // The whole month, in the popover of the smaller forms.
+    let whole = (form != Form::Full).then(|| Rc::new(Month::new(config.week_start, 6)));
+    let months: Vec<Rc<Month>> = [Some(month.clone()), whole.clone()].into_iter().flatten().collect();
+    for m in &months {
+        m.latitude.set(config.latitude);
+    }
     if config.latitude.is_none()
         && let Some(weather) = weather
     {
-        let month = month.clone();
+        let months = months.clone();
         weather_data::subscribe(weather, move |w| {
-            if month.latitude.replace(Some(w.latitude)) != Some(w.latitude) {
-                month.fill();
+            for month in &months {
+                if month.latitude.replace(Some(w.latitude)) != Some(w.latitude) {
+                    month.fill();
+                }
             }
         });
     }
 
-    let root: gtk::Widget = if vertical {
+    let card = |classes: &[&str], child: &gtk::Box| {
         let card = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .css_classes(["card", "calendar"])
+            .css_classes(classes)
             .build();
-        card.append(&month.root);
-        card.upcast()
-    } else {
-        let card = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .css_classes(["card", "calendar", "popup"])
-            .build();
-        card.append(&month.root);
-        let popover = gtk::Popover::builder().child(&card).build();
-
-        let button = gtk::Button::builder()
-            .css_classes(["calendar-line"])
-            .child(&month.today)
-            .build();
-        popover.set_parent(&button);
-        button.connect_clicked(move |_| popover.popup());
-        button.upcast()
+        card.append(child);
+        card
+    };
+    // Mini and Normal are cards, not buttons: the panel's buttons have no
+    // border, and the card's outline is part of its size on the grid.
+    let root: gtk::Widget = match form {
+        Form::Full => card(&["card", "calendar", "full"], &month.root).upcast(),
+        Form::Normal => {
+            let card = card(&["card", "calendar", "normal"], &month.root);
+            month_popover(&card, whole.as_deref().expect("made for this form"));
+            card.upcast()
+        }
+        Form::Mini => {
+            let card = gtk::Box::builder()
+                .css_classes(["card", "calendar-mini", "mini"])
+                .build();
+            month.short.set_hexpand(true);
+            card.append(&month.short);
+            month_popover(&card, whole.as_deref().expect("made for this form"));
+            card.upcast()
+        }
+        Form::Line => {
+            let button = gtk::Button::builder()
+                .css_classes(["calendar-line"])
+                .child(&month.today)
+                .build();
+            month_popover(&button, whole.as_deref().expect("made for this form"));
+            button.upcast()
+        }
     };
 
-    month.fill();
+    let tooltip_month = month.clone();
+    root.set_has_tooltip(form != Form::Full);
+    root.connect_query_tooltip(move |_, _, _, _, tooltip| {
+        tooltip.set_text(Some(&tooltip_month.tooltip()));
+        true
+    });
+
+    for m in &months {
+        m.fill();
+    }
     // Checked every minute rather than timed to midnight: GLib timers run on
     // the monotonic clock, which stops during suspend, so a timer aimed at
     // midnight would fire late after a night asleep.
@@ -104,7 +138,9 @@ pub fn new(config: &CalendarConfig, weather: Option<&WeatherConfig>, vertical: b
         let now = today().map(|d| d.ymd());
         if now != day.get() {
             day.set(now);
-            month.fill();
+            for m in &months {
+                m.fill();
+            }
         }
         glib::ControlFlow::Continue
     });
@@ -115,19 +151,38 @@ fn today() -> Option<glib::DateTime> {
     glib::DateTime::now_local().ok()
 }
 
+/// Opens `month` in a popover under `anchor` on a left click.
+fn month_popover(anchor: &impl IsA<gtk::Widget>, month: &Month) {
+    let card = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["card", "calendar", "popup"])
+        .build();
+    card.append(&month.root);
+    let popover = gtk::Popover::builder().child(&card).build();
+    popover.set_parent(anchor);
+    let click = gtk::GestureClick::builder().button(1).build();
+    click.connect_released(move |_, _, _, _| popover.popup());
+    anchor.add_controller(click);
+    anchor.set_cursor_from_name(Some("pointer"));
+}
+
 struct Month {
     root: gtk::Box,
     /// Season and year.
     title: gtk::Label,
     latitude: Cell<Option<f64>>,
     week_start: WeekStart,
+    /// 6: the month's weeks; fewer: from this week on.
+    weeks: usize,
     days: Vec<gtk::Label>,
     /// The day of the month, for the line form.
     today: gtk::Label,
+    /// Weekday, day and month, for the mini form.
+    short: gtk::Label,
 }
 
 impl Month {
-    fn new(week_start: WeekStart) -> Self {
+    fn new(week_start: WeekStart, weeks: usize) -> Self {
         let head = gtk::Grid::builder().column_homogeneous(true).build();
         for col in 0..7 {
             let mut classes = vec!["head"];
@@ -146,7 +201,7 @@ impl Month {
             .column_homogeneous(true)
             .row_homogeneous(true)
             .build();
-        let days: Vec<gtk::Label> = (0..42)
+        let days: Vec<gtk::Label> = (0..weeks as i32 * 7)
             .map(|i| {
                 let label = gtk::Label::builder().hexpand(true).build();
                 grid.attach(&label, i % 7, i / 7, 1, 1);
@@ -158,7 +213,8 @@ impl Month {
         let lines = gtk::DrawingArea::builder().css_classes(["lines"]).build();
         let cells = days.clone();
         lines.set_draw_func(move |area, cr, _, _| draw_lines(area, cr, &cells));
-        let overlay = gtk::Overlay::builder().child(&lines).build();
+        // The weeks take the height the card has left.
+        let overlay = gtk::Overlay::builder().child(&lines).vexpand(true).build();
         overlay.add_overlay(&grid);
         overlay.set_measure_overlay(&grid, true);
 
@@ -175,44 +231,62 @@ impl Month {
             title,
             latitude: Cell::new(None),
             week_start,
+            weeks,
             days,
             today: gtk::Label::new(None),
+            short: gtk::Label::new(None),
         }
     }
 
-    /// Lays out the current month.
+    /// Lays out the current month, or the weeks from this one on.
     fn fill(&self) {
         let Some(now) = today() else { return };
         let (year, month, day) = now.ymd();
         let Ok(first) = glib::DateTime::from_local(year, month, 1, 0, 0, 0.0) else {
             return;
         };
-        let length = first
-            .add_months(1)
-            .and_then(|next| next.add_days(-1))
-            .map_or(31, |last| last.day_of_month());
-        // Empty cells before the 1st.
-        let offset = (0..7)
-            .find(|&col| self.week_start.weekday(col) == first.day_of_week())
-            .unwrap_or(0);
+        // The first day shown and how far today is from the start of its
+        // week.
+        let column = |date: &glib::DateTime| {
+            (0..7)
+                .find(|&col| self.week_start.weekday(col) == date.day_of_week())
+                .unwrap_or(0) as i32
+        };
+        let start = if self.weeks >= 6 {
+            first.add_days(-column(&first))
+        } else {
+            now.add_days(-column(&now))
+        };
+        let Ok(start) = start else { return };
 
         for (i, label) in self.days.iter().enumerate() {
-            let n = i as i32 - offset as i32 + 1;
-            let in_month = (1..=length).contains(&n);
-            label.set_label(&if in_month {
-                n.to_string()
+            let Ok(date) = start.add_days(i as i32) else { continue };
+            let in_month = date.month() == month;
+            // The month's grid leaves other months' days empty; the weeks
+            // from today on show them all.
+            let shown = in_month || self.weeks < 6;
+            label.set_label(&if shown {
+                date.day_of_month().to_string()
             } else {
                 String::new()
             });
             let mut classes = vec!["day"];
-            if in_month && n == day {
+            if date.ymd() == (year, month, day) {
                 classes.push("today");
             } else if self.week_start.is_weekend(i % 7) {
                 classes.push("weekend");
             }
+            if !in_month && shown {
+                classes.push("other");
+            }
             label.set_css_classes(&classes);
         }
         self.today.set_label(&day.to_string());
+        self.short.set_label(
+            &now.format("%a %-d %b")
+                .map(|s| s.replace('.', ""))
+                .unwrap_or_default(),
+        );
         // Until the place is known, the year alone.
         self.title.set_label(&match self.latitude.get() {
             Some(lat) => tr_args(
@@ -225,6 +299,15 @@ impl Month {
             None => year.to_string(),
         });
         self.root.queue_draw();
+    }
+
+    /// The full date and the season, for the forms that leave them out.
+    fn tooltip(&self) -> String {
+        let date = today()
+            .and_then(|now| now.format("%A, %-d %B %Y").ok())
+            .map(|s| capitalize(&s))
+            .unwrap_or_default();
+        format!("{date}\n{}", self.title.label())
     }
 }
 
@@ -262,7 +345,7 @@ fn draw_lines(area: &gtk::DrawingArea, cr: &gtk::cairo::Context, cells: &[gtk::L
             )
         })
     };
-    let (Some(first), Some(last)) = (bounds(0), bounds(41)) else {
+    let (Some(first), Some(last)) = (bounds(0), bounds(cells.len().saturating_sub(1))) else {
         return;
     };
     let (left, top) = (first.0, first.1);
@@ -283,7 +366,7 @@ fn draw_lines(area: &gtk::DrawingArea, cr: &gtk::cairo::Context, cells: &[gtk::L
     {
         cr.rectangle(x, top, 1.0, bottom - top + 1.0);
     }
-    for y in (0..6)
+    for y in (0..cells.len() / 7)
         .filter_map(|row| bounds(row * 7).map(|b| b.1))
         .chain([bottom])
     {
