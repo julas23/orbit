@@ -155,6 +155,7 @@ dock-recent = Recentes
 dock-edit = Editar dock
 dock-edit-done = Concluir edição
 dock-add-launcher = Adicionar atalho…
+dock-add-appimage = Adicionar AppImage…
 dock-add-separator = Adicionar separador
 dock-search = Buscar aplicativo
 

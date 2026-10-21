@@ -91,6 +91,10 @@ A row of launchers on a screen edge, built from desktop files, in groups with
 separators between them. Icons come from the icon theme or from the files the
 desktop entries point to, loaded at display size.
 
+An AppImage — picked with "Add AppImage…" while editing the dock, or dropped
+on it — needs nothing else: its icon is taken out of it and kept next to it,
+and a desktop file that runs it is written to `~/.local/share/applications`.
+
 ## Orbit-Calc
 
 A calculator with four profiles, one tab each; it always opens on the

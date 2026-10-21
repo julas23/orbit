@@ -160,6 +160,7 @@ dock-recent = Recent
 dock-edit = Edit dock
 dock-edit-done = Done editing
 dock-add-launcher = Add launcher…
+dock-add-appimage = Add AppImage…
 dock-add-separator = Add separator
 dock-search = Search applications
 

@@ -4,9 +4,11 @@
 //! where there is no launcher — turns editing on. While editing, the dock
 //! takes every click from the launchers: a launcher or a separator dragged
 //! along the dock goes where it is dropped, and dropped off the dock it is
-//! removed; a right click adds a launcher (from the installed applications)
-//! or a separator after the one under the pointer. Every change is shown at
-//! once and written to `dock.yaml` (`ConfigDir::save_dock_apps`).
+//! removed; a right click adds a launcher (from the installed applications
+//! or an AppImage file) or a separator after the one under the pointer. An
+//! AppImage dropped on the dock is added where it is dropped (see
+//! `appimage`). Every change is shown at once and written to `dock.yaml`
+//! (`ConfigDir::save_dock_apps`).
 //!
 //! `dock.yaml` keeps separators as groups: neighbouring launchers of
 //! different groups have one between them. Saving names each run of
@@ -14,15 +16,16 @@
 
 use std::{
     cell::{Cell, RefCell},
+    path::PathBuf,
     rc::Rc,
 };
 
-use gtk::{gio, prelude::*};
+use gtk::{gdk, gio, glib, prelude::*};
 use gtk4_layer_shell::{KeyboardMode, LayerShell};
 use orbit_app::i18n::tr;
 use orbit_common::{ConfigDir, config::DockApp};
 
-use crate::{Launcher, SystemApps, badges::Badges};
+use crate::{Launcher, SystemApps, appimage, badges::Badges};
 
 /// A drag shorter than this is a click.
 const DRAG_MIN: f64 = 5.0;
@@ -306,6 +309,33 @@ impl Editor {
         }
         self.changed();
     }
+
+    /// Adds AppImage `path` at list place `at`, once its icon and desktop
+    /// file are out of it (in a thread: it runs the AppImage's runtime).
+    fn add_appimage(&self, path: PathBuf, at: usize) {
+        let weak = self.weak.borrow().clone();
+        glib::spawn_future_local(async move {
+            let result = gio::spawn_blocking(move || appimage::install(&path)).await;
+            let Some(editor) = weak.upgrade() else { return };
+            match result {
+                Ok(Ok(desktop)) => editor.insert(at, Kind::App(launcher(desktop))),
+                Ok(Err(err)) => log::error!("dock: adding the AppImage: {err:#}"),
+                Err(_) => log::error!("dock: adding the AppImage failed"),
+            }
+        });
+    }
+}
+
+/// A new launcher for desktop file `desktop` (an id or a path).
+fn launcher(desktop: String) -> DockApp {
+    DockApp {
+        desktop: Some(desktop),
+        name: None,
+        exec: None,
+        icon: None,
+        group: None,
+        show: true,
+    }
 }
 
 /// The launchers as `dock.yaml` keeps them (`None` is a separator): each
@@ -363,6 +393,26 @@ fn gestures(editor: &Rc<Editor>) {
         }
     });
     root.add_controller(click.clone());
+
+    // AppImages dropped on the dock, from a file manager.
+    let files = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
+    let weak = Rc::downgrade(editor);
+    files.connect_drop(move |_, value, x, y| {
+        let Some(editor) = weak.upgrade() else { return false };
+        let Ok(list) = value.get::<gdk::FileList>() else { return false };
+        let paths: Vec<PathBuf> = list
+            .files()
+            .iter()
+            .filter_map(|file| file.path())
+            .filter(|path| appimage::is_appimage(path))
+            .collect();
+        let at = editor.place_after(x, y);
+        for path in paths.iter().rev() {
+            editor.add_appimage(path.clone(), at);
+        }
+        !paths.is_empty()
+    });
+    root.add_controller(files);
 
     let drag = gtk::GestureDrag::builder()
         .button(gtk::gdk::BUTTON_PRIMARY)
@@ -442,6 +492,10 @@ fn dock_menu(editor: &Rc<Editor>, x: f64, y: f64) {
             let (x, y) = e.menu_at.get();
             chooser(e, x, y);
         });
+        add(&section, &tr("dock-add-appimage"), "appimage", |e| {
+            let (x, y) = e.menu_at.get();
+            pick_appimage(e, x, y);
+        });
         add(&section, &tr("dock-add-separator"), "separator", |e| {
             let (x, y) = e.menu_at.get();
             e.insert(e.place_after(x, y), Kind::Separator);
@@ -457,6 +511,36 @@ fn dock_menu(editor: &Rc<Editor>, x: f64, y: f64) {
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("edit", Some(&group));
     orbit_app::popup::open(&popover, &editor.root, Some((x, y)));
+}
+
+/// Asks for an AppImage file; it goes after the item under (`x`, `y`).
+fn pick_appimage(editor: &Rc<Editor>, x: f64, y: f64) {
+    let at = editor.place_after(x, y);
+    let filter = gtk::FileFilter::new();
+    filter.set_name(Some("AppImage"));
+    filter.add_suffix("AppImage");
+    filter.add_suffix("appimage");
+    let filters = gio::ListStore::new::<gtk::FileFilter>();
+    filters.append(&filter);
+    let dialog = gtk::FileDialog::builder()
+        .title(tr("dock-add-appimage"))
+        .modal(true)
+        .filters(&filters)
+        .default_filter(&filter)
+        .build();
+    let usual = glib::home_dir().join(".appimage");
+    if usual.is_dir() {
+        dialog.set_initial_folder(Some(&gio::File::for_path(usual)));
+    }
+    let weak = Rc::downgrade(editor);
+    // No parent: the dock is a layer surface, not a window to stack on.
+    dialog.open(None::<&gtk::Window>, gio::Cancellable::NONE, move |result| {
+        if let (Some(editor), Ok(file)) = (weak.upgrade(), result)
+            && let Some(path) = file.path()
+        {
+            editor.add_appimage(path, at);
+        }
+    });
 }
 
 /// The installed applications to pick a new launcher from, with a search
@@ -520,15 +604,7 @@ fn chooser(editor: &Rc<Editor>, x: f64, y: f64) {
         let Some(editor) = weak.upgrade() else { return };
         let id = row.widget_name();
         if !id.is_empty() {
-            let app = DockApp {
-                desktop: Some(id.to_string()),
-                name: None,
-                exec: None,
-                icon: None,
-                group: None,
-                show: true,
-            };
-            editor.insert(at, Kind::App(app));
+            editor.insert(at, Kind::App(launcher(id.to_string())));
         }
         if let Some(popover) = shut.upgrade() {
             popover.popdown();

@@ -6,8 +6,10 @@
 //! file has none — and its recent files, which open in it.
 //!
 //! A launcher shows the unread count its application announces (see
-//! `badges`). The dock is edited in place (see `edit`).
+//! `badges`). The dock is edited in place (see `edit`); an AppImage added
+//! there brings its own icon and desktop file (see `appimage`).
 
+mod appimage;
 mod badges;
 mod edit;
 
