@@ -2211,6 +2211,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-lifetimes"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3121,6 +3127,22 @@ dependencies = [
  "orbit-common",
  "poppler-rs",
  "pulldown-cmark",
+]
+
+[[package]]
+name = "orbit-term"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gtk4",
+ "log",
+ "orbit-app",
+ "orbit-common",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "vte4",
 ]
 
 [[package]]
@@ -4290,7 +4312,7 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af4e37e9ea4401fc841ff54b9ddfc9be1079b1e89434c1a6a865dd68980f7e9f"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 1.0.11",
  "libc",
  "libudev-sys",
  "pkg-config",
@@ -4449,6 +4471,40 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vte4"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c61732974d4915c5112a82506cdc86e19a83d786497c2c8bcd80d065825c695d"
+dependencies = [
+ "cairo-rs",
+ "gdk4",
+ "gio 0.22.10",
+ "glib 0.22.10",
+ "gtk4",
+ "io-lifetimes 2.0.4",
+ "libc",
+ "pango",
+ "vte4-sys",
+]
+
+[[package]]
+name = "vte4-sys"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd99766524f740945b1b3fc516dc2ee76311be2efa8d7a1238f35f04330b9afd"
+dependencies = [
+ "cairo-sys-rs",
+ "gdk4-sys",
+ "gio-sys 0.22.9",
+ "glib-sys 0.22.9",
+ "gobject-sys 0.22.9",
+ "gtk4-sys",
+ "libc",
+ "pango-sys",
+ "system-deps 7.0.8",
+]
 
 [[package]]
 name = "walkdir"

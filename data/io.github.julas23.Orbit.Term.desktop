@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Term
+GenericName=Terminal
+Comment=Terminal with the prompt on top, outputs that never wrap, and a history of them
+Comment[pt_BR]=Terminal com o prompt no topo, saídas sem quebra de linha e um histórico delas
+Exec=orbit-term
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;prompt;command;
+Keywords[pt_BR]=terminal;shell;prompt;comando;

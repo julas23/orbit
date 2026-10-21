@@ -1,0 +1,7 @@
+# Orbit-Term — ~/.config/orbit/term.yaml. Every key is optional.
+
+font: Monospace 11          # Pango font of the prompt and the output
+# Programs that run in the terminal (VTE), besides the built-in ones
+# (vim, nano, htop, less, man, ssh, sudo…); their first word, aliases too.
+interactive: []
+# interactive: [please, g]

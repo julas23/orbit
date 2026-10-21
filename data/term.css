@@ -1,0 +1,56 @@
+/* Orbit-Term (crates/orbit-term). The output and the terminal share one
+ * dark surface (ansi::PALETTE is drawn for it); the prompt sits above it,
+ * the status line below, the index of outputs on the right, as narrow as
+ * its min-width at first. The font of the command line and the output
+ * comes from term.yaml. The prompt's parts take the colours of the user's
+ * bash prompt (xterm 256: 15, 75 / 196, 228, 15, 74). */
+.orbit-term .prompt {
+  padding: 8px 10px;
+  background-color: @orbit_selected;
+  border-bottom: 1px solid @orbit_border;
+}
+.orbit-term .part {
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #000000;
+}
+.orbit-term .part.time  { background-color: #ffffff; }
+.orbit-term .part.exit  { background-color: #5fafff; }
+.orbit-term .part.exit.error { background-color: #ff0000; color: #ffffff; }
+.orbit-term .part.git   { background-color: #ffff87; }
+.orbit-term .part.user  { background-color: #ffffff; }
+.orbit-term .part.user.root { color: #ff0000; }
+.orbit-term .part.dir   { background-color: #5fafd7; }
+.orbit-term .arrow { color: @orbit_accent; }
+.orbit-term .choices row  { padding: 1px 8px; }
+.orbit-term .choices .dir { color: #61afef; font-weight: bold; }
+.orbit-term .prompt entry {
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  min-height: 0;
+}
+.orbit-term .prompt entry.busy { opacity: 0.5; }
+.orbit-term .output,
+.orbit-term .output text { background-color: #1b1f27; color: #d8dee9; }
+.orbit-term .status {
+  padding: 3px 10px;
+  font-size: 11px;
+  color: @orbit_muted;
+  border-top: 1px solid @orbit_border;
+}
+.orbit-term .status.error { color: #e06c75; }
+.orbit-term .side { min-width: 150px; }
+.orbit-term .side .title {
+  padding: 8px 10px;
+  font-weight: bold;
+  color: @orbit_muted;
+  border-bottom: 1px solid @orbit_border;
+}
+.orbit-term .history row { padding: 5px 10px; }
+.orbit-term .history .command { font-family: monospace; font-size: 11px; }
+.orbit-term .history .when    { font-size: 10px; color: @orbit_muted; }

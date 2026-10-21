@@ -1,0 +1,21 @@
+[package]
+name = "orbit-term"
+description = "Orbit-Term: a terminal with the prompt fixed on top, outputs that never wrap, and a history of them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+vte4.workspace = true
+log.workspace = true
+anyhow.workspace = true
+async-channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rustix = { workspace = true, features = ["pty", "termios", "process"] }

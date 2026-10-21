@@ -661,3 +661,13 @@ panel-filesystem = Filesystem
 disk-total = TOTAL
 disk-used = USED
 disk-free = FREE
+
+# Orbit-Term
+term-history = Outputs
+term-no-shell = The shell could not start
+term-starting = The shell is still starting
+term-running = Running { $command }…
+term-interactive = { $command } — in the terminal
+term-exit = exit { $code }
+term-stderr = wrote errors
+term-from-history = { $command }  ·  { $time }  ·  { $cwd }

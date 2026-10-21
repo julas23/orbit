@@ -299,20 +299,38 @@ and the best of Thunar, Caja, Nautilus, Konqueror and Nemo.
 | Ctrl+H | hidden files | Ctrl+T, Ctrl+W | new tab, close tab |
 | F3 | two panes | F5, F6 | copy, move to the other pane |
 
+## Orbit-Term
+
+A terminal whose prompt is part of the window: it stays at the top, and
+outputs never mix with it. Each command's output fills the box below,
+never wrapped — scrolled both ways — in its colours; the last 50 that
+worked (exit code 0 and nothing on stderr) are listed on the right, a
+click showing one again (`~/.local/state/orbit/term/`).
+
+Commands run in one shell session that loads `~/.shell/*.sh` (or
+`~/.bash_aliases`): `cd`, `export` and aliases hold from one command to the
+next. Interactive programs — editors, `htop`, `less`, `ssh`, `sudo`… (the
+built-in list plus `interactive:` in `term.yaml`), or any command run with
+Ctrl+Enter — run in a real terminal (VTE) that takes the output's place and
+the keyboard until they end. ↑ ↓ walk the commands run before, Ctrl+C
+interrupts (twice: kills), Ctrl+L clears the output; `font:` in `term.yaml`
+sets the font.
+
 ## Building and running
 
 Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
 bubblewrap (its sandbox); for Orbit-Read the poppler-glib development
 files; for Orbit-Play GStreamer's (core, base and bad plugins) and
-`gstreamer1.0-libav`; for Orbit-Edit GtkSourceView 5's. Orbit-Files uses
+`gstreamer1.0-libav`; for Orbit-Edit GtkSourceView 5's; for Orbit-Term VTE's
+(GTK 4). Orbit-Files uses
 GVfs for network shares and zip, unzip, tar and 7z for archives.
 On Debian/Ubuntu:
 
 ```sh
 sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev glycin-loaders bubblewrap libpoppler-glib-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-libav \
-  libgtksourceview-5-dev gvfs-backends p7zip-full unzip zip
+  libgtksourceview-5-dev libvte-2.91-gtk4-dev gvfs-backends p7zip-full unzip zip
 cargo build --release
 ./target/release/orbit-panel &
 ./target/release/orbit-dock &
