@@ -4,7 +4,12 @@
 //! and dock (layer shell), and speaks the clipboard protocols orbit-clip
 //! uses.
 //!
-//!   orbit-core [-c CONFIG] [-- COMMAND…]
+//!   orbit-core [-c CONFIG] [--nested | --drm] [-- COMMAND…]
+//!
+//! Inside a Wayland or X session it runs nested, as a window; from a text
+//! console it takes the screen (DRM/KMS, libinput, libseat), and logs to
+//! `$XDG_STATE_HOME/orbit/core/core.log`. Ctrl+Alt+F1…F12 switch consoles,
+//! Mod+Shift+E leaves.
 //!
 //! COMMAND (and the config's `startup:`) run as clients of the core. The
 //! plan is `docs/PLANO-CORE.md`.
@@ -14,11 +19,14 @@
 
 mod command;
 mod config;
+mod cursor;
 mod handlers;
 mod input;
 mod ipc;
+mod render;
 mod state;
 mod tile;
+mod udev;
 mod winit;
 mod workspace;
 
@@ -27,30 +35,36 @@ use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 use crate::{config::Config, state::Orbit};
 
 fn main() -> anyhow::Result<()> {
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-    tracing_subscriber::fmt().with_env_filter(filter).init();
-
     let mut args = std::env::args().skip(1);
+    // Nested when there is a session to nest in.
+    let mut drm = std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none();
     let mut config_path = Config::path();
     let mut command: Vec<String> = Vec::new();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => config_path = args.next().map(Into::into).ok_or_else(|| anyhow::anyhow!("--config needs a file"))?,
             "--" => command = args.by_ref().collect(),
+            "--nested" => drm = false,
+            "--drm" => drm = true,
             "-h" | "--help" => {
-                println!("Usage: orbit-core [-c|--config FILE] [-- COMMAND…]  (default config: {})", Config::path().display());
+                println!("Usage: orbit-core [-c|--config FILE] [--nested|--drm] [-- COMMAND…]  (default config: {})", Config::path().display());
                 return Ok(());
             }
             other => anyhow::bail!("unknown argument: {other}"),
         }
     }
+    logging(drm);
     let config = Config::load(&config_path);
 
     let mut event_loop: EventLoop<Orbit> = EventLoop::try_new()?;
     let display: Display<Orbit> = Display::new()?;
     let mut state = Orbit::new(&mut event_loop, display, config, config_path);
     state.read_layouts();
-    winit::init(&mut event_loop, &mut state)?;
+    if drm {
+        udev::init(&mut event_loop, &mut state)?;
+    } else {
+        winit::init(&mut event_loop, &mut state)?;
+    }
     if let Err(err) = ipc::listen(&mut event_loop, &mut state) {
         tracing::error!("no IPC: {err:#}");
     }
@@ -71,6 +85,25 @@ fn main() -> anyhow::Result<()> {
         state.ipc.flush();
     })?;
     Ok(())
+}
+
+/// Logs to stderr nested; on the screen, to a file (the console is hidden
+/// behind it), `$XDG_STATE_HOME/orbit/core/core.log`, a new one each start.
+fn logging(drm: bool) {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    if drm {
+        let dir = std::env::var_os("XDG_STATE_HOME")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"))
+            .join("orbit/core");
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(file) = std::fs::File::create(dir.join("core.log")) {
+            tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(std::sync::Mutex::new(file)).init();
+            return;
+        }
+    }
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
 /// `arg` as one word for `sh -c`.

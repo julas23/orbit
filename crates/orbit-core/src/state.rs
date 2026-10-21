@@ -87,8 +87,12 @@ pub struct Orbit {
     /// advertised.
     _globals: (XdgDecorationState, OutputManagerState, ViewporterState),
 
-    /// The nested window this compositor draws into.
-    pub winit: Option<crate::winit::WinitData>,
+    /// Where frames go: a window of the host session, or the screen.
+    pub backend: Backend,
+    /// What the pointer looks like (a client's image, or the theme's), and
+    /// the theme, when the core draws it.
+    pub cursor_status: smithay::input::pointer::CursorImageStatus,
+    pub cursor: crate::cursor::Cursor,
     /// Something changed on screen since the last frame.
     pub needs_render: bool,
     /// The keyboard's layouts by name, and the active one (for the IPC).
@@ -123,6 +127,7 @@ impl Orbit {
         seat.add_pointer();
 
         let socket_name = Self::listen(display, event_loop);
+        let cursor = crate::cursor::Cursor::load(&config.cursor_theme, config.cursor_size);
 
         Self {
             start_time: Instant::now(),
@@ -150,7 +155,9 @@ impl Orbit {
             data_control_state,
             seat,
             _globals: (xdg_decoration_state, output_manager_state, viewporter_state),
-            winit: None,
+            backend: Backend::None,
+            cursor_status: smithay::input::pointer::CursorImageStatus::default_named(),
+            cursor,
             needs_render: true,
             suppressed: Vec::new(),
             layouts: (Vec::new(), 0),
@@ -214,8 +221,10 @@ impl Orbit {
     /// Draw a new frame when the loop is next idle.
     pub fn request_render(&mut self) {
         self.needs_render = true;
-        if let Some(winit) = &self.winit {
-            winit.backend.window().request_redraw();
+        match &self.backend {
+            Backend::Winit(winit) => winit.backend.window().request_redraw(),
+            Backend::Drm(_) => crate::udev::schedule(self),
+            Backend::None => {}
         }
     }
 
@@ -313,6 +322,27 @@ impl Orbit {
         self.window_for(&focus)
     }
 
+    /// Kills the client of the focused window (SIGKILL), as sway's
+    /// `$mod+Shift+q` did; the core itself is never the target.
+    pub fn kill_focused(&mut self) {
+        use smithay::reexports::{
+            rustix::process::{Pid, Signal, kill_process},
+            wayland_server::Resource,
+        };
+        let Some(surface) = self.focused_window().and_then(|w| w.toplevel().map(|t| t.wl_surface().clone())) else { return };
+        let Some(client) = surface.client() else { return };
+        match client.get_credentials(&self.display_handle) {
+            Ok(creds) if creds.pid > 0 && creds.pid as u32 != std::process::id() => {
+                tracing::info!("killing client {}", creds.pid);
+                if let Some(Err(err)) = Pid::from_raw(creds.pid).map(|pid| kill_process(pid, Signal::KILL)) {
+                    tracing::warn!("kill {}: {err}", creds.pid);
+                }
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!("no credentials for the focused client: {err}"),
+        }
+    }
+
     /// A layer surface that takes the keyboard for as long as it is there
     /// (a lock screen, a launcher), on top first.
     pub fn exclusive_layer(&self) -> Option<LayerSurface> {
@@ -356,7 +386,14 @@ impl Orbit {
     /// Runs `command` through the shell, as a client of this compositor.
     pub fn spawn(&self, command: &str) {
         let mut child = std::process::Command::new("sh");
-        child.arg("-c").arg(command).env("WAYLAND_DISPLAY", &self.socket_name);
+        child
+            .arg("-c")
+            .arg(command)
+            .env("WAYLAND_DISPLAY", &self.socket_name)
+            .env("XDG_SESSION_TYPE", "wayland")
+            .env("XCURSOR_THEME", &self.config.cursor_theme)
+            .env("XCURSOR_SIZE", self.config.cursor_size.to_string())
+            .env_remove("DISPLAY");
         // Clients find the core's IPC under every name they look for, and
         // never the outer sway's.
         match &self.ipc.path {
@@ -375,6 +412,16 @@ impl Orbit {
             Err(err) => tracing::warn!("{command}: {err}"),
         }
     }
+}
+
+/// Where frames go.
+pub enum Backend {
+    /// Not set up yet, or taken out for a moment while drawing.
+    None,
+    /// A window inside another session (`winit`).
+    Winit(Box<crate::winit::WinitData>),
+    /// The screen itself (`udev`).
+    Drm(Box<crate::udev::DrmData>),
 }
 
 /// The keymap the config asks for.

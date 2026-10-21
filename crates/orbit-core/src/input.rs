@@ -1,5 +1,5 @@
 //! Keyboard, pointer and wheel: the core's own shortcuts (Mod+Return,
-//! Mod+Shift+Q…) are taken before the focused client sees them; the
+//! Mod+Q…) are taken before the focused client sees them; the
 //! window under the pointer takes the keyboard (`focus_follows_mouse`), as
 //! does whatever is clicked.
 //!
@@ -10,7 +10,7 @@
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent, KeyState,
-        KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+        KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
     desktop::{WindowSurfaceType, layer_map_for_output},
     input::{
@@ -27,7 +27,11 @@ use crate::{config::Modifier, state::Orbit};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Terminal,
+    /// Mod+Q: asks the focused window to close.
     Close,
+    /// Mod+Shift+Q: kills the focused window's client (`kill -9`), for one
+    /// that does not answer.
+    Kill,
     Quit,
     FocusNext,
     FocusPrevious,
@@ -35,6 +39,10 @@ pub enum Action {
     MovePrevious,
     Workspace(i32),
     MoveToWorkspace(i32),
+    /// Ctrl+Alt+F1…F12: another virtual terminal (on the screen only).
+    Vt(i32),
+    /// Ctrl+Alt+Backspace: out, whatever the config says (as in X).
+    Emergency,
 }
 
 /// The action of `sym` with `mods` held, when `modifier` is the core's.
@@ -55,7 +63,8 @@ pub fn shortcut(modifier: Modifier, mods: &ModifiersState, sym: Keysym) -> Optio
     }
     Some(match (mods.shift, sym) {
         (false, Keysym::Return) => Action::Terminal,
-        (true, Keysym::q) => Action::Close,
+        (false, Keysym::q) => Action::Close,
+        (true, Keysym::q) => Action::Kill,
         (true, Keysym::e) => Action::Quit,
         (false, Keysym::Right | Keysym::l | Keysym::Down | Keysym::j) => Action::FocusNext,
         (false, Keysym::Left | Keysym::h | Keysym::Up | Keysym::k) => Action::FocusPrevious,
@@ -74,6 +83,12 @@ impl Orbit {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         match event {
             InputEvent::Keyboard { event, .. } => self.key::<I>(event),
+            // A mouse or touchpad: it moves the pointer by so much.
+            InputEvent::PointerMotion { event, .. } => {
+                let Some(pointer) = self.seat.get_pointer() else { return };
+                let pos = self.clamp(pointer.current_location() + event.delta());
+                self.pointer_to(pos, Event::time(&event));
+            }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let Some(output) = self.output() else { return };
                 let Some(geo) = self.space.output_geometry(&output) else { return };
@@ -109,6 +124,16 @@ impl Orbit {
                 }
                 return FilterResult::Forward;
             }
+            if mods.ctrl && mods.alt && handle.modified_sym() == Keysym::BackSpace {
+                state.suppressed.push(code);
+                return FilterResult::Intercept(Some(Action::Emergency));
+            }
+            // Ctrl+Alt+Fn: the keymap gives XF86Switch_VT_n.
+            let vt = handle.modified_sym().raw();
+            if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw()).contains(&vt) {
+                state.suppressed.push(code);
+                return FilterResult::Intercept(Some(Action::Vt((vt - Keysym::XF86_Switch_VT_1.raw() + 1) as i32)));
+            }
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             match shortcut(modifier, mods, sym) {
                 Some(action) => {
@@ -134,7 +159,12 @@ impl Orbit {
                     t.send_close();
                 }
             }
+            Action::Kill => self.kill_focused(),
             Action::Quit => self.loop_signal.stop(),
+            Action::Emergency => {
+                tracing::warn!("Ctrl+Alt+Backspace: leaving");
+                self.loop_signal.stop();
+            }
             Action::FocusNext | Action::FocusPrevious => {
                 let next = self.neighbour(action == Action::FocusNext);
                 if next.is_some() {
@@ -143,12 +173,37 @@ impl Orbit {
             }
             Action::MoveNext | Action::MovePrevious => self.move_focused(action == Action::MoveNext),
             Action::Workspace(n) => self.switch_workspace(n),
+            Action::Vt(n) => {
+                if let crate::state::Backend::Drm(drm) = &mut self.backend {
+                    drm.change_vt(n);
+                }
+            }
             Action::MoveToWorkspace(n) => {
                 if let Some(window) = self.focused_window() {
                     self.move_to_workspace(&window, n);
                 }
             }
         }
+    }
+
+    /// `pos` kept on the screens: inside the output it is over, or the
+    /// nearest one.
+    fn clamp(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
+        let outputs: Vec<_> = self.space.outputs().filter_map(|o| self.space.output_geometry(o)).collect();
+        if outputs.iter().any(|g| g.to_f64().contains(pos)) || outputs.is_empty() {
+            return pos;
+        }
+        outputs
+            .iter()
+            .map(|g| {
+                let g = g.to_f64();
+                Point::from((pos.x.clamp(g.loc.x, g.loc.x + g.size.w - 1.0), pos.y.clamp(g.loc.y, g.loc.y + g.size.h - 1.0)))
+            })
+            .min_by(|a: &Point<f64, Logical>, b| {
+                let d = |p: &Point<f64, Logical>| (p.x - pos.x).powi(2) + (p.y - pos.y).powi(2);
+                d(a).total_cmp(&d(b))
+            })
+            .unwrap_or(pos)
     }
 
     /// The window after (or before) the focused one, wrapping around.
@@ -189,6 +244,10 @@ impl Orbit {
         }
         pointer.motion(self, under, &MotionEvent { location: pos, serial, time });
         pointer.frame(self);
+        // On the screen the core draws the pointer: it moved, so a frame.
+        if matches!(self.backend, crate::state::Backend::Drm(_)) {
+            self.request_render();
+        }
     }
 
     /// A click gives the keyboard to what was clicked: a layer surface that
@@ -261,7 +320,8 @@ mod tests {
     #[test]
     fn shortcuts() {
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::Return), Some(Action::Terminal));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Q), Some(Action::Close));
+        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::q), Some(Action::Close));
+        assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Q), Some(Action::Kill));
         assert_eq!(shortcut(Modifier::Super, &mods(false, true), Keysym::Q), None);
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::x), None);
         assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Left), Some(Action::MovePrevious));

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # orbit-session — starts (or restarts) Orbit-Panel and Orbit-Dock for a
-# Wayland session, in the right order.
+# Wayland session, in the right order, and Orbit-Notify when no
+# notification server is running (sway's config used to start it).
 #
 #   orbit-session [--fallback COMMAND]
 #
@@ -53,3 +54,10 @@ fi
 # Give the panel's surface a moment to be mapped before the dock's.
 sleep 0.5
 setsid "$BIN/orbit-dock" >/dev/null 2>&1 < /dev/null &
+
+# Notifications (the panel's "syncing before leaving" among them). Left
+# running on a restart, so the centre keeps its history; a second launch
+# would only toggle the centre.
+if ! busctl --user status org.freedesktop.Notifications >/dev/null 2>&1; then
+  setsid "$BIN/orbit-notify" --background >/dev/null 2>&1 < /dev/null &
+fi

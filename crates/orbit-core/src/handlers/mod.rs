@@ -34,7 +34,12 @@ use smithay::{
     },
 };
 
-use crate::state::Orbit;
+use smithay::{
+    backend::{allocator::dmabuf::Dmabuf, renderer::ImportDma},
+    wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
+};
+
+use crate::state::{Backend, Orbit};
 
 impl SeatHandler for Orbit {
     type KeyboardFocus = WlSurface;
@@ -45,8 +50,14 @@ impl SeatHandler for Orbit {
         &mut self.seat_state
     }
 
-    // Nested, the host draws the pointer.
-    fn cursor_image(&mut self, _seat: &Seat<Self>, _image: CursorImageStatus) {}
+    /// The image a client gives the pointer (drawn by the core on the
+    /// screen; nested, the host draws its own).
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        self.cursor_status = image;
+        if matches!(self.backend, crate::state::Backend::Drm(_)) {
+            self.request_render();
+        }
+    }
 
     /// The clipboard follows the keyboard: the focused client may read it.
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
@@ -100,6 +111,30 @@ impl WaylandDndGrabHandler for Orbit {
 }
 
 impl OutputHandler for Orbit {}
+
+/// Client buffers in GPU memory, imported by the backend's renderer.
+impl DmabufHandler for Orbit {
+    fn dmabuf_state(&mut self) -> &mut DmabufState {
+        match &mut self.backend {
+            Backend::Winit(w) => &mut w.dmabuf_state,
+            Backend::Drm(d) => &mut d.dmabuf_state,
+            Backend::None => unreachable!("dmabuf requests before a backend"),
+        }
+    }
+
+    fn dmabuf_imported(&mut self, _global: &DmabufGlobal, dmabuf: Dmabuf, notifier: ImportNotifier) {
+        let imported = match &mut self.backend {
+            Backend::Winit(w) => w.backend.renderer().import_dmabuf(&dmabuf, None).is_ok(),
+            Backend::Drm(d) => d.renderer.import_dmabuf(&dmabuf, None).is_ok(),
+            Backend::None => false,
+        };
+        if imported {
+            let _ = notifier.successful::<Orbit>();
+        } else {
+            notifier.failed();
+        }
+    }
+}
 
 // Pointer locks (games) come later; the seat needs the handler.
 impl PointerConstraintsHandler for Orbit {}

@@ -83,6 +83,10 @@ regex = "1"
 # between versions; updated on purpose, as with glycin). The commit the
 # ported smallvil/anvil code was read at.
 smithay = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d00131eb7f388efed26e35ea316b0018", default-features = false }
+# orbit-core's DRM backend: connectors and monitor names (same commit).
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d00131eb7f388efed26e35ea316b0018" }
+# orbit-core: the pointer's image, from the cursor theme.
+xcursor = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4"

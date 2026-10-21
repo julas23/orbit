@@ -34,6 +34,10 @@ pub struct Config {
     pub focus_follows_mouse: bool,
     /// Commands run once the core is up (through `sh -c`).
     pub startup: Vec<String>,
+    /// The pointer's theme and size (sway's `seat * xcursor_theme`); also
+    /// handed to clients as XCURSOR_THEME and XCURSOR_SIZE.
+    pub cursor_theme: String,
+    pub cursor_size: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,6 +72,8 @@ impl Default for Config {
             unfocused_color: "#4c566a".into(),
             focus_follows_mouse: true,
             startup: Vec::new(),
+            cursor_theme: "Breeze_Light".into(),
+            cursor_size: 24,
         }
     }
 }

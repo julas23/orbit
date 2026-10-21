@@ -295,7 +295,7 @@ desta fase — sem esperar o aninhado ficar completo.
     (`#4682b4`/`#4c566a`, 2 px, gaps 6 — da config do sway), decoração no
     servidor, popups com grab (menus do painel), **layer shell** (o painel do
     Orbit sobe e reserva a borda), teclado `us alt-intl` com teclas mortas,
-    foco por clique e `focus_follows_mouse`, atalhos Mod+Return / Mod+Shift+Q /
+    foco por clique e `focus_follows_mouse`, atalhos Mod+Return / Mod+Q (fecha) / Mod+Shift+Q (mata, `kill -9`) /
     Mod+Shift+E / Mod+setas (Shift move), clipboard (`wl-data-device`,
     `primary-selection`, `wlr-data-control`), `xdg-output`, viewporter,
     `core.yaml` com padrões (vazio = sessão usável), desenho só quando algo
@@ -334,8 +334,21 @@ desta fase — sem esperar o aninhado ficar completo.
     (clique na área 2 troca; minimizar/restaurar), `swaymsg` do sistema contra o
     core, eventos na ordem do sway.
   - Ainda não: árvore/tabbed/flutuantes, regras `for_window`, XWayland,
-    backend DRM, estado `Locked` / greet, testes headless automáticos; migrar
-    painel/blink para os protocolos padrão (§5).
+    estado `Locked` / greet, testes headless automáticos; migrar painel/blink
+    para os protocolos padrão (§5).
+- **2026-10-21 — backend DRM/KMS** (`udev.rs`, portado do anvil, MIT): sessão
+  libseat (logind), GPU única com `GlesRenderer` sobre GBM, um `DrmOutput` por
+  conector (nome `eDP-1`/`HDMI-A-4`, modo preferido, lado a lado), libinput
+  (movimento relativo, touchpad no padrão do libinput como no sway), troca de VT
+  (Ctrl+Alt+F1…F12, pausa/retoma DRM e libinput), hotplug por udev, ponteiro
+  desenhado pelo core (`cursor.rs`: tema `Breeze_Light` 24 ou a imagem do app),
+  `render.rs` comum aos dois backends. Desenho sob demanda: um pedido desenha na
+  próxima volta ociosa, a não ser que um quadro espere o vblank; o vblank só
+  redesenha se algo mudou. Escolha automática: aninhado com
+  `WAYLAND_DISPLAY`/`DISPLAY`, tela sem eles (`--nested`/`--drm` forçam). Log
+  em `~/.local/state/orbit/core/core.log` no modo tela. Saída de emergência
+  Ctrl+Alt+Backspace. Instalado em `~/.local/bin` para o 1º teste num TTY
+  (não testável de dentro do sway, que é o dono da GPU).
 
 ### Fase 2 — sessão real de uso diário
 
