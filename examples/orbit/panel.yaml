@@ -23,5 +23,6 @@ end:                # bottom / right
   - network
   - keyboard
   - battery
+  - notifications     # the bell of orbit-notify
   - workspaces
   - session

@@ -1,0 +1,72 @@
+/* Orbit-Notify built-in stylesheet: the bubbles and the centre. Colours
+ * come from the palette (palette-dark.css / palette-light.css);
+ * ~/.config/orbit/style.css goes on top and can override any of this.
+ * Sizes on the 5 px grid. */
+
+window.orbit-notify-bubbles,
+window.orbit-notify-centre {
+  background: transparent;
+  color: @orbit_fg;
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+}
+
+window.orbit-notify-bubbles button,
+window.orbit-notify-centre button {
+  background: none;
+  border: none;
+  box-shadow: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A notification, in a bubble or in the centre. 1 px border + 9 = 10. */
+.note {
+  background-color: @orbit_surface;
+  border: 1px solid @orbit_border;
+  border-radius: 5px;
+  padding: 9px;
+}
+.orbit-notify-centre .note {
+  background-color: @orbit_faint;
+}
+.note:hover          { border-color: @orbit_focus; }
+.note.critical       { border-color: @orbit_alert; }
+.note .app           { color: @orbit_muted; font-size: 11px; }
+.note .time          { color: @orbit_muted; font-size: 11px; }
+.note .summary       { font-weight: bold; font-size: 13px; }
+.note .body          { font-size: 12px; }
+.note .body link     { color: @orbit_accent; }
+.note .close         { color: @orbit_muted; padding: 0 5px; border-radius: 5px; }
+.note .close:hover   { color: @orbit_fg; background-color: @orbit_hover; }
+.note .value trough  { min-height: 5px; border-radius: 5px; background-color: @orbit_trough; }
+.note .value progress { min-height: 5px; border-radius: 5px; background-color: @orbit_accent; }
+.note .actions       { margin-top: 5px; }
+.note .actions button {
+  background-color: @orbit_button;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.note .actions button:hover { background-color: @orbit_button_hover; }
+
+/* The centre. */
+.centre {
+  background-color: @orbit_surface;
+  border: 1px solid @orbit_edge;
+  border-radius: 10px;
+  padding: 9px;
+}
+.centre .header .title { font-weight: bold; font-size: 14px; }
+.centre .header button {
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.centre .header button:hover    { background-color: @orbit_hover; }
+.centre .header .dnd            { font-size: 16px; padding: 0 10px; }
+.centre .header .dnd:checked    { background-color: alpha(@orbit_accent, 0.35); }
+.centre .group                  { color: @orbit_muted; font-size: 12px; margin-top: 5px; }
+.centre .group .close           { padding: 0 5px; border-radius: 5px; }
+.centre .group .close:hover     { color: @orbit_fg; background-color: @orbit_hover; }
+.centre .placeholder            { color: @orbit_muted; }
+.centre scrollbar               { background: none; }

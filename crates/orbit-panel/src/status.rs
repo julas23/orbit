@@ -29,9 +29,10 @@ use crate::{dbusmenu, sway};
 #[serde(default, deny_unknown_fields)]
 pub struct StatusConfig {}
 
-/// The shared shape: icon, first line, second line.
-struct Row {
-    root: gtk::Widget,
+/// The shared shape: icon, first line, second line (also the bell's, in
+/// `notifications`).
+pub(crate) struct Row {
+    pub(crate) root: gtk::Widget,
     icon: gtk::Label,
     first: gtk::Label,
     second: gtk::Label,
@@ -39,7 +40,7 @@ struct Row {
 }
 
 impl Row {
-    fn new(class: &str, vertical: bool) -> Rc<Row> {
+    pub(crate) fn new(class: &str, vertical: bool) -> Rc<Row> {
         let icon = gtk::Label::builder()
             .css_classes(["icon"])
             .valign(gtk::Align::Center)
@@ -82,7 +83,7 @@ impl Row {
         })
     }
 
-    fn show(&self, glyph: &str, first: &str, second: &str, tooltip: &str) {
+    pub(crate) fn show(&self, glyph: &str, first: &str, second: &str, tooltip: &str) {
         self.icon.set_label(glyph);
         self.first.set_label(first);
         self.second.set_label(second);

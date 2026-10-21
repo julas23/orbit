@@ -21,11 +21,12 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay) | planned |
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
+| **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | in progress |
 | **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
 | **orbit-read** | PDF, Markdown and plain-text reader: outline, thumbnails, search, night mode | **working** |
 | **orbit-files** | File manager: Yazi's speed, three views, two panes, preview, bulk rename, actions, archives, network | **working** |
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
-| **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts and notifications, tracking parameters stripped, no telemetry | in progress |
+| **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts and notifications, tracking parameters stripped, no telemetry | **working** |
 | orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |

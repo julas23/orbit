@@ -2281,6 +2281,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-notify"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gio-unix",
+ "gtk4",
+ "gtk4-layer-shell",
+ "log",
+ "orbit-app",
+ "orbit-common",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "orbit-panel"
 version = "0.1.0"
 dependencies = [

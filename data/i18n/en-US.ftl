@@ -562,3 +562,20 @@ pathfinder-error-load = The page could not be opened
 pathfinder-error-tls = Invalid certificate
 pathfinder-error-tls-detail = This site's certificate is not valid. Pathfinder does not open public sites with an invalid certificate — someone may be posing as it.
 pathfinder-downloaded = Download finished: { $name }
+
+## Orbit-Notify, and the panel's bell
+
+notify-title = Notifications
+notify-dnd = Do not disturb
+notify-clear = Clear all
+notify-clear-group = Clear these
+notify-empty = No notifications
+notifications-none = none new
+notifications-new = { $count ->
+    [one] 1 new
+   *[other] { $count } new
+}
+notifications-dnd = do not disturb
+notifications-on = notifications on
+notifications-off = no server
+notifications-tooltip = Click: notification centre · Right click: do not disturb

@@ -1,0 +1,20 @@
+[package]
+name = "orbit-notify"
+description = "Orbit-Notify: the desktop's notification server — bubbles, a notification centre and the panel's counter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+gtk4-layer-shell.workspace = true
+log.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+gio-unix.workspace = true

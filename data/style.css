@@ -305,6 +305,9 @@ window.orbit-menu { background: transparent; }
 .status .icon.button:hover { background-color: @orbit_hover; }
 .status-line .icon  { font-size: 16px; }
 .status-line .first { font-size: 11px; }
+/* The bell (notifications.rs): the accent while there are new ones. */
+.notifications:hover        { background-color: @orbit_hover; }
+.notifications.unread .icon { color: @orbit_accent; }
 
 /* Popovers and context menus (window list, tray, network, calendar, volume):
  * the panel's dark background and light text. They live in the panel's

@@ -13,6 +13,7 @@ mod dbusmenu;
 mod forecast;
 mod maintenance;
 mod menu;
+mod notifications;
 mod pulse;
 mod session;
 mod sni;
@@ -168,6 +169,9 @@ fn module(name: &str, dir: &ConfigDir, edge: Edge) -> Option<gtk::Widget> {
             .module("keyboard")
             .map(|c| status::keyboard(&c, vertical)),
         "battery" => dir.module("battery").map(|c| status::battery(&c, vertical)),
+        "notifications" => dir
+            .module("notifications")
+            .map(|c| notifications::new(&c, vertical)),
         "weather" => dir.module("weather").map(|c| weather::new(&c, vertical)),
         // The forecast shares the weather module's source and icons.
         "forecast" => dir.module("forecast").and_then(|f| {

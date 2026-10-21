@@ -554,3 +554,20 @@ pathfinder-error-load = Não foi possível abrir a página
 pathfinder-error-tls = Certificado inválido
 pathfinder-error-tls-detail = O certificado deste site não é válido. O Pathfinder não abre sites públicos com certificado inválido — alguém pode estar se passando por ele.
 pathfinder-downloaded = Download concluído: { $name }
+
+## Orbit-Notify, e o sino do painel
+
+notify-title = Notificações
+notify-dnd = Não perturbe
+notify-clear = Limpar tudo
+notify-clear-group = Limpar estas
+notify-empty = Nenhuma notificação
+notifications-none = nenhuma nova
+notifications-new = { $count ->
+    [one] 1 nova
+   *[other] { $count } novas
+}
+notifications-dnd = não perturbe
+notifications-on = avisos ligados
+notifications-off = sem servidor
+notifications-tooltip = Clique: central de notificações · Botão direito: não perturbe

@@ -1,0 +1,21 @@
+# Orbit-Notify — ~/.config/orbit/notify.yaml. Every key is optional; these
+# are the defaults.
+
+# The monitor for the bubbles and the centre (index or output name, such as
+# HDMI-A-1). Without it, the panel's.
+# monitor: 0
+width: 360          # a bubble's width, px
+center_width: 400   # the centre's width, px
+margin: 10          # distance from the screen's edges, px
+max_popups: 5       # bubbles at once; the rest wait their turn
+# How long a bubble stays, by urgency, in seconds, when the program does not
+# say; 0 keeps it until closed.
+timeout:
+  low: 5
+  normal: 8
+  critical: 0
+history_limit: 200  # notifications kept in the centre
+# Programs whose notifications are only bubbles, never kept.
+no_history:
+  - volume
+  - microfone
