@@ -549,4 +549,16 @@ pathfinder-unread = { $count ->
     [one] 1 unread
    *[other] { $count } unread
 }
+pathfinder-new-tab = New tab (Ctrl+T)
+pathfinder-close-tab = Close tab (Ctrl+W)
+pathfinder-cert-title = Untrusted certificate
+pathfinder-cert-detail = { $host } is an address on your local network and showed a certificate from no known authority — usual for Proxmox, routers and NAS, which sign their own. Trust it only if this is your device.
+pathfinder-cert-changed = ⚠️ The certificate of { $host } CHANGED since you trusted it. It may be the device reinstalled — or someone posing as it.
+pathfinder-cert-facts = Issued to: { $subject }
+    Valid until: { $until }
+    SHA-256: { $sha256 }
+pathfinder-cert-trust = Trust this certificate
+pathfinder-error-load = The page could not be opened
+pathfinder-error-tls = Invalid certificate
+pathfinder-error-tls-detail = This site's certificate is not valid. Pathfinder does not open public sites with an invalid certificate — someone may be posing as it.
 pathfinder-downloaded = Download finished: { $name }

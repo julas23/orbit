@@ -541,4 +541,16 @@ pathfinder-unread = { $count ->
     [one] 1 não lida
    *[other] { $count } não lidas
 }
+pathfinder-new-tab = Nova aba (Ctrl+T)
+pathfinder-close-tab = Fechar aba (Ctrl+W)
+pathfinder-cert-title = Certificado não confiável
+pathfinder-cert-detail = { $host } é um endereço da sua rede local e apresentou um certificado que não vem de uma autoridade conhecida — comum em Proxmox, roteadores e NAS, que assinam o próprio certificado. Confie só se este for o seu equipamento.
+pathfinder-cert-changed = ⚠️ O certificado de { $host } MUDOU desde que você confiou nele. Pode ser uma reinstalação do equipamento — ou alguém se passando por ele.
+pathfinder-cert-facts = Emitido para: { $subject }
+    Válido até: { $until }
+    SHA-256: { $sha256 }
+pathfinder-cert-trust = Confiar neste certificado
+pathfinder-error-load = Não foi possível abrir a página
+pathfinder-error-tls = Certificado inválido
+pathfinder-error-tls-detail = O certificado deste site não é válido. O Pathfinder não abre sites públicos com certificado inválido — alguém pode estar se passando por ele.
 pathfinder-downloaded = Download concluído: { $name }

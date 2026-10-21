@@ -53,10 +53,20 @@ pub struct Window {
     /// The address bar: the page's address; what is typed opens in the
     /// browser.
     address: gtk::Entry,
-    /// Typing in the address bar: the page's address does not overwrite it.
+    /// The address bar holds what the user is typing (or was emptied for
+    /// it): the page's address does not overwrite it.
     editing: std::cell::Cell<bool>,
+    /// The address bar's text is being set by the program, not typed.
+    setting_address: std::cell::Cell<bool>,
     /// The built-in browser, at the top of the sidebar.
     browser: Rc<Service>,
+    /// The browser's tabs, over the address bar while the browser shows.
+    tabbar: gtk::Box,
+    tabs_box: gtk::Box,
+    /// "+", right after the last tab.
+    new_tab: gtk::Button,
+    /// The new tab whose page may not take the keys yet (see `guard_tab`).
+    guard: RefCell<Option<(webkit6::WebView, gtk::EventControllerFocus, gtk::GestureClick)>>,
     back: gtk::Button,
     forward: gtk::Button,
     current: RefCell<Option<Rc<Service>>>,
@@ -80,6 +90,7 @@ impl Window {
             changed: RefCell::new(None),
             page_changed: RefCell::new(None),
             watching: RefCell::new(None),
+            tabs_changed: RefCell::new(None),
         });
 
         let window = gtk::ApplicationWindow::builder()
@@ -150,7 +161,24 @@ impl Window {
         let empty = gtk::Label::builder().label(tr("pathfinder-empty")).css_classes(["empty"]).build();
         stack.add_named(&empty, Some("empty"));
 
+        let tabs_box = gtk::Box::builder().spacing(2).css_classes(["tabs"]).build();
+        let tabs_scroll = gtk::ScrolledWindow::builder()
+            .child(&tabs_box)
+            .vscrollbar_policy(gtk::PolicyType::Never)
+            .hexpand(true)
+            .propagate_natural_height(true)
+            .build();
+        let new_tab = gtk::Button::builder()
+            .icon_name("list-add-symbolic")
+            .tooltip_text(tr("pathfinder-new-tab"))
+            .css_classes(["flat", "new-tab"])
+            .focus_on_click(false)
+            .valign(gtk::Align::Center)
+            .build();
+        let tabbar = gtk::Box::builder().css_classes(["tabbar"]).visible(false).build();
+        tabbar.append(&tabs_scroll);
         let page = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+        page.append(&tabbar);
         page.append(&bar);
         page.append(&stack);
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -181,7 +209,12 @@ impl Window {
             stack,
             address,
             editing: std::cell::Cell::new(false),
+            setting_address: std::cell::Cell::new(false),
             browser,
+            tabbar,
+            tabs_box,
+            new_tab: new_tab.clone(),
+            guard: RefCell::new(None),
             back,
             forward,
             current: RefCell::new(None),
@@ -213,17 +246,41 @@ impl Window {
             }));
         }
         this.wire(&this.browser.clone());
+        {
+            let state = this.state.borrow();
+            this.browser.set_restore(state.tabs.clone(), state.tab);
+        }
+        new_tab.connect_clicked(glib::clone!(#[weak] this, move |_| this.new_tab()));
+        let weak = Rc::downgrade(&this);
+        *this.env.tabs_changed.borrow_mut() = Some(Box::new(move |service| {
+            if let Some(w) = weak.upgrade()
+                && service.key == w.browser.key
+            {
+                w.sync_tabs();
+            }
+        }));
         home.connect_clicked(glib::clone!(#[weak] this, move |_| this.go_home()));
         this.address.connect_activate(glib::clone!(#[weak] this, move |e| this.go_to(&e.text())));
         {
             // Editing: the page's address waits; leaving puts it back.
             let focus = gtk::EventControllerFocus::new();
-            focus.connect_enter(glib::clone!(#[weak] this, move |_| this.editing.set(true)));
-            focus.connect_leave(glib::clone!(#[weak] this, move |_| {
-                this.editing.set(false);
-                this.update_bar();
+            // "Leave" alone also fires when the focus goes from the entry to
+            // the text inside it; this is the focus leaving the bar.
+            focus.connect_contains_focus_notify(glib::clone!(#[weak] this, move |focus| {
+                // A guarded new tab taking the focus is not the user leaving:
+                // the guard hands it back (see `guard_tab`).
+                if !focus.contains_focus() && this.guard.borrow().is_none() {
+                    this.editing.set(false);
+                    this.update_bar();
+                }
             }));
             this.address.add_controller(focus);
+            // Typing makes it the user's text until Enter, Esc or leaving it.
+            this.address.connect_changed(glib::clone!(#[weak] this, move |_| {
+                if !this.setting_address.get() {
+                    this.editing.set(true);
+                }
+            }));
             let keys = gtk::EventControllerKey::new();
             keys.connect_key_pressed(glib::clone!(
                 #[weak]
@@ -236,6 +293,7 @@ impl Window {
                     }
                     this.editing.set(false);
                     this.update_bar();
+                    this.unguard_tab();
                     this.with_view(|v| {
                         v.grab_focus();
                     });
@@ -386,7 +444,7 @@ impl Window {
         // Services gone from the config: their pages go too.
         for (key, service) in old {
             if !kept.contains_key(&key) {
-                if let Some(view) = service.view() {
+                for view in service.views() {
                     self.stack.remove(&view);
                 }
                 service.drop_view();
@@ -492,13 +550,16 @@ impl Window {
     /// Makes the service's page and puts it in the stack.
     fn attach(&self, service: &Rc<Service>) -> webkit6::WebView {
         let view = service.ensure_view();
-        if view.parent().is_none() {
-            self.stack.add_named(&view, Some(&service.key));
+        for v in service.views() {
+            if v.parent().is_none() {
+                self.stack.add_child(&v);
+            }
         }
         view
     }
 
     fn select(self: &Rc<Self>, service: &Rc<Service>) {
+        self.unguard_tab();
         if let Some(old) = self.current.borrow().as_ref() {
             old.button.remove_css_class("active");
         }
@@ -506,6 +567,10 @@ impl Window {
         self.stack.set_visible_child(&view);
         service.button.add_css_class("active");
         *self.current.borrow_mut() = Some(service.clone());
+        self.tabbar.set_visible(service.key == self.browser.key);
+        if service.key == self.browser.key {
+            self.sync_tabs();
+        }
         view.grab_focus();
         self.update_bar();
         let mut state = self.state.borrow_mut();
@@ -518,12 +583,12 @@ impl Window {
     fn update_bar(&self) {
         let Some(view) = self.current_view() else {
             if !self.editing.get() {
-                self.address.set_text("");
+                self.set_address("");
             }
             return;
         };
         if !self.editing.get() {
-            self.address.set_text(view.uri().as_deref().unwrap_or_default());
+            self.set_address(view.uri().as_deref().unwrap_or_default());
         }
         self.address.set_tooltip_text(view.title().as_deref());
         self.back.set_sensitive(view.can_go_back());
@@ -1148,6 +1213,15 @@ impl Window {
             this.address.select_region(0, -1);
         }));
         add("home", None, Box::new(|this, _| this.go_home()));
+        add("new-tab", None, Box::new(|this, _| this.new_tab()));
+        add("close-tab", None, Box::new(|this, _| {
+            if this.browsing() {
+                let i = this.browser.active_tab();
+                this.close_tab(i);
+            }
+        }));
+        add("next-tab", None, Box::new(|this, _| this.step_tab(1)));
+        add("previous-tab", None, Box::new(|this, _| this.step_tab(-1)));
         add("inspect", None, Box::new(|this, _| {
             this.with_view(|v| {
                 if let Some(i) = v.inspector() {
@@ -1172,6 +1246,10 @@ impl Window {
             ("win.fill", &["<Control><Shift>l"]),
             ("win.address", &["<Control>l", "F6"]),
             ("win.home", &["<Alt>Home"]),
+            ("win.new-tab", &["<Control>t"]),
+            ("win.close-tab", &["<Control>w"]),
+            ("win.next-tab", &["<Control>Page_Down"]),
+            ("win.previous-tab", &["<Control>Page_Up"]),
         ] {
             app.set_accels_for_action(action, keys);
         }
@@ -1187,13 +1265,204 @@ impl Window {
         }
         self.editing.set(false);
         let browser = self.browser.clone();
-        browser.open(&url);
+        // In the browser, the tab shown goes there; from a service, a new
+        // tab, so the browser's own tab is left as it was.
+        if self.browsing() {
+            browser.open(&url);
+        } else {
+            browser.new_tab(&url, true);
+        }
+        self.select(&browser);
+        // Off it goes: the page takes the keys from here on.
+        self.unguard_tab();
+        if let Some(view) = browser.view() {
+            view.grab_focus();
+        }
+    }
+
+    /// A link handed over by another program: a new tab in the browser.
+    pub fn open_link(self: &Rc<Self>, uri: &str) {
+        let url = crate::privacy::typed(uri, DEFAULT_SEARCH);
+        if url.is_empty() {
+            return;
+        }
+        let browser = self.browser.clone();
+        browser.new_tab(&url, true);
         self.select(&browser);
     }
 
-    /// A link handed over by another program: opened in the browser.
-    pub fn open_link(self: &Rc<Self>, uri: &str) {
-        self.go_to(uri);
+    /// "+" (Ctrl+T): a new tab on the start page, the address bar ready to
+    /// type into.
+    fn new_tab(self: &Rc<Self>) {
+        let home = self.cfg.borrow().home.clone().unwrap_or_else(|| DEFAULT_HOME.into());
+        let browser = self.browser.clone();
+        browser.new_tab(&home, true);
+        self.select(&browser);
+        // Empty and waiting for what is typed: the start page loading does
+        // not fill it, nor take the keys (Google's page focuses its own search
+        // box) — the page gets the focus only when clicked, or after Enter.
+        self.set_address("");
+        self.editing.set(true);
+        if let Some(view) = browser.view() {
+            self.guard_tab(&view);
+        }
+        // After the click that got here is done with (the strip it came
+        // from is made again).
+        let address = self.address.clone();
+        glib::idle_add_local_once(move || {
+            address.grab_focus();
+        });
+    }
+
+    /// Keeps the keys in the address bar while a new tab's page loads: a
+    /// page that focuses itself (Google's search box) gives them back, until
+    /// it is clicked or Enter is pressed.
+    fn guard_tab(self: &Rc<Self>, view: &webkit6::WebView) {
+        self.unguard_tab();
+        let focus = gtk::EventControllerFocus::new();
+        let address = self.address.clone();
+        focus.connect_contains_focus_notify(move |focus| {
+            if focus.contains_focus() {
+                let address = address.clone();
+                glib::idle_add_local_once(move || {
+                    address.grab_focus();
+                });
+            }
+        });
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        click.connect_pressed(move |gesture, _, _, _| {
+            // Removed after this click is done with: a controller taken off
+            // while it handles an event brings GTK down.
+            if let Some(this) = weak.upgrade() {
+                glib::idle_add_local_once(move || this.unguard_tab());
+            }
+            if let Some(view) = gesture.widget() {
+                view.grab_focus();
+            }
+        });
+        view.add_controller(focus.clone());
+        view.add_controller(click.clone());
+        *self.guard.borrow_mut() = Some((view.clone(), focus, click));
+    }
+
+    fn unguard_tab(&self) {
+        let guard = self.guard.borrow_mut().take();
+        if let Some((view, focus, click)) = guard {
+            view.remove_controller(&focus);
+            view.remove_controller(&click);
+            // The keys went elsewhere meanwhile: the bar shows the address.
+            let in_bar = gtk::prelude::GtkWindowExt::focus(&self.window).is_some_and(|f| f.is_ancestor(&self.address));
+            if !in_bar {
+                self.editing.set(false);
+                self.update_bar();
+            }
+        }
+    }
+
+    /// Sets the address bar's text as the program (not as typing).
+    fn set_address(&self, text: &str) {
+        if self.address.text() != text {
+            self.setting_address.set(true);
+            self.address.set_text(text);
+            self.setting_address.set(false);
+        }
+    }
+
+    /// Closes the browser's tab `index` (Ctrl+W: the one shown).
+    fn close_tab(self: &Rc<Self>, index: usize) {
+        if let Some(view) = self.browser.close_tab(index) {
+            self.stack.remove(&view);
+        }
+    }
+
+    /// The tab strip, made again from the browser's tabs; the tab shown
+    /// goes to the front when the browser is what is shown.
+    fn sync_tabs(self: &Rc<Self>) {
+        let browser = self.browser.clone();
+        for v in browser.views() {
+            if v.parent().is_none() {
+                self.stack.add_child(&v);
+            }
+        }
+        if self.browsing() && let Some(view) = browser.view() {
+            self.stack.set_visible_child(&view);
+            self.update_bar();
+        }
+        while let Some(child) = self.tabs_box.first_child() {
+            self.tabs_box.remove(&child);
+        }
+        let active = browser.active_tab();
+        for (i, view) in browser.views().iter().enumerate() {
+            let icon = gtk::Image::builder().pixel_size(16).build();
+            match view.favicon() {
+                Some(texture) => icon.set_from_gicon(&texture),
+                None => icon.set_icon_name(Some("web-browser-symbolic")),
+            }
+            let title = view
+                .title()
+                .filter(|t| !t.is_empty())
+                .map(|t| t.to_string())
+                .or_else(|| view.uri().map(|u| u.to_string()))
+                .unwrap_or_else(|| tr("pathfinder-new-tab"));
+            let label = gtk::Label::builder()
+                .label(&title)
+                .ellipsize(gtk::pango::EllipsizeMode::End)
+                .max_width_chars(18)
+                .width_chars(18)
+                .xalign(0.0)
+                .build();
+            let close = gtk::Button::builder().icon_name("window-close-symbolic").css_classes(["flat", "tab-close"]).tooltip_text(tr("pathfinder-close-tab")).build();
+            // A box, not a button: a button inside a button (the ×) would
+            // never get its click.
+            let tab = gtk::Box::builder().spacing(5).tooltip_text(&title).css_classes(["tab"]).build();
+            tab.append(&icon);
+            tab.append(&label);
+            tab.append(&close);
+            if i == active {
+                tab.add_css_class("active");
+            }
+            let pick = gtk::GestureClick::builder().button(gdk::BUTTON_PRIMARY).build();
+            let weak = Rc::downgrade(self);
+            pick.connect_released(move |_, _, _, _| {
+                if let Some(w) = weak.upgrade() {
+                    w.unguard_tab();
+                    w.browser.show_tab(i);
+                }
+            });
+            tab.add_controller(pick);
+            let weak = Rc::downgrade(self);
+            close.connect_clicked(move |_| {
+                if let Some(w) = weak.upgrade() {
+                    glib::idle_add_local_once(move || w.close_tab(i));
+                }
+            });
+            // A middle click closes it, as in every browser.
+            let middle = gtk::GestureClick::builder().button(gdk::BUTTON_MIDDLE).build();
+            let weak = Rc::downgrade(self);
+            middle.connect_released(move |_, _, _, _| {
+                if let Some(w) = weak.upgrade() {
+                    glib::idle_add_local_once(move || w.close_tab(i));
+                }
+            });
+            tab.add_controller(middle);
+            self.tabs_box.append(&tab);
+        }
+        self.tabs_box.append(&self.new_tab);
+    }
+
+    /// Whether the browser is what is shown.
+    fn browsing(&self) -> bool {
+        self.current.borrow().as_ref().is_some_and(|c| c.key == self.browser.key)
+    }
+
+    /// The browser's tabs, kept for the next run.
+    fn save_tabs(&self) {
+        let mut state = self.state.borrow_mut();
+        state.tabs = self.browser.tab_urls();
+        state.tab = self.browser.active_tab().min(state.tabs.len().saturating_sub(1));
+        state.save();
     }
 
     /// Home: the browser, on its start page.
@@ -1218,6 +1487,7 @@ impl Window {
         glib::timeout_add_local(crate::cookies::SAVE_EVERY, move || {
             let Some(this) = weak.upgrade() else { return glib::ControlFlow::Break };
             this.save_cookies(|| {});
+            this.save_tabs();
             glib::ControlFlow::Continue
         });
         let saved = Rc::new(std::cell::Cell::new(false));
@@ -1230,6 +1500,7 @@ impl Window {
                 if saved.get() {
                     return glib::Propagation::Proceed;
                 }
+                this.save_tabs();
                 let finish = {
                     let (saved, window) = (saved.clone(), window.clone());
                     move || {
@@ -1270,6 +1541,18 @@ impl Window {
                     done();
                 }
             });
+        }
+    }
+
+    /// The next (or previous) tab of the browser, when it shows.
+    fn step_tab(self: &Rc<Self>, step: isize) {
+        if !self.browsing() {
+            return;
+        }
+        let n = self.browser.views().len() as isize;
+        if n > 1 {
+            let next = (self.browser.active_tab() as isize + step).rem_euclid(n) as usize;
+            self.browser.show_tab(next);
         }
     }
 

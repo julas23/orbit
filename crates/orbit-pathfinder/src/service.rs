@@ -17,10 +17,10 @@ use std::{
 };
 
 use gtk::{gdk, gio, glib, prelude::*};
-use orbit_app::i18n::{number, text, tr_args};
+use orbit_app::i18n::{number, text, tr, tr_args};
 use webkit6::prelude::*;
 
-use crate::{config, cookies, privacy};
+use crate::{config, cookies, privacy, trust};
 
 type Hook<T> = RefCell<Option<Box<dyn Fn(T)>>>;
 type Waiting = Rc<RefCell<Option<Vec<Box<dyn FnOnce()>>>>>;
@@ -66,6 +66,8 @@ pub struct Env {
     /// Whether the service is what the user is looking at (the window
     /// active, the service shown): then a new unread count tells nothing.
     pub watching: RefCell<Option<Watching>>,
+    /// The browser's tabs changed (opened, closed, shown, retitled).
+    pub tabs_changed: RefCell<Option<PageHook>>,
 }
 
 impl Env {
@@ -103,6 +105,8 @@ impl Env {
         // Privacy, the same for every profile (docs/PLANO-PATHFINDER.md §3).
         session.set_itp_enabled(true);
         session.set_tls_errors_policy(webkit6::TLSErrorsPolicy::Fail);
+        // The local-network certificates the user trusted (see `trust`).
+        trust::apply(&self.data, &session);
         if let Some(manager) = session.website_data_manager() {
             manager.set_favicons_enabled(true);
         }
@@ -188,20 +192,24 @@ pub struct Service {
     pub button: gtk::Button,
     image: gtk::Image,
     badge: gtk::Label,
-    view: RefCell<Option<webkit6::WebView>>,
+    /// The pages: one for a service, one per tab for the browser.
+    views: RefCell<Vec<webkit6::WebView>>,
+    /// Which of `views` is shown.
+    active: Cell<usize>,
+    /// Tabs saved from the last run, opened when the browser first shows.
+    restore: RefCell<(Vec<String>, usize)>,
     unread: Cell<u32>,
     /// The page's last notification: clicking the desktop's tells the page,
     /// which then opens the conversation.
     notification: RefCell<Option<webkit6::Notification>>,
     zoom: Cell<f64>,
     env: Weak<Env>,
+    /// The HTTPS address last retried over HTTP (once each).
+    tried_http: RefCell<Option<String>>,
     /// A count was read since the page was made (the first is not news).
     counted: Cell<bool>,
     /// When the page last sent a notification of its own.
     last_page_notification: Cell<Option<std::time::Instant>>,
-    /// Where the page goes when it is made, instead of the service's
-    /// address (an address typed before the browser had a page).
-    pending: RefCell<Option<String>>,
     /// A better icon than the favicon is in place (the page's touch icon,
     /// or the one the config names): favicons no longer replace it.
     good_icon: Cell<bool>,
@@ -229,14 +237,16 @@ impl Service {
             button,
             image,
             badge,
-            view: RefCell::new(None),
+            views: RefCell::new(Vec::new()),
+            active: Cell::new(0),
+            restore: RefCell::new((Vec::new(), 0)),
             unread: Cell::new(0),
             notification: RefCell::new(None),
             zoom: Cell::new(zoom),
             env: Rc::downgrade(env),
             good_icon: Cell::new(false),
-            pending: RefCell::new(None),
             counted: Cell::new(false),
+            tried_http: RefCell::new(None),
             last_page_notification: Cell::new(None),
         });
         service.apply_icon();
@@ -256,12 +266,36 @@ impl Service {
         self.unread.get()
     }
 
+    /// The page shown (the active tab, for the browser).
     pub fn view(&self) -> Option<webkit6::WebView> {
-        self.view.borrow().clone()
+        self.views.borrow().get(self.active.get()).cloned()
+    }
+
+    /// Every page (every tab).
+    pub fn views(&self) -> Vec<webkit6::WebView> {
+        self.views.borrow().clone()
+    }
+
+    pub fn active_tab(&self) -> usize {
+        self.active.get()
     }
 
     pub fn is_loaded(&self) -> bool {
-        self.view.borrow().is_some()
+        !self.views.borrow().is_empty()
+    }
+
+    /// Tabs to open the first time the browser shows (the last run's).
+    pub fn set_restore(&self, urls: Vec<String>, active: usize) {
+        *self.restore.borrow_mut() = (urls, active);
+    }
+
+    /// The tabs' addresses, to save for the next run.
+    pub fn tab_urls(&self) -> Vec<String> {
+        if self.views.borrow().is_empty() {
+            // Not opened this run: what was saved stays.
+            return self.restore.borrow().0.clone();
+        }
+        self.views.borrow().iter().filter_map(|v| v.uri().map(|u| u.to_string())).filter(|u| u.starts_with("http")).collect()
     }
 
     pub fn zoom(&self) -> f64 {
@@ -271,7 +305,7 @@ impl Service {
     pub fn set_zoom(&self, zoom: f64) {
         let zoom = zoom.clamp(0.3, 3.0);
         self.zoom.set(zoom);
-        if let Some(view) = self.view() {
+        for view in self.views() {
             view.set_zoom_level(zoom);
         }
     }
@@ -312,11 +346,162 @@ impl Service {
 
     /// Opens `url` in the service's page — straight away when the page
     /// exists, as its first address when it is made.
-    pub fn open(&self, url: &str) {
+    pub fn open(self: &Rc<Self>, url: &str) {
         match self.view() {
             Some(view) => view.load_uri(url),
-            None => *self.pending.borrow_mut() = Some(url.to_owned()),
+            None => self.first_pages(Some(url.to_owned())),
         }
+    }
+
+    /// A new tab on `url`, shown when `show` (a middle click opens it
+    /// behind).
+    pub fn new_tab(self: &Rc<Self>, url: &str, show: bool) {
+        if self.views.borrow().is_empty() {
+            self.first_pages(Some(url.to_owned()));
+        } else {
+            let view = self.make_view(url.to_owned());
+            self.views.borrow_mut().push(view);
+            if show {
+                self.active.set(self.views.borrow().len() - 1);
+            }
+        }
+        self.tabs_changed();
+    }
+
+    /// A page a script opened (`window.open`), taken as a tab: it shares the
+    /// opener's storage and process, as WebKit requires.
+    fn adopt_tab(self: &Rc<Self>, opener: &webkit6::WebView) -> webkit6::WebView {
+        let view = webkit6::WebView::builder().related_view(opener).hexpand(true).vexpand(true).build();
+        if let Some(settings) = WebViewExt::settings(opener) {
+            view.set_settings(&settings);
+        }
+        view.set_background_color(&gdk::RGBA::new(0.106, 0.122, 0.153, 1.0));
+        view.set_zoom_level(self.zoom.get());
+        if let Some(env) = self.env.upgrade() {
+            self.connect(&view, &env);
+        }
+        self.views.borrow_mut().push(view.clone());
+        self.active.set(self.views.borrow().len() - 1);
+        self.tabs_changed();
+        view
+    }
+
+    pub fn show_tab(&self, index: usize) {
+        if index < self.views.borrow().len() {
+            self.active.set(index);
+            self.tabs_changed();
+        }
+    }
+
+    /// Closes tab `index`, handing back its page for the window to drop; the
+    /// last tab closed leaves a new one on the start page.
+    pub fn close_tab(self: &Rc<Self>, index: usize) -> Option<webkit6::WebView> {
+        let view = {
+            let mut views = self.views.borrow_mut();
+            if index >= views.len() {
+                return None;
+            }
+            views.remove(index)
+        };
+        let len = self.views.borrow().len();
+        if len == 0 {
+            let home = self.cfg.borrow().url.clone();
+            let fresh = self.make_view(home);
+            self.views.borrow_mut().push(fresh);
+            self.active.set(0);
+        } else if self.active.get() >= len || self.active.get() > index {
+            self.active.set(self.active.get().saturating_sub(1).min(len - 1));
+        }
+        view.try_close();
+        self.tabs_changed();
+        Some(view)
+    }
+
+    fn tabs_changed(&self) {
+        if let Some(env) = self.env.upgrade()
+            && let Some(f) = env.tabs_changed.borrow().as_ref()
+        {
+            f(self);
+        }
+    }
+
+    /// The first pages: the last run's tabs (the browser), then `extra`, or
+    /// else the service's address.
+    fn first_pages(self: &Rc<Self>, extra: Option<String>) {
+        let (saved, saved_active) = std::mem::take(&mut *self.restore.borrow_mut());
+        for url in &saved {
+            let view = self.make_view(url.clone());
+            self.views.borrow_mut().push(view);
+        }
+        self.active.set(saved_active.min(saved.len().saturating_sub(1)));
+        if let Some(url) = extra {
+            let view = self.make_view(url);
+            self.views.borrow_mut().push(view);
+            self.active.set(self.views.borrow().len() - 1);
+        }
+        if self.views.borrow().is_empty() {
+            let url = self.cfg.borrow().url.clone();
+            let view = self.make_view(url);
+            self.views.borrow_mut().push(view);
+            self.active.set(0);
+        }
+    }
+
+    /// Asks whether to trust the certificate a local address showed; if so,
+    /// every profile accepts it from now on, and the page loads.
+    fn ask_trust(&self, view: &webkit6::WebView, uri: &str, host: &str, certificate: &gio::TlsCertificate) {
+        let Some(env) = self.env.upgrade() else { return };
+        let changed = trust::changed(&env.data, host, certificate);
+        let mut detail = tr_args("pathfinder-cert-detail", &[("host", text(host.to_owned()))]);
+        if changed {
+            detail = format!("{}\n\n{detail}", tr_args("pathfinder-cert-changed", &[("host", text(host.to_owned()))]));
+        }
+        let subject = certificate.subject_name().map(|s| s.to_string()).unwrap_or_default();
+        let until = certificate.not_valid_after().and_then(|d| d.format("%x").ok()).map(|d| d.to_string()).unwrap_or_default();
+        detail = format!(
+            "{detail}\n\n{}",
+            tr_args(
+                "pathfinder-cert-facts",
+                &[("subject", text(subject)), ("until", text(until)), ("sha256", text(trust::fingerprint(certificate)))],
+            )
+        );
+        let dialog = gtk::AlertDialog::builder()
+            .message(tr("pathfinder-cert-title"))
+            .detail(detail)
+            .buttons([tr("pathfinder-cancel"), tr("pathfinder-cert-trust")])
+            .cancel_button(0)
+            .default_button(0)
+            .modal(true)
+            .build();
+        let parent = view.root().and_downcast::<gtk::Window>();
+        let (view, uri, host, certificate) = (view.clone(), uri.to_owned(), host.to_owned(), certificate.clone());
+        let env = Rc::downgrade(&env);
+        dialog.choose(parent.as_ref(), gio::Cancellable::NONE, move |answer| {
+            if answer != Ok(1) {
+                return;
+            }
+            let Some(env) = env.upgrade() else { return };
+            trust::add(&env.data, &host, &certificate);
+            for profile in env.profiles.borrow().values() {
+                profile.session.allow_tls_certificate_for_host(&certificate, &host);
+            }
+            view.load_uri(&uri);
+        });
+    }
+
+    /// In the browser, a local address that failed over HTTPS is tried once
+    /// over HTTP (see `privacy::http_fallback`). Whether it was.
+    fn try_http(&self, view: &webkit6::WebView, uri: &str) -> bool {
+        if !self.cfg.borrow().browser {
+            return false;
+        }
+        let Some(http) = privacy::http_fallback(uri) else { return false };
+        if self.tried_http.borrow().as_deref() == Some(uri) {
+            return false;
+        }
+        *self.tried_http.borrow_mut() = Some(uri.to_owned());
+        view.load_uri(&http);
+        true
     }
 
     /// Downloads the icon at `url` (the config's, or the page's touch icon)
@@ -361,20 +546,18 @@ impl Service {
 
     /// The page, made now if it does not exist yet.
     pub fn ensure_view(self: &Rc<Self>) -> webkit6::WebView {
-        if let Some(view) = self.view() {
-            return view;
+        if !self.is_loaded() {
+            self.first_pages(None);
         }
-        let view = self.make_view();
-        *self.view.borrow_mut() = Some(view.clone());
-        view
+        self.view().expect("a page was just made")
     }
 
     /// Forgets the page (removing a service); its storage stays on disk.
     pub fn drop_view(&self) {
         // The page closes when the view goes; its process may be another
         // page's too, in a shared profile, so it is not ended here.
-        let view = self.view.borrow_mut().take();
-        if let Some(view) = view {
+        let views = std::mem::take(&mut *self.views.borrow_mut());
+        for view in views {
             view.try_close();
         }
     }
@@ -397,7 +580,7 @@ impl Service {
 
     pub fn set_muted(&self, muted: bool) {
         self.cfg.borrow_mut().muted = muted;
-        if let Some(view) = self.view() {
+        for view in self.views() {
             view.set_is_muted(muted);
         }
     }
@@ -444,7 +627,7 @@ impl Service {
         }
     }
 
-    fn make_view(self: &Rc<Self>) -> webkit6::WebView {
+    fn make_view(self: &Rc<Self>, first: String) -> webkit6::WebView {
         self.counted.set(false);
         let env = self.env.upgrade().expect("the window outlives its services");
         let cfg = self.cfg.borrow().clone();
@@ -481,7 +664,6 @@ impl Service {
         view.set_zoom_level(self.zoom.get());
         self.connect(&view, &env);
         // Loaded once the profile's session cookies are back: the login.
-        let first = self.pending.borrow_mut().take().unwrap_or(cfg.url);
         profile.when_ready(glib::clone!(
             #[weak]
             view,
@@ -498,7 +680,9 @@ impl Service {
             move |view| {
                 let Some(service) = weak.upgrade() else { return };
                 let title = view.title().unwrap_or_default();
-                if !service.cfg.borrow().browser {
+                if service.cfg.borrow().browser {
+                    service.tabs_changed();
+                } else {
                     service.set_unread(privacy::unread(&title).unwrap_or(0));
                 }
                 service.page_changed();
@@ -518,6 +702,10 @@ impl Service {
             weak,
             move |view| {
                 let Some(service) = weak.upgrade() else { return };
+                if service.cfg.borrow().browser {
+                    service.tabs_changed();
+                    return;
+                }
                 if service.cfg.borrow().icon.is_none()
                     && !service.good_icon.get()
                     && let Some(texture) = view.favicon()
@@ -604,6 +792,15 @@ impl Service {
                 match kind {
                     webkit6::PolicyDecisionType::NewWindowAction => {
                         let cfg = service.cfg.borrow();
+                        // The browser: a link meant for a new window is a new
+                        // tab (behind it, for a middle click).
+                        if cfg.browser && action.navigation_type() == webkit6::NavigationType::LinkClicked && !uri.is_empty() {
+                            decision.ignore();
+                            let show = action.mouse_button() != 2;
+                            drop(cfg);
+                            service.new_tab(&privacy::clean(&uri), show);
+                            return true;
+                        }
                         if cfg.browser || privacy::stays_inside(&uri, &cfg.url, &cfg.domains) {
                             // A link ("Sign in", a message): opened right here,
                             // as a tab would be. A script's window (a login
@@ -636,23 +833,67 @@ impl Service {
         ));
         // Windows that stay inside (logins, previews) open as small windows
         // sharing the service's storage.
+        // A window a script opens: a tab, in the browser; a window of its own
+        // elsewhere (a login that reports back to the service).
         view.connect_create(glib::clone!(
             #[strong]
             weak,
-            move |view, _| Some(popup(view, weak.clone()).upcast())
+            move |view, _| {
+                let service = weak.upgrade()?;
+                if service.cfg.borrow().browser {
+                    return Some(service.adopt_tab(view).upcast());
+                }
+                Some(popup(view, weak.clone()).upcast())
+            }
+        ));
+        // A tab a script closes (window.close()).
+        view.connect_close(glib::clone!(
+            #[strong]
+            weak,
+            move |view| {
+                let Some(service) = weak.upgrade() else { return };
+                let index = service.views.borrow().iter().position(|v| v == view);
+                if service.cfg.borrow().browser
+                    && let Some(i) = index
+                {
+                    service.close_tab(i);
+                }
+            }
         ));
         // Why a page did not load, for the log: the address's host and the
         // error (never the full address, which may carry tokens).
-        view.connect_load_failed(|_, _, uri, error| {
-            if !error.matches(webkit6::NetworkError::Cancelled) {
+        view.connect_load_failed(glib::clone!(
+            #[strong]
+            weak,
+            move |view, _, uri, error| {
+                if error.matches(webkit6::NetworkError::Cancelled) {
+                    return false;
+                }
                 log::warn!("load failed: {}: {error}", privacy::host(uri).unwrap_or_default());
+                if weak.upgrade().is_some_and(|s| s.try_http(view, uri)) {
+                    return true;
+                }
+                error_page(view, uri, &tr("pathfinder-error-load"), error.message());
+                true
             }
-            false
-        });
-        view.connect_load_failed_with_tls_errors(|_, uri, _, errors| {
-            log::warn!("TLS error: {}: {errors:?}", privacy::host(uri).unwrap_or_default());
-            false
-        });
+        ));
+        // A certificate refused: on the local network, the user may trust it
+        // (Proxmox, routers and NAS sign their own); elsewhere, refused.
+        view.connect_load_failed_with_tls_errors(glib::clone!(
+            #[strong]
+            weak,
+            move |view, uri, certificate, errors| {
+                let host = privacy::host(uri).unwrap_or_default();
+                log::warn!("TLS error: {host}: {errors:?}");
+                let Some(service) = weak.upgrade() else { return false };
+                if !privacy::is_local(&host) {
+                    error_page(view, uri, &tr("pathfinder-error-tls"), &tr("pathfinder-error-tls-detail"));
+                    return true;
+                }
+                service.ask_trust(view, uri, &host, certificate);
+                true
+            }
+        ));
         // A page that crashed (or ran out of memory) comes back.
         view.connect_web_process_terminated(|view, reason| {
             if reason != webkit6::WebProcessTerminationReason::TerminatedByApi {
@@ -741,6 +982,28 @@ fn fetch(url: &str) -> Result<Vec<u8>, String> {
         .limit(2 * 1024 * 1024)
         .read_to_vec()
         .map_err(|e| e.to_string())
+}
+
+/// A page in place of one that did not load, readable on the dark window
+/// (WebKit's own writes black on it) and in the user's language.
+fn error_page(view: &webkit6::WebView, uri: &str, title: &str, detail: &str) {
+    let host = privacy::host(uri).unwrap_or_else(|| uri.to_owned());
+    let escape = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let html = format!(
+        r#"<!doctype html><html><head><meta charset="utf-8"><title>{host}</title><style>
+:root {{ color-scheme: dark light; }}
+body {{ font: 15px system-ui, sans-serif; background: #1b1f27; color: #d8dee9; margin: 0; display: grid; place-items: center; min-height: 100vh; }}
+@media (prefers-color-scheme: light) {{ body {{ background: #eceff4; color: #2e3440; }} }}
+main {{ max-width: 560px; padding: 30px; }}
+h1 {{ font-size: 20px; margin: 0 0 10px; }}
+p {{ opacity: .8; line-height: 1.5; }}
+code {{ opacity: .6; font-size: 13px; }}
+</style></head><body><main><h1>{title}</h1><p>{detail}</p><code>{host}</code></main></body></html>"#,
+        host = escape(&host),
+        title = escape(title),
+        detail = escape(detail),
+    );
+    view.load_alternate_html(&html, uri, None);
 }
 
 /// "X11; Linux x86_64" → "Macintosh; Intel Mac OS X 10_15_7" (what Safari

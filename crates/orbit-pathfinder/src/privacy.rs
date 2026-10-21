@@ -198,6 +198,28 @@ pub fn typed(text: &str, search: &str) -> String {
     format!("{search}{query}")
 }
 
+/// A host on this machine or the local network: localhost, `.local`,
+/// `.lan`, `.home.arpa`, and the private IPv4 ranges.
+pub fn is_local(host: &str) -> bool {
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    if host == "localhost" || host == "::1" || [".local", ".lan", ".home.arpa", ".localhost"].iter().any(|s| host.ends_with(s)) {
+        return true;
+    }
+    let parts: Vec<u8> = host.split('.').filter_map(|p| p.parse().ok()).collect();
+    if parts.len() != 4 || host.split('.').count() != 4 {
+        return false;
+    }
+    matches!(parts[..], [10, ..] | [127, ..] | [192, 168, ..]) || (parts[0] == 172 && (16..=31).contains(&parts[1]))
+}
+
+/// The plain-HTTP address to try when `url`, a local address typed without
+/// a scheme and so tried over HTTPS first, did not load (most devices on a
+/// home network speak HTTP).
+pub fn http_fallback(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
+    is_local(&host(url)?).then(|| format!("http://{rest}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,6 +264,15 @@ mod tests {
         assert_eq!(typed("previsão do tempo", g), "https://www.google.com/search?q=previs%C3%A3o+do+tempo");
         assert_eq!(typed("rust", g), "https://www.google.com/search?q=rust");
         assert_eq!(typed("  ", g), "");
+    }
+
+    #[test]
+    fn knows_local_hosts() {
+        assert!(is_local("localhost") && is_local("10.0.0.250") && is_local("192.168.1.1") && is_local("172.20.0.5"));
+        assert!(is_local("printer.local") && is_local("[::1]"));
+        assert!(!is_local("8.8.8.8") && !is_local("172.32.0.1") && !is_local("example.org") && !is_local("10.0.0"));
+        assert_eq!(http_fallback("https://127.0.0.1:8765/a.html").as_deref(), Some("http://127.0.0.1:8765/a.html"));
+        assert_eq!(http_fallback("https://example.org/"), None);
     }
 
     #[test]

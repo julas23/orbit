@@ -237,6 +237,20 @@ cofre. "Limpar dados" avisa quando o login é compartilhado.
   só o que o cofre não tem.
 - **Barra lateral editável:** adicionar/editar/mover, arrastar botões e
   separadores, separador pelo "+"; ícone por endereço, touch icon da página.
+- **Abas no Navegador** (só nele; serviços seguem com uma página): faixa no
+  alto com "+", Ctrl+T/W/PgUp/PgDn, clique do meio fecha; `_blank`, clique do
+  meio em link, links de outros programas e o que se digita estando num serviço
+  abrem em aba nova; janelas de script viram abas; abas restauradas ao reabrir.
+  Na aba nova a barra de endereço segura o foco até um clique na página ou Enter
+  (o Google foca a própria busca). Endereço local que falha em HTTPS é tentado
+  uma vez em HTTP.
+- **Certificados da rede local** (2026-10-20): certificado inválido continua
+  recusado, com página de erro própria, exceto em endereço local (localhost,
+  `.local`/`.lan`, IPs privados): aí aparece "Confiar neste certificado" com
+  emissor, validade e SHA-256. A exceção vale por host e certificado
+  (`trusted-certificates.json`, 0600), é dada a todo perfil, e um certificado
+  que muda pergunta de novo com aviso. Remover exceção: editar o arquivo (falta
+  tela).
 - **Notificações:** além das da página, contador que sobe vira "N não lidas" na
   central do desktop (uma por serviço; nunca com o serviço na tela).
 

@@ -67,6 +67,25 @@ window.orbit-pathfinder .footer-button {
   border-radius: 5px;
 }
 
+/* The browser's tabs. */
+window.orbit-pathfinder .tabbar {
+  padding: 5px 10px 0 10px;
+  background-color: mix(@orbit_window, #000000, 0.25);
+}
+window.orbit-pathfinder .tabbar .tab {
+  padding: 5px 5px 5px 10px;
+  border-radius: 8px 8px 0 0;
+  color: @orbit_muted;
+  min-height: 20px;
+}
+window.orbit-pathfinder .tabbar .tab:hover { background-color: @orbit_hover; }
+window.orbit-pathfinder .tabbar .tab.active {
+  background-color: mix(@orbit_window, @orbit_fg, 0.06);
+  color: @orbit_fg;
+}
+window.orbit-pathfinder .tabbar .tab-close { min-width: 20px; min-height: 20px; padding: 0; }
+window.orbit-pathfinder .tabbar .new-tab { min-width: 30px; min-height: 30px; margin-left: 5px; }
+
 /* The bar over the page. */
 window.orbit-pathfinder .bar {
   padding: 5px 10px;

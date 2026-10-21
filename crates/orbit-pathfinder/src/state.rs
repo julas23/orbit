@@ -15,6 +15,11 @@ pub struct State {
     pub collapsed: Vec<String>,
     #[serde(default)]
     pub zoom: BTreeMap<String, f64>,
+    /// The browser's open tabs, and which was shown.
+    #[serde(default)]
+    pub tabs: Vec<String>,
+    #[serde(default)]
+    pub tab: usize,
 }
 
 /// `$XDG_STATE_HOME/orbit/pathfinder`, `~/.local/state/orbit/pathfinder`

@@ -13,6 +13,7 @@ mod passwords;
 mod privacy;
 mod service;
 mod state;
+mod trust;
 mod ui;
 mod window;
 
