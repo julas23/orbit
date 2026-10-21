@@ -1,0 +1,8 @@
+# Orbit-Panel spectrum module — ~/.config/orbit/modules/spectrum.yaml.
+# Every key is optional. Sizes: mini (a line), normal (12 bars), full (thin
+# gradient bars on a grid).
+
+framerate: 30          # frames a second
+low: 50                # lowest frequency shown, Hz
+high: 10000            # highest frequency shown, Hz
+noise_reduction: 0.77  # CAVA's: 0 fast and jumpy … 1 slow and smooth

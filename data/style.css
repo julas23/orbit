@@ -402,6 +402,10 @@ window.orbit-menu { background: transparent; }
 }
 .monitors-full .apply:hover { background-color: alpha(@orbit_accent, 0.55); }
 
+/* Spectrum (spectrum.rs): drawn with cairo; the line and the Normal bars
+ * take this colour, the Full grid a faint wash of it. */
+.spectrum { color: @orbit_accent; }
+
 /* Popovers and context menus (window list, tray, network, calendar, volume):
  * the panel's dark background and light text. They live in the panel's
  * widget tree, so they inherit its colour; their background has to be set

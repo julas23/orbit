@@ -21,6 +21,7 @@ mod notifications;
 mod pulse;
 mod session;
 mod sni;
+mod spectrum;
 mod status;
 mod sway;
 mod tray;
@@ -111,6 +112,7 @@ fn shapes(name: &str) -> &'static [(Form, i32, i32)] {
             &[(Normal, 4, 1), (Full, 4, 2), (Mini, 1, 1)]
         }
         "workspaces" => &[(Normal, 4, 2)],
+        "spectrum" => &[(Normal, 4, 2), (Full, 4, 4), (Mini, 2, 1)],
         _ => &[(Normal, 4, 1)],
     }
 }
@@ -161,6 +163,7 @@ fn module(name: &str, dir: &ConfigDir, edge: Edge, form: Form) -> Option<gtk::Wi
         "battery" => dir.module("battery").map(|c| status::battery(&c, form)),
         "bluetooth" => dir.module("bluetooth").map(|c| bluetooth::new(&c, form)),
         "monitors" => dir.module("monitors").map(|c| monitors::new(&c, form)),
+        "spectrum" => dir.module("spectrum").map(|c| spectrum::new(&c, form)),
         "notifications" => dir
             .module("notifications")
             .map(|c| notifications::new(&c, form)),

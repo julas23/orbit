@@ -184,3 +184,85 @@ pub fn subscribe(notify: impl Fn() + 'static) {
         }
     });
 }
+
+/// Why `record_monitor` returned.
+pub enum Stop {
+    /// `on_samples` asked to stop: nobody wants the sound any more.
+    Done,
+    /// The default sink changed or the stream was taken away: record again
+    /// to follow it.
+    Again,
+}
+
+/// Records what the default sink plays (its monitor source), mono, 32-bit
+/// float at `rate` Hz, in blocks of about `block` samples, and hands each
+/// block to `on_samples` until it returns `false`. Blocks the calling
+/// thread.
+pub fn record_monitor(rate: u32, block: u32, mut on_samples: impl FnMut(&[f32]) -> bool) -> io::Result<Stop> {
+    use std::io::Read;
+
+    let mut conn = Connection::open()?;
+    // Told when the default sink changes, to follow it.
+    conn.send(&Command::Subscribe(protocol::SubscriptionMask::SERVER))?;
+    protocol::read_ack_message(&mut conn.sock).map_err(other)?;
+
+    conn.send(&Command::CreateRecordStream(protocol::RecordStreamParams {
+        source_name: Some(CString::new("@DEFAULT_MONITOR@").expect("no NUL")),
+        sample_spec: protocol::SampleSpec {
+            format: protocol::SampleFormat::Float32Le,
+            channels: 1,
+            sample_rate: rate,
+        },
+        channel_map: protocol::ChannelMap::mono(),
+        buffer_attr: protocol::stream::BufferAttr {
+            fragment_size: block * 4,
+            ..Default::default()
+        },
+        flags: protocol::stream::StreamFlags {
+            adjust_latency: true,
+            // Listening must not keep the sound card awake.
+            no_inhibit_auto_suspend: true,
+            ..Default::default()
+        },
+        props: {
+            let mut props = protocol::Props::new();
+            props.set(protocol::Prop::MediaName, CString::new("spectrum").expect("no NUL"));
+            props
+        },
+        ..Default::default()
+    }))?;
+    let (_, stream) =
+        protocol::read_reply_message::<protocol::CreateRecordStreamReply>(&mut conn.sock, conn.version)
+            .map_err(other)?;
+    log::debug!(
+        "pulse: recording in blocks of {} bytes, {} µs behind",
+        stream.buffer_attr.fragment_size,
+        stream.stream_latency
+    );
+
+    let mut bytes = Vec::new();
+    let mut samples = Vec::new();
+    loop {
+        let desc = protocol::read_descriptor(&mut conn.sock).map_err(other)?;
+        if desc.channel == u32::MAX {
+            let (_, command) =
+                Command::read_tag_prefixed(&mut conn.sock, conn.version).map_err(other)?;
+            match command {
+                Command::SubscribeEvent(_) => return Ok(Stop::Again),
+                Command::RecordStreamKilled(index) if index == stream.channel => return Ok(Stop::Again),
+                _ => {}
+            }
+            continue;
+        }
+        bytes.resize(desc.length as usize, 0);
+        conn.sock.read_exact(&mut bytes)?;
+        if desc.channel != stream.channel {
+            continue;
+        }
+        samples.clear();
+        samples.extend(bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
+        if !on_samples(&samples) {
+            return Ok(Stop::Done);
+        }
+    }
+}

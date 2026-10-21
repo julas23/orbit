@@ -39,6 +39,7 @@ const MODULES: &[&str] = &[
     "notifications",
     "bluetooth",
     "monitors",
+    "spectrum",
     "workspaces",
     "session",
 ];
