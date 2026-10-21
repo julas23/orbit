@@ -122,10 +122,19 @@ impl Config {
         base.join("orbit").join("core.yaml")
     }
 
-    /// The file at `path`; the defaults when it is missing. An error in it
-    /// is reported and the defaults are used: a bad file never stops the
+    /// The file at `path`, with the monitors where `output … pos` last put
+    /// them (`placed`); the defaults when it is missing. An error in it is
+    /// reported and the defaults are used: a bad file never stops the
     /// session from coming up (§1.5).
     pub fn load(path: &std::path::Path) -> Self {
+        let mut config = Self::read(path);
+        for (name, at) in placed() {
+            config.outputs.entry(name).or_default().position = Some(at);
+        }
+        config
+    }
+
+    fn read(path: &std::path::Path) -> Self {
         match std::fs::read_to_string(path) {
             Ok(text) if text.trim().is_empty() => Self::default(),
             Ok(text) => serde_yaml_ng::from_str(&text).unwrap_or_else(|err| {
@@ -138,6 +147,39 @@ impl Config {
                 Self::default()
             }
         }
+    }
+}
+
+/// `$XDG_STATE_HOME/orbit/core`, or `~/.local/state/orbit/core`: the log
+/// and what the core remembers between sessions.
+pub fn state_dir() -> PathBuf {
+    std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"))
+        .join("orbit/core")
+}
+
+/// Where `output … pos` put each monitor (the panel's monitors module, or
+/// orbitctl): kept in the state directory, so the next session comes up
+/// the same, and over `outputs:` in core.yaml.
+pub fn placed() -> HashMap<String, (i32, i32)> {
+    std::fs::read_to_string(state_dir().join("outputs.yaml"))
+        .ok()
+        .and_then(|text| serde_yaml_ng::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+/// Remembers that monitor `name` is at `at`.
+pub fn place(name: &str, at: (i32, i32)) {
+    let mut all = placed();
+    all.insert(name.to_owned(), at);
+    let dir = state_dir();
+    let written = std::fs::create_dir_all(&dir)
+        .and_then(|()| serde_yaml_ng::to_string(&all).map_err(std::io::Error::other))
+        .and_then(|text| std::fs::write(dir.join("outputs.yaml"), text));
+    if let Err(err) = written {
+        tracing::warn!("remembering where {name} is: {err}");
     }
 }
 

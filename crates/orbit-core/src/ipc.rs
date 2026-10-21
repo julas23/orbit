@@ -208,6 +208,11 @@ impl Orbit {
         self.emit("window", |s| json!({ "change": change, "container": s.window_json(&window) }));
     }
 
+    /// An `output` event: a monitor came, went or moved. sway says no more.
+    pub fn output_event(&mut self) {
+        self.emit("output", |_| json!({ "change": "unspecified" }));
+    }
+
     pub fn input_event(&mut self) {
         self.emit("input", |s| json!({ "change": "xkb_layout", "input": s.inputs_json()[0].clone() }));
     }

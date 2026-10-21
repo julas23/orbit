@@ -211,7 +211,8 @@ impl Default for PanelConfig {
         Self {
             enabled: true,
             edge: Edge::Left,
-            size: 150,
+            // The grid's 150 px and 2 px on each side (orbit-panel's board).
+            size: 154,
             monitor: MonitorSpec::default(),
             reserve: true,
             maintenance: false,

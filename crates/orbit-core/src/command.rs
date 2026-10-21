@@ -170,6 +170,16 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.reload_config();
             Ok(())
         }
+        // sway's `output NAME position X Y`; the place is remembered.
+        ["output", name, "pos" | "position", x, y] => {
+            let at = (x.parse::<i32>(), y.parse::<i32>());
+            let (Ok(x), Ok(y)) = at else { return Err(format!("output {name}: not a position: {x} {y}")) };
+            if state.output_named(name).is_none() {
+                return Err(format!("There is no output called {name}"));
+            }
+            state.move_output(name, (x, y));
+            Ok(())
+        }
         ["workspace", rest @ ..] => {
             let num = workspace_number(state, rest)?;
             state.switch_workspace(state.resolve(num));

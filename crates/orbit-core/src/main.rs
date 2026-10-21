@@ -104,11 +104,7 @@ fn main() -> anyhow::Result<()> {
 fn logging(drm: bool) {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
     if drm {
-        let dir = std::env::var_os("XDG_STATE_HOME")
-            .map(std::path::PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"))
-            .join("orbit/core");
+        let dir = crate::config::state_dir();
         let _ = std::fs::create_dir_all(&dir);
         if let Ok(file) = std::fs::File::create(dir.join("core.log")) {
             tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(std::sync::Mutex::new(file)).init();

@@ -2,6 +2,11 @@
 //! notifications, menus of the panel. They sit on an edge of the output,
 //! reserve their part of it, and the windows are laid out over the rest.
 //!
+//! The parts are reserved in the order the surfaces came, so the panel is
+//! always put first: it takes its whole edge, and the dock and the others
+//! only what it leaves — whether the dock came before it or not (a panel
+//! restarted under a running dock).
+//!
 //! Ported from anvil `src/shell/mod.rs` @ 24647fc (Smithay, MIT, Copyright
 //! (c) 2017 Victor Berger and Victoria Brekenfeld).
 
@@ -17,6 +22,9 @@ use smithay::{
 
 use crate::state::Orbit;
 
+/// Orbit-Panel's layer-shell namespace.
+const PANEL: &str = "orbit-panel";
+
 impl WlrLayerShellHandler for Orbit {
     fn shell_state(&mut self) -> &mut WlrLayerShellState {
         &mut self.layer_shell_state
@@ -27,8 +35,25 @@ impl WlrLayerShellHandler for Orbit {
             tracing::warn!("layer surface {namespace}: no output");
             return;
         };
-        if let Err(err) = layer_map_for_output(&output).map_layer(&LayerSurface::new(surface, namespace.clone())) {
+        let mut map = layer_map_for_output(&output);
+        if let Err(err) = map.map_layer(&LayerSurface::new(surface, namespace.clone())) {
             tracing::warn!("layer surface {namespace}: {err}");
+            return;
+        }
+        if namespace == PANEL {
+            // The others again, now after the panel.
+            let others: Vec<LayerSurface> = map.layers().filter(|l| l.namespace() != PANEL).cloned().collect();
+            for layer in &others {
+                map.unmap_layer(layer);
+            }
+            for layer in &others {
+                if let Err(err) = map.map_layer(layer) {
+                    tracing::warn!("layer surface {}: {err}", layer.namespace());
+                }
+            }
+            // `arrange` takes the map again.
+            drop(map);
+            self.arrange();
         }
     }
 

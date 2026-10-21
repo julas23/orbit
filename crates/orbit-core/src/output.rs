@@ -1,10 +1,11 @@
 //! The monitors: where each sits in the layout, which one is under the
 //! pointer, and what happens when one comes or goes.
 //!
-//! A monitor goes where `outputs:` in the config says; the others stack
-//! downwards, the laptop's own panel first, each centred on the widest
-//! (the hp's desk: the laptop on top, the external screen below it).
-//! Each monitor shows a workspace of its own (`workspace`).
+//! A monitor goes where `output … pos` last put it (remembered between
+//! sessions, see `config::placed`) or where `outputs:` in the config says;
+//! the others stack downwards, the laptop's own panel first, each centred
+//! on the widest (the hp's desk: the laptop on top, the external screen
+//! below it). Every change is told to the IPC's `output` subscribers.
 
 use std::collections::HashMap;
 
@@ -115,6 +116,18 @@ impl Orbit {
         self.place_outputs();
         self.renumber();
         self.arrange();
+        self.output_event();
+    }
+
+    /// Puts monitor `name` at `at` (`output … pos`), now and in the next
+    /// sessions.
+    pub fn move_output(&mut self, name: &str, at: (i32, i32)) {
+        self.config.outputs.entry(name.to_owned()).or_default().position = Some(at);
+        crate::config::place(name, at);
+        self.place_outputs();
+        self.renumber();
+        self.arrange();
+        self.output_event();
     }
 
     /// A monitor went: its windows go to the first one left, in the same
@@ -126,6 +139,7 @@ impl Orbit {
         self.arrange();
         let focus = self.current_ws().last_focus.clone();
         self.focus_window(focus);
+        self.output_event();
     }
 
     /// The monitors in area order: the laptop's panel first, then top to
