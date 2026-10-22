@@ -3,13 +3,15 @@
 //! One entry per open window: icon and APPLICATION name (the title goes to
 //! the tooltip), with a tab on the left in the light colour of the window's
 //! area. Focused: bold on a light background. Minimized (sway scratchpad):
-//! faded and italic, still listed so a click brings it back.
+//! faded and italic, still listed so a click brings it back; under
+//! orbit-core its tab keeps the colour of the area it left.
 //!
 //! Order is geometric: by area, then by monitor in physical position (top
 //! to bottom, left to right), then by window position on that monitor in the
 //! same reading order. Minimized windows have no place on screen and go last.
 //!
-//! Left click focuses (a minimized window comes back to the current area).
+//! Left click focuses (a minimized window goes back to the area it left
+//! under orbit-core, comes to the current one under sway).
 //! Right click opens a menu: show/minimize, maximize, restore, send to area
 //! 1–4, close.
 //!
@@ -66,6 +68,8 @@ struct Window {
     title: String,
     /// 1-based area; `None` when minimized.
     area: Option<i32>,
+    /// Minimized: the area it left, when the compositor says (orbit-core).
+    left: Option<i32>,
     output: String,
     x: i32,
     y: i32,
@@ -241,7 +245,7 @@ impl Module {
         }
         item.name.set_label(&app);
         let mut classes = vec!["window".to_string()];
-        if let Some(area) = window.area {
+        if let Some(area) = window.area.or(window.left) {
             classes.push(format!("area-{}", area.clamp(1, 4)));
         }
         if window.focused {
@@ -267,9 +271,10 @@ impl Module {
 
     /// Focuses `window`; a minimized one comes back to the current area,
     /// tiled — `scratchpad show` alone would leave it floating, and tiling
-    /// it in place could drop it into another area.
+    /// it in place could drop it into another area. orbit-core's own
+    /// `focus` puts it back where it was.
     fn focus(&self, window: &Window) {
-        if window.minimized() {
+        if window.minimized() && window.left.is_none() {
             let current = self
                 .with_conn(|c| c.query::<Vec<sway::Workspace>>(sway::GET_WORKSPACES))
                 .and_then(|ws| ws.into_iter().find(|w| w.focused).map(|w| w.num));
@@ -409,6 +414,10 @@ fn collect(tree: &Value, stride: i32) -> Vec<Window> {
                     },
                     class,
                     area,
+                    left: node["orbit_workspace"]
+                        .as_i64()
+                        .filter(|n| *n > 0)
+                        .map(|n| n as i32 % stride),
                     output: output.clone(),
                     x: node["rect"]["x"].as_i64().unwrap_or_default() as i32,
                     y: node["rect"]["y"].as_i64().unwrap_or_default() as i32,
@@ -547,6 +556,7 @@ mod tests {
             class: String::new(),
             title: String::new(),
             area,
+            left: None,
             output: output.into(),
             x,
             y,

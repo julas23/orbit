@@ -7,7 +7,8 @@
 //!   model by default: the automatic model and wttr.in's own conditions both
 //!   overstated rain on the coast, and ICON matched the reference forecast.
 //!
-//! The fetch runs on a thread every `interval` minutes; the last result is
+//! The fetch runs on a thread every `interval` minutes and at each unlock
+//! (waking up included), a minute later when it fails; the last result is
 //! cached in ~/.cache/orbit/weather.json, so the panel starts with it
 //! without waiting for the network, and keeps it when the network is down.
 
@@ -125,7 +126,12 @@ struct Service {
     last: RefCell<Option<Weather>>,
     listeners: RefCell<Vec<Listener>>,
     busy: std::cell::Cell<bool>,
+    /// A fetch that failed is tried again `RETRY` later, until one works.
+    retrying: std::cell::Cell<bool>,
 }
+
+/// After a failed fetch: waking up, the network takes a moment to return.
+const RETRY: u32 = 60;
 
 thread_local! {
     static SERVICE: RefCell<Option<Rc<Service>>> = const { RefCell::new(None) };
@@ -152,8 +158,19 @@ impl Service {
             source,
             listeners: RefCell::default(),
             busy: std::cell::Cell::new(false),
+            retrying: std::cell::Cell::new(false),
         });
         service.fetch();
+        // Unlocking (waking up included: Orbit locks before sleeping),
+        // the weather may be hours old.
+        let weak = Rc::downgrade(&service);
+        crate::sway::listen(&["lock"], move |event| {
+            if event["change"] == "unlocked"
+                && let Some(service) = weak.upgrade()
+            {
+                service.fetch();
+            }
+        });
         let weak = Rc::downgrade(&service);
         glib::timeout_add_seconds_local(service.source.interval.max(5) * 60, move || {
             match weak.upgrade() {
@@ -191,7 +208,18 @@ impl Service {
                     }
                     *service.last.borrow_mut() = Some(weather);
                 }
-                Ok(Err(err)) => log::warn!("weather: {err}; keeping the last data"),
+                Ok(Err(err)) => {
+                    log::warn!("weather: {err}; keeping the last data");
+                    if !service.retrying.replace(true) {
+                        let weak = Rc::downgrade(&service);
+                        glib::timeout_add_seconds_local_once(RETRY, move || {
+                            if let Some(service) = weak.upgrade() {
+                                service.retrying.set(false);
+                                service.fetch();
+                            }
+                        });
+                    }
+                }
                 Err(_) => {}
             }
         });

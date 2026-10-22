@@ -14,7 +14,31 @@ use serde::Deserialize;
 /// (e.g. `["workspace", "output"]`). A burst of events results in one call.
 /// Reconnects if sway restarts.
 pub fn subscribe(events: &'static [&'static str], notify: impl Fn() + 'static) {
-    let (tx, rx) = async_channel::unbounded::<()>();
+    let rx = receive(events);
+    gtk::glib::spawn_future_local(async move {
+        while rx.recv().await.is_ok() {
+            while rx.try_recv().is_ok() {} // fold a burst into one update
+            notify();
+        }
+    });
+}
+
+/// Calls `notify` on the GTK thread with the body of each of `events`, one
+/// by one. Reconnects if sway restarts.
+pub fn listen(events: &'static [&'static str], notify: impl Fn(&serde_json::Value) + 'static) {
+    let rx = receive(events);
+    gtk::glib::spawn_future_local(async move {
+        while let Ok(body) = rx.recv().await {
+            if let Ok(body) = serde_json::from_slice(&body) {
+                notify(&body);
+            }
+        }
+    });
+}
+
+/// The bodies of `events`, from a thread of their own.
+fn receive(events: &'static [&'static str]) -> async_channel::Receiver<Vec<u8>> {
+    let (tx, rx) = async_channel::unbounded::<Vec<u8>>();
     let payload = serde_json::to_string(events).expect("a list of strings serializes");
 
     std::thread::spawn(move || {
@@ -23,8 +47,8 @@ pub fn subscribe(events: &'static [&'static str], notify: impl Fn() + 'static) {
                 let mut conn = Connection::open()?;
                 conn.request(SUBSCRIBE, &payload)?;
                 loop {
-                    conn.receive()?;
-                    if tx.send_blocking(()).is_err() {
+                    let (_, body) = conn.receive()?;
+                    if tx.send_blocking(body).is_err() {
                         return Ok(()); // the GTK side is gone
                     }
                 }
@@ -38,13 +62,7 @@ pub fn subscribe(events: &'static [&'static str], notify: impl Fn() + 'static) {
             }
         }
     });
-
-    gtk::glib::spawn_future_local(async move {
-        while rx.recv().await.is_ok() {
-            while rx.try_recv().is_ok() {} // fold a burst into one update
-            notify();
-        }
-    });
+    rx
 }
 
 #[derive(Debug, Deserialize)]
