@@ -104,6 +104,9 @@ fn main() -> anyhow::Result<()> {
     tracing::info!("listening on {:?}", state.socket_name);
     // Before any program starts, so each gets DISPLAY.
     state.start_xwayland();
+    if drm {
+        state.spawn(REFRESH_PORTALS);
+    }
 
     for line in state.config.startup.clone() {
         state.spawn(&line);
@@ -124,6 +127,16 @@ fn main() -> anyhow::Result<()> {
     })?;
     Ok(())
 }
+
+/// The user's systemd and D-Bus outlive a core (Ctrl+Alt+Backspace, a
+/// crash): the portals still running hold the dead core's display, and the
+/// one D-Bus restarts meanwhile fails on it while D-Bus waits two minutes
+/// for its name. Every GTK program asks the portal for its settings at
+/// start and waits too, the greet first. So the new display goes to
+/// systemd, and the portals left over restart on it.
+const REFRESH_PORTALS: &str = "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY ORBIT_SOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE; \
+    units=$(systemctl --user list-units --all --plain --no-legend --state=active,activating,failed 'xdg-desktop-portal*.service' | cut -d' ' -f1); \
+    [ -z \"$units\" ] || systemctl --user restart $units";
 
 /// Logs to stderr nested; on the screen, to a file (the console is hidden
 /// behind it), `$XDG_STATE_HOME/orbit/core/core.log`, a new one each start

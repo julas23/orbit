@@ -38,7 +38,10 @@ use smithay::{
     input::pointer::CursorImageStatus,
     output::{Mode as WlMode, Output, PhysicalProperties},
     reexports::{
-        calloop::EventLoop,
+        calloop::{
+            EventLoop,
+            timer::{TimeoutAction, Timer},
+        },
         drm::control::{ModeTypeFlags, connector, crtc},
         input::Libinput,
         rustix::fs::OFlags,
@@ -116,7 +119,15 @@ struct Surface {
     /// one must not clear what another, still waiting for its vblank,
     /// has yet to show.
     dirty: bool,
+    /// Frames refused in a row (the screen still busy with the console's
+    /// or another session's last flip): each tries again after a moment.
+    failures: u32,
 }
+
+/// The wait before drawing again a frame the screen refused. Without it a
+/// screen with nothing changing (the lock coming back after another user
+/// logs out) would stay black until something moved.
+const RETRY: Duration = Duration::from_millis(50);
 
 pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> anyhow::Result<()> {
     // The seat first, even behind another session: taking control holds
@@ -299,7 +310,7 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
         }
     };
     tracing::info!("{name}: {}x{}@{}", wl_mode.size.w, wl_mode.size.h, wl_mode.refresh);
-    drm.surfaces.insert(crtc, Surface { output: output.clone(), drm_output, global, waiting: false, scheduled: false, dirty: true });
+    drm.surfaces.insert(crtc, Surface { output: output.clone(), drm_output, global, waiting: false, scheduled: false, dirty: true, failures: 0 });
     state.add_output(&output);
     state.request_render();
 }
@@ -368,13 +379,35 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
     let elements = output_elements(state, &output, &mut drm.renderer, true);
     let clear = background(state);
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
-        match surface.drm_output.render_frame(&mut drm.renderer, &elements, clear, FrameFlags::DEFAULT) {
+        let failed = match surface.drm_output.render_frame(&mut drm.renderer, &elements, clear, FrameFlags::DEFAULT) {
             Ok(result) if !result.is_empty => match surface.drm_output.queue_frame(()) {
-                Ok(()) => surface.waiting = true,
-                Err(err) => tracing::warn!("queue frame: {err:?}"),
+                Ok(()) => {
+                    surface.waiting = true;
+                    None
+                }
+                Err(err) => Some(format!("queue frame: {err:?}")),
             },
-            Ok(_) => {}
-            Err(err) => tracing::warn!("render: {err:?}"),
+            Ok(_) => None,
+            Err(err) => Some(format!("render: {err:?}")),
+        };
+        match failed {
+            None => surface.failures = 0,
+            Some(err) => {
+                // Logged once a run of them, not every 50 ms.
+                if surface.failures == 0 {
+                    tracing::warn!("{err}; trying again");
+                }
+                surface.failures += 1;
+                surface.dirty = true;
+                surface.scheduled = true;
+                let retry = state.loop_handle.insert_source(Timer::from_duration(RETRY), move |_, _, state| {
+                    render(state, crtc);
+                    TimeoutAction::Drop
+                });
+                if retry.is_err() {
+                    surface.scheduled = false;
+                }
+            }
         }
     }
     // The eyes moving: the next frame is drawn at this one's vblank.
