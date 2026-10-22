@@ -44,6 +44,7 @@ mod sleep;
 mod state;
 mod tile;
 mod udev;
+mod watchdog;
 mod winit;
 mod workspace;
 mod xwayland;
@@ -94,6 +95,7 @@ fn main() -> anyhow::Result<()> {
     if drm {
         state.serve_screensaver();
         state.lock_before_sleep();
+        watchdog::start(&mut event_loop);
     }
     if let Err(err) = ipc::listen(&mut event_loop, &mut state) {
         tracing::error!("no IPC: {err:#}");
@@ -123,12 +125,14 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Logs to stderr nested; on the screen, to a file (the console is hidden
-/// behind it), `$XDG_STATE_HOME/orbit/core/core.log`, a new one each start.
+/// behind it), `$XDG_STATE_HOME/orbit/core/core.log`, a new one each start
+/// (the one before in `core.log.prev`).
 fn logging(drm: bool) {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
     if drm {
         let dir = crate::config::state_dir();
         let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::rename(dir.join("core.log"), dir.join("core.log.prev"));
         if let Ok(file) = std::fs::File::create(dir.join("core.log")) {
             tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(std::sync::Mutex::new(file)).init();
             return;

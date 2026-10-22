@@ -317,9 +317,12 @@ fn disconnected(state: &mut Orbit, crtc: crtc::Handle) {
 /// vblank.
 pub fn schedule(state: &mut Orbit) {
     let Backend::Drm(drm) = &mut state.backend else { return };
+    // On another console nothing is drawn (it would fail, over and over,
+    // as each frame let clients draw the next): coming back draws it all.
+    let active = drm.session.is_active();
     for (crtc, surface) in drm.surfaces.iter_mut() {
         surface.dirty = true;
-        if surface.waiting || surface.scheduled {
+        if !active || surface.waiting || surface.scheduled {
             continue;
         }
         surface.scheduled = true;
@@ -350,6 +353,14 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
         state.backend = Backend::Drm(drm);
         return;
     };
+    // Left for another console since it was set: kept for the way back.
+    if !drm.session.is_active() {
+        if let Some(surface) = drm.surfaces.get_mut(&crtc) {
+            surface.scheduled = false;
+        }
+        state.backend = Backend::Drm(drm);
+        return;
+    }
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
         surface.scheduled = false;
         surface.dirty = false;
@@ -411,9 +422,10 @@ fn send_frames(state: &mut Orbit, output: &Output) {
 }
 
 impl DrmData {
-    /// Every screen shows the last frame drawn, with nothing left to draw.
+    /// Every screen shows the last frame drawn, with nothing left to draw;
+    /// on another console, none shows the session at all.
     pub fn settled(&self) -> bool {
-        self.surfaces.values().all(|s| !s.dirty && !s.scheduled && !s.waiting)
+        !self.session.is_active() || self.surfaces.values().all(|s| !s.dirty && !s.scheduled && !s.waiting)
     }
 
     /// Switches to virtual terminal `vt` (Ctrl+Alt+F1…F12).

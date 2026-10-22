@@ -142,11 +142,14 @@ pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRende
     // layer's menus and X menus (`fullscreen`).
     if let Some(full) = state.fullscreen_on(output) {
         layer_elements(output, renderer, scale, &[WlrLayer::Overlay], elements);
+        // Before the map is held: `top_above` takes it too, and taking it
+        // twice hangs the core.
+        let above = crate::fullscreen::top_above(output);
         let map = layer_map_for_output(output);
-        for surface in crate::fullscreen::top_above(output) {
-            let Some(at) = map.layer_geometry(&surface).map(|g| g.loc.to_physical_precise_round(scale)) else { continue };
+        for surface in &above {
+            let Some(at) = map.layer_geometry(surface).map(|g| g.loc.to_physical_precise_round(scale)) else { continue };
             elements.extend(
-                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(&surface, renderer, at, scale, 1.0)
+                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(surface, renderer, at, scale, 1.0)
                     .into_iter()
                     .map(OutputElement::Surface),
             );
@@ -164,7 +167,16 @@ pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRende
         return;
     }
     layer_elements(output, renderer, scale, &[WlrLayer::Overlay, WlrLayer::Top], elements);
-    let windows: Vec<Window> = state.space.elements_for_output(output).cloned().collect();
+    // Only this monitor's: a window of the next one that reaches over the
+    // edge (its shadow, a frame of the old size) is not drawn here. X menus
+    // and the window being dragged go where they are.
+    let shown = state.visible.get(&output.name()).copied();
+    let windows: Vec<Window> = state
+        .space
+        .elements_for_output(output)
+        .filter(|w| !state.all_windows().any(|m| m == *w) || state.dragging.as_ref() == Some(*w) || state.workspace_of(w) == shown)
+        .cloned()
+        .collect();
     for window in windows.iter().rev() {
         window_elements(state, window, geo, renderer, scale, shaders, elements);
     }
