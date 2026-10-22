@@ -8,7 +8,8 @@
 # Root runs orbit-login, so it goes to /usr/local/bin, root's own; so does
 # the whole rack (core, greet, panel, dock, the applications…), for the
 # users without a copy in ~/.local/bin: any user who logs in gets the
-# desktop. /etc/orbit/login.yaml is written only if missing.
+# desktop, dark and with its font. /etc/orbit/login.yaml is written only
+# if missing.
 #
 #   scripts/install-login.sh --remove    back to the getty's autologin
 set -eu
@@ -44,6 +45,20 @@ sed 's|^Exec=/usr/bin/|Exec=/usr/local/bin/|' "$ROOT/data/dbus/org.gnome.keyring
 rm -rf /usr/local/share/orbit-pathfinder/recipes
 mkdir -p /usr/local/share/orbit-pathfinder
 cp -r "$ROOT/data/pathfinder/recipes" /usr/local/share/orbit-pathfinder/recipes
+# Dark by default, as Orbit is drawn, for users who have not chosen.
+install -o root -g root -m 644 "$ROOT/data/gsettings/90_orbit.gschema.override" /usr/share/glib-2.0/schemas/
+glib-compile-schemas /usr/share/glib-2.0/schemas
+# The panel's and the apps' font (its icons too), for every user: taken
+# from USER_NAME's own fonts until Orbit ships it (orbit-fonts).
+HOME_DIR=$(getent passwd "$USER_NAME" | cut -d: -f6)
+FONTS=$(find "$HOME_DIR/.fonts" "$HOME_DIR/.local/share/fonts" -name 'CaskaydiaCoveNerdFont-*.ttf' -o -name 'CaskaydiaCoveNerdFontMono-*.ttf' 2>/dev/null || true)
+if [ -n "$FONTS" ]; then
+  mkdir -p /usr/local/share/fonts/orbit
+  echo "$FONTS" | xargs -d '\n' install -o root -g root -m 644 -t /usr/local/share/fonts/orbit/
+  fc-cache -f /usr/local/share/fonts/orbit
+else
+  echo "no CaskaydiaCove Nerd Font in $USER_NAME's fonts: other users' panels will miss their icons" >&2
+fi
 install -o root -g root -m 644 "$ROOT/data/pam/orbit-login" /etc/pam.d/orbit-login
 [ -e /etc/pam.d/orbit-greet ] || install -o root -g root -m 644 "$ROOT/data/pam/orbit-greet" /etc/pam.d/orbit-greet
 mkdir -p /etc/orbit

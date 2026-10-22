@@ -1,0 +1,5 @@
+# Orbit's defaults for every user who has not chosen otherwise: dark, as
+# Orbit is drawn. The portal tells the apps (and Orbit's own) from these.
+[org.gnome.desktop.interface]
+gtk-theme='Adwaita-dark'
+color-scheme='prefer-dark'
