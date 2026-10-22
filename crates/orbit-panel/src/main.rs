@@ -19,6 +19,7 @@ mod maintenance;
 mod menu;
 mod meters;
 mod monitors;
+mod network;
 mod notifications;
 mod pulse;
 mod session;
@@ -162,7 +163,7 @@ fn module(entry: &ModuleEntry, dir: &ConfigDir, edge: Edge, form: Form) -> Optio
         "volume" => dir.module("volume").map(|c| volume::new(&c, form)),
         "brightness" => dir.module("brightness").map(|c| brightness::new(&c, form)),
         "tray" => dir.module("tray").map(|c| tray::new(&c, vertical)),
-        "network" => dir.module("network").map(|c| status::network(&c, form)),
+        "network" => dir.module("network").map(|c| network::new(&c, form)),
         "keyboard" => dir.module("keyboard").map(|c| status::keyboard(&c, form)),
         "battery" => dir.module("battery").map(|c| status::battery(&c, form)),
         "bluetooth" => dir.module("bluetooth").map(|c| bluetooth::new(&c, form)),

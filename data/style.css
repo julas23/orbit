@@ -403,6 +403,15 @@ window.orbit-menu { background: transparent; }
  * their quick parts and the monitors' editor open in popovers. */
 .bluetooth-quick,
 .monitors-quick          { padding: 5px; min-width: 200px; }
+/* The status modules' quick parts (network.rs, status.rs,
+ * notifications.rs): switches, titles and flat buttons, the active one in
+ * the accent. The whole card is clickable. */
+.quick                   { padding: 5px; min-width: 200px; }
+.quick .title            { color: @orbit_muted; font-size: 11px; margin-top: 5px; }
+.quick button            { padding: 2px 5px; }
+.quick button.active     { color: @orbit_accent; }
+.status.clickable:hover,
+.status-line.clickable:hover { background-color: @orbit_hover; }
 .monitors-quick .arrow   { font-size: 16px; min-width: 30px; min-height: 30px; border-radius: 5px; }
 .monitors-quick .arrow:hover { background-color: @orbit_hover; }
 .monitors-full           { padding: 5px; }

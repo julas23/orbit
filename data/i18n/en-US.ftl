@@ -82,10 +82,13 @@ network-kind-vpn = VPN
 network-menu-networking = Networking enabled
 network-menu-wifi = Wi-Fi enabled
 network-menu-edit = Edit connections…
+network-quick-wifi = Wi-Fi networks
+network-tooltip = Click: networks · Right click: connections
 
 ## Keyboard
 
-keyboard-next = { $name } — click for the next one:
+keyboard-next = { $name }, of:
+keyboard-tooltip = Click: next · Right click: choose · Wheel: walk through
 
 ## Battery
 
@@ -97,6 +100,11 @@ battery-charging = charging
 battery-discharging = discharging
 battery-full = charged
 battery-pending = waiting to charge
+battery-hint = Click: details and power profile
+battery-profile = Power profile
+battery-profile-saver = Power saver
+battery-profile-balanced = Balanced
+battery-profile-performance = Performance
 
 ## Weather
 
@@ -588,7 +596,9 @@ notifications-new = { $count ->
 notifications-dnd = do not disturb
 notifications-on = notifications on
 notifications-off = no server
-notifications-tooltip = Click: notification centre · Right click: do not disturb
+notifications-tooltip = Click: notification centre · Right click: options
+notifications-dnd-switch = Do not disturb
+notifications-open = Notification centre
 
 ## Bluetooth and monitors on the panel
 

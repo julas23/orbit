@@ -24,7 +24,7 @@ use orbit_app::i18n::{number, tr, tr_args};
 
 use crate::{
     board::Form,
-    status::{Row, hold, on_changes, open_or_focus, system_bus},
+    status::{Row, hold, on_changes, open_or_focus, switch_row, system_bus},
 };
 
 const BLUEZ: &str = "org.bluez";
@@ -249,24 +249,6 @@ impl Module {
         let popover = gtk::Popover::builder().child(child).build();
         orbit_app::popup::open(&popover, &self.row.root, None);
     }
-}
-
-/// A line of `list`: `label` on the left, a switch on the right.
-fn switch_row(label: &str, on: bool, list: &gtk::Box) -> gtk::Switch {
-    let line = gtk::Box::builder().spacing(10).build();
-    let name = gtk::Label::builder()
-        .label(label)
-        .xalign(0.0)
-        .hexpand(true)
-        .build();
-    let switch = gtk::Switch::builder()
-        .active(on)
-        .valign(gtk::Align::Center)
-        .build();
-    line.append(&name);
-    line.append(&switch);
-    list.append(&line);
-    switch
 }
 
 /// Everything BlueZ knows, from its object manager.

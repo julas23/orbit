@@ -1,0 +1,5 @@
+# Battery — ~/.config/orbit/modules/battery.yaml
+
+# Left click: the details and, when power-profiles-daemon runs, the power
+# profile. Right click opens (or focuses) this; nothing when empty.
+manager: ""

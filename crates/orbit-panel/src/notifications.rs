@@ -4,7 +4,7 @@
 //!
 //! Event-driven: the server's `Changed` signal on the session bus, and its
 //! name coming and going. Left click opens or closes the centre; right
-//! click turns do-not-disturb on or off.
+//! click, the full part: do-not-disturb, clearing them all, the centre.
 
 use std::{
     cell::{Cell, RefCell},
@@ -16,7 +16,10 @@ use serde::Deserialize;
 
 use orbit_app::i18n::{number, tr, tr_args};
 
-use crate::{board::Form, status::Row};
+use crate::{
+    board::Form,
+    status::{Row, clicks, popup, quick_button, quick_list, switch_row},
+};
 
 const NAME: &str = "io.github.julas23.Orbit.Notify";
 const PATH: &str = "/io/github/julas23/Orbit/Notify";
@@ -70,17 +73,8 @@ pub fn new(_config: &NotificationsConfig, form: Form) -> gtk::Widget {
         module.keep.borrow_mut().push(Box::new(watch));
     }
 
-    let click = gtk::GestureClick::builder().button(0).build();
-    {
-        let module = module.clone();
-        click.connect_released(move |gesture, _, _, _| match gesture.current_button() {
-            1 => module.call("Toggle", None),
-            3 => module.call("SetDnd", Some((!module.dnd.get(),).to_variant())),
-            _ => {}
-        });
-    }
-    row.root.add_controller(click);
-    row.root.set_cursor_from_name(Some("pointer"));
+    let (left, right) = (module.clone(), module.clone());
+    clicks(&row.root, move || left.call("Toggle", None), move || right.full(), None);
     row.root.clone()
 }
 
@@ -139,6 +133,37 @@ impl Module {
                 },
             );
         }
+    }
+
+    /// The full part: do-not-disturb, clear them all, open the centre.
+    fn full(self: &Rc<Self>) {
+        if self.conn.is_none() {
+            return;
+        }
+        let list = quick_list("notifications-quick");
+        let dnd = switch_row(&tr("notifications-dnd-switch"), self.dnd.get(), &list);
+        {
+            let module = Rc::downgrade(self);
+            dnd.connect_state_set(move |_, on| {
+                if let Some(m) = module.upgrade() {
+                    m.call("SetDnd", Some((on,).to_variant()));
+                }
+                glib::Propagation::Proceed
+            });
+        }
+        let module = Rc::downgrade(self);
+        quick_button(&tr("notify-clear"), &list, move || {
+            if let Some(m) = module.upgrade() {
+                m.call("Clear", None);
+            }
+        });
+        let module = Rc::downgrade(self);
+        quick_button(&tr("notifications-open"), &list, move || {
+            if let Some(m) = module.upgrade() {
+                m.call("Toggle", None);
+            }
+        });
+        popup(&list, &self.row.root);
     }
 
     fn call(&self, method: &str, args: Option<glib::Variant>) {
