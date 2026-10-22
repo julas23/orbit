@@ -1,5 +1,5 @@
 Description: Orbit desktop: orbit-core, its panel, dock and applications
  The essential Orbit session: the compositor, panel, dock, notifications
  and every Orbit application, with sound, network, portals and fonts.
-Depends: orbit-core, orbit-greet, orbit-panel, orbit-dock, orbit-notify, orbitctl, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-pathfinder, orbit-term, xwayland, pipewire-pulse, wireplumber, network-manager, xdg-desktop-portal-gtk, xdg-user-dirs, fonts-noto-core, fonts-noto-color-emoji, polkitd, udisks2, upower
+Depends: orbit-core, orbit-greet, orbit-polkit, orbit-panel, orbit-dock, orbit-notify, orbitctl, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-pathfinder, orbit-term, xwayland, pipewire-pulse, wireplumber, network-manager, xdg-desktop-portal-gtk, xdg-user-dirs, fonts-noto-core, fonts-noto-color-emoji, polkitd, udisks2, upower
 Recommends: plymouth, plymouth-themes, firefox | firefox-esr, kitty

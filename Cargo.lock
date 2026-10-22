@@ -3135,6 +3135,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-polkit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "env_logger",
+ "gtk4",
+ "gtk4-layer-shell",
+ "log",
+ "orbit-app",
+ "orbit-common",
+]
+
+[[package]]
 name = "orbit-protocols"
 version = "0.1.0"
 dependencies = [

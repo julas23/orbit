@@ -678,3 +678,10 @@ greet-password = Password
 greet-checking = Checking…
 greet-wrong = Wrong password
 greet-wait = Try again in { $seconds } s
+
+## The polkit password dialog
+
+polkit-title = Authentication required
+polkit-authenticate = Authenticate
+polkit-cancel = Cancel
+polkit-details = Details

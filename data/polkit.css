@@ -1,0 +1,79 @@
+/* Orbit-Polkit built-in stylesheet: the screen dimmed around a card with
+ * the request, in the greet's manner. Colours come from the palette;
+ * ~/.config/orbit/style.css goes on top. Sizes on the 5 px grid. */
+
+window.orbit-polkit {
+  background-color: alpha(#000000, 0.6);
+  color: @orbit_fg;
+}
+
+window.orbit-polkit .card {
+  min-width: 300px;
+  padding: 30px;
+  border-radius: 20px;
+  background-color: @orbit_window;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-polkit .icon {
+  color: @orbit_accent;
+  margin-bottom: 10px;
+}
+
+window.orbit-polkit .title {
+  font-size: 20px;
+  margin-bottom: 5px;
+}
+
+window.orbit-polkit .what {
+  color: @orbit_muted;
+  margin-bottom: 20px;
+}
+
+window.orbit-polkit .avatar {
+  margin-bottom: 10px;
+  color: @orbit_muted;
+}
+
+window.orbit-polkit .name,
+window.orbit-polkit .users {
+  margin-bottom: 15px;
+}
+
+window.orbit-polkit .password {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 20px;
+  background-color: @orbit_button;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-polkit .password:focus-within {
+  border-color: @orbit_accent;
+}
+
+window.orbit-polkit .message {
+  margin-top: 10px;
+  min-height: 20px;
+  color: @orbit_muted;
+}
+
+window.orbit-polkit .buttons {
+  margin-top: 10px;
+}
+
+window.orbit-polkit .buttons button {
+  min-height: 35px;
+  border-radius: 20px;
+}
+
+window.orbit-polkit .more {
+  margin-top: 15px;
+  color: @orbit_muted;
+}
+
+window.orbit-polkit .details {
+  margin-top: 5px;
+  font-family: monospace;
+  font-size: 12px;
+}

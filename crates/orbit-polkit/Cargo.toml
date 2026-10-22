@@ -1,0 +1,29 @@
+[package]
+name = "orbit-polkit"
+description = "Orbit-Polkit: the polkit authentication agent of Orbit, Rust + GTK4"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Polkit: asks for the password when a program needs an administrator's rights (polkit, pkexec), with the look of Orbit-Greet. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, polkitd"
+assets = [
+    ["target/release/orbit-polkit", "usr/bin/", "755"],
+]
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+gtk4-layer-shell.workspace = true
+log.workspace = true
+env_logger.workspace = true
+async-channel.workspace = true
+anyhow.workspace = true
