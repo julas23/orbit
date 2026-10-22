@@ -399,16 +399,18 @@ impl Orbit {
         self.request_render();
     }
 
-    /// The windows of workspace `num` in columns over `area`; a maximized
-    /// one over all of `area`, a fullscreen one over the whole monitor,
-    /// `full`, above the others; the floating and snapped ones above them
-    /// all, in the order they were stacked (`floating`).
+    /// The windows of workspace `num` in columns over `area`, as wide as
+    /// their weights; a maximized one over all of `area`, a fullscreen one
+    /// over the whole monitor, `full`, above the others; the floating and
+    /// snapped ones above them all, in the order they were stacked
+    /// (`floating`).
     fn arrange_on(&mut self, area: tile::Rect, full: tile::Rect, num: i32) {
         let windows = self.windows_of(num);
         let (mut floating, tiled): (Vec<Window>, Vec<Window>) = windows.into_iter().partition(|w| {
             crate::floating::floats(w) && !crate::fullscreen::is_fullscreen(w) && !crate::fullscreen::is_maximized(w)
         });
-        let rects = tile::columns(tiled.len(), area, self.config.gaps, self.config.border);
+        let weights: Vec<f64> = tiled.iter().map(|w| info(w).borrow().weight).collect();
+        let rects = tile::weighted(&weights, area, self.config.gaps, self.config.border);
         let whole = tile::columns(1, area, self.config.gaps, self.config.border).first().copied().unwrap_or(area);
         tracing::debug!(num, ?area, ?rects, "arrange");
         // The space stacks in the order windows are mapped: the tiled,

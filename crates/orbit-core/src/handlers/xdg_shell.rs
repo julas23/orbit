@@ -6,8 +6,8 @@
 //! Ported from Smithay's smallvil `src/handlers/xdg_shell.rs` @ 24647fc (MIT,
 //! Copyright (c) 2017 Victor Berger and Victoria Brekenfeld); the popup grab
 //! and keeping layer-surface menus on screen from anvil `src/shell/xdg.rs`
-//! @ 24647fc (same licence). Moving by the title bar is `grab`'s; resizing
-//! by the pointer comes with floating windows.
+//! @ 24647fc (same licence). Moving by the title bar is `grab`'s, resizing
+//! by the frame's edges `resize`'s.
 
 use smithay::{
     desktop::{
@@ -15,7 +15,10 @@ use smithay::{
         get_popup_toplevel_coords, layer_map_for_output,
     },
     input::{Seat, pointer::Focus},
-    reexports::wayland_server::{Resource, protocol::{wl_output, wl_seat}},
+    reexports::{
+        wayland_protocols::xdg::shell::server::xdg_toplevel,
+        wayland_server::{Resource, protocol::{wl_output, wl_seat}},
+    },
     utils::{Logical, Rectangle, Serial},
     wayland::shell::xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState},
 };
@@ -93,6 +96,20 @@ impl XdgShellHandler for Orbit {
         }
         let Some(window) = self.window_for(surface.wl_surface()) else { return };
         self.start_move(window, serial, Some(start));
+    }
+
+    fn resize_request(&mut self, surface: ToplevelSurface, seat: wl_seat::WlSeat, serial: Serial, edges: xdg_toplevel::ResizeEdge) {
+        let Some(pointer) = Seat::<Self>::from_resource(&seat).and_then(|s| s.get_pointer()) else { return };
+        if self.locked() || !pointer.has_grab(serial) {
+            return;
+        }
+        let Some(start) = pointer.grab_start_data() else { return };
+        // The press began on this client's window.
+        if !start.focus.as_ref().is_some_and(|(s, _)| s.id().same_client_as(&surface.wl_surface().id())) {
+            return;
+        }
+        let Some(window) = self.window_for(surface.wl_surface()) else { return };
+        self.start_resize(window, serial, Some(start), Some(edges.into()));
     }
 
     /// Fullscreen on its workspace's monitor, whichever output it names.

@@ -38,7 +38,8 @@ impl Workspace {
 /// rectangle it was last laid out in (kept while its workspace is hidden)
 /// whether it is fullscreen or maximized (`fullscreen`), and whether it
 /// floats, where and at what size (`floating`; no place yet, its own
-/// size), or is snapped to a half of the screen.
+/// size), or is snapped to a half of the screen; tiled, how wide its
+/// column is against the others (`weight`, 1 at first).
 pub struct Info {
     pub id: u64,
     pub rect: (i32, i32, i32, i32),
@@ -48,11 +49,12 @@ pub struct Info {
     pub float_at: Option<(i32, i32)>,
     pub float_size: Option<(i32, i32)>,
     pub snap: Option<crate::floating::Half>,
+    pub weight: f64,
 }
 
 /// The window's info; given on the first call.
 pub fn info(window: &Window) -> &RefCell<Info> {
-    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false, maximized: false, floating: false, float_at: None, float_size: None, snap: None }));
+    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false, maximized: false, floating: false, float_at: None, float_size: None, snap: None, weight: 1.0 }));
     window.user_data().get::<RefCell<Info>>().expect("just inserted")
 }
 

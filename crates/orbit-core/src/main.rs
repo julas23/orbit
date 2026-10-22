@@ -42,6 +42,7 @@ mod keys;
 mod lock;
 mod output;
 mod render;
+mod resize;
 mod rounded;
 mod screensaver;
 mod sleep;

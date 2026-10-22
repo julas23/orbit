@@ -72,15 +72,19 @@ impl Orbit {
             InputEvent::PointerButton { event, .. } => {
                 let Some(pointer) = self.seat.get_pointer() else { return };
                 let serial = SERIAL_COUNTER.next_serial();
-                // Mod + left button on a window moves it; the click is not
-                // the window's.
+                // Mod + left button on a window moves it, Mod + right
+                // button resizes it; the click is not the window's.
                 if event.state() == ButtonState::Pressed
-                    && event.button_code() == crate::grab::BTN_LEFT
+                    && matches!(event.button_code(), crate::grab::BTN_LEFT | crate::resize::BTN_RIGHT)
                     && !pointer.is_grabbed()
                     && self.modifier_held()
                     && let Some(window) = self.window_under(pointer.current_location())
                 {
-                    self.start_move(window, serial, None);
+                    if event.button_code() == crate::grab::BTN_LEFT {
+                        self.start_move(window, serial, None);
+                    } else {
+                        self.start_resize(window, serial, None, None);
+                    }
                     return;
                 }
                 if event.state() == ButtonState::Pressed && !pointer.is_grabbed() {

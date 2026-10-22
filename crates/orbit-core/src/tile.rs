@@ -1,4 +1,4 @@
-//! Where the windows go, for now: side by side in equal columns over the
+//! Where the windows go, for now: side by side in columns over the
 //! area the panel and dock leave free, with gaps and room for the borders.
 //! Pure arithmetic, tested without a screen; the i3 tree (split, tabbed,
 //! stacked) replaces it in the `orbit-layout` crate (PLANO-CORE §6).
@@ -9,19 +9,34 @@ pub type Rect = (i32, i32, i32, i32);
 /// The rectangles of `count` windows in `area` — their content, inside the
 /// border. Gaps go between windows and around them.
 pub fn columns(count: usize, area: Rect, gaps: i32, border: i32) -> Vec<Rect> {
-    if count == 0 {
+    weighted(&vec![1.0; count], area, gaps, border)
+}
+
+/// The rectangles of columns as wide as their `weights` say, each its
+/// share of the sum (Mod+right-drag moves the line between two).
+pub fn weighted(weights: &[f64], area: Rect, gaps: i32, border: i32) -> Vec<Rect> {
+    if weights.is_empty() {
         return Vec::new();
     }
     let (x, y, w, h) = area;
-    let n = count as i32;
+    let n = weights.len() as i32;
     let inner_w = (w - gaps * (n + 1)).max(n);
     let height = (h - 2 * gaps - 2 * border).max(1);
+    let total: f64 = weights.iter().map(|k| k.max(0.0)).sum::<f64>().max(f64::EPSILON);
+    // Each column ends where the sum of the weights up to it falls,
+    // rounded, so the widths always add up to the whole.
+    let mut ends = Vec::with_capacity(weights.len() + 1);
+    let mut sum = 0.0;
+    ends.push(0);
+    for k in weights {
+        sum += k.max(0.0);
+        ends.push((inner_w as f64 * sum / total).round() as i32);
+    }
     (0..n)
         .map(|i| {
-            // The remainder goes to the first columns, a pixel each.
-            let width = inner_w / n + i32::from(i < inner_w % n);
-            let left = x + gaps + i * (inner_w / n) + i.min(inner_w % n) + i * gaps;
-            (left + border, y + gaps + border, (width - 2 * border).max(1), height)
+            let (start, end) = (ends[i as usize], ends[i as usize + 1]);
+            let left = x + gaps + start + i * gaps;
+            (left + border, y + gaps + border, (end - start - 2 * border).max(1), height)
         })
         .collect()
 }
@@ -53,5 +68,14 @@ mod tests {
         assert_eq!(rects.iter().map(|r| r.2).sum::<i32>(), 101);
         assert!(columns(5, (0, 0, 10, 10), 6, 2).iter().all(|r| r.2 >= 1 && r.3 >= 1));
         assert!(columns(0, (0, 0, 10, 10), 0, 0).is_empty());
+    }
+
+    #[test]
+    fn weights_share_the_width() {
+        // 1000 - 3 gaps = 970: a third and two thirds.
+        let rects = weighted(&[1.0, 2.0], (0, 0, 1000, 500), 10, 0);
+        assert_eq!(rects[0], (10, 10, 323, 480));
+        assert_eq!(rects[1], (343, 10, 647, 480));
+        assert_eq!(rects[1].0 + rects[1].2, 1000 - 10);
     }
 }

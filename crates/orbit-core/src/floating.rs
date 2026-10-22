@@ -3,8 +3,9 @@
 //! window transient for another or typed dialog, utility, splash or
 //! toolbar, a Wayland window with a parent, any window of a fixed size —
 //! and open centred over their parent, on its workspace. Any window floats
-//! or tiles again with `floating enable|disable|toggle` (Mod+Shift+Space);
-//! Mod+drag moves a floating one where it is let go (`grab`).
+//! or tiles again with `floating enable|disable|toggle` (Mod+Shift+Space or
+//! Mod+Esc); Mod+drag moves a floating one where it is let go (`grab`),
+//! Mod+right-drag resizes it (`resize`).
 //!
 //! Snapped windows (`snap left|right`, Mod+←/→) are laid over the left or
 //! right half of what the panel and the dock leave free, above the tiled

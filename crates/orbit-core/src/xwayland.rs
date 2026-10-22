@@ -274,8 +274,16 @@ impl XwmHandler for Orbit {
         }
     }
 
-    // Resizing waits for floating windows: a tiled window has its size.
-    fn resize_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32, _edges: ResizeEdge) {}
+    /// An edge of its own frame dragged: resized as with Mod+right-drag.
+    fn resize_request(&mut self, _xwm: XwmId, surface: X11Surface, _button: u32, edges: ResizeEdge) {
+        let Some(pointer) = self.seat.get_pointer() else { return };
+        if self.locked() {
+            return;
+        }
+        let Some(window) = self.x11_window(&surface) else { return };
+        let Some(start) = pointer.grab_start_data() else { return };
+        self.start_resize(window, smithay::utils::SERIAL_COUNTER.next_serial(), Some(start), Some(edges.into()));
+    }
 
     /// Its own title bar dragged: moved as with Mod+drag.
     fn move_request(&mut self, _xwm: XwmId, surface: X11Surface, _button: u32) {
