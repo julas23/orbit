@@ -1,0 +1,6 @@
+# gnome-keyring's password prompts in Orbit's look (orbit-prompter), in
+# place of gcr-prompter. A user's file wins over the system's: copy it
+# to ~/.local/share/dbus-1/services/ (with Exec= where orbit-prompter is).
+[D-BUS Service]
+Name=org.gnome.keyring.SystemPrompter
+Exec=/usr/bin/orbit-prompter

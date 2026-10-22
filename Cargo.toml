@@ -83,6 +83,12 @@ webkit6 = { version = "0.6", features = ["v2_48"] }
 rusqlite = "0.37"
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
+# orbit-prompter: the secret exchange of gcr's prompter protocol (DH,
+# HKDF-SHA256, AES-128-CBC).
+hkdf = "0.12"
+sha2 = "0.10"
+num-bigint = "0.4"
+getrandom = "0.2"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha1 = "0.10"
 libloading = "0.8"

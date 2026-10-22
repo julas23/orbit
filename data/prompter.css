@@ -1,0 +1,73 @@
+/* Orbit-Prompter built-in stylesheet: the keyring's prompt in
+ * orbit-polkit's card, the screen dimmed around it, in the greet's
+ * manner. Colours come from the palette; ~/.config/orbit/style.css goes
+ * on top. Sizes on the 5 px grid. */
+
+window.orbit-prompter {
+  background-color: alpha(#000000, 0.6);
+  color: @orbit_fg;
+}
+
+window.orbit-prompter .card {
+  min-width: 300px;
+  padding: 30px;
+  border-radius: 20px;
+  background-color: @orbit_window;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-prompter .icon {
+  color: @orbit_accent;
+  margin-bottom: 10px;
+}
+
+window.orbit-prompter .title {
+  font-size: 20px;
+  margin-bottom: 5px;
+}
+
+window.orbit-prompter .what {
+  color: @orbit_muted;
+  margin-bottom: 20px;
+}
+
+
+
+window.orbit-prompter .password {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 20px;
+  background-color: @orbit_button;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-prompter .password:focus-within {
+  border-color: @orbit_accent;
+}
+
+window.orbit-prompter .message {
+  margin-top: 10px;
+  min-height: 20px;
+  color: @orbit_muted;
+}
+
+window.orbit-prompter .buttons {
+  margin-top: 10px;
+}
+
+window.orbit-prompter .buttons button {
+  min-height: 35px;
+  border-radius: 20px;
+}
+
+window.orbit-prompter .password.again {
+  margin-top: 10px;
+}
+
+window.orbit-prompter .choice {
+  margin-top: 10px;
+}
+
+window.orbit-prompter .message.warning {
+  color: @orbit_alert;
+}

@@ -686,3 +686,10 @@ polkit-title = Authentication required
 polkit-authenticate = Authenticate
 polkit-cancel = Cancel
 polkit-details = Details
+
+## The keyring's password prompt
+
+prompter-title = Keyring
+prompter-continue = Continue
+prompter-again = Password again
+prompter-mismatch = The passwords do not match

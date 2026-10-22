@@ -678,3 +678,10 @@ polkit-title = Autenticação necessária
 polkit-authenticate = Autenticar
 polkit-cancel = Cancelar
 polkit-details = Detalhes
+
+## Pedido de senha do chaveiro
+
+prompter-title = Chaveiro
+prompter-continue = Continuar
+prompter-again = Repita a senha
+prompter-mismatch = As senhas não conferem
