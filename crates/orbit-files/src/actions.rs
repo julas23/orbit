@@ -137,6 +137,49 @@ pub fn open(entry: &Entry, app: Option<&gio::AppInfo>, display: &gtk::gdk::Displ
     }
 }
 
+/// Whether F4 opens it in Orbit-Edit: text of any kind, and Markdown,
+/// whatever the system calls it.
+pub fn is_text(mime: &str, name: &str) -> bool {
+    let lower = name.to_lowercase();
+    mime.starts_with("text/")
+        || gio::content_type_is_a(mime, "text/plain")
+        || [".md", ".markdown", ".txt"].iter().any(|ext| lower.ends_with(ext))
+}
+
+/// The Orbit application F9 shows it in: `View`, `Read` or `Play`.
+pub fn viewer(mime: &str, name: &str) -> Option<&'static str> {
+    if mime.starts_with("image/") {
+        Some("View")
+    } else if mime.starts_with("video/") || mime.starts_with("audio/") || name.to_lowercase().ends_with(".swf") {
+        Some("Play")
+    } else if mime == "application/pdf" || is_text(mime, name) {
+        Some("Read")
+    } else {
+        None
+    }
+}
+
+/// Opens `entries` in one of Orbit's applications (`Edit`, `View`…): its
+/// desktop entry when installed, else the program by name.
+pub fn launch_orbit(app: &str, entries: &[Entry], display: &gtk::gdk::Display) {
+    if entries.is_empty() {
+        return;
+    }
+    let files: Vec<gio::File> = entries.iter().map(|e| e.location.file()).collect();
+    let id = format!("io.github.julas23.Orbit.{app}.desktop");
+    if let Some(info) = gio::AppInfo::all().into_iter().find(|a| a.id().as_deref() == Some(id.as_str())) {
+        if let Err(err) = info.launch(&files, Some(&display.app_launch_context())) {
+            log::warn!("opening in {id}: {err}");
+        }
+        return;
+    }
+    let program = format!("orbit-{}", app.to_lowercase());
+    let paths: Vec<std::path::PathBuf> = files.iter().filter_map(|f| f.path()).collect();
+    if let Err(err) = std::process::Command::new(&program).args(&paths).spawn() {
+        log::warn!("running {program}: {err}");
+    }
+}
+
 /// The applications that open `mime`, the default first.
 pub fn apps_for(mime: &str) -> Vec<gio::AppInfo> {
     let mut apps = gio::AppInfo::recommended_for_type(mime);
@@ -263,6 +306,18 @@ pub fn compress_dialog(parent: &gtk::Window, dir: PathBuf, names: Vec<String>, j
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn f4_and_f9_pick_by_kind() {
+        assert!(is_text("text/markdown", "a.md"));
+        assert!(is_text("application/octet-stream", "notes.TXT"));
+        assert!(!is_text("image/png", "a.png"));
+        assert_eq!(viewer("image/png", "a.png"), Some("View"));
+        assert_eq!(viewer("application/pdf", "a.pdf"), Some("Read"));
+        assert_eq!(viewer("text/plain", "a.txt"), Some("Read"));
+        assert_eq!(viewer("video/mp4", "a.mp4"), Some("Play"));
+        assert_eq!(viewer("application/zip", "a.zip"), None);
+    }
 
     #[test]
     fn archives_by_name() {

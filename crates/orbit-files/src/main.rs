@@ -15,6 +15,7 @@
 mod actions;
 mod clipboard;
 mod entry;
+mod help;
 mod ops;
 mod pane;
 mod places;

@@ -3,8 +3,9 @@
 //! side (F3) — and the jobs bar along the bottom.
 //!
 //! The keyboard works both ways: the usual keys (arrows, Enter, Backspace,
-//! Ctrl+C/X/V, F2, Delete…) and Yazi's and Vim's (h j k l, gg, G, Space to
-//! mark, yy, dd, pp, /).
+//! Ctrl+C/X/V, Delete…), the function keys as in Total Commander and
+//! Midnight Commander (F1 help … F12, see `help`), and Yazi's and Vim's
+//! (h j k l, gg, G, Space to mark, yy, dd, pp, /).
 
 use std::{
     cell::{Cell, RefCell},
@@ -106,9 +107,9 @@ impl Window {
         for b in [&list, &grid, &columns] {
             views_box.append(b);
         }
-        let split = toggle("view-paged-symbolic", "files-split", "F3");
+        let split = toggle("view-paged-symbolic", "files-split", "F10");
         let hidden = toggle("view-reveal-symbolic", "files-hidden", "Ctrl+H");
-        let search = button("system-search-symbolic", "files-filter", "/");
+        let search = button("system-search-symbolic", "files-filter", "F3");
         let row = gtk::Box::builder().spacing(5).css_classes(["bar"]).build();
         let nav = gtk::Box::builder().css_classes(["linked"]).build();
         for b in [&back, &forward, &up] {
@@ -717,12 +718,88 @@ impl Window {
         }
     }
 
-    /// F5 with two panes, as in Total Commander and Dolphin: copy (or,
-    /// with Shift, move) the selection to the other pane's folder.
-    fn to_other_pane(&self, kind: Kind) {
-        let Some(other) = self.other_pane() else { return };
-        let Some(target) = other.location.borrow().path().map(PathBuf::from) else { return };
-        self.jobs.start(kind, self.selected_paths(), Some(target));
+    /// F5 and F6, as in Total Commander: copy or move the selection to
+    /// the other pane's folder or, with one pane, to a folder chosen in a
+    /// dialog that browses the disk.
+    fn transfer(self: &Rc<Self>, kind: Kind) {
+        let paths = self.selected_paths();
+        if paths.is_empty() {
+            return;
+        }
+        if let Some(other) = self.other_pane() {
+            if let Some(target) = other.location.borrow().path().map(PathBuf::from) {
+                self.jobs.start(kind, paths, Some(target));
+            }
+            return;
+        }
+        let title = match kind {
+            Kind::Move => tr("files-move-to"),
+            _ => tr("files-copy-to"),
+        };
+        let dialog = gtk::FileDialog::builder().title(title).accept_label(tr("files-choose")).modal(true).build();
+        if let Some(here) = self.here() {
+            dialog.set_initial_folder(Some(&gio::File::for_path(here)));
+        }
+        let jobs = self.jobs.clone();
+        dialog.select_folder(Some(&self.window), gio::Cancellable::NONE, move |r| {
+            if let Some(target) = r.ok().and_then(|f| f.path()) {
+                jobs.start(kind, paths, Some(target));
+            }
+        });
+    }
+
+    /// F4: text in Orbit-Edit; anything else in its own application.
+    fn edit(&self) {
+        let (text, other): (Vec<Entry>, Vec<Entry>) =
+            self.pane().selected().into_iter().filter(|e| !e.dir).partition(|e| actions::is_text(&e.mime, &e.name));
+        actions::launch_orbit("Edit", &text, &WidgetExt::display(&self.window));
+        for e in other {
+            self.open(&e);
+        }
+    }
+
+    /// F9: a look at the file — images in Orbit-View, documents and text in
+    /// Orbit-Read, video and sound in Orbit-Play, the rest in its own
+    /// application.
+    fn view_files(&self) {
+        let display = WidgetExt::display(&self.window);
+        let mut by_app: Vec<(&str, Vec<Entry>)> = vec![("View", vec![]), ("Read", vec![]), ("Play", vec![])];
+        for e in self.pane().selected().into_iter().filter(|e| !e.dir) {
+            match actions::viewer(&e.mime, &e.name) {
+                Some(app) => by_app.iter_mut().find(|(a, _)| *a == app).expect("a viewer").1.push(e),
+                None => self.open(&e),
+            }
+        }
+        for (app, entries) in by_app {
+            actions::launch_orbit(app, &entries, &display);
+        }
+    }
+
+    /// F12: a terminal in this folder.
+    fn terminal(&self) {
+        let Some(dir) = self.here() else { return };
+        let terminal = ["orbit-term", "ghostty", "alacritty", "kitty", "foot", "x-terminal-emulator"]
+            .into_iter()
+            .find(|t| glib::find_program_in_path(t).is_some());
+        if let Some(t) = terminal
+            && let Err(err) = std::process::Command::new(t).current_dir(&dir).spawn()
+        {
+            log::warn!("terminal: {err}");
+        }
+    }
+
+    /// F11: full screen, or back.
+    fn toggle_fullscreen(&self) {
+        if self.window.is_fullscreen() {
+            self.window.unfullscreen();
+        } else {
+            self.window.fullscreen();
+        }
+    }
+
+    /// F1: the keys.
+    fn help(&self) {
+        crate::help::show(self.window.upcast_ref());
     }
 
     // ------------------------------------------------- the context menu
@@ -964,6 +1041,9 @@ impl Window {
         }
         if ctrl {
             match key {
+                Key::space => pane.toggle_cursor(),
+                Key::i | Key::I => pane.invert_selection(),
+                Key::r | Key::R => pane.reload(),
                 Key::c | Key::C => self.copy(false),
                 Key::x | Key::X => self.copy(true),
                 Key::v | Key::V => self.paste(),
@@ -987,6 +1067,22 @@ impl Window {
                 _ => return false,
             }
             return true;
+        }
+        // Shift with the arrows: the selection runs from where it started.
+        if shift && pane.view() != View::Grid {
+            let by = match key {
+                Key::Down => Some(1),
+                Key::Up => Some(-1),
+                Key::Page_Down => Some(20),
+                Key::Page_Up => Some(-20),
+                Key::Home => Some(i64::MIN),
+                Key::End => Some(i64::MAX),
+                _ => None,
+            };
+            if let Some(by) = by {
+                pane.extend_cursor(by);
+                return true;
+            }
         }
         // Two-key Vim commands: gg, yy, dd, pp.
         let typed = key.to_unicode();
@@ -1033,11 +1129,19 @@ impl Window {
             }
             Key::Delete | Key::KP_Delete if shift => self.delete(),
             Key::Delete | Key::KP_Delete => self.trash(),
+            Key::F1 => self.help(),
             Key::F2 => self.rename(),
-            Key::F3 => self.split.set_active(!self.split.is_active()),
-            Key::F5 if self.other_pane().is_some() => self.to_other_pane(if shift { Kind::Move } else { Kind::Copy }),
-            Key::F5 => pane.reload(),
-            Key::F6 if self.other_pane().is_some() => self.to_other_pane(Kind::Move),
+            Key::F3 => pane.open_filter(),
+            Key::F4 => self.edit(),
+            Key::F5 => self.transfer(Kind::Copy),
+            Key::F6 => self.transfer(Kind::Move),
+            Key::F7 => self.new_folder(),
+            Key::F8 if shift => self.delete(),
+            Key::F8 => self.trash(),
+            Key::F9 => self.view_files(),
+            Key::F10 => self.split.set_active(!self.split.is_active()),
+            Key::F11 => self.toggle_fullscreen(),
+            Key::F12 => self.terminal(),
             Key::Tab => {
                 if let Some(other) = self.other_pane() {
                     self.activate_pane(&other);

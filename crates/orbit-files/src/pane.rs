@@ -71,6 +71,11 @@ pub struct Pane {
     /// marked (Space), j and k move it and leave the marks alone.
     cursor: Cell<Option<u32>>,
     marking: Cell<bool>,
+    /// Where a Shift range starts: the last entry clicked or moved to.
+    anchor: Cell<Option<u32>>,
+    /// Set while the selection is changed here, with the cursor already
+    /// where it belongs.
+    quiet: Cell<bool>,
     on_open: Callback<Entry>,
     on_moved: Callback<()>,
     on_selected: Callback<()>,
@@ -90,7 +95,7 @@ impl Pane {
         let list = column_view(&selection);
         let grid = gtk::GridView::builder()
             .model(&selection)
-            .factory(&grid_factory())
+            .factory(&grid_factory(&selection))
             .max_columns(30)
             .min_columns(1)
             .enable_rubberband(true)
@@ -98,7 +103,7 @@ impl Pane {
             .build();
         let current = gtk::ListView::builder()
             .model(&selection)
-            .factory(&row_factory())
+            .factory(&row_factory(Some(&selection)))
             .css_classes(["column-list"])
             .build();
         let parent_store = gio::ListStore::new::<glib::BoxedAnyObject>();
@@ -108,7 +113,7 @@ impl Pane {
         );
         let parent_list = gtk::ListView::builder()
             .model(&gtk::SingleSelection::builder().model(&parent_sorted).autoselect(false).build())
-            .factory(&row_factory())
+            .factory(&row_factory(None))
             .css_classes(["column-list", "parent"])
             .build();
         let preview = Preview::new();
@@ -186,6 +191,8 @@ impl Pane {
             loading: Cell::new(false),
             cursor: Cell::new(None),
             marking: Cell::new(false),
+            anchor: Cell::new(None),
+            quiet: Cell::new(false),
             on_open: RefCell::default(),
             on_moved: RefCell::default(),
             on_selected: RefCell::default(),
@@ -260,6 +267,30 @@ impl Pane {
                 }
             });
             activate.add_controller(click);
+            // Ctrl+click and Shift+click, taken before the view's own
+            // handling, so they mean the same in every view.
+            let click = gtk::GestureClick::builder().button(1).build();
+            click.set_propagation_phase(gtk::PropagationPhase::Capture);
+            let weak = Rc::downgrade(self);
+            let widget = activate.clone();
+            click.connect_pressed(move |gesture, _, x, y| {
+                let state = gesture.current_event_state();
+                let ctrl = state.contains(gtk::gdk::ModifierType::CONTROL_MASK);
+                let shift = state.contains(gtk::gdk::ModifierType::SHIFT_MASK);
+                if !(ctrl || shift) {
+                    return;
+                }
+                let Some(p) = weak.upgrade() else { return };
+                let Some(position) = position_under(&widget, x, y) else { return };
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                if shift {
+                    p.select_range_to(position, ctrl);
+                } else {
+                    p.toggle_at(position);
+                }
+                p.focus_view();
+            });
+            activate.add_controller(click);
         }
         // The parent column: a click goes there.
         let weak = Rc::downgrade(self);
@@ -279,9 +310,10 @@ impl Pane {
         self.selection.connect_selection_changed(move |_, _, _| {
             let Some(p) = weak.upgrade() else { return };
             // A click moves the cursor too.
-            if !p.marking.get() {
+            if !p.marking.get() && !p.quiet.get() {
                 let set = p.selection.selection();
                 p.cursor.set((!set.is_empty()).then(|| set.minimum()));
+                p.anchor.set(p.cursor.get());
             }
             p.update_status();
             p.selected_changed();
@@ -395,6 +427,7 @@ impl Pane {
         self.store.remove_all();
         self.marking.set(false);
         self.cursor.set(None);
+        self.anchor.set(None);
         self.loading.set(true);
         self.update_status();
         let here = self.location.borrow().clone();
@@ -620,9 +653,84 @@ impl Pane {
             _ => (at + by).clamp(0, n - 1),
         } as u32;
         self.cursor.set(Some(to));
+        self.anchor.set(Some(to));
         if !self.marking.get() {
             self.selection.select_item(to, true);
         }
+        self.moved_to(to);
+    }
+
+    /// Shift with the arrows: the cursor moves by `by` (or to an end) and
+    /// the selection runs from the anchor to it.
+    pub fn extend_cursor(&self, by: i64) {
+        let n = self.selection.n_items() as i64;
+        if n == 0 {
+            return;
+        }
+        let at = self.focused_position().map_or(0, |p| p as i64);
+        let to = match by {
+            i64::MIN => 0,
+            i64::MAX => n - 1,
+            _ => (at + by).clamp(0, n - 1),
+        } as u32;
+        self.select_range_to(to, false);
+        self.moved_to(to);
+    }
+
+    /// Selects from the anchor to `to` — instead of the selection, or, with
+    /// `add`, besides it — and puts the cursor on `to`.
+    pub fn select_range_to(&self, to: u32, add: bool) {
+        let from = self.anchor.get().or(self.focused_position()).unwrap_or(to);
+        let (first, last) = (from.min(to), from.max(to));
+        self.marking.set(false);
+        self.quiet.set(true);
+        self.selection.select_range(first, last - first + 1, !add);
+        self.quiet.set(false);
+        self.anchor.set(Some(from));
+        self.cursor.set(Some(to));
+        self.update_status();
+        self.selected_changed();
+    }
+
+    /// Ctrl+click and Ctrl+Space: `position` in or out of the selection,
+    /// the rest left as it is; the cursor goes there.
+    pub fn toggle_at(&self, position: u32) {
+        self.marking.set(false);
+        self.quiet.set(true);
+        if self.selection.is_selected(position) {
+            self.selection.unselect_item(position);
+        } else {
+            self.selection.select_item(position, false);
+        }
+        self.quiet.set(false);
+        self.cursor.set(Some(position));
+        self.anchor.set(Some(position));
+        self.update_status();
+        self.selected_changed();
+    }
+
+    /// Ctrl+Space: the entry under the cursor in or out of the selection.
+    pub fn toggle_cursor(&self) {
+        if let Some(at) = self.focused_position() {
+            self.toggle_at(at);
+        }
+    }
+
+    /// Ctrl+I: what was selected is not, and the rest is.
+    pub fn invert_selection(&self) {
+        let n = self.selection.n_items();
+        if n == 0 {
+            return;
+        }
+        let all = gtk::Bitset::new_range(0, n);
+        let inverted = all.copy();
+        inverted.subtract(&self.selection.selection());
+        self.marking.set(false);
+        self.selection.set_selection(&inverted, &all);
+    }
+
+    /// After the cursor moved: in view, and the preview follows.
+    fn moved_to(&self, to: u32) {
         self.scroll_to(to);
         if self.view.get() == View::Columns {
             self.preview.show(self.focused().as_ref());
@@ -821,6 +929,46 @@ fn position_of_cell(widget: &gtk::Widget) -> Option<u32> {
     Some(item.position()).filter(|&p| p != gtk::INVALID_LIST_POSITION)
 }
 
+/// The position of the entry at (`x`, `y`) in a view, if there is one.
+fn position_under(view: &gtk::Widget, x: f64, y: f64) -> Option<u32> {
+    let mut node = view.pick(x, y, gtk::PickFlags::DEFAULT);
+    while let Some(w) = node {
+        if let Some(position) = position_of_cell(&w) {
+            return Some(position);
+        }
+        if &w == view {
+            return None;
+        }
+        node = w.parent();
+    }
+    None
+}
+
+/// The selection's box of an entry: ticked while it is selected, and a
+/// click on it puts the entry in or out, the rest left as it is.
+fn check_box(item: &gtk::ListItem, selection: &gtk::MultiSelection) -> gtk::CheckButton {
+    let check = gtk::CheckButton::builder()
+        .focus_on_click(false)
+        .valign(gtk::Align::Center)
+        .css_classes(["select-box"])
+        .build();
+    item.bind_property("selected", &check, "active").sync_create().build();
+    let (item, selection) = (item.downgrade(), selection.downgrade());
+    check.connect_toggled(move |check| {
+        let (Some(item), Some(selection)) = (item.upgrade(), selection.upgrade()) else { return };
+        let position = item.position();
+        if position == gtk::INVALID_LIST_POSITION || check.is_active() == item.is_selected() {
+            return;
+        }
+        if check.is_active() {
+            selection.select_item(position, false);
+        } else {
+            selection.unselect_item(position);
+        }
+    });
+    check
+}
+
 fn remember_position(widget: &impl IsA<gtk::Widget>, item: &gtk::ListItem) {
     unsafe {
         widget.set_data("orbit-item", item.downgrade());
@@ -829,12 +977,16 @@ fn remember_position(widget: &impl IsA<gtk::Widget>, item: &gtk::ListItem) {
 
 // ------------------------------------------------------------ the views
 
-/// An icon and a name, a row of a list.
-fn row_factory() -> gtk::SignalListItemFactory {
+/// An icon and a name, a row of a list; with a `selection`, its box first.
+fn row_factory(selection: Option<&gtk::MultiSelection>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    factory.connect_setup(|_, item| {
+    let selection = selection.cloned();
+    factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
         let row = gtk::Box::builder().spacing(10).css_classes(["entry-row"]).build();
+        if let Some(selection) = &selection {
+            row.append(&check_box(item, selection));
+        }
         row.append(&gtk::Image::builder().pixel_size(16).build());
         row.append(&gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).build());
         item.set_child(Some(&row));
@@ -845,8 +997,13 @@ fn row_factory() -> gtk::SignalListItemFactory {
             return;
         };
         remember_position(&row, item);
-        if let Some(image) = row.first_child().and_downcast::<gtk::Image>() {
-            image.set_from_gicon(&entry::icon(&e));
+        let mut child = row.first_child();
+        while let Some(w) = child {
+            if let Some(image) = w.downcast_ref::<gtk::Image>() {
+                image.set_from_gicon(&entry::icon(&e));
+                break;
+            }
+            child = w.next_sibling();
         }
         if let Some(label) = row.last_child().and_downcast::<gtk::Label>() {
             label.set_label(&e.name);
@@ -891,7 +1048,7 @@ fn column_view(selection: &gtk::MultiSelection) -> gtk::ColumnView {
     let name = gtk::ColumnViewColumn::builder()
         .id("name")
         .title(tr("files-column-name"))
-        .factory(&row_factory())
+        .factory(&row_factory(Some(selection)))
         .resizable(true)
         .expand(true)
         .sorter(&gtk::CustomSorter::new(|_, _| gtk::Ordering::Equal))
@@ -914,10 +1071,12 @@ fn column_view(selection: &gtk::MultiSelection) -> gtk::ColumnView {
     view
 }
 
-/// A large icon (or a thumbnail) over the name.
-fn grid_factory() -> gtk::SignalListItemFactory {
+/// A large icon (or a thumbnail) over the name, the selection's box in
+/// the corner.
+fn grid_factory(selection: &gtk::MultiSelection) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    factory.connect_setup(|_, item| {
+    let selection = selection.clone();
+    factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
         let cell = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
@@ -936,11 +1095,19 @@ fn grid_factory() -> gtk::SignalListItemFactory {
                 .max_width_chars(14)
                 .build(),
         );
-        item.set_child(Some(&cell));
+        let overlay = gtk::Overlay::builder().child(&cell).build();
+        let check = check_box(item, &selection);
+        check.set_halign(gtk::Align::Start);
+        check.set_valign(gtk::Align::Start);
+        overlay.add_overlay(&check);
+        item.set_child(Some(&overlay));
     });
     factory.connect_bind(|_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
-        let (Some(cell), Some(e)) = (item.child(), item.item().and_then(|o| entry_of(&o))) else {
+        let (Some(cell), Some(e)) = (
+            item.child().and_downcast::<gtk::Overlay>().and_then(|o| o.child()),
+            item.item().and_then(|o| entry_of(&o)),
+        ) else {
             return;
         };
         remember_position(&cell, item);
