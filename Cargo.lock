@@ -2892,6 +2892,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-aigent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "log",
+ "orbit-audio",
+ "pulseaudio",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+]
+
+[[package]]
 name = "orbit-app"
 version = "0.1.0"
 dependencies = [
@@ -2908,6 +2922,10 @@ dependencies = [
  "orbit-common",
  "unic-langid",
 ]
+
+[[package]]
+name = "orbit-audio"
+version = "0.1.0"
 
 [[package]]
 name = "orbit-backend-wayland"
@@ -3125,7 +3143,9 @@ dependencies = [
  "gtk4",
  "gtk4-layer-shell",
  "log",
+ "orbit-aigent",
  "orbit-app",
+ "orbit-audio",
  "orbit-common",
  "pulseaudio",
  "serde",

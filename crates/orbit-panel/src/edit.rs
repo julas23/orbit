@@ -40,6 +40,7 @@ const MODULES: &[&str] = &[
     "bluetooth",
     "monitors",
     "spectrum",
+    "aigent",
     "cpu",
     "ram",
     "gpu",

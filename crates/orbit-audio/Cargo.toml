@@ -1,0 +1,11 @@
+[package]
+name = "orbit-audio"
+description = "Sound analysis shared by Orbit-Panel and Orbit-Aigent: CAVA's spectrum bands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]

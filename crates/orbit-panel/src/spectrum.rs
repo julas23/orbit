@@ -7,13 +7,8 @@
 //! The sound is the default sink's monitor, recorded through PulseAudio
 //! (`pulse::record_monitor`, served by pipewire-pulse) on a thread of its
 //! own, mono at 44.1 kHz, in blocks of one frame. The thread analyses it
-//! as CAVA does: a Hann window over the last 2048 samples (46 ms), an FFT,
-//! bands spaced evenly on a log scale between `low` and `high`, weighted up
-//! with frequency (music is louder low down), a sensitivity that adjusts
-//! itself so the loudest bar just reaches the top, and bars that fall with
-//! gravity (`noise_reduction`). Unlike CAVA's integral filter, nothing
-//! slows a bar on its way up: it follows the sound at once, which is what
-//! keeps it in step with what is heard. It hands the GTK thread the newest
+//! as CAVA does (`orbit_audio::Analyzer`): nothing slows a bar on its way
+//! up, which is what keeps it in step with what is heard. It hands the GTK thread the newest
 //! bars `framerate` times a second (a frame not drawn yet is replaced, never
 //! queued), and nothing while all of them rest at zero.
 //!
@@ -22,13 +17,13 @@
 
 use std::{
     cell::RefCell,
-    f32::consts::PI,
     rc::Rc,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use gtk::{cairo, prelude::*};
+use orbit_audio::Analyzer;
 use serde::Deserialize;
 
 use crate::{board::Form, pulse};
@@ -59,16 +54,10 @@ impl Default for SpectrumConfig {
 }
 
 const RATE: u32 = 44_100;
-/// Samples per FFT: 46 ms, bins 21.5 Hz apart.
-const FFT_SIZE: usize = 2048;
 /// The line's points, and the Full bars.
 const LINE_POINTS: usize = 24;
 const NORMAL_BARS: usize = 12;
 const FULL_BARS: usize = 47;
-/// Below this peak (−60 dB) a block is silence: the monitor carries a
-/// faint hiss even when nothing plays, which the sensitivity would raise
-/// into dancing bars.
-const SILENCE: f32 = 1e-3;
 /// Inside the card.
 const PAD: f64 = 4.0;
 const NORMAL_GAP: f64 = 3.0;
@@ -142,7 +131,7 @@ type Latest = Arc<Mutex<Option<Vec<f32>>>>;
 /// sound server or the default sink changes.
 fn listen(config: &SpectrumConfig, bands: usize, latest: &Latest, wake: &async_channel::Sender<()>) {
     let fps = config.framerate.clamp(1, 144);
-    let mut analyzer = Analyzer::new(bands, config.low, config.high, config.noise_reduction, fps);
+    let mut analyzer = Analyzer::new(RATE, bands, config.low, config.high, config.noise_reduction, fps);
     let per_frame = (RATE / fps) as usize;
     loop {
         let mut since = 0;
@@ -177,162 +166,6 @@ fn listen(config: &SpectrumConfig, bands: usize, latest: &Latest, wake: &async_c
         if wake.is_closed() {
             return;
         }
-    }
-}
-
-/// CAVA's analysis, for a fixed number of bands.
-struct Analyzer {
-    /// The last `FFT_SIZE` samples, oldest first from `head`.
-    ring: Vec<f32>,
-    head: usize,
-    window: Vec<f32>,
-    /// Each band's FFT bins, and its weight.
-    ranges: Vec<(usize, usize)>,
-    eq: Vec<f32>,
-    sens: f32,
-    /// Raising the sensitivity fast, until the bars first reach the top.
-    sens_init: bool,
-    noise_reduction: f32,
-    gravity: f32,
-    /// Per band: the peak it falls from, how far it has fallen, and the
-    /// last output.
-    peak: Vec<f32>,
-    fall: Vec<f32>,
-    prev: Vec<f32>,
-    /// Whether the last block was silence (`SILENCE`).
-    silent: bool,
-}
-
-impl Analyzer {
-    fn new(bands: usize, low: f32, high: f32, noise_reduction: f32, fps: u32) -> Self {
-        let high = high.min(RATE as f32 / 2.0).max(low * 2.0);
-        let bin = |f: f32| ((f * FFT_SIZE as f32 / RATE as f32).round() as usize).clamp(1, FFT_SIZE / 2 - 1);
-        let mut ranges = Vec::with_capacity(bands);
-        let mut eq = Vec::with_capacity(bands);
-        let mut from = bin(low);
-        for k in 0..bands {
-            let edge = low * (high / low).powf((k + 1) as f32 / bands as f32);
-            // Every band at least one bin of its own.
-            let to = bin(edge).max(from + 1).min(FFT_SIZE / 2);
-            let centre = (from + to) as f32 / 2.0 * RATE as f32 / FFT_SIZE as f32;
-            ranges.push((from, to));
-            // Music falls about 3 dB an octave; this levels it.
-            eq.push((centre / low).sqrt());
-            from = to.min(FFT_SIZE / 2 - 1);
-        }
-        let noise_reduction = noise_reduction.clamp(0.0, 0.99);
-        Self {
-            ring: vec![0.0; FFT_SIZE],
-            head: 0,
-            window: (0..FFT_SIZE).map(|i| 0.5 - 0.5 * (2.0 * PI * i as f32 / (FFT_SIZE - 1) as f32).cos()).collect(),
-            ranges,
-            eq,
-            sens: 1.0,
-            sens_init: true,
-            noise_reduction,
-            // CAVA's `gravity_mod`, so the fall looks the same at any rate.
-            gravity: (60.0 / fps as f32).powf(2.5) * 1.54 / noise_reduction.max(0.1),
-            peak: vec![0.0; bands],
-            fall: vec![0.0; bands],
-            prev: vec![0.0; bands],
-            silent: true,
-        }
-    }
-
-    fn push(&mut self, samples: &[f32]) {
-        for &s in samples {
-            self.ring[self.head] = s;
-            self.head = (self.head + 1) % FFT_SIZE;
-        }
-        self.silent = samples.iter().all(|s| s.abs() < SILENCE);
-    }
-
-    /// The bars now, 0 to 1.
-    fn frame(&mut self) -> Vec<f32> {
-        let mut re: Vec<f32> = (0..FFT_SIZE).map(|i| self.ring[(self.head + i) % FFT_SIZE] * self.window[i]).collect();
-        let mut im = vec![0.0; FFT_SIZE];
-        fft(&mut re, &mut im);
-        // A full-scale sine comes out about 1.
-        let scale = 4.0 / FFT_SIZE as f32;
-        let mut out: Vec<f32> = self
-            .ranges
-            .iter()
-            .zip(&self.eq)
-            .map(|(&(from, to), eq)| {
-                if self.silent {
-                    return 0.0;
-                }
-                let sum: f32 = (from..to).map(|i| re[i].hypot(im[i])).sum();
-                sum / (to - from) as f32 * scale * eq * self.sens
-            })
-            .collect();
-
-        let mut overshoot = false;
-        for (k, v) in out.iter_mut().enumerate() {
-            // Up at once; down with gravity, from the peak, faster and
-            // faster, but never below the sound itself.
-            if *v < self.prev[k] && self.noise_reduction > 0.0 {
-                let falling = self.peak[k] * (1.0 - self.fall[k] * self.fall[k] * self.gravity);
-                *v = v.max(falling);
-                self.fall[k] += 0.028;
-            } else {
-                self.peak[k] = *v;
-                self.fall[k] = 0.0;
-            }
-            self.prev[k] = *v;
-            if *v > 1.0 {
-                overshoot = true;
-                *v = 1.0;
-            }
-            if *v < 1e-3 {
-                *v = 0.0;
-            }
-        }
-        if overshoot {
-            self.sens *= 0.98;
-            self.sens_init = false;
-        } else if !self.silent {
-            self.sens *= if self.sens_init { 1.1 } else { 1.001 };
-        }
-        self.sens = self.sens.clamp(1e-4, 1e4);
-        out
-    }
-}
-
-/// In-place radix-2 FFT; `re.len()` is a power of two.
-fn fft(re: &mut [f32], im: &mut [f32]) {
-    let n = re.len();
-    let mut j = 0;
-    for i in 1..n {
-        let mut bit = n >> 1;
-        while j & bit != 0 {
-            j ^= bit;
-            bit >>= 1;
-        }
-        j |= bit;
-        if i < j {
-            re.swap(i, j);
-            im.swap(i, j);
-        }
-    }
-    let mut len = 2;
-    while len <= n {
-        let angle = -2.0 * PI / len as f32;
-        let (w_im, w_re) = angle.sin_cos();
-        for start in (0..n).step_by(len) {
-            let (mut c_re, mut c_im) = (1.0f32, 0.0f32);
-            for k in 0..len / 2 {
-                let (a, b) = (start + k, start + k + len / 2);
-                let t_re = re[b] * c_re - im[b] * c_im;
-                let t_im = re[b] * c_im + im[b] * c_re;
-                re[b] = re[a] - t_re;
-                im[b] = im[a] - t_im;
-                re[a] += t_re;
-                im[a] += t_im;
-                (c_re, c_im) = (c_re * w_re - c_im * w_im, c_re * w_im + c_im * w_re);
-            }
-        }
-        len <<= 1;
     }
 }
 
@@ -443,96 +276,16 @@ fn draw_full(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gd
 
 #[cfg(test)]
 mod tests {
+    use std::f32::consts::PI;
+
     use super::*;
-
-    fn sine(freq: f32, amplitude: f32, n: usize) -> Vec<f32> {
-        (0..n).map(|i| amplitude * (2.0 * PI * freq * i as f32 / RATE as f32).sin()).collect()
-    }
-
-    #[test]
-    fn fft_finds_a_sine() {
-        let bin = 100;
-        let freq = bin as f32 * RATE as f32 / FFT_SIZE as f32;
-        let mut re = sine(freq, 1.0, FFT_SIZE);
-        let mut im = vec![0.0; FFT_SIZE];
-        fft(&mut re, &mut im);
-        let mags: Vec<f32> = (0..FFT_SIZE / 2).map(|i| re[i].hypot(im[i])).collect();
-        let peak = (0..FFT_SIZE / 2).max_by(|&a, &b| mags[a].total_cmp(&mags[b])).unwrap();
-        assert_eq!(peak, bin);
-        assert!((mags[bin] - FFT_SIZE as f32 / 2.0).abs() < 1.0);
-    }
-
-    /// How long after a sound starts its bar is past half way, in ms.
-    fn rise_ms(fps: u32) -> f32 {
-        let mut a = Analyzer::new(NORMAL_BARS, 50.0, 10_000.0, 0.77, fps);
-        let per = RATE as usize / fps as usize;
-        // Teach the sensitivity the tone first, then a pause.
-        let tone = sine(1000.0, 0.5, per);
-        let silence = vec![0.0; per];
-        for _ in 0..3 * fps {
-            a.push(&tone);
-            a.frame();
-        }
-        for _ in 0..2 * fps {
-            a.push(&silence);
-            a.frame();
-        }
-        for n in 1..=fps {
-            a.push(&tone);
-            if a.frame().iter().any(|v| *v > 0.5) {
-                return n as f32 * 1000.0 / fps as f32;
-            }
-        }
-        f32::INFINITY
-    }
-
-    #[test]
-    fn bars_rise_quickly() {
-        for fps in [30, 60] {
-            let ms = rise_ms(fps);
-            eprintln!("{fps} fps: {ms} ms");
-            assert!(ms <= 70.0, "{fps} fps: {ms} ms");
-        }
-    }
-
-    #[test]
-    fn bands_cover_the_range_in_order() {
-        let a = Analyzer::new(FULL_BARS, 50.0, 10_000.0, 0.77, 30);
-        assert_eq!(a.ranges.len(), FULL_BARS);
-        for pair in a.ranges.windows(2) {
-            assert!(pair[0].0 < pair[0].1 && pair[0].1 <= pair[1].0);
-        }
-    }
-
-    #[test]
-    fn a_tone_lights_its_band_and_silence_falls() {
-        let mut a = Analyzer::new(NORMAL_BARS, 50.0, 10_000.0, 0.77, 30);
-        let tone = sine(1000.0, 0.5, RATE as usize / 30);
-        let mut frame = Vec::new();
-        for _ in 0..60 {
-            a.push(&tone);
-            frame = a.frame();
-        }
-        let loudest = (0..NORMAL_BARS).max_by(|&x, &y| frame[x].total_cmp(&frame[y])).unwrap();
-        let (from, to) = a.ranges[loudest];
-        let bin = 1000.0 * FFT_SIZE as f32 / RATE as f32;
-        assert!((from as f32) <= bin.ceil() && bin.floor() < to as f32, "band {loudest} {from}..{to}");
-        // The sensitivity brought the loudest bar to the top.
-        assert!(frame[loudest] > 0.9);
-        let silence = vec![0.0; RATE as usize / 30];
-        for _ in 0..90 {
-            a.push(&silence);
-            frame = a.frame();
-        }
-        assert!(frame.iter().all(|v| *v == 0.0), "{frame:?}");
-    }
 
     /// What the speakers play for a second, as Normal bars:
     /// `cargo test -p orbit-panel records -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn records_the_monitor() {
-        let mut a = Analyzer::new(NORMAL_BARS, 50.0, 10_000.0, 0.77, 30);
+        let mut a = Analyzer::new(RATE, NORMAL_BARS, 50.0, 10_000.0, 0.77, 30);
         let (mut n, mut peak, mut frames) = (0usize, 0.0f32, 0);
         let start = std::time::Instant::now();
         let stop = pulse::record_monitor(RATE, 1024, |samples| {
@@ -574,7 +327,7 @@ mod tests {
             .ok()
             .map(|p| std::fs::read(p).unwrap().chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect());
         let frames = |bands| {
-            let mut a = Analyzer::new(bands, 50.0, 10_000.0, 0.77, 30);
+            let mut a = Analyzer::new(RATE, bands, 50.0, 10_000.0, 0.77, 30);
             let per = RATE as usize / 30;
             let mut frame = Vec::new();
             for f in 0..90 {

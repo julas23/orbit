@@ -1,0 +1,29 @@
+[package]
+name = "orbit-aigent"
+description = "Orbit-Aigent: talk to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code) by voice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "sound"
+priority = "optional"
+extended-description = "Orbit-Aigent: a voice layer for coding agents. It listens for its wake word, hears the request, hands it to the agent chosen (Claude Code, Gemini CLI, OpenCode or Kimi Code) and speaks the answer; the panel's aigent module shows it as a sphere. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+assets = [
+    ["target/release/orbit-aigent", "usr/bin/", "755"],
+]
+
+[dependencies]
+orbit-audio.workspace = true
+pulseaudio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true

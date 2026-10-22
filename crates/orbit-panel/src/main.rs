@@ -4,6 +4,7 @@
 //! listing a module turns it on. Each module reads its own options from
 //! `modules/<name>.yaml`.
 
+mod aigent;
 mod bluetooth;
 mod board;
 mod brightness;
@@ -116,6 +117,7 @@ fn shapes(name: &str) -> &'static [(Form, i32, i32)] {
         }
         "workspaces" => &[(Normal, 4, 2)],
         "spectrum" => &[(Normal, 4, 2), (Full, 4, 2), (Mini, 2, 1)],
+        "aigent" => &[(Full, 4, 3), (Mini, 2, 1)],
         "cpu" | "ram" | "lan" | "gpu" | "disk" => &[(Normal, 4, 1), (Full, 4, 2), (Mini, 2, 1)],
         _ => &[(Normal, 4, 1)],
     }
@@ -169,6 +171,7 @@ fn module(entry: &ModuleEntry, dir: &ConfigDir, edge: Edge, form: Form) -> Optio
         "bluetooth" => dir.module("bluetooth").map(|c| bluetooth::new(&c, form)),
         "monitors" => dir.module("monitors").map(|c| monitors::new(&c, form)),
         "spectrum" => dir.module("spectrum").map(|c| spectrum::new(&c, form)),
+        "aigent" => dir.module("aigent").map(|c| aigent::new(&c, form)),
         "cpu" => dir.module("cpu").map(|c| meters::cpu(&c, form)),
         "ram" => dir.module("ram").map(|c| meters::ram(&c, form)),
         "lan" => dir.module("lan").map(|c| meters::lan(&c, form)),

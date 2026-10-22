@@ -23,6 +23,8 @@ assets = [
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true
+orbit-audio.workspace = true
+orbit-aigent.workspace = true
 gtk.workspace = true
 gtk4-layer-shell.workspace = true
 gio-unix.workspace = true

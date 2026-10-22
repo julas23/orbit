@@ -18,6 +18,8 @@ orbit-backend-wayland = { path = "crates/orbit-backend-wayland" }
 orbit-ipc = { path = "crates/orbit-ipc" }
 orbit-protocols = { path = "crates/orbit-protocols" }
 orbit-login = { path = "crates/orbit-login" }
+orbit-audio = { path = "crates/orbit-audio" }
+orbit-aigent = { path = "crates/orbit-aigent" }
 
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 # Only to enable GLib 2.68 APIs (TimeZone::from_identifier); the code uses the

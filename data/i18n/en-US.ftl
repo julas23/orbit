@@ -692,6 +692,7 @@ panel-module-monitors = Monitors
 panel-module-workspaces = Workspaces
 panel-module-session = Session
 panel-module-spectrum = Spectrum
+panel-module-aigent = Aigent
 panel-module-cpu = CPU
 panel-module-ram = RAM
 panel-module-gpu = GPU
@@ -741,3 +742,9 @@ prompter-title = Keyring
 prompter-continue = Continue
 prompter-again = Password again
 prompter-mismatch = The passwords do not match
+
+## The aigent module (aigent.rs)
+
+aigent-offline = Orbit-Aigent is not running
+aigent-agents = Agents
+aigent-cancel = Cancel

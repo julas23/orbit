@@ -428,6 +428,10 @@ window.orbit-menu { background: transparent; }
  * take this colour, the Full grid a faint wash of it. */
 .spectrum { color: @orbit_accent; }
 
+/* Aigent (aigent.rs): the sphere is drawn with cairo in its own colours
+ * (white, red, yellow); Full shows the agent in use under it. */
+.aigent-agent { font-size: 9px; opacity: 0.6; margin-bottom: 2px; }
+
 /* CPU, RAM, LAN and GPU (meters.rs): a graph on a 4 × 8 grid, in the
  * module's colour, with the part's name and value on top of it and, Full,
  * a line of details at the bottom; the text keeps a dark halo so

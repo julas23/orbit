@@ -59,9 +59,9 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 | orbit-read | medium | Done (alpha) | TXT and MD are simple; PDF needs a rendering library |
 | orbit-files | high | Done (alpha) | A file manager has many edge cases (Yazi as reference) |
 | orbit-edit | high | Done (alpha) | A real text editor |
-| orbit-aigent | high | Not started | Voice layer for talking to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget |
+| orbit-aigent | high | Started | Voice layer for talking to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget (§13) |
 
-Only orbit-aigent and the station pair (§9) are still to be started.
+Only the station pair (§9) is still to be started.
 
 ## 7. Orbit Linux (`orbit-linux.txt`, plan in `docs/PLANO-DISTRO.md`)
 
@@ -140,3 +140,21 @@ for this pair.
 
 ## 12. Orbit-Files
 - [x] Multiple selection: boxes, Shift+click and Shift+arrows for a range, Ctrl+click and Ctrl+Space for one, Ctrl+A, Ctrl+I; and the function keys F1–F12 (2026-10-22).
+
+## 13. Orbit-Aigent
+
+A voice layer for coding agents, after Jarvis (github.com/adewaskar/jarvis):
+the daemon `orbit-aigent` and the panel's `aigent` module, Full (4 × 3) and
+Mini (2 × 1). A sphere whose edge moves as a spectrum, with a spectrum
+across it: white waiting, red listening, yellow speaking, the colour
+sweeping in from the edge. Decided on 2026-10-22: a wake word (the
+microphone always open), Portuguese and English detected by themselves,
+and anything that changes something confirmed by a spoken "yes" or a click.
+
+- [x] Daemon: microphone, voice detection, states, socket; `orbit-aigent demo` (2026-10-22).
+- [x] Panel module: the sphere in both sizes, clicks and the agents' menu (2026-10-22). Awaiting a look on screen.
+- [ ] Whisper (whisper.cpp in the daemon): the wake word (`orbit`, `jarvis`) and the request, pt and en.
+- [ ] The agents: Claude Code, Gemini CLI, OpenCode, Kimi Code headless, the session kept between requests; choose in `aigent.yaml` or the menu.
+- [ ] Piper: the answer spoken in the language it was asked in; the sphere moving with the voice.
+- [ ] Confirmation of actions that change something, by voice or click.
+- [ ] Start with the session; a shortcut in `keys.yaml`; packaging.
