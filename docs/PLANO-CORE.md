@@ -260,6 +260,8 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) — **feito** 2026-10-21 | 1 |
 | 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar (`login:` no `core.yaml`) — **feito** 2026-10-21 | 2 |
 | 7 | Destravar o gnome-keyring com a senha — **feito** 2026-10-21: `auth optional pam_gnome_keyring.so` no serviço `orbit-greet`, com o greet pondo `XDG_RUNTIME_DIR` no ambiente do PAM (é onde o módulo acha o socket de controle do daemon, ativado pelo socket do systemd do usuário) | 2 |
+| 7a | Agente polkit próprio, `orbit-polkit` (no lugar do `lxpolkit`): camada overlay com o teclado, o cartão no visual do greet; a senha conferida pelo `polkit-agent-helper-1` do próprio polkit — **feito** 2026-10-21 | 2 |
+| 7b | Prompter do chaveiro no visual do Orbit, no lugar do `gcr-prompter` (o pedido de senha quando um app abre um chaveiro travado ou cria um novo). O chaveiro em si continua o gnome-keyring (ver Riscos, "Chaveiro próprio") | 4 |
 | 8 | Bloqueio por Super+L, ociosidade e antes de suspender | 2 |
 | 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar | 2 |
 | 9 | Visual completo (seção 7.2), vários monitores | 2 |
@@ -508,6 +510,9 @@ a dia, portando do cosmic-comp o que falta:
 - orbit-talk integrado: atalho do core ativa, comandos viram IPC.
 - Configurações de monitor próprias; backend de portal próprio; digital no
   greet (passo 10 da seção 7.3).
+- `orbit-keys`: o app de senhas do Orbit, no lugar do Seahorse — ver, buscar,
+  copiar e editar o que está no chaveiro, pelo Secret Service (funciona com o
+  gnome-keyring hoje e com o oo7 se ele vier).
 - **Pronto quando:** abrir a sessão do hp no navegador do celular fora de casa,
   com mouse e teclado, sem instalar nada; e "abrir o arquivos na pasta
   Downloads" por voz funcionar.
@@ -580,5 +585,6 @@ Regras de porte:
 | Segurança do remoto | Expor a sessão é o recurso mais perigoso do projeto; desligado por padrão, só via túnel, pareamento explícito, auditoria antes de abrir para fora |
 | Tamanho do esforço | Fase 1 sozinha é o maior bloco de código do Orbit até agora; cada fase vira commits pequenos, nunca um despejo único |
 | Login automático | O autologin do tty1 abre a sessão do usuário **antes** da senha: serviços de usuário do systemd (Syncthing, PipeWire) já sobem no boot, embora nada apareça na tela até destravar. O `$HOME` não é criptografado, então a senha protege a tela, não os dados em disco. **Aceito em 2026-10-21**: é o preço de "a sessão já estava carregada atrás" (§7.1) |
-| Chaveiro no destravar | Hoje o PAM do greetd destrava o gnome-keyring no login; com login automático isso não acontece sozinho — o passo 7 da seção 7.3 tem que resolver antes da Fase 2 acabar, ou Chromium e afins pedem a senha do chaveiro |
+| Chaveiro no destravar | **Resolvido em 2026-10-21** (§7.3 passo 7): `pam_gnome_keyring` no serviço PAM do `orbit-greet` destrava o chaveiro `login` com a mesma senha |
+| Chaveiro próprio | **Decidido em 2026-10-21: não escrever um.** O gnome-keyring não amarra o Orbit ao GNOME: é um daemon do padrão Secret Service (`org.freedesktop.secrets`), que é o que os apps usam, e se troca sem mexer neles. Um chaveiro novo é cripto que guarda todas as senhas, com o formato do `login.keyring` a ler e a API inteira a manter. Se um dia trocar, o candidato é o **oo7** (Rust, do pessoal do GNOME, lê o formato do gnome-keyring), quando estiver maduro no Debian. O Orbit desenha o que se vê: o prompter (§7.3 passo 7b) e um app de senhas (Fase 5) |
 | Nome dos layouts e tags | Se tags (dwm) e workspaces convivem na mesma barra de áreas do painel ou só um dos dois — decidir antes da Fase 3 |
