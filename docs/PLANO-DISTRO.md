@@ -78,7 +78,7 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-studio` | Criação: suíte ArtCraft (seção 5) **e** os clássicos (GIMP, Inkscape, Scribus, LibreOffice) enquanto a ArtCraft for alpha |
 | `orbit-dev` | Desenvolvimento: VS Code/VSCodium, toolchain Rust, DBeaver, Git, contêineres |
 | `orbit-media` | Música, vídeo e jogos: Feishin, Steam/Proton, codecs |
-| `orbit-ai` | orbit-talk (Whisper/Piper), integração com o gateway de IA |
+| `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
 
@@ -156,8 +156,10 @@ prontos** — nada é compilado na máquina de quem instala.
   - volume LVM (o caso do hp: `hp-vg-home`);
   - LUKS (pede a senha para abrir);
   - subvolume `@home` do btrfs (recria só o da raiz);
-  - **`/home` como pasta dentro da raiz: em aberto** — recusar, ou instalar
-    limpando tudo menos `/home`.
+  - **`/home` como pasta dentro da raiz** (partição única): apaga tudo menos
+    `/home` e instala nessa mesma partição, sem formatar.
+  A alternativa "apagar tudo e instalar do zero" é sempre oferecida, como
+  escolha explícita do usuário.
   O usuário novo recebe o **UID do dono** da pasta existente. Antes de tocar
   no disco, uma tela "vou formatar X / vou manter Y" pede confirmação
   explícita. Cada layout é testado em VM (Proxmox).
@@ -250,7 +252,6 @@ Amarradas às fases do PLANO-CORE.
 
 | Item | Risco / decisão em aberto |
 |---|---|
-| `/home` dentro da raiz | O instalador recusa, ou instala limpando tudo menos `/home`? (seção 6) |
 | Popsicle, Ghostty, AniCraft, craft-fonts | Sem `.deb` oficial: AppImage gerenciada pelo Orbit, ou pacote próprio |
 | Nerd Font | O painel usa glifos Nerd Font, que o Debian não tem: pacote `orbit-fonts` (MIT) |
 | orbit-greet | Ainda não existe (PLANO-CORE §7.3, passos 3–5): a ISO depende dele |

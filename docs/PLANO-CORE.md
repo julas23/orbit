@@ -87,9 +87,9 @@ O que cada WM/DE ensina e como entra no core. Coluna "Fase" remete à seção 8.
 | | Notificações, teclado/idioma, áudio, rede | Já no painel; o core só fornece o necessário (layout de teclado por IPC) | — |
 | | Arrastar janela entre monitores, "aero snap" | Flutuantes com snap nas bordas e em metades/quartos | 3 |
 | **Orbit (próprio)** | Painel, dock, menu, blink, apps | Já existem; viram cidadãos de primeira classe via layer-shell + IPC | 1 |
-| | Acesso remoto nativo | Crate `orbit-remote` (seção 6) | 5 |
-| | Esfera/espectro "Jarvis" no wallpaper | Camada `background` própria; sobe para `overlay` quando o orbit-talk ativa | 5 |
-| | Voz (orbit-talk) | Ativação por atalho do core; ações via IPC | 5 |
+| | Acesso remoto nativo | `orbit-remote-server` + `orbit-local-station` (seção 6) | 5 |
+| | Esfera/espectro "Jarvis" no wallpaper | Camada `background` própria; sobe para `overlay` quando o orbit-aigent ativa | 5 |
+| | Voz (orbit-aigent) | Ativação por atalho do core; ações via IPC | 5 |
 
 **Fora do escopo** (decidido agora para não voltar): Lua/scripting embutido
 (awesome) — a extensão é por IPC e plugins Rust; X11 como sessão — X só via
@@ -172,7 +172,7 @@ Tudo no workspace do repositório `orbit`, junto com os apps.
 | `orbit-ipc` | Protocolo i3/sway (servidor no core, cliente para `orbitctl` e para os apps). Substitui o `sway.rs` duplicado em `orbit-common` e `orbit-panel` |
 | `orbit-config` | YAML → configuração tipada, validação com mensagens claras, recarga a quente, importador do sway |
 | `orbit-render` | Efeitos: bordas, cantos, sombras, blur (dual kawase), animações com curvas. Isolado para poder ser desligado inteiro |
-| `orbit-remote` | Acesso remoto: trait `Session { frames(); inject(); }`, captura por dmabuf, codificação VA-API, WebRTC, cliente web, pareamento. Implementações `WlrootsSession` (testar já sobre o sway) e `CoreSession` (dentro do core) |
+| `orbit-remote-server` | Acesso remoto (o orbit-core com a camada de streaming; o cliente é o `orbit-local-station`): trait `Session { frames(); inject(); }`, captura por dmabuf, codificação VA-API, WebRTC, cliente web, pareamento. Implementações `WlrootsSession` (testar já sobre o sway) e `CoreSession` (dentro do core) |
 | `orbit-greet` | A face do login e do bloqueio (seção 7): GTK4, PAM, destrava o chaveiro. Processo à parte do core, cliente privilegiado dele |
 | `orbitctl` | Linha de comando (`swaymsg` do Orbit) |
 
@@ -266,7 +266,7 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar — **feito** 2026-10-21 (`fullscreen.rs`, `screensaver.rs`) | 2 |
 | 9 | Visual completo (seção 7.2), vários monitores — **feito** 2026-10-21: teclado, rede e bateria no canto (`status.rs` do greet; layouts do próprio keymap, clique troca pelo IPC do core, que o greet agora recebe), suspender/reiniciar/desligar embaixo (`power.rs`, comandos no `greet.yaml`; reiniciar e desligar perguntam no próprio cartão, "Não" focado, Esc volta); o greet segue o cursor entre monitores, os outros ficam pretos | 2 |
 | 10 | Seleção de usuário com a sessão carregando atrás da camada — feito em 2026-10-22 (§7.4, `orbit-login`); falta o teste real com dois usuários | 5 |
-| 11 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |
+| 11 | Extras: digital (fprintd), pareamento do `orbit-remote-server` exigindo a sessão destravada | 5 |
 
 **Pronto (login) quando:** o hp liga direto no greet do Orbit; a senha certa
 abre os olhos sobre a sessão com o chaveiro destravado e o autostart rodando;
@@ -570,13 +570,17 @@ a dia, portando do cosmic-comp o que falta:
 
 ### Fase 5 — o que nenhum outro tem
 
-- `orbit-remote`: acesso remoto nativo (WebRTC, VA-API, cliente web sem
-  instalar, pareamento por token/QR, TLS), acessível de fora pelo túnel
-  WireGuard casa↔VPS + TURN. A PoC pode começar **antes**, sobre o sway, com
+- `orbit-remote-server` + `orbit-local-station`: acesso remoto nativo. O
+  servidor é o orbit-core com a camada de streaming (WebRTC, VA-API,
+  pareamento por token/QR, TLS), acessível de fora pelo túnel WireGuard
+  casa↔VPS + TURN. A interface da versão remota usa Iced ou Slint no lugar
+  do GTK4, pelo caminho de WebSocket/WebRTC deles. O `orbit-local-station`
+  não tem interface local: puxa o greeter e a sessão direto do servidor.
+  Cobaias: o think e a VM Julas. A PoC pode começar **antes**, sobre o sway, com
   `WlrootsSession`.
 - Wallpaper Jarvis: camada `background` que reage ao áudio (PipeWire) e sobe a
-  `overlay` quando o orbit-talk escuta; FPS limitado e pausa quando coberto.
-- orbit-talk integrado: atalho do core ativa, comandos viram IPC.
+  `overlay` quando o orbit-aigent escuta; FPS limitado e pausa quando coberto.
+- orbit-aigent integrado: atalho do core ativa, comandos viram IPC.
 - Configurações de monitor próprias; backend de portal próprio; digital no
   greet (passo 10 da seção 7.3).
 - `orbit-keys`: o app de senhas do Orbit, no lugar do Seahorse — ver, buscar,
@@ -597,7 +601,7 @@ a dia, portando do cosmic-comp o que falta:
   `ext-foreign-toplevel-list` mas **não** `ext-workspace` (conferido em
   2026-10-20), então no sway o módulo de áreas mantém o IPC como alternativa.
   Quando todos migrarem, o IPC fica só para scripts e terceiros.
-- `orbit-remote` estuda o `libei.rs` do cosmic-comp: injeção de mouse e teclado
+- `orbit-remote-server` estuda o `libei.rs` do cosmic-comp: injeção de mouse e teclado
   pelo padrão libei, o mesmo que o portal de área de trabalho remota usa.
 
 ## 9. Referências e como portar
@@ -645,7 +649,7 @@ Regras de porte:
 
 | Item | Risco / decisão em aberto |
 |---|---|
-| Wayfire no think | O think usa sway **e** wayfire; com o core, o wayfire sai também? (proposta: sim, na mesma regra de duas semanas) |
+| Wayfire no think | Fora de pauta por ora: o think e a VM Julas ficam como cobaias do `orbit-local-station` + `orbit-remote-server` (pending §9) |
 | Smithay e a API instável | Smithay muda API entre versões; fixar versão exata e atualizar de propósito, como foi com o glycin. O cosmic-comp faz o mesmo (Smithay 0.7 com `[patch]` num commit do git): ao portar um trecho, usar o mesmo commit de Smithay que ele usava naquele ponto, para o código vir funcionando |
 | XWayland | Conferido em 2026-10-20: o **cosmic-comp usa o XWayland integrado do Smithay** (`XWayland::spawn` + `X11Wm`, em `src/xwayland.rs`); o **niri usa o `xwayland-satellite`** (processo à parte). Integrado = foco, empilhamento e regras das janelas X sob controle do core, e código pronto para portar; satellite = menos código, mas janelas X viram clientes Wayland comuns e perdem detalhes (posição de menus, ícones na bandeja X). **Proposta: integrado, portado do cosmic-comp**; o satellite fica como plano B se o porte travar a Fase 1 |
 | Porte do cosmic-comp | Código grande e amarrado a `cosmic-protocols`, `cosmic-config` e libcosmic: portar só o comportamento, trocando as dependências COSMIC pelas nossas (`orbit-config`, protocolos padrão); arquivos que receberem código dele viram GPL-3.0-only (seção 9) |

@@ -12,8 +12,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 > monitors and XWayland for X programs — and hosts the panel, the dock and
 > every application below, which all work. Orbit is packaged as `.deb` and
 > served from its own apt repository, the first step of **Orbit Linux**, the
-> Debian-based distribution built around it; **Orbit-Station**, a remote
-> edition reached from any browser, is an idea for later. Still to come: the
+> Debian-based distribution built around it; **orbit-remote-server** with
+> **orbit-local-station**, a remote edition, is planned for later. Still to come: the
 > login and lock screen (orbit-greet) and the installer. Configuration and
 > APIs may still change.
 
@@ -32,7 +32,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts (Ferdium recipes) and notifications, EasyList/EasyPrivacy blocking, idle services hibernated, tracking parameters stripped, no telemetry | **working** |
 | **orbitctl** | Commands and queries to orbit-core (and sway), as `swaymsg`: `orbitctl workspace number 2`, `orbitctl -t get_tree` | **working** |
-| orbit-talk | Speech: Whisper (speech-to-text) and Piper (text-to-speech) | planned |
+| orbit-aigent | Voice layer for coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
@@ -416,25 +416,27 @@ Debian's. The plan (in Portuguese) is in
 - **Status.** Packages and repository done; orbit-greet, the installer and
   the ISO are next.
 
-## Orbit-Station
+## orbit-remote-server and orbit-local-station
 
-The idea for a later, remote edition of Orbit Linux, in the spirit of LTSP:
-type the address of an Orbit machine into any browser — Chrome, Firefox or
-Safari, on a phone, a tablet, a smart TV, a Fire Stick or another computer —
-and the whole Orbit desktop is there, with nothing installed on that device.
+A later, remote edition of Orbit Linux, in the spirit of LTSP, made of a pair
+that works only together:
 
-- **How:** the interface reaches the browser over the web — a client in
-  WebAssembly, with WebSocket/WebRTC to the host — so an Orbit machine can
-  sit at home or in the cloud and be used from anywhere.
+- **orbit-remote-server:** orbit-core with a remote streaming layer. Its
+  interface is built with Iced or Slint instead of GTK4, for their
+  WebSocket/WebRTC path, so an Orbit machine can sit at home or in the cloud
+  and be used from anywhere.
+- **orbit-local-station:** no local interface of its own; it pulls the
+  greeter, and then the whole session, straight from the server. Later,
+  orbit-greet will also let a full Orbit machine choose between its local
+  desktop and a remote one.
 - **Storage:** a USB drive or external disk plugged into the device in hand
   (TV, phone, stick) is seen and used by Orbit; the user's whole environment
   could even live on that disk and travel with them.
 - **Why:** it would replace the Sunshine/Moonlight streaming used today to
   reach a remote machine.
-- **The cost:** one interface that runs natively on Wayland and in the
-  browser means dealing with deep differences in concurrency, sound, input
-  and font rendering, and some performance lost against native. It is an
-  idea to study, not yet a plan.
+- **The cost:** a second interface toolkit next to GTK4 means dealing with
+  differences in sound, input and font rendering, and some performance lost
+  against the native session. The think and a VM are its first test machines.
 
 ## Configuration
 

@@ -25,7 +25,8 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 
 - [ ] Set up biometrics in Orbit: fingerprint (fprintd) and face, the same way.
 - [ ] Review the face recognition script that today runs only in the greeter.
-- [ ] `orbit-remote` pairing allowed only while the session is unlocked.
+- [ ] `orbit-remote-server` pairing allowed only while the session is unlocked.
+- [ ] Later: orbit-greet chooses between the full local desktop and the remote desktop (§9).
 
 ## 4. Core
 
@@ -38,8 +39,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [ ] Phase 2: hotplug, fractional scale, `wlr-output-management`, portal and screen sharing, VRR/tearing. Done when the hp gets a full day without going back to sway.
 - [ ] Phase 3: layouts `bsp`, `master`, `monocle`, `scroll`, per-workspace layouts, tags, named scratchpads.
 - [ ] Phase 4: animations, shadows, blur, gestures, overview, effects off on battery.
-- [ ] Phase 5: `orbit-remote`, Jarvis wallpaper, orbit-talk integrated with the core, own monitor settings, `orbit-keys` (password app).
-- [ ] In parallel: run the core on the think (AMD RX 6400).
+- [ ] Phase 5: `orbit-remote-server` (§9), Jarvis wallpaper, orbit-aigent integrated with the core, own monitor settings, `orbit-keys` (password app).
 
 ## 5. Panel
 
@@ -48,17 +48,19 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 
 ## 6. Apps
 
-| App | Effort | Notes |
-|---|---|---|
-| orbit-clip | low–medium | Small UI; Wayland clipboard protocol and sync with XWayland |
-| orbit-blink | low–medium | Screenshots: full screen, current window, rectangle |
-| orbit-view | medium | Image viewer: decode, zoom, browse the folder |
-| orbit-read | medium | TXT and MD are simple; PDF needs a rendering library |
-| orbit-play | medium–high | GStreamer, many formats |
-| orbit-talk | high | Whisper + Piper, latency; ships together with its panel widget |
-| orbit-files | high | A file manager has many edge cases (Yazi as reference) |
-| orbit-edit | high | A real text editor |
-| orbit-calc | — | Done |
+| App | Effort | Status | Notes |
+|---|---|---|---|
+| orbit-calc | low–medium | Done | |
+| orbit-clip | low–medium | Done (alpha) | Small UI; Wayland clipboard protocol and sync with XWayland |
+| orbit-view | medium | Done (alpha) | Image viewer: decode, zoom, browse the folder |
+| orbit-play | medium–high | Done (alpha) | GStreamer, many formats |
+| orbit-blink | low–medium | Done (alpha) | Screenshots: full screen, current window, rectangle |
+| orbit-read | medium | Done (alpha) | TXT and MD are simple; PDF needs a rendering library |
+| orbit-files | high | Done (alpha) | A file manager has many edge cases (Yazi as reference) |
+| orbit-edit | high | Done (alpha) | A real text editor |
+| orbit-aigent | high | Not started | Voice layer for talking to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget |
+
+Only orbit-aigent and the station pair (§9) are still to be started.
 
 ## 7. Orbit Linux (`orbit-linux.txt`, plan in `docs/PLANO-DISTRO.md`)
 
@@ -70,7 +72,7 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 - [ ] Phase A: CI building and publishing the debs; the hp and the think running on the packages instead of `install.sh` (`apt install orbit-desktop`).
 - [ ] Phase A: `orbit-common-data`, `orbit-defaults`, `orbit-ruffle`, `orbit-fonts` (Nerd Font).
 - [ ] Phase B: `orbit-studio` with ArtCraft mirrored; Orbit egui theme. Done when a fresh Debian 13 VM becomes this desktop with `apt install orbit-desktop orbit-studio`.
-- [ ] Phase C (after core Phase 2): `orbit-install` and the ISO — disk, hostname, user, password; "will format X / will keep Y" confirmation; existing `/home` reused (partition, LVM, LUKS, btrfs `@home`) with the owner's UID; progress and log on screen; automated install test in a Proxmox VM.
+- [ ] Phase C (after core Phase 2): `orbit-install` and the ISO — disk, hostname, user, password; "will format X / will keep Y" confirmation; existing `/home` reused with the owner's UID — a partition holding user data that is clearly the `/home` mount (partition, LVM, LUKS, btrfs `@home`) is kept as it is, never formatted; a single partition with `/` and `/home` together has everything but `/home` deleted and the install goes on in that same partition; "wipe everything and start from scratch" is always offered as an alternative; progress and log on screen; automated install test in a Proxmox VM.
 - [ ] Phase D: site, docs, stable/testing channels, security policy, arm64 image, check the "Orbit Linux" name.
 - [ ] Packages without an official `.deb` (Popsicle, Ghostty, AniCraft, craft-fonts): AppImage managed by Orbit, or own package.
 - [ ] Update `docs/PLANO-DISTRO.md` §9: the "orbit-greet doesn't exist yet" risk is gone.
@@ -83,22 +85,27 @@ A place to keep passwords safely, reachable after authenticating. It is the
 - [ ] Fold `orbit-safe` and `orbit-keys` into one app and one name.
 - [ ] MFA: TOTP codes (Google Authenticator style) stored and shown by the app, and/or required to open it.
 
-## 9. Orbit-Station (`orbit-station.txt`)
+## 9. Remote edition: `orbit-local-station` + `orbit-remote-server` (`orbit-station.txt`)
 
-A remote-only edition of Orbit Linux (LTSP-like): type the machine's IP in any
-browser (phone, tablet, TV, another PC) and get the full session, with nothing
-installed. Never used as a local desktop.
+A pair that works only together (LTSP-like), replacing the old Orbit-Station
+and `orbit-remote` names:
 
-- [ ] Build on `orbit-remote` (core Phase 5: WebRTC, VA-API, web client) rather than compiling the UI to WASM.
+- `orbit-remote-server`: orbit-core with a remote streaming layer.
+- `orbit-local-station`: no local interface of its own; it pulls the greeter,
+  and then the whole session, straight from `orbit-remote-server`.
+
+The think and the Julas VM are set aside for now: they are the test machines
+for this pair.
+
+- [ ] Not started yet.
+- [ ] The remote version's interface uses Iced or Slint instead of GTK4, for their WebSocket/WebRTC (§10).
 - [ ] External drive on the client (TV, FireStick, Android, iOS) visible to the session; the user's whole environment possibly living on it.
 - [ ] Goal: replace Sunshine + Moonlight on the Julas VM.
 
 ## 10. Open decisions
 
-- [ ] Does wayfire leave the think too, under the same two-week rule as sway?
 - [ ] Tags (dwm) and workspaces in the same panel bar, or only one of them? Decide before Phase 3.
-- [ ] Installer: `/home` as a folder inside `/` — refuse, or install wiping everything but `/home`?
-- [ ] Orbit-Station: WASM UI (as in the note) or streaming the real session (`orbit-remote`)? My recommendation is streaming: one code base, and the apps stay native.
+- [ ] `orbit-remote-server`: Iced or Slint?
 
 ## 11. Orbit-Edit
 - [x] Two look-alike search buttons in the toolbar: quick open (Ctrl+P) now has its own icon (`go-jump-symbolic`).

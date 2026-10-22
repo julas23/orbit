@@ -175,7 +175,7 @@ Ferdium** (repositório `ferdium-recipes`, licença MIT, centenas de serviços):
 | Navegador padrão | `x-scheme-handler/http(s)` e `text/html` passam para o Pathfinder só depois do critério da Fase 3 |
 | Navegador externo | Serviço com `external: true` ou "abrir fora" usa o navegador configurado (Zen, Chromium) para sites que o WebKit não atende |
 | Senhas | **Bitwarden** (o que você usa) via `bw serve` (API REST local do CLI oficial do Bitwarden), com preenchimento por atalho; senhas próprias, se usadas, no Secret Service (gnome-keyring). Sem gerenciador de senhas "na nuvem do Orbit" |
-| orbit-talk | Mais tarde: "abrir WhatsApp", "ler não lidos" via ações expostas por D-Bus |
+| orbit-aigent | Mais tarde: "abrir WhatsApp", "ler não lidos" via ações expostas por D-Bus |
 
 **Sem extensões.** O WebKitGTK não roda extensões do Chrome/Firefox. O que se
 usava de extensão vira recurso embutido (bloqueio, Bitwarden, leitor, limpar
@@ -339,7 +339,7 @@ fixa `mode 1600x1000@60Hz`.
 ### Fase 4 — acabamento
 
 - Animações da barra, modo foco, tradutor opcional, user scripts
-  configuráveis, ações para o orbit-talk, empacotamento `.deb` (PLANO-DISTRO).
+  configuráveis, ações para o orbit-aigent, empacotamento `.deb` (PLANO-DISTRO).
 
 ## 10. Referências
 
