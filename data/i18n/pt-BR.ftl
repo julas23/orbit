@@ -670,6 +670,7 @@ greet-password = Senha
 greet-checking = Verificando…
 greet-wrong = Senha incorreta
 greet-wait = Tente de novo em { $seconds } s
+greet-suspend = suspender
 
 ## Pedido de senha do polkit
 

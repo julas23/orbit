@@ -264,7 +264,7 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 7b | Prompter do chaveiro no visual do Orbit, no lugar do `gcr-prompter` (o pedido de senha quando um app abre um chaveiro travado ou cria um novo). O chaveiro em si continua o gnome-keyring (ver Riscos, "Chaveiro próprio") | 4 |
 | 8 | Bloqueio por Super+L, ociosidade e antes de suspender — **feito** 2026-10-21: `idle_lock` por máquina no `core.yaml` (`idle.rs`); antes de suspender, um inibidor `delay` do logind, solto quando o quadro preto está em todas as telas, 2 s no máximo (`sleep.rs`) | 2 |
 | 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar — **feito** 2026-10-21 (`fullscreen.rs`, `screensaver.rs`) | 2 |
-| 9 | Visual completo (seção 7.2), vários monitores | 2 |
+| 9 | Visual completo (seção 7.2), vários monitores — **feito** 2026-10-21: teclado, rede e bateria no canto (`status.rs` do greet; layouts do próprio keymap, clique troca pelo IPC do core, que o greet agora recebe), suspender/reiniciar/desligar embaixo (`power.rs`, comandos no `greet.yaml`; reiniciar e desligar perguntam no próprio cartão, "Não" focado, Esc volta); o greet segue o cursor entre monitores, os outros ficam pretos | 2 |
 | 10 | Seleção de usuário com a sessão carregando atrás da camada | 5 |
 | 11 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |
 

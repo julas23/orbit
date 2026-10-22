@@ -4,6 +4,10 @@
 //! with the pointer, only while locked; the password checked by PAM
 //! (`pam`), it asks the core to unlock (`link`).
 //!
+//! Around the card (§7.2): keyboard layout, network and battery in a
+//! corner (`status`), power off, reboot and suspend below (`power`, with
+//! its commands in `greet.yaml`).
+//!
 //! It stays running between locks: at each `locked` the field is emptied
 //! and ready. Wrong passwords wait longer each time. Run anywhere else it
 //! is a preview: a right password just quits.
@@ -12,6 +16,8 @@
 
 mod link;
 mod pam;
+mod power;
+mod status;
 
 use std::{cell::Cell, path::PathBuf, rc::Rc, time::Duration};
 
@@ -54,7 +60,11 @@ fn main() -> glib::ExitCode {
         let style = Style::install(&display, include_str!("../../../data/greet.css"), &dir.style_path());
         let theme = orbit_app::theme::install(&display);
         *keep.borrow_mut() = Some((style, theme));
-        build(app, &display);
+        let power = dir.app::<power::Config>("greet").unwrap_or_else(|err| {
+            log::error!("greet.yaml: {err:#}");
+            power::Config::default()
+        });
+        build(app, &display, power);
     });
     app.run_with_args::<&str>(&[])
 }
@@ -86,9 +96,16 @@ struct Greet {
     /// wait is going on.
     failures: Cell<u32>,
     busy: Cell<bool>,
+    /// The password or the question of a power button, and that question.
+    pages: gtk::Stack,
+    question: gtk::Label,
+    yes: gtk::Button,
+    no: gtk::Button,
+    asked: Cell<Option<power::Action>>,
+    power: power::Config,
 }
 
-fn build(app: &gtk::Application, display: &gdk::Display) {
+fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
     let (user, real_name) = pam::user();
     let window = gtk::ApplicationWindow::builder()
         .application(app)
@@ -118,16 +135,34 @@ fn build(app: &gtk::Application, display: &gdk::Display) {
         .build();
     let message = gtk::Label::builder().css_classes(["message"]).wrap(true).justify(gtk::Justification::Center).build();
 
+    let login = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+    for widget in [avatar.upcast_ref::<gtk::Widget>(), name.upcast_ref(), password.upcast_ref(), message.upcast_ref()] {
+        login.append(widget);
+    }
+    let question = gtk::Label::builder().css_classes(["question"]).wrap(true).justify(gtk::Justification::Center).build();
+    let no = gtk::Button::builder().label(tr("session-no")).hexpand(true).build();
+    let yes = gtk::Button::builder().label(tr("session-yes")).hexpand(true).css_classes(["yes"]).build();
+    let answers = gtk::Box::builder().spacing(10).homogeneous(true).build();
+    answers.append(&no);
+    answers.append(&yes);
+    let confirm = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(20).valign(gtk::Align::Center).css_classes(["confirm"]).build();
+    confirm.append(&question);
+    confirm.append(&answers);
+    let pages = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vhomogeneous(true).build();
+    pages.add_named(&login, Some("login"));
+    pages.add_named(&confirm, Some("confirm"));
+
     let card = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .halign(gtk::Align::Center)
         .valign(gtk::Align::Center)
         .css_classes(["card"])
         .build();
-    for widget in [time.upcast_ref::<gtk::Widget>(), date.upcast_ref(), avatar.upcast_ref(), name.upcast_ref(), password.upcast_ref(), message.upcast_ref()] {
+    for widget in [time.upcast_ref::<gtk::Widget>(), date.upcast_ref(), pages.upcast_ref()] {
         card.append(widget);
     }
-    window.set_child(Some(&card));
+    let screen = gtk::Overlay::builder().child(&card).build();
+    screen.add_overlay(&status::new(display));
 
     let link = Link::connect(display);
     if link.is_none() {
@@ -141,7 +176,39 @@ fn build(app: &gtk::Application, display: &gdk::Display) {
         message,
         failures: Cell::new(0),
         busy: Cell::new(false),
+        pages,
+        question,
+        yes: yes.clone(),
+        no: no.clone(),
+        asked: Cell::new(None),
+        power,
     });
+    {
+        let greet = greet.clone();
+        screen.add_overlay(&power::new(move |action| greet.ask(action)));
+    }
+    window.set_child(Some(&screen));
+    {
+        let greet = greet.clone();
+        no.connect_clicked(move |_| greet.back());
+    }
+    {
+        let greet = greet.clone();
+        yes.connect_clicked(move |_| greet.answered());
+    }
+    // Escape leaves a question; nothing else of the keys is the greet's.
+    let keys = gtk::EventControllerKey::new();
+    {
+        let greet = greet.clone();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gdk::Key::Escape && greet.asked.get().is_some() {
+                greet.back();
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+    }
+    window.add_controller(keys);
     {
         let greet = greet.clone();
         password.connect_activate(move |_| greet.submit());
@@ -159,9 +226,46 @@ impl Greet {
     fn event(&self, event: Event) {
         log::info!("{event:?}");
         self.password.set_text("");
+        self.back();
         if event == Event::Locked && !self.busy.get() {
             self.message.set_text("");
             self.password.set_sensitive(true);
+            self.password.grab_focus();
+        }
+    }
+
+    /// A power button: suspend at once, the others after a "yes".
+    fn ask(&self, action: power::Action) {
+        let Some(question) = action.question() else {
+            action.run(&self.power);
+            return;
+        };
+        self.question.set_text(&question);
+        if action == power::Action::Poweroff {
+            self.yes.add_css_class("poweroff");
+        } else {
+            self.yes.remove_css_class("poweroff");
+        }
+        self.asked.set(Some(action));
+        self.pages.set_visible_child_name("confirm");
+        // "No" first, so a stray Enter does not take the machine down.
+        self.no.grab_focus();
+    }
+
+    fn answered(&self) {
+        if let Some(action) = self.asked.get() {
+            action.run(&self.power);
+        }
+        self.back();
+    }
+
+    /// Back to the password.
+    fn back(&self) {
+        if self.asked.take().is_none() {
+            return;
+        }
+        self.pages.set_visible_child_name("login");
+        if self.password.is_sensitive() {
             self.password.grab_focus();
         }
     }

@@ -3050,6 +3050,7 @@ dependencies = [
  "orbit-app",
  "orbit-common",
  "orbit-protocols",
+ "serde",
  "wayland-backend",
  "wayland-client",
 ]

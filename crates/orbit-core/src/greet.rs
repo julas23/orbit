@@ -8,6 +8,9 @@
 //! (`orbit-protocols`), whose `unlock` request is the only way out of the
 //! lock.
 //!
+//! It gets the core's IPC too (`ORBIT_SOCK`), as every client the core
+//! launches does.
+//!
 //! The greet shows itself with an ordinary `xdg_toplevel`. Its window is
 //! not tiled: locked, it fills the monitor with the pointer and has the
 //! keyboard; unlocked, it is hidden and gets nothing. The greet may stay
@@ -183,6 +186,12 @@ impl Orbit {
             .env("XDG_SESSION_TYPE", "wayland")
             .env("XCURSOR_THEME", &self.config.cursor_theme)
             .env("XCURSOR_SIZE", self.config.cursor_size.to_string());
+        // The core's IPC, for the keyboard layout switch on the locked
+        // screen; never the outer sway's.
+        match &self.ipc.path {
+            Some(path) => child.env("ORBIT_SOCK", path).env("SWAYSOCK", path).env("I3SOCK", path),
+            None => child.env_remove("ORBIT_SOCK").env_remove("SWAYSOCK").env_remove("I3SOCK"),
+        };
         // Safety: only clears close-on-exec of a descriptor the child
         // inherits; nothing is allocated between fork and exec.
         unsafe {

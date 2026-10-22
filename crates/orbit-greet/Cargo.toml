@@ -24,7 +24,8 @@ assets = [
 orbit-app.workspace = true
 orbit-common.workspace = true
 orbit-protocols = { workspace = true, features = ["client"] }
-gtk.workspace = true
+# The keyboard layouts of a gdk::Device are GTK 4.18 (Debian 13 has 4.18.6).
+gtk = { workspace = true, features = ["v4_18"] }
 gdk4-wayland.workspace = true
 wayland-client.workspace = true
 wayland-backend.workspace = true
@@ -32,3 +33,4 @@ log.workspace = true
 env_logger.workspace = true
 async-channel.workspace = true
 glib-unix.workspace = true
+serde.workspace = true

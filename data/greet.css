@@ -50,3 +50,70 @@ window.orbit-greet .message {
   min-height: 40px;
   color: @orbit_muted;
 }
+
+/* The question of a power button, in place of the password. */
+window.orbit-greet .confirm .question {
+  font-size: 20px;
+}
+
+window.orbit-greet .confirm button {
+  min-height: 40px;
+  border-radius: 20px;
+}
+
+window.orbit-greet .confirm button.yes {
+  background: @orbit_accent;
+  color: #ffffff;
+}
+
+window.orbit-greet .confirm button.yes.poweroff {
+  background: @orbit_alert;
+}
+
+/* Keyboard, network and battery, top right. */
+window.orbit-greet .status {
+  margin: 20px;
+}
+
+window.orbit-greet .status .item {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 5px 10px;
+  border-radius: 20px;
+  color: @orbit_muted;
+}
+
+window.orbit-greet .status .keyboard:hover {
+  background-color: @orbit_button;
+  color: @orbit_fg;
+}
+
+window.orbit-greet .status .glyph {
+  font-size: 20px;
+}
+
+/* Suspend, reboot and power off, below the card. */
+window.orbit-greet .power {
+  margin-bottom: 40px;
+}
+
+window.orbit-greet .power .action {
+  min-width: 50px;
+  min-height: 50px;
+  padding: 0;
+  border-radius: 25px;
+  font-size: 25px;
+  background-color: @orbit_button;
+  border: 1px solid @orbit_border;
+  color: @orbit_muted;
+}
+
+window.orbit-greet .power .action:hover {
+  color: @orbit_fg;
+  border-color: @orbit_accent;
+}
+
+window.orbit-greet .power .poweroff:hover {
+  border-color: @orbit_alert;
+}
