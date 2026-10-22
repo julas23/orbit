@@ -324,7 +324,10 @@ impl Orbit {
     }
 
     pub fn workspace_json(&self, num: i32) -> Value {
-        let windows: Vec<Value> = self.workspaces.iter().find(|w| w.num == num).map(|w| w.windows.iter().map(|win| self.window_json(win)).collect()).unwrap_or_default();
+        let all = self.windows_of(num);
+        let (floating, tiled): (Vec<&Window>, Vec<&Window>) = all.iter().partition(|w| crate::floating::is_floating(w));
+        let windows: Vec<Value> = tiled.into_iter().map(|w| self.window_json(w)).collect();
+        let floating: Vec<Value> = floating.into_iter().map(|w| self.window_json(w)).collect();
         let output = self.ws_output(num).unwrap_or_else(|| self.focused_output_name());
         let area = self.output_named(&output).and_then(|o| self.usable_area(&o)).unwrap_or_default();
         json!({
@@ -340,7 +343,7 @@ impl Orbit {
             "orientation": "horizontal",
             "rect": rect(area),
             "nodes": windows,
-            "floating_nodes": [],
+            "floating_nodes": floating,
             "focus": [],
             "representation": "H[]",
         })
@@ -382,7 +385,7 @@ impl Orbit {
     fn con_json(&self, window: &Window, id: u64, r: (i32, i32, i32, i32), on: Option<i32>, title: &str, app_id: Option<&str>, pid: Option<i32>, shell: &str) -> Value {
         json!({
             "id": id,
-            "type": "con",
+            "type": if crate::floating::is_floating(window) { "floating_con" } else { "con" },
             "name": title,
             "app_id": app_id,
             "pid": pid,

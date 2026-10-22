@@ -11,7 +11,7 @@ use regex::RegexBuilder;
 use serde_json::{Value, json};
 use smithay::desktop::Window;
 
-use crate::{state::Orbit, workspace};
+use crate::{direction::Dir, floating::Half, state::Orbit, switcher::Mode, workspace};
 
 /// Runs `line`; one result per command, as sway answers.
 pub fn run(state: &mut Orbit, line: &str) -> Vec<Value> {
@@ -180,6 +180,11 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.move_output(name, (x, y));
             Ok(())
         }
+        // Orbit's own: the area beside, in the grid (Ctrl+Alt+arrows).
+        ["workspace", dir] if Dir::parse(dir).is_some() => {
+            state.workspace_toward(Dir::parse(dir).expect("just parsed"));
+            Ok(())
+        }
         ["workspace", rest @ ..] => {
             let num = workspace_number(state, rest)?;
             state.switch_workspace(state.resolve(num));
@@ -190,11 +195,15 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.focus_anywhere(&window);
             Ok(())
         }
-        ["focus", dir @ ("left" | "right" | "up" | "down" | "next" | "prev")] => {
-            let next = state.neighbour(matches!(*dir, "right" | "down" | "next"));
+        ["focus", dir @ ("next" | "prev")] => {
+            let next = state.neighbour(*dir == "next");
             if next.is_some() {
                 state.focus_window(next);
             }
+            Ok(())
+        }
+        ["focus", dir] if Dir::parse(dir).is_some() => {
+            state.focus_toward(Dir::parse(dir).expect("just parsed"));
             Ok(())
         }
         ["focus", "output", which] => {
@@ -234,12 +243,47 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             }
             Ok(())
         }
-        ["move", dir @ ("left" | "right" | "up" | "down")] => {
-            state.move_focused(matches!(*dir, "right" | "down"));
+        ["move", dir] if Dir::parse(dir).is_some() => {
+            state.move_toward(Dir::parse(dir).expect("just parsed"));
             Ok(())
         }
-        // Every window is tiled: already so.
-        ["floating", "disable"] => Ok(()),
+        // Orbit's own: a half of the screen, maximized, and back.
+        ["snap", side @ ("left" | "right")] => {
+            let half = if *side == "left" { Half::Left } else { Half::Right };
+            for window in windows() {
+                state.snap(&window, Some(half));
+            }
+            Ok(())
+        }
+        // Orbit's own: Alt+Tab, Alt+Shift+Tab, Mod+Tab (`switcher`).
+        ["switch", mode, rest @ ..] if Mode::parse(mode).is_some() => {
+            state.switch(Mode::parse(mode).expect("just parsed"), rest == ["back"]);
+            Ok(())
+        }
+        ["maximize"] => {
+            for window in windows() {
+                state.set_maximized(&window, true);
+            }
+            Ok(())
+        }
+        ["restore"] => {
+            for window in windows() {
+                state.restore(&window);
+            }
+            Ok(())
+        }
+        ["floating", rest @ ..] => {
+            for window in windows() {
+                let on = match rest {
+                    ["toggle"] => !crate::floating::is_floating(&window),
+                    ["enable"] => true,
+                    ["disable"] => false,
+                    _ => return Err(format!("floating: enable, disable or toggle, not {}", rest.join(" "))),
+                };
+                state.set_floating(&window, on);
+            }
+            Ok(())
+        }
         ["input", _, "xkb_switch_layout", which] => {
             state.switch_layout(which)?;
             Ok(())
@@ -256,7 +300,7 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             }
             Ok(())
         }
-        ["floating", ..] | ["split" | "splith" | "splitv", ..] | ["layout", ..] | ["resize", ..] | ["gaps", ..] | ["border", ..] | ["sticky", ..] | ["mark", ..] => {
+        ["split" | "splith" | "splitv", ..] | ["layout", ..] | ["resize", ..] | ["gaps", ..] | ["border", ..] | ["sticky", ..] | ["mark", ..] => {
             Err(format!("not in orbit-core yet: {}", w[0]))
         }
         _ => Err(format!("Unknown/invalid command '{command}'")),

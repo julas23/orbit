@@ -36,17 +36,23 @@ impl Workspace {
 
 /// What the core keeps with each window: its id (sway's `con_id`), the
 /// rectangle it was last laid out in (kept while its workspace is hidden)
-/// and whether it is fullscreen (`fullscreen`).
+/// whether it is fullscreen or maximized (`fullscreen`), and whether it
+/// floats, where and at what size (`floating`; no place yet, its own
+/// size), or is snapped to a half of the screen.
 pub struct Info {
     pub id: u64,
     pub rect: (i32, i32, i32, i32),
     pub fullscreen: bool,
     pub maximized: bool,
+    pub floating: bool,
+    pub float_at: Option<(i32, i32)>,
+    pub float_size: Option<(i32, i32)>,
+    pub snap: Option<crate::floating::Half>,
 }
 
 /// The window's info; given on the first call.
 pub fn info(window: &Window) -> &RefCell<Info> {
-    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false, maximized: false }));
+    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false, maximized: false, floating: false, float_at: None, float_size: None, snap: None }));
     window.user_data().get::<RefCell<Info>>().expect("just inserted")
 }
 
@@ -341,6 +347,7 @@ impl Orbit {
     pub fn forget(&mut self, window: &Window) -> Option<i32> {
         let on = self.workspace_of(window).filter(|n| self.is_visible(*n));
         self.take(window);
+        self.switch_forget(window);
         self.space.unmap_elem(window);
         self.window_event("close", window);
         self.drop_empty();

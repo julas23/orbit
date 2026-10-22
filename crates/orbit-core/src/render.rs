@@ -3,7 +3,8 @@
 //! (menus, notifications), the windows — each with its menus, its surfaces
 //! cut to rounded corners (`rounded`) and its border — then the bottom and
 //! background layers. A fullscreen window hides most of that
-//! (`fullscreen`); locking and unlocking blur it under black (`eyes`).
+//! (`fullscreen`); locking and unlocking blur it under black (`eyes`), and
+//! the window cards (`cards`) and a confirmation dialog blur it too.
 //!
 //! The element types follow anvil `src/render.rs` @ 24647fc (Smithay, MIT,
 //! Copyright (c) 2017 Victor Berger and Victoria Brekenfeld); a window's
@@ -58,6 +59,7 @@ render_elements! {
     Border=PixelShaderElement,
     Texture=TextureRenderElement<GlesTexture>,
     Solid=SolidColorRenderElement,
+    Card=crate::cards::CardElement,
 }
 
 /// A window's border, kept with the window so the damage tracker sees the
@@ -135,17 +137,49 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
         crate::session_lock::face_elements(state, output, renderer, scale, 1.0, &mut elements);
         return elements;
     }
-    session_elements(state, output, renderer, scale, shaders.as_ref(), &mut elements);
+    // The window cards (Mod+Tab) over the blurred screen.
+    if let Some(shaders) = shaders.as_ref()
+        && state.switcher.as_ref().is_some_and(|s| s.mode == crate::switcher::Mode::Cards)
+        && state.cards_output().as_ref() == Some(output)
+    {
+        state.card_elements(output, renderer, scale, shaders, &mut elements);
+        return elements;
+    }
+    // A confirmation (power off, restart, log out): the session blurred
+    // under it.
+    if let Some(shaders) = shaders.as_ref()
+        && blurs_behind(state, output)
+        && let Some(geo) = state.space.output_geometry(output)
+    {
+        layer_elements(output, renderer, scale, &[WlrLayer::Overlay], &mut elements);
+        let mut session = Vec::new();
+        session_elements(state, output, renderer, scale, Some(shaders), false, &mut session);
+        let mut cache = std::mem::take(&mut state.backdrop_cache);
+        crate::eyes::backdrop(renderer, &mut cache, shaders, output, geo.size, scale, &session, 0.7, &mut elements);
+        state.backdrop_cache = cache;
+        return elements;
+    }
+    state.backdrop_cache.clear();
+    session_elements(state, output, renderer, scale, shaders.as_ref(), true, &mut elements);
     elements
 }
 
-/// The session on `output` — layers and windows — topmost first.
-pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: Option<&Shaders>, elements: &mut Vec<OutputElement>) {
+/// Whether an overlay surface on `output` wants the session blurred under
+/// it (its namespace is one of `blur_layers`).
+fn blurs_behind(state: &Orbit, output: &Output) -> bool {
+    let map = layer_map_for_output(output);
+    map.layers_on(WlrLayer::Overlay).any(|l| state.config.blur_layers.iter().any(|n| *n == l.namespace()))
+}
+
+/// The session on `output` — layers (the overlay one only `with_overlay`)
+/// and windows — topmost first.
+pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: Option<&Shaders>, with_overlay: bool, elements: &mut Vec<OutputElement>) {
+    let overlay: &[WlrLayer] = if with_overlay { &[WlrLayer::Overlay] } else { &[] };
     let Some(geo) = state.space.output_geometry(output) else { return };
     // A fullscreen window hides the rest, but for the overlay, the top
     // layer's menus and X menus (`fullscreen`).
     if let Some(full) = state.fullscreen_on(output) {
-        layer_elements(output, renderer, scale, &[WlrLayer::Overlay], elements);
+        layer_elements(output, renderer, scale, overlay, elements);
         // Before the map is held: `top_above` takes it too, and taking it
         // twice hangs the core.
         let above = crate::fullscreen::top_above(output);
@@ -170,7 +204,8 @@ pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRende
         }
         return;
     }
-    layer_elements(output, renderer, scale, &[WlrLayer::Overlay, WlrLayer::Top], elements);
+    layer_elements(output, renderer, scale, overlay, elements);
+    layer_elements(output, renderer, scale, &[WlrLayer::Top], elements);
     // Only this monitor's: a window of the next one that reaches over the
     // edge (its shadow, a frame of the old size) is not drawn here. X menus
     // and the window being dragged go where they are.

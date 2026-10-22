@@ -142,6 +142,12 @@ pub struct Orbit {
     pub sleep_inhibitor: Option<std::os::fd::OwnedFd>,
     /// The textures of the eyes opening or closing (`eyes`).
     pub eyes_cache: crate::eyes::Cache,
+    /// The blur's textures under a confirmation dialog (`render`).
+    pub backdrop_cache: crate::eyes::Cache,
+    /// Every window, the last to have the keyboard first, and the switch
+    /// walking them (`switcher`).
+    pub mru: Vec<Window>,
+    pub switcher: Option<crate::switcher::Switcher>,
 }
 
 impl Orbit {
@@ -228,6 +234,9 @@ impl Orbit {
             idle_inhibit_state,
             sleep_inhibitor: None,
             eyes_cache: Default::default(),
+            backdrop_cache: Default::default(),
+            mru: Vec::new(),
+            switcher: None,
         }
     }
 
@@ -307,11 +316,16 @@ impl Orbit {
     }
 
     /// A new window, Wayland or X: on the monitor under the pointer, in
-    /// the workspace it shows, with the keyboard.
+    /// the workspace it shows (a dialog, on its parent's), with the
+    /// keyboard.
     pub fn add_window(&mut self, window: Window) {
         info(&window).borrow_mut().id = self.next_window_id;
         self.next_window_id += 1;
-        let num = self.pointer_output().and_then(|o| self.visible.get(&o.name()).copied()).unwrap_or(self.current);
+        let num = self
+            .parent_of(&window)
+            .and_then(|p| self.workspace_of(&p))
+            .or_else(|| self.pointer_output().and_then(|o| self.visible.get(&o.name()).copied()))
+            .unwrap_or(self.current);
         let i = self.ensure_ws(num);
         self.workspaces[i].windows.push(window.clone());
         self.space.map_element(window.clone(), (0, 0), false);
@@ -387,13 +401,21 @@ impl Orbit {
 
     /// The windows of workspace `num` in columns over `area`; a maximized
     /// one over all of `area`, a fullscreen one over the whole monitor,
-    /// `full`, above the others.
+    /// `full`, above the others; the floating and snapped ones above them
+    /// all, in the order they were stacked (`floating`).
     fn arrange_on(&mut self, area: tile::Rect, full: tile::Rect, num: i32) {
         let windows = self.windows_of(num);
-        let rects = tile::columns(windows.len(), area, self.config.gaps, self.config.border);
+        let (mut floating, tiled): (Vec<Window>, Vec<Window>) = windows.into_iter().partition(|w| {
+            crate::floating::floats(w) && !crate::fullscreen::is_fullscreen(w) && !crate::fullscreen::is_maximized(w)
+        });
+        let rects = tile::columns(tiled.len(), area, self.config.gaps, self.config.border);
         let whole = tile::columns(1, area, self.config.gaps, self.config.border).first().copied().unwrap_or(area);
         tracing::debug!(num, ?area, ?rects, "arrange");
-        for (window, rect) in windows.into_iter().zip(rects) {
+        // The space stacks in the order windows are mapped: the tiled,
+        // then the maximized and fullscreen, then the floating.
+        let mut placed: Vec<(Window, tile::Rect)> = tiled.into_iter().zip(rects).collect();
+        placed.sort_by_key(|(w, _)| crate::fullscreen::is_fullscreen(w) || crate::fullscreen::is_maximized(w));
+        for (window, rect) in placed {
             let fullscreen = crate::fullscreen::is_fullscreen(&window);
             let maximized = crate::fullscreen::is_maximized(&window);
             let (x, y, w, h) = if fullscreen { full } else if maximized { whole } else { rect };
@@ -429,6 +451,11 @@ impl Orbit {
                 self.space.map_element(window, (x, y), above);
             }
         }
+        let stacked: Vec<Window> = self.space.elements().cloned().collect();
+        floating.sort_by_key(|w| stacked.iter().position(|s| s == w));
+        for window in floating {
+            self.place_floating(&window, area, full);
+        }
     }
 
     /// Gives `window` the keyboard (and the active look); `None` takes it
@@ -438,6 +465,9 @@ impl Orbit {
         let before = self.focused_window();
         if let Some(w) = &window {
             self.yield_fullscreen(w);
+            if crate::floating::floats(w) {
+                self.space.raise_element(w, false);
+            }
         }
         if let Some(w) = &window
             && let Some(num) = self.workspace_of(w)
@@ -468,10 +498,11 @@ impl Orbit {
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, target, serial);
         }
-        if let Some(w) = &window
-            && before.as_ref() != Some(w)
-        {
-            self.window_event("focus", w);
+        if let Some(w) = &window {
+            self.used(w);
+            if before.as_ref() != Some(w) {
+                self.window_event("focus", w);
+            }
         }
         self.request_render();
     }

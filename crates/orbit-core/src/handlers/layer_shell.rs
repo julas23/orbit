@@ -35,6 +35,7 @@ impl WlrLayerShellHandler for Orbit {
             tracing::warn!("layer surface {namespace}: no output");
             return;
         };
+        tracing::info!("layer surface {namespace} on {}", output.name());
         let mut map = layer_map_for_output(&output);
         if let Err(err) = map.map_layer(&LayerSurface::new(surface, namespace.clone())) {
             tracing::warn!("layer surface {namespace}: {err}");

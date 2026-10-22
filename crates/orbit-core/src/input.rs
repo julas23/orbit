@@ -100,6 +100,12 @@ impl Orbit {
         let code = event.key_code();
         let pressed = event.state() == KeyState::Pressed;
         let action = keyboard.input::<Option<Action>, _>(self, code, event.state(), serial, Event::time(&event), |state, mods, handle| {
+            // Escape while switching windows: back as it was.
+            if pressed && state.switcher.is_some() && handle.modified_sym() == Keysym::Escape {
+                state.suppressed.push(code);
+                state.switch_cancel();
+                return FilterResult::Intercept(None);
+            }
             if !pressed {
                 // The release of a key a shortcut took is not the client's.
                 if let Some(i) = state.suppressed.iter().position(|c| *c == code) {
@@ -134,6 +140,11 @@ impl Orbit {
         });
         if let Some(Some(action)) = action {
             self.run(action);
+        }
+        // A switch settles once its modifier is let go (`switcher`).
+        let mods = keyboard.modifier_state();
+        if self.switcher.is_some() && !(mods.alt || mods.logo || mods.ctrl) {
+            self.switch_finish();
         }
     }
 
@@ -198,19 +209,6 @@ impl Orbit {
         let i = self.focused_window().and_then(|w| windows.iter().position(|x| x == &w)).unwrap_or(0);
         let j = if forward { (i + 1) % n } else { (i + n - 1) % n };
         windows.get(j).cloned()
-    }
-
-    /// Swaps the focused window with its neighbour on the workspace.
-    pub fn move_focused(&mut self, forward: bool) {
-        let Some(window) = self.focused_window() else { return };
-        let ws = self.current_ws();
-        let Some(i) = ws.windows.iter().position(|w| w == &window) else { return };
-        let j = if forward { i + 1 } else { i.wrapping_sub(1) };
-        if j < ws.windows.len() {
-            ws.windows.swap(i, j);
-            self.arrange();
-            self.window_event("move", &window);
-        }
     }
 
     fn pointer_to(&mut self, pos: Point<f64, Logical>, time: smithay::backend::input::InputTime) {

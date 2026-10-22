@@ -1,7 +1,7 @@
 //! X programs, through XWayland run by the core (PLANO-CORE: integrated,
 //! not `xwayland-satellite`). The core starts `Xwayland` with itself and
-//! is its window manager (`X11Wm`): an X window is tiled and focused like
-//! any other; its menus and tooltips (override-redirect windows) are drawn
+//! is its window manager (`X11Wm`): an X window is tiled or floats and is
+//! focused like any other; its menus and tooltips (override-redirect windows) are drawn
 //! where they ask, above the rest, and never take the keyboard. The X
 //! clipboard and primary selection are bridged both ways.
 //!
@@ -10,8 +10,8 @@
 //!
 //! Ported from anvil `src/shell/x11.rs` and `src/state.rs`
 //! (`start_xwayland`) @ 24647fc (Smithay, MIT, Copyright (c) 2017 Victor
-//! Berger and Victoria Brekenfeld); resizing and maximizing wait for
-//! floating windows.
+//! Berger and Victoria Brekenfeld). Dialogs float (`floating`); resizing
+//! by the pointer is still to come.
 
 use std::{os::unix::io::OwnedFd, process::Stdio};
 
@@ -128,7 +128,7 @@ impl XwmHandler for Orbit {
     fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
     fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
-    /// A window shown: tiled, as a Wayland one.
+    /// A window shown: tiled, as a Wayland one, or floating if a dialog.
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         if let Err(err) = surface.set_mapped(true) {
             tracing::warn!("X window {}: {err}", surface.window_id());
@@ -138,7 +138,12 @@ impl XwmHandler for Orbit {
             return;
         }
         let fullscreen = surface.is_fullscreen();
+        let asked = surface.geometry().size;
         let window = Window::new_x11_window(surface);
+        // A dialog floats at the size it asks for, never tiled first.
+        if crate::floating::is_dialog(&window) {
+            crate::floating::mark_floating(&window, Some((asked.w, asked.h)));
+        }
         self.add_window(window.clone());
         // Asked for before it was shown (a game, a video player).
         if fullscreen {
@@ -164,8 +169,9 @@ impl XwmHandler for Orbit {
         self.x11_gone(&surface);
     }
 
-    /// A tiled window keeps its tile, whatever it asks; one not shown yet
-    /// may take the size it wants.
+    /// A tiled window keeps its tile, whatever it asks; a floating one
+    /// takes the size it asks for, where it is; one not shown yet takes
+    /// what it wants.
     fn configure_request(
         &mut self,
         _xwm: XwmId,
@@ -177,6 +183,10 @@ impl XwmHandler for Orbit {
         _reorder: Option<Reorder>,
     ) {
         if let Some(window) = self.x11_window(&surface) {
+            if crate::floating::is_floating(&window) && (w.is_some() || h.is_some()) {
+                self.resize_floating(&window, w, h);
+                return;
+            }
             let (x, y, w, h) = crate::workspace::info(&window).borrow().rect;
             let _ = surface.configure(Rectangle::new((x, y).into(), (w, h).into()));
             return;

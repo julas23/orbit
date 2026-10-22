@@ -58,9 +58,10 @@ impl Orbit {
         }
     }
 
-    /// Whether frames must keep coming (the eyes moving).
+    /// Whether frames must keep coming (the eyes moving, the window cards
+    /// moving).
     pub fn animating(&self) -> bool {
-        matches!(self.lock, Lock::Closing(_) | Lock::Opening(_))
+        matches!(self.lock, Lock::Closing(_) | Lock::Opening(_)) || self.switch_moving()
     }
 
     /// The eyes finish moving once their time is up; called at each frame.
@@ -90,6 +91,7 @@ impl Orbit {
     /// Hides the session, closing the eyes: the keyboard and the pointer
     /// leave every client for the greet at once.
     pub fn lock(&mut self) {
+        self.switch_cancel();
         self.lock = match self.lock {
             Lock::Locked | Lock::Closing(_) => return,
             Lock::Opening(start) => Lock::Closing(Self::turn(start)),

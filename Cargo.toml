@@ -26,6 +26,8 @@ glib = { version = "0.22", features = ["v2_68"] }
 gdk4-x11 = "0.11"
 gdk4-wayland = "0.11"
 gtk4-layer-shell = "0.8"
+# orbit-core: the window cards' title bars (Mod+Tab), text drawn by Pango.
+pangocairo = "0.22"
 x11rb = "0.14"
 gio-unix = "0.22"
 glib-unix = "0.22"

@@ -16,6 +16,9 @@
 //! login: [nm-applet]          # at the first unlock (at once if not locked)
 //! greet: orbit-greet     # shown while locked; the only client that unlocks
 //! stride: 10             # area N: workspace N, 10+N, 20+N… down the monitors
+//! areas: 4               # the grid of areas Alt/Mod+Ctrl+arrows walk:
+//! area_columns: 2        # 1 2 / 3 4, as the panel shows them
+//! blur_layers: [orbit-confirm]   # overlay surfaces with the screen blurred under
 //! idle_lock: 600         # seconds without input before locking; 0: never
 //! # or by machine (the file synced between several):
 //! # idle_lock: { default: 600, think: 0, julas: 0 }
@@ -68,6 +71,13 @@ pub struct Config {
     /// Workspace-number distance between the same area on two monitors
     /// (the panel's `stride`; see `workspace`).
     pub stride: i32,
+    /// How many areas there are, and how many to a row of their grid
+    /// (the panel's `count` and `columns`; see `direction`).
+    pub areas: i32,
+    pub area_columns: i32,
+    /// Overlay surfaces (by layer-shell namespace) the session is blurred
+    /// under: the panel's confirmation dialog.
+    pub blur_layers: Vec<String>,
     /// Seconds without input before the core locks (0: never), for every
     /// machine or by host name (`idle`).
     pub idle_lock: PerHost<u64>,
@@ -153,6 +163,9 @@ impl Default for Config {
             cursor_size: 24,
             outputs: HashMap::new(),
             stride: 10,
+            areas: 4,
+            area_columns: 2,
+            blur_layers: vec!["orbit-confirm".into()],
             idle_lock: PerHost::All(600),
         }
     }

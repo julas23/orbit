@@ -2,7 +2,8 @@
 //! sway's `floating_modifier`), or the client's own title bar. The window
 //! follows the pointer above the others; let go over another window, the
 //! two swap places; over the empty part of a monitor, it goes to the
-//! workspace that monitor shows.
+//! workspace that monitor shows. A floating window stays where it is let
+//! go, on the workspace of the monitor under the pointer.
 //!
 //! The grab is ported from Smithay's smallvil `src/grabs/move_grab.rs` @
 //! 24647fc (MIT, Copyright (c) 2017 Victor Berger and Victoria Brekenfeld).
@@ -53,10 +54,24 @@ impl Orbit {
             self.arrange();
             return;
         }
+        let target = self.output_at(pos).and_then(|o| self.visible.get(&o.name()).copied());
+        // Dragged off its half: back to what it was.
+        info(window).borrow_mut().snap = None;
+        if crate::floating::is_floating(window) {
+            if let Some(at) = self.space.element_location(window) {
+                info(window).borrow_mut().float_at = Some((at.x, at.y));
+            }
+            if let Some(num) = target.filter(|n| Some(*n) != self.workspace_of(window)) {
+                self.move_to_workspace(window, num);
+            }
+            self.arrange();
+            self.focus_window(Some(window.clone()));
+            return;
+        }
         let shown: Vec<Window> = self.visible.values().flat_map(|n| self.windows_of(*n)).collect();
         let under = shown.iter().find(|w| {
             let (x, y, width, height) = info(w).borrow().rect;
-            *w != window && pos.x >= x as f64 && pos.x < (x + width) as f64 && pos.y >= y as f64 && pos.y < (y + height) as f64
+            *w != window && !crate::floating::floats(w) && pos.x >= x as f64 && pos.x < (x + width) as f64 && pos.y >= y as f64 && pos.y < (y + height) as f64
         });
         match under {
             Some(other) => {
@@ -64,7 +79,6 @@ impl Orbit {
                 self.swap_windows(window, &other);
             }
             None => {
-                let target = self.output_at(pos).and_then(|o| self.visible.get(&o.name()).copied());
                 if let Some(num) = target.filter(|n| Some(*n) != self.workspace_of(window)) {
                     self.move_to_workspace(window, num);
                 }

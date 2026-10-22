@@ -1,5 +1,5 @@
 //! Surface commits: a window's or a layer surface's new content, its first
-//! configure, and a new frame to draw.
+//! configure (when a dialog starts floating), and a new frame to draw.
 //!
 //! Ported from Smithay's smallvil `src/handlers/compositor.rs` @ 24647fc
 //! (MIT, Copyright (c) 2017 Victor Berger and Victoria Brekenfeld); the
@@ -47,6 +47,7 @@ impl CompositorHandler for Orbit {
             }
             if let Some(window) = self.window_for(&root).or_else(|| self.greet_window(&root)) {
                 window.on_commit();
+                self.floating_committed(&window);
             }
         }
         self.first_configure(surface);
@@ -90,6 +91,8 @@ impl Orbit {
                 states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
             });
             if !sent && let Some(toplevel) = window.toplevel() {
+                // Its parent and size limits are known now: a dialog floats.
+                self.float_if_dialog(&window);
                 toplevel.send_configure();
             }
             return;

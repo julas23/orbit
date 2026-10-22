@@ -1,5 +1,5 @@
 //! Windows (`xdg_toplevel`) and their menus (`xdg_popup`): a new window is
-//! tiled and takes the keyboard; a closed one leaves its place to the
+//! tiled (a dialog floats) and takes the keyboard; a closed one leaves its place to the
 //! others; menus are kept inside the screen and hold the pointer and the
 //! keyboard while open.
 //!
@@ -54,6 +54,13 @@ impl XdgShellHandler for Orbit {
 
     fn app_id_changed(&mut self, surface: ToplevelSurface) {
         self.title_changed(surface);
+    }
+
+    /// Given a parent (GTK does so after the first commit): a dialog.
+    fn parent_changed(&mut self, surface: ToplevelSurface) {
+        if let Some(window) = self.window_for(surface.wl_surface()) {
+            self.float_if_dialog(&window);
+        }
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {

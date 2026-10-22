@@ -237,55 +237,77 @@ fn blurred(
     Ok(layers)
 }
 
+/// `session` (elements of `output`, topmost first, of logical `size`)
+/// blurred by `strength` (0…1), pushed onto `elements` stretched over the
+/// monitor: what is drawn behind the eyes, the window cards and the
+/// confirmation dialog.
+#[allow(clippy::too_many_arguments)]
+pub fn backdrop(
+    renderer: &mut GlesRenderer,
+    cache: &mut Cache,
+    shaders: &crate::rounded::Shaders,
+    output: &Output,
+    size: Size<i32, smithay::utils::Logical>,
+    scale: Scale<f64>,
+    session: &[OutputElement],
+    strength: f32,
+    elements: &mut Vec<OutputElement>,
+) {
+    let physical = size.to_physical_precise_round(scale);
+    let clear = crate::render::BACKGROUND;
+    match blurred(renderer, cache, (&shaders.down, &shaders.up), &output.name(), physical, scale, clear, session, strength) {
+        Ok(layers) => {
+            let context = renderer.context_id();
+            // Topmost first: the deeper blur over the shallower.
+            for (texture, alpha) in layers.into_iter().rev() {
+                // The whole texture (half size when blurred), stretched
+                // over the monitor.
+                let whole = texture.size();
+                let src = Rectangle::from_size((whole.w as f64, whole.h as f64).into());
+                elements.push(OutputElement::Texture(TextureRenderElement::from_static_texture(
+                    // A new id each frame: the picture changes each frame.
+                    Id::new(),
+                    context.clone(),
+                    (0.0, 0.0),
+                    texture,
+                    1,
+                    Transform::Normal,
+                    Some(alpha),
+                    Some(src),
+                    Some(size),
+                    None,
+                    Kind::Unspecified,
+                )));
+            }
+        }
+        Err(err) => tracing::warn!("blur: {err:?}"),
+    }
+}
+
 impl crate::state::Orbit {
     /// The frame of `output` while the eyes move, `closed` (0…1) shut:
     /// the greet and black fading in over the session blurring, topmost
-    /// first, after whatever `elements` holds (the pointer).
+    /// first, after whatever `elements` holds (the pointer). The blur runs
+    /// ahead — whole by two thirds of the way — and black and the greet
+    /// lag, so the blur is seen before they cover it.
     pub fn eyes_elements(&mut self, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, closed: f32, shaders: &crate::rounded::Shaders, elements: &mut Vec<OutputElement>) {
         let Some(geo) = self.space.output_geometry(output) else { return };
         let size = geo.size.to_physical_precise_round(scale);
-        crate::session_lock::face_elements(self, output, renderer, scale, closed, elements);
+        let cover = closed * closed;
+        crate::session_lock::face_elements(self, output, renderer, scale, cover, elements);
         elements.push(OutputElement::Solid(SolidColorRenderElement::new(
             Id::new(),
             Rectangle::from_size(size),
             CommitCounter::default(),
-            Color32F::new(0.0, 0.0, 0.0, closed),
+            Color32F::new(0.0, 0.0, 0.0, cover),
             Kind::Unspecified,
         )));
         let mut session = Vec::new();
-        crate::render::session_elements(self, output, renderer, scale, Some(shaders), &mut session);
-        let clear = crate::render::BACKGROUND;
+        crate::render::session_elements(self, output, renderer, scale, Some(shaders), true, &mut session);
         let mut cache = std::mem::take(&mut self.eyes_cache);
-        let layers = blurred(renderer, &mut cache, (&shaders.down, &shaders.up), &output.name(), size, scale, clear, &session, closed);
+        // The session stays hidden if it fails: black is all that is left.
+        backdrop(renderer, &mut cache, shaders, output, geo.size, scale, &session, (closed * 1.5).min(1.0), elements);
         self.eyes_cache = cache;
-        match layers {
-            Ok(layers) => {
-                let context = renderer.context_id();
-                // Topmost first: the deeper blur over the shallower.
-                for (texture, alpha) in layers.into_iter().rev() {
-                    // The whole texture (half size when blurred), stretched
-                    // over the monitor.
-                    let whole = texture.size();
-                    let src = Rectangle::from_size((whole.w as f64, whole.h as f64).into());
-                    elements.push(OutputElement::Texture(TextureRenderElement::from_static_texture(
-                        // A new id each frame: the picture changes each frame.
-                        Id::new(),
-                        context.clone(),
-                        (0.0, 0.0),
-                        texture,
-                        1,
-                        Transform::Normal,
-                        Some(alpha),
-                        Some(src),
-                        Some(geo.size),
-                        None,
-                        Kind::Unspecified,
-                    )));
-                }
-            }
-            // The session stays hidden: black is all that is left.
-            Err(err) => tracing::warn!("eyes: {err:?}"),
-        }
     }
 }
 

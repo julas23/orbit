@@ -115,6 +115,8 @@ pub struct Shaders {
     /// The blur's passes down and up (`eyes`).
     pub down: GlesTexProgram,
     pub up: GlesTexProgram,
+    /// A window card in perspective (`cards`).
+    pub card: GlesTexProgram,
 }
 
 impl Shaders {
@@ -136,7 +138,8 @@ impl Shaders {
             ],
         )?;
         let (down, up) = crate::eyes::compile(renderer)?;
-        Ok(Self { clip, border, down, up })
+        let card = crate::cards::compile(renderer)?;
+        Ok(Self { clip, border, down, up, card })
     }
 }
 
