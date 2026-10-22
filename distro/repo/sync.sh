@@ -142,6 +142,18 @@ aptly repo search orbit-local 2>/dev/null | while read -r ref; do
     name=${ref%%_*}
     grep -qx "$name" "$ours" || aptly repo remove orbit-local "Name (= $name)" >/dev/null
 done
+# And of each package only the newest version stays.
+aptly repo search -format='{{.Package}} {{.Version}}' orbit-local 2>/dev/null | sort -k1,1 | while read -r name version; do
+    versions=$(aptly repo search -format='{{.Version}}' orbit-local "Name (= $name)")
+    newest=""
+    for v in $versions; do
+        [[ -z "$newest" ]] || dpkg --compare-versions "$v" gt "$newest" && newest=$v
+    done
+    for v in $versions; do
+        dpkg --compare-versions "$v" lt "$newest" && aptly repo remove orbit-local "Name (= $name), \$Version (= $v)" >/dev/null
+    done
+    true
+done
 
 log "What the packages need from Debian"
 wanted=$(mktemp)
