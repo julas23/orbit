@@ -15,7 +15,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEST=${PREFIX:-$HOME/.local}/bin
 APPS=${PREFIX:-$HOME/.local}/share/applications
 
-cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock -p orbit-notify -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder -p orbit-term -p orbitctl
+cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock -p orbit-notify -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder -p orbit-term -p orbit-run -p orbitctl
 
 mkdir -p "$DEST"
 # install(1) replaces the file instead of writing into it, so a running
@@ -33,6 +33,7 @@ install -m 755 "$ROOT/target/release/orbit-edit" "$DEST/orbit-edit"
 install -m 755 "$ROOT/target/release/orbit-files" "$DEST/orbit-files"
 install -m 755 "$ROOT/target/release/orbit-pathfinder" "$DEST/orbit-pathfinder"
 install -m 755 "$ROOT/target/release/orbit-term" "$DEST/orbit-term"
+install -m 755 "$ROOT/target/release/orbit-run" "$DEST/orbit-run"
 # orbitctl talks to sway as well as to Orbit-Core.
 install -m 755 "$ROOT/target/release/orbitctl" "$DEST/orbitctl"
 install -m 755 "$ROOT/scripts/orbit-session" "$DEST/orbit-session"

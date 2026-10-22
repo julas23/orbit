@@ -3229,6 +3229,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-run"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "gtk4",
+ "gtk4-layer-shell",
+ "log",
+ "orbit-app",
+ "orbit-common",
+]
+
+[[package]]
 name = "orbit-term"
 version = "0.1.0"
 dependencies = [

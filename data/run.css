@@ -1,0 +1,52 @@
+/* Orbit-Run built-in stylesheet: a line high on the dimmed screen, in the
+ * greet's manner. Colours come from the palette; ~/.config/orbit/style.css
+ * goes on top. Sizes on the 5 px grid. */
+
+window.orbit-run {
+  background-color: alpha(#000000, 0.4);
+  color: @orbit_fg;
+}
+
+window.orbit-run .card {
+  min-width: 500px;
+  margin-top: 200px;
+  padding: 10px;
+  border-radius: 25px;
+  background-color: @orbit_window;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-run .field {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 20px;
+  background-color: @orbit_button;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-run .field:focus-within {
+  border-color: @orbit_accent;
+}
+
+window.orbit-run .icon {
+  color: @orbit_accent;
+}
+
+window.orbit-run .command,
+window.orbit-run .command:focus-within {
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  font-size: 15px;
+}
+
+window.orbit-run .message {
+  margin: 10px 15px 5px;
+  color: @orbit_muted;
+  font-family: monospace;
+}
+
+window.orbit-run .message.error {
+  color: @orbit_warn;
+}

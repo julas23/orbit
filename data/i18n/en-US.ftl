@@ -687,6 +687,12 @@ polkit-authenticate = Authenticate
 polkit-cancel = Cancel
 polkit-details = Details
 
+## The run line (Mod+R)
+
+run-title = Run
+run-placeholder = Command to run
+run-not-found = { $program }: no such program
+
 ## The keyring's password prompt
 
 prompter-title = Keyring

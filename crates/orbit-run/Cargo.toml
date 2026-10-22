@@ -1,0 +1,27 @@
+[package]
+name = "orbit-run"
+description = "Orbit-Run: type a command and run it (Mod+R), Rust + GTK4"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Run: a line over the screen, opened with Mod+R, where a command is typed and run, with history and completion of program names. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+assets = [
+    ["target/release/orbit-run", "usr/bin/", "755"],
+]
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+gtk.workspace = true
+gtk4-layer-shell.workspace = true
+log.workspace = true
+env_logger.workspace = true

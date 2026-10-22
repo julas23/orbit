@@ -679,6 +679,12 @@ polkit-authenticate = Autenticar
 polkit-cancel = Cancelar
 polkit-details = Detalhes
 
+## A linha de execução (Mod+R)
+
+run-title = Executar
+run-placeholder = Comando a executar
+run-not-found = { $program }: programa não encontrado
+
 ## Pedido de senha do chaveiro
 
 prompter-title = Chaveiro
