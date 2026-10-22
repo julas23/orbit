@@ -244,7 +244,7 @@ impl crate::state::Orbit {
     pub fn eyes_elements(&mut self, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, closed: f32, shaders: &crate::rounded::Shaders, elements: &mut Vec<OutputElement>) {
         let Some(geo) = self.space.output_geometry(output) else { return };
         let size = geo.size.to_physical_precise_round(scale);
-        crate::greet::elements(self, output, renderer, scale, closed, elements);
+        crate::session_lock::face_elements(self, output, renderer, scale, closed, elements);
         elements.push(OutputElement::Solid(SolidColorRenderElement::new(
             Id::new(),
             Rectangle::from_size(size),

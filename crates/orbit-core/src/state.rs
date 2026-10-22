@@ -14,7 +14,7 @@ use smithay::{
     input::{Seat, SeatState, keyboard::XkbConfig},
     output::Output,
     reexports::{
-        calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction, generic::Generic},
+        calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction, generic::Generic, ping::make_ping},
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::{
             Display, DisplayHandle,
@@ -40,6 +40,7 @@ use smithay::{
         viewporter::ViewporterState,
         xwayland_shell::XWaylandShellState,
         idle_inhibit::IdleInhibitManagerState,
+        session_lock::SessionLockManagerState,
     },
     xwayland::X11Wm,
 };
@@ -122,6 +123,10 @@ pub struct Orbit {
     pub logged_in: bool,
     /// The client shown while locked (`greet`).
     pub greet: crate::greet::Greet,
+    /// ext-session-lock, and the locker of others holding the lock
+    /// (`session_lock`).
+    pub session_lock_state: SessionLockManagerState,
+    pub locker: Option<crate::session_lock::Locker>,
     /// Input and its absence (`idle`).
     pub idle: crate::idle::Idle,
     pub idle_inhibit_state: IdleInhibitManagerState,
@@ -150,6 +155,7 @@ impl Orbit {
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
         let idle_inhibit_state = IdleInhibitManagerState::new::<Self>(&dh);
         crate::greet::init(&dh);
+        let session_lock_state = crate::session_lock::init(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "seat0");
@@ -204,6 +210,8 @@ impl Orbit {
             xwayland_shell_state,
             logged_in: false,
             greet: Default::default(),
+            session_lock_state,
+            locker: None,
             idle: Default::default(),
             idle_inhibit_state,
             sleep_inhibitor: None,
@@ -216,9 +224,13 @@ impl Orbit {
         let socket = ListeningSocketSource::new_auto().expect("a Wayland socket");
         let name = socket.socket_name().to_os_string();
         let handle = event_loop.handle();
+        // Any client leaving: was it the locker (`session_lock`)?
+        let (left, source) = make_ping().expect("a ping");
+        handle.insert_source(source, |(), &mut (), state| state.client_left()).expect("the ping in the event loop");
         handle
-            .insert_source(socket, |stream, _, state| {
-                if let Err(err) = state.display_handle.insert_client(stream, Arc::new(ClientState::default())) {
+            .insert_source(socket, move |stream, _, state| {
+                let data = ClientState { left: Some(left.clone()), ..Default::default() };
+                if let Err(err) = state.display_handle.insert_client(stream, Arc::new(data)) {
                     tracing::warn!("client refused: {err}");
                 }
             })
@@ -622,12 +634,14 @@ pub struct ClientState {
     pub compositor_state: CompositorClientState,
     /// Set on the greet's connection only (`greet`): rung when it closes.
     pub greet: Option<smithay::reexports::calloop::ping::Ping>,
+    /// Set on the socket's clients: rung when one closes (`session_lock`).
+    pub left: Option<smithay::reexports::calloop::ping::Ping>,
 }
 
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {
-        if let Some(ping) = &self.greet {
+        for ping in [&self.greet, &self.left].into_iter().flatten() {
             ping.ping();
         }
     }

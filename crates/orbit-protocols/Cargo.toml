@@ -19,7 +19,13 @@ wayland-server = { workspace = true, optional = true }
 
 [dev-dependencies]
 wayland-client.workspace = true
+# session-lock: a locker of others, for testing the core's ext-session-lock.
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+rustix.workspace = true
 
 [[example]]
 name = "greet-unlock"
 required-features = ["client"]
+
+[[example]]
+name = "session-lock"

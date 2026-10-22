@@ -128,7 +128,7 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
         return elements;
     }
     if state.locked() {
-        crate::greet::elements(state, output, renderer, scale, 1.0, &mut elements);
+        crate::session_lock::face_elements(state, output, renderer, scale, 1.0, &mut elements);
         return elements;
     }
     session_elements(state, output, renderer, scale, shaders.as_ref(), &mut elements);

@@ -11,7 +11,8 @@
 //!
 //! `orbit-core --locked` starts that way, before any client connects;
 //! `lock` (IPC) locks a running session. Unlocking is the greet's alone
-//! (`greet`), so nothing in the session can open it.
+//! (`greet`), so nothing in the session can open it — or, when a locker
+//! of others holds the lock, that locker's (`session_lock`).
 
 use std::time::Instant;
 
@@ -117,16 +118,31 @@ impl Orbit {
             keyboard.set_focus(self, None, SERIAL_COUNTER.next_serial());
         }
         self.greet_state();
-        self.place_greet();
-        self.focus_greet();
+        // A locker of others is the face itself (`session_lock`).
+        if self.locker.is_none() {
+            self.place_greet();
+        }
+        self.focus_face();
         self.refresh_pointer();
-        self.launch_greet();
+        if self.locker.is_none() {
+            self.launch_greet();
+        }
         self.request_render();
     }
 
     /// Shows the session again, opening the eyes; the keyboard goes back
-    /// where it was once they are open. The greet's to call (`greet`).
+    /// where it was once they are open. The greet's to call (`greet`),
+    /// unless a locker of others holds the lock.
     pub fn unlock(&mut self) {
+        if self.locker.is_some() {
+            tracing::warn!("unlock refused: a locker of others holds the lock");
+            return;
+        }
+        self.open();
+    }
+
+    /// Opens the eyes, for the greet or for the locker holding the lock.
+    pub fn open(&mut self) {
         match self.lock {
             Lock::Unlocked | Lock::Opening(_) => return,
             Lock::Closing(start) => self.lock = Lock::Opening(Self::turn(start)),
@@ -175,7 +191,7 @@ impl Orbit {
     pub fn refresh_pointer(&mut self) {
         let Some(pointer) = self.seat.get_pointer() else { return };
         let location = pointer.current_location();
-        let under = if self.locked() { self.greet_surface_under(location) } else { self.surface_under(location) };
+        let under = if self.locked() { self.face_surface_under(location) } else { self.surface_under(location) };
         let serial = SERIAL_COUNTER.next_serial();
         let time = smithay::backend::input::InputTime::now();
         pointer.motion(self, under, &smithay::input::pointer::MotionEvent { location, serial, time });

@@ -305,6 +305,7 @@ fn vblank(state: &mut Orbit, crtc: crtc::Handle) {
         state.loop_handle.insert_idle(move |state| render(state, crtc));
     }
     state.lock_shown();
+    state.confirm_lock();
 }
 
 fn render(state: &mut Orbit, crtc: crtc::Handle) {
@@ -340,6 +341,7 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
     send_frames(state, &output);
     // Nothing new to show: no vblank comes.
     state.lock_shown();
+    state.confirm_lock();
 }
 
 /// Tells the clients on `output` they may draw their next frame — only
@@ -352,7 +354,7 @@ fn send_frames(state: &mut Orbit, output: &Output) {
     for layer in layer_map_for_output(output).layers().filter(|_| state.session_shown()) {
         layer.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
-    state.greet_send_frame(output, time);
+    state.face_send_frame(output, time);
     // The pointer's own surface, when a client gave one.
     if let CursorImageStatus::Surface(surface) = &state.cursor_status {
         with_surface_tree_downward(

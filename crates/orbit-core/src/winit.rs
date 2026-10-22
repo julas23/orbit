@@ -131,11 +131,8 @@ fn render(state: &mut Orbit) {
     if state.animating() {
         winit.backend.window().request_redraw();
     }
-    // The eyes moving: another frame.
-    if state.animating() {
-        winit.backend.window().request_redraw();
-    }
     state.backend = Backend::Winit(winit);
+    state.confirm_lock();
 
     // Locked, clients are not drawn, so they are not asked to draw; the
     // greet is.
@@ -146,7 +143,7 @@ fn render(state: &mut Orbit) {
     for layer in layer_map_for_output(&output).layers().filter(|_| state.session_shown()) {
         layer.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
-    state.greet_send_frame(&output, time);
+    state.face_send_frame(&output, time);
     state.space.refresh();
     state.popups.cleanup();
     layer_map_for_output(&output).cleanup();

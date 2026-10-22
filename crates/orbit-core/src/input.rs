@@ -176,7 +176,7 @@ impl Orbit {
             // Locked, no shortcut but the two above, and no client but
             // the greet.
             if state.locked() {
-                return if state.greet_has_keyboard() { FilterResult::Forward } else { FilterResult::Intercept(None) };
+                return if state.face_has_keyboard() { FilterResult::Forward } else { FilterResult::Intercept(None) };
             }
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             match shortcut(modifier, mods, sym) {
@@ -302,9 +302,9 @@ impl Orbit {
         if self.locked()
             && let Some(output) = self.output_at(pos)
         {
-            self.greet_follow(&output);
+            self.face_follow(&output);
         }
-        let under = if self.locked() { self.greet_surface_under(pos) } else { self.surface_under(pos) };
+        let under = if self.locked() { self.face_surface_under(pos) } else { self.surface_under(pos) };
         if !self.locked() && self.config.focus_follows_mouse && !pointer.is_grabbed() && self.exclusive_layer().is_none() {
             let window = self.window_under(pos);
             let over_layer = self.layer_at(pos, &[WlrLayer::Overlay, WlrLayer::Top]);

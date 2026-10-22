@@ -30,6 +30,7 @@ mod focus;
 mod fullscreen;
 mod grab;
 mod greet;
+mod session_lock;
 mod handlers;
 mod idle;
 mod input;
