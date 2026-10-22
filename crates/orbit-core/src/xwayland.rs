@@ -137,7 +137,13 @@ impl XwmHandler for Orbit {
         if self.x11_window(&surface).is_some() {
             return;
         }
-        self.add_window(Window::new_x11_window(surface));
+        let fullscreen = surface.is_fullscreen();
+        let window = Window::new_x11_window(surface);
+        self.add_window(window.clone());
+        // Asked for before it was shown (a game, a video player).
+        if fullscreen {
+            self.set_fullscreen(&window, true);
+        }
     }
 
     /// A menu or tooltip: where it asks, above everything.
@@ -207,6 +213,24 @@ impl XwmHandler for Orbit {
             && let Some(window) = self.x11_window(&surface)
         {
             self.window_event("title", &window);
+        }
+    }
+
+    fn fullscreen_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        match self.x11_window(&surface) {
+            Some(window) => self.set_fullscreen(&window, true),
+            None => {
+                let _ = surface.set_fullscreen(true);
+            }
+        }
+    }
+
+    fn unfullscreen_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        match self.x11_window(&surface) {
+            Some(window) => self.set_fullscreen(&window, false),
+            None => {
+                let _ = surface.set_fullscreen(false);
+            }
         }
     }
 

@@ -238,7 +238,19 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.switch_layout(which)?;
             Ok(())
         }
-        ["floating", ..] | ["fullscreen", ..] | ["split" | "splith" | "splitv", ..] | ["layout", ..] | ["resize", ..] | ["gaps", ..] | ["border", ..] | ["sticky", ..] | ["mark", ..] => {
+        ["fullscreen", rest @ ..] => {
+            for window in windows() {
+                let on = match rest {
+                    [] | ["toggle"] => !crate::fullscreen::is_fullscreen(&window),
+                    ["enable"] => true,
+                    ["disable"] => false,
+                    _ => return Err(format!("fullscreen: enable, disable or toggle, not {}", rest.join(" "))),
+                };
+                state.set_fullscreen(&window, on);
+            }
+            Ok(())
+        }
+        ["floating", ..] | ["split" | "splith" | "splitv", ..] | ["layout", ..] | ["resize", ..] | ["gaps", ..] | ["border", ..] | ["sticky", ..] | ["mark", ..] => {
             Err(format!("not in orbit-core yet: {}", w[0]))
         }
         _ => Err(format!("Unknown/invalid command '{command}'")),

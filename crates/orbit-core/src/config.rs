@@ -14,6 +14,9 @@
 //! login: [nm-applet]          # at the first unlock (at once if not locked)
 //! greet: orbit-greet     # shown while locked; the only client that unlocks
 //! stride: 10             # area N: workspace N, 10+N, 20+N… down the monitors
+//! idle_lock: 600         # seconds without input before locking; 0: never
+//! # or by machine (the file synced between several):
+//! # idle_lock: { default: 600, think: 0, julas: 0 }
 //! outputs:               # where each monitor sits; unnamed ones stack
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
 //! ```
@@ -60,6 +63,32 @@ pub struct Config {
     /// Workspace-number distance between the same area on two monitors
     /// (the panel's `stride`; see `workspace`).
     pub stride: i32,
+    /// Seconds without input before the core locks (0: never), for every
+    /// machine or by host name (`idle`).
+    pub idle_lock: PerHost<u64>,
+}
+
+/// One value for every machine, or one per host name, with `default` for
+/// the others (a `core.yaml` synced between machines).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(untagged)]
+pub enum PerHost<T> {
+    All(T),
+    ByHost(HashMap<String, T>),
+}
+
+impl<T: Copy + Default> PerHost<T> {
+    pub fn get(&self, host: &str) -> T {
+        match self {
+            Self::All(value) => *value,
+            Self::ByHost(map) => map.get(host).or_else(|| map.get("default")).copied().unwrap_or_default(),
+        }
+    }
+}
+
+/// This machine's name.
+pub fn hostname() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/hostname").map(|s| s.trim().to_owned()).unwrap_or_default()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -109,6 +138,7 @@ impl Default for Config {
             cursor_size: 24,
             outputs: HashMap::new(),
             stride: 10,
+            idle_lock: PerHost::All(600),
         }
     }
 }
@@ -210,6 +240,18 @@ pub fn color(text: &str) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn idle_by_host() {
+        let config: Config = serde_yaml_ng::from_str("idle_lock: 300").unwrap();
+        assert_eq!(config.idle_lock.get("hp"), 300);
+        let config: Config = serde_yaml_ng::from_str("idle_lock: { default: 600, think: 0 }").unwrap();
+        assert_eq!(config.idle_lock.get("think"), 0);
+        assert_eq!(config.idle_lock.get("hp"), 600);
+        let config: Config = serde_yaml_ng::from_str("idle_lock: { think: 0 }").unwrap();
+        assert_eq!(config.idle_lock.get("hp"), 0);
+        assert_eq!(Config::default().idle_lock.get("hp"), 600);
+    }
 
     #[test]
     fn empty_and_partial_files() {

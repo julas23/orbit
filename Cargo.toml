@@ -97,6 +97,9 @@ smithay = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d0013
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "24647fc8d00131eb7f388efed26e35ea316b0018" }
 # orbit-core: the pointer's image, from the cursor theme.
 xcursor = "0.3"
+# orbit-core: org.freedesktop.ScreenSaver, the inhibitors of browsers and
+# players (the series glycin already brings).
+zbus = "5"
 # The matrices of the renderer's shaders (the version Smithay uses).
 glam = { version = "0.33", default-features = false, features = ["std"] }
 tracing = "0.1"

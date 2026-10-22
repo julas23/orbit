@@ -34,16 +34,18 @@ impl Workspace {
     }
 }
 
-/// What the core keeps with each window: its id (sway's `con_id`) and the
-/// rectangle it was last laid out in (kept while its workspace is hidden).
+/// What the core keeps with each window: its id (sway's `con_id`), the
+/// rectangle it was last laid out in (kept while its workspace is hidden)
+/// and whether it is fullscreen (`fullscreen`).
 pub struct Info {
     pub id: u64,
     pub rect: (i32, i32, i32, i32),
+    pub fullscreen: bool,
 }
 
 /// The window's info; given on the first call.
 pub fn info(window: &Window) -> &RefCell<Info> {
-    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0) }));
+    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false }));
     window.user_data().get::<RefCell<Info>>().expect("just inserted")
 }
 

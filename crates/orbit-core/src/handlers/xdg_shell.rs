@@ -15,7 +15,7 @@ use smithay::{
         get_popup_toplevel_coords, layer_map_for_output,
     },
     input::{Seat, pointer::Focus},
-    reexports::wayland_server::{Resource, protocol::wl_seat},
+    reexports::wayland_server::{Resource, protocol::{wl_output, wl_seat}},
     utils::{Logical, Rectangle, Serial},
     wayland::shell::xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState},
 };
@@ -86,6 +86,31 @@ impl XdgShellHandler for Orbit {
         }
         let Some(window) = self.window_for(surface.wl_surface()) else { return };
         self.start_move(window, serial, Some(start));
+    }
+
+    /// Fullscreen on its workspace's monitor, whichever output it names.
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<wl_output::WlOutput>) {
+        match self.window_for(surface.wl_surface()) {
+            Some(window) => self.set_fullscreen(&window, true),
+            None => {
+                surface.send_configure();
+            }
+        }
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        match self.window_for(surface.wl_surface()) {
+            Some(window) => self.set_fullscreen(&window, false),
+            None => {
+                surface.send_configure();
+            }
+        }
+    }
+
+    /// A tiled window keeps its tile: told so, as the protocol wants an
+    /// answer.
+    fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        surface.send_configure();
     }
 
     /// A menu holds the pointer and the keyboard until it closes.

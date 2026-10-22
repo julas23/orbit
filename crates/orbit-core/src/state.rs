@@ -39,6 +39,7 @@ use smithay::{
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
         xwayland_shell::XWaylandShellState,
+        idle_inhibit::IdleInhibitManagerState,
     },
     xwayland::X11Wm,
 };
@@ -121,6 +122,9 @@ pub struct Orbit {
     pub logged_in: bool,
     /// The client shown while locked (`greet`).
     pub greet: crate::greet::Greet,
+    /// Input and its absence (`idle`).
+    pub idle: crate::idle::Idle,
+    pub idle_inhibit_state: IdleInhibitManagerState,
 }
 
 impl Orbit {
@@ -139,6 +143,7 @@ impl Orbit {
         let data_control_state = DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
         let viewporter_state = ViewporterState::new::<Self>(&dh);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
+        let idle_inhibit_state = IdleInhibitManagerState::new::<Self>(&dh);
         crate::greet::init(&dh);
 
         let mut seat_state = SeatState::new();
@@ -194,6 +199,8 @@ impl Orbit {
             xwayland_shell_state,
             logged_in: false,
             greet: Default::default(),
+            idle: Default::default(),
+            idle_inhibit_state,
         }
     }
 
@@ -234,6 +241,7 @@ impl Orbit {
         }
         self.read_layouts();
         self.arrange();
+        self.arm_idle();
     }
 
     /// Notes the keyboard's layouts and which is active.
@@ -338,17 +346,22 @@ impl Orbit {
     pub fn arrange(&mut self) {
         let shown: Vec<(String, i32)> = self.visible.iter().map(|(o, n)| (o.clone(), *n)).collect();
         for (output, num) in shown {
-            let Some(area) = self.output_named(&output).and_then(|o| self.usable_area(&o)) else { continue };
-            self.arrange_on(area, num);
+            let Some(output) = self.output_named(&output) else { continue };
+            let (Some(area), Some(full)) = (self.usable_area(&output), self.space.output_geometry(&output)) else { continue };
+            self.arrange_on(area, (full.loc.x, full.loc.y, full.size.w, full.size.h), num);
         }
         self.request_render();
     }
 
-    fn arrange_on(&mut self, area: tile::Rect, num: i32) {
+    /// The windows of workspace `num` in columns over `area`; a fullscreen
+    /// one over the whole monitor, `full`, above the others.
+    fn arrange_on(&mut self, area: tile::Rect, full: tile::Rect, num: i32) {
         let windows = self.windows_of(num);
         let rects = tile::columns(windows.len(), area, self.config.gaps, self.config.border);
         tracing::debug!(num, ?area, ?rects, "arrange");
-        for (window, (x, y, w, h)) in windows.into_iter().zip(rects) {
+        for (window, rect) in windows.into_iter().zip(rects) {
+            let fullscreen = crate::fullscreen::is_fullscreen(&window);
+            let (x, y, w, h) = if fullscreen { full } else { rect };
             info(&window).borrow_mut().rect = (x, y, w, h);
             if let Some(surface) = window.x11_surface() {
                 // X windows are placed in the root window's coordinates,
@@ -357,7 +370,7 @@ impl Orbit {
                     tracing::warn!("X window {}: {err}", surface.window_id());
                 }
                 if self.dragging.as_ref() != Some(&window) {
-                    self.space.map_element(window, (x, y), false);
+                    self.space.map_element(window, (x, y), fullscreen);
                 }
                 continue;
             }
@@ -377,7 +390,7 @@ impl Orbit {
             toplevel.send_pending_configure();
             // The one being dragged follows the pointer until it is let go.
             if self.dragging.as_ref() != Some(&window) {
-                self.space.map_element(window, (x, y), false);
+                self.space.map_element(window, (x, y), fullscreen);
             }
         }
     }
@@ -387,6 +400,9 @@ impl Orbit {
     pub fn focus_window(&mut self, window: Option<Window>) {
         let serial = SERIAL_COUNTER.next_serial();
         let before = self.focused_window();
+        if let Some(w) = &window {
+            self.yield_fullscreen(w);
+        }
         if let Some(w) = &window
             && let Some(num) = self.workspace_of(w)
         {
@@ -502,6 +518,28 @@ impl Orbit {
                     .map(|(s, p)| (s, (p + loc + out.loc).to_f64()))
             })
         };
+        // A fullscreen window: above it, the overlay, the top layer's
+        // menus and X menus alone.
+        if let Some(full) = self.fullscreen_on(&output) {
+            let menu = |l: &LayerSurface| crate::fullscreen::above_fullscreen(l);
+            let in_top = || {
+                let rel = pos - out.loc.to_f64();
+                map.layer_under(WlrLayer::Top, rel).filter(|l| menu(l)).and_then(|l| {
+                    let loc = map.layer_geometry(l)?.loc;
+                    l.surface_under(rel - loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + loc + out.loc).to_f64()))
+                })
+            };
+            let window = || {
+                self.space
+                    .element_under(pos)
+                    .filter(|(w, _)| **w == full || w.x11_surface().is_some_and(|x| x.is_override_redirect()))
+                    .or_else(|| Some((&full, self.space.element_location(&full)?)))
+                    .and_then(|(window, location)| {
+                        window.surface_under(pos - location.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + location).to_f64()))
+                    })
+            };
+            return in_layer(WlrLayer::Overlay).or_else(in_top).or_else(window);
+        }
         in_layer(WlrLayer::Overlay)
             .or_else(|| in_layer(WlrLayer::Top))
             .or_else(|| {

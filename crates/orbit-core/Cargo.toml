@@ -34,3 +34,4 @@ tracing-subscriber.workspace = true
 serde.workspace = true
 serde_yaml_ng.workspace = true
 anyhow.workspace = true
+zbus.workspace = true

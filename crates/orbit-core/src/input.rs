@@ -45,6 +45,10 @@ pub enum Action {
     Vt(i32),
     /// Ctrl+Alt+Backspace: out, whatever the config says (as in X).
     Emergency,
+    /// Mod+L: the lock (`lock`).
+    Lock,
+    /// Mod+F: the focused window in or out of fullscreen.
+    Fullscreen,
 }
 
 /// The action of `sym` with `mods` held, when `modifier` is the core's.
@@ -69,7 +73,9 @@ pub fn shortcut(modifier: Modifier, mods: &ModifiersState, sym: Keysym) -> Optio
         (false, Keysym::q) => Action::Close,
         (true, Keysym::q) => Action::Kill,
         (true, Keysym::e) => Action::Quit,
-        (false, Keysym::Right | Keysym::l | Keysym::Down | Keysym::j) => Action::FocusNext,
+        (false, Keysym::l) => Action::Lock,
+        (false, Keysym::f) => Action::Fullscreen,
+        (false, Keysym::Right | Keysym::Down | Keysym::j) => Action::FocusNext,
         (false, Keysym::Left | Keysym::h | Keysym::Up | Keysym::k) => Action::FocusPrevious,
         (true, Keysym::Right | Keysym::l | Keysym::Down | Keysym::j) => Action::MoveNext,
         (true, Keysym::Left | Keysym::h | Keysym::Up | Keysym::k) => Action::MovePrevious,
@@ -84,6 +90,16 @@ fn xkb_lower(raw: u32) -> u32 {
 
 impl Orbit {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        if matches!(
+            event,
+            InputEvent::Keyboard { .. }
+                | InputEvent::PointerMotion { .. }
+                | InputEvent::PointerMotionAbsolute { .. }
+                | InputEvent::PointerButton { .. }
+                | InputEvent::PointerAxis { .. }
+        ) {
+            self.touched();
+        }
         match event {
             InputEvent::Keyboard { event, .. } => self.key::<I>(event),
             // A mouse or touchpad: it moves the pointer by so much.
@@ -192,6 +208,12 @@ impl Orbit {
                 }
             }
             Action::Kill => self.kill_focused(),
+            Action::Lock => self.lock(),
+            Action::Fullscreen => {
+                if let Some(window) = self.focused_window() {
+                    self.set_fullscreen(&window, !crate::fullscreen::is_fullscreen(&window));
+                }
+            }
             Action::Quit => self.loop_signal.stop(),
             Action::Emergency => {
                 tracing::warn!("Ctrl+Alt+Backspace: leaving");
@@ -377,6 +399,7 @@ mod tests {
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::Return), Some(Action::Terminal));
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::q), Some(Action::Close));
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::space), Some(Action::Launcher));
+        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::f), Some(Action::Fullscreen));
         assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Q), Some(Action::Kill));
         assert_eq!(shortcut(Modifier::Super, &mods(false, true), Keysym::Q), None);
         assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::x), None);

@@ -2,7 +2,8 @@
 //! first: the pointer (when the core draws it), the overlay and top layers
 //! (menus, notifications), the windows — each with its menus, its surfaces
 //! cut to rounded corners (`rounded`) and its border — then the bottom and
-//! background layers.
+//! background layers. A fullscreen window hides most of that
+//! (`fullscreen`).
 //!
 //! The element types follow anvil `src/render.rs` @ 24647fc (Smithay, MIT,
 //! Copyright (c) 2017 Victor Berger and Victoria Brekenfeld); a window's
@@ -120,6 +121,31 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
     }
 
     let shaders = shaders(state, renderer);
+    // A fullscreen window hides the rest, but for the overlay, the top
+    // layer's menus and X menus (`fullscreen`).
+    if let Some(full) = state.fullscreen_on(output) {
+        layer_elements(output, renderer, scale, &[WlrLayer::Overlay], &mut elements);
+        let map = layer_map_for_output(output);
+        for surface in crate::fullscreen::top_above(output) {
+            let Some(at) = map.layer_geometry(&surface).map(|g| g.loc.to_physical_precise_round(scale)) else { continue };
+            elements.extend(
+                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(&surface, renderer, at, scale, 1.0)
+                    .into_iter()
+                    .map(OutputElement::Surface),
+            );
+        }
+        drop(map);
+        let menus: Vec<Window> = state
+            .space
+            .elements_for_output(output)
+            .filter(|w| w.x11_surface().is_some_and(|x| x.is_override_redirect()))
+            .cloned()
+            .collect();
+        for window in menus.iter().rev().chain([&full]) {
+            window_elements(state, window, geo, renderer, scale, shaders.as_ref(), &mut elements);
+        }
+        return elements;
+    }
     layer_elements(output, renderer, scale, &[WlrLayer::Overlay, WlrLayer::Top], &mut elements);
     let windows: Vec<Window> = state.space.elements_for_output(output).cloned().collect();
     for window in windows.iter().rev() {
@@ -174,7 +200,9 @@ fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>,
         );
     }
 
-    let radius = state.config.corner_radius.max(0);
+    // Fullscreen: square corners, no border.
+    let fullscreen = crate::fullscreen::is_fullscreen(window);
+    let radius = if fullscreen { 0 } else { state.config.corner_radius.max(0) };
     let physical = rect.to_physical_precise_round(scale);
     let physical_radius = (radius as f64 * scale.x).round() as i32;
     for element in render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, surface, at, scale, 1.0, Kind::Unspecified) {
@@ -187,7 +215,7 @@ fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>,
     }
 
     let width = state.config.border;
-    let Some(shaders) = shaders.filter(|_| width > 0) else { return };
+    let Some(shaders) = shaders.filter(|_| width > 0 && !fullscreen) else { return };
     let colour = if state.focused_window().as_ref() == Some(window) { color(&state.config.focused_color) } else { color(&state.config.unfocused_color) };
     let area = Rectangle::new(rect.loc - Point::from((width, width)), (rect.size.w + 2 * width, rect.size.h + 2 * width).into());
     let border = border_of(window);

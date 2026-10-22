@@ -380,7 +380,7 @@ impl Orbit {
             "orientation": "none",
             "border": "pixel",
             "current_border_width": self.config.border,
-            "fullscreen_mode": 0,
+            "fullscreen_mode": u8::from(crate::fullscreen::is_fullscreen(window)),
             "sticky": false,
             "marks": [],
             "nodes": [],
