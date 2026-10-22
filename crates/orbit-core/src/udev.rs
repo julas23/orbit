@@ -200,7 +200,11 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
                     tracing::error!("libinput resume: {err:?}");
                 }
                 if let Backend::Drm(drm) = &mut state.backend {
-                    if let Err(err) = drm.manager.lock().activate(false) {
+                    // The other session may have left each screen on another
+                    // crtc: kept as it is, every frame asks for a connector
+                    // still held by the other crtc and is refused forever.
+                    // Everything off first, then each output takes its own.
+                    if let Err(err) = drm.manager.lock().activate(true) {
                         tracing::error!("DRM activate: {err}");
                     }
                     for surface in drm.surfaces.values_mut() {
