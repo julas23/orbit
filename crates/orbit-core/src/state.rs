@@ -117,6 +117,8 @@ pub struct Orbit {
     pub xdisplay: Option<u32>,
     pub xwm: Option<X11Wm>,
     pub xwayland_shell_state: XWaylandShellState,
+    /// The `login:` commands ran (`lock`).
+    pub logged_in: bool,
     /// The client shown while locked (`greet`).
     pub greet: crate::greet::Greet,
 }
@@ -190,6 +192,7 @@ impl Orbit {
             xdisplay: None,
             xwm: None,
             xwayland_shell_state,
+            logged_in: false,
             greet: Default::default(),
         }
     }

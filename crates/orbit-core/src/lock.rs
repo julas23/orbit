@@ -66,6 +66,17 @@ impl Orbit {
         self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
         self.refresh_pointer();
         self.request_render();
+        self.log_in();
+    }
+
+    /// Runs the config's `login:` commands, the first time only.
+    pub fn log_in(&mut self) {
+        if std::mem::replace(&mut self.logged_in, true) {
+            return;
+        }
+        for line in self.config.login.clone() {
+            self.spawn(&line);
+        }
     }
 
     /// Sends the pointer, where it is, to what is under it now: the greet

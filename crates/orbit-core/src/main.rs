@@ -12,7 +12,8 @@
 //! Mod+Shift+E leaves.
 //!
 //! `--locked` starts with the session hidden behind the lock (the login,
-//! PLANO-CORE §7), with the greet (`greet`) launched. COMMAND (and the config's `startup:`) run as clients of
+//! PLANO-CORE §7), with the greet (`greet`) launched; the config's
+//! `login:` waits for the first unlock. COMMAND (and the config's `startup:`) run as clients of
 //! the core. The
 //! plan is `docs/PLANO-CORE.md`.
 //!
@@ -89,6 +90,9 @@ fn main() -> anyhow::Result<()> {
 
     for line in state.config.startup.clone() {
         state.spawn(&line);
+    }
+    if !state.locked() {
+        state.log_in();
     }
     if !command.is_empty() {
         let line = command.iter().map(|a| shell_quote(a)).collect::<Vec<_>>().join(" ");

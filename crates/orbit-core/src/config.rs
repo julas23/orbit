@@ -10,7 +10,8 @@
 //! gaps: 6
 //! border: 2
 //! corner_radius: 10
-//! startup: [orbit-session]
+//! startup: [orbit-session]   # at once, behind the lock if locked
+//! login: [nm-applet]          # at the first unlock (at once if not locked)
 //! greet: orbit-greet     # shown while locked; the only client that unlocks
 //! stride: 10             # area N: workspace N, 10+N, 20+N… down the monitors
 //! outputs:               # where each monitor sits; unnamed ones stack
@@ -44,6 +45,10 @@ pub struct Config {
     pub focus_follows_mouse: bool,
     /// Commands run once the core is up (through `sh -c`).
     pub startup: Vec<String>,
+    /// Commands run once the user is in: at the first unlock of a core
+    /// started `--locked`, at once otherwise. What needs the user's
+    /// secrets (the keyring) goes here.
+    pub login: Vec<String>,
     /// The greet, launched by the core at each lock (through `sh -c`).
     pub greet: String,
     /// The pointer's theme and size (sway's `seat * xcursor_theme`); also
@@ -98,6 +103,7 @@ impl Default for Config {
             unfocused_color: "#4c566a".into(),
             focus_follows_mouse: true,
             startup: Vec::new(),
+            login: Vec::new(),
             greet: "orbit-greet".into(),
             cursor_theme: "Breeze_Light".into(),
             cursor_size: 24,
