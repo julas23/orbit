@@ -256,22 +256,91 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 1 | Estado `Locked` no core: com ele ligado, a tela é preta, nada de cliente é desenhado nem recebe entrada; `--locked`; teste headless provando que uma janela aberta não aparece no quadro capturado | 1 |
 | 2 | Abrir e fechar os olhos: fade do preto + blur (dual kawase, shader GLES próprio) da sessão numa textura fora da tela, só durante a transição — **feito** 2026-10-21 (`eyes.rs`, estados `Closing`/`Opening` em `lock.rs`; 400 ms, curva cúbica; a meio caminho volta de onde está; antes de suspender trava sem transição) | 1 |
 | 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar; o core põe a janela do greet no monitor ativo) — **feito** 2026-10-21 | 1 |
-| 4 | `ext-session-lock-v1` no core (para lockers de terceiros) | 1 |
+| 4 | `ext-session-lock-v1` no core (para lockers de terceiros) — **feito** 2026-10-21 (`session_lock.rs`): o locker pega o mesmo bloqueio do Super+L (fecha os olhos) com as superfícies dele no lugar do greet, uma por monitor, o teclado na do cursor; `locked` só com o preto em todas as telas; o `unlock_and_destroy` dele abre os olhos e o greet não destrava enquanto ele segura. Já travado (pelo Orbit ou por outro locker), um novo recebe `finished`. Locker que morre deixa a sessão travada e o greet assume. Testado aninhado com `orbit-protocols/examples/session-lock` (os quatro casos) | 1 |
 | 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) — **feito** 2026-10-21 | 1 |
 | 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar (`login:` no `core.yaml`) — **feito** 2026-10-21 | 2 |
 | 7 | Destravar o gnome-keyring com a senha — **feito** 2026-10-21: `auth optional pam_gnome_keyring.so` no serviço `orbit-greet`, com o greet pondo `XDG_RUNTIME_DIR` no ambiente do PAM (é onde o módulo acha o socket de controle do daemon, ativado pelo socket do systemd do usuário) | 2 |
 | 7a | Agente polkit próprio, `orbit-polkit` (no lugar do `lxpolkit`): camada overlay com o teclado, o cartão no visual do greet; a senha conferida pelo `polkit-agent-helper-1` do próprio polkit — **feito** 2026-10-21 | 2 |
-| 7b | Prompter do chaveiro no visual do Orbit, no lugar do `gcr-prompter` (o pedido de senha quando um app abre um chaveiro travado ou cria um novo). O chaveiro em si continua o gnome-keyring (ver Riscos, "Chaveiro próprio") | 4 |
+| 7b | Prompter do chaveiro no visual do Orbit, no lugar do `gcr-prompter` (o pedido de senha quando um app abre um chaveiro travado ou cria um novo). O chaveiro em si continua o gnome-keyring (ver Riscos, "Chaveiro próprio") — **feito** 2026-10-22: crate `orbit-prompter`, que fala o protocolo do `gcr-prompter` (`org.gnome.keyring.SystemPrompter`: BeginPrompting/PerformPrompt/StopPrompting, PromptReady/PromptDone) e a troca `sx-aes-1` (DH 1536, HKDF-SHA256, AES-128-CBC; conferida contra a `libgcr-base-3` real); cartão do `orbit-polkit`, senha nova pedida duas vezes, a escolha "destravar ao entrar". Ativado pelo D-Bus com `data/dbus/org.gnome.keyring.SystemPrompter.service` em `~/.local/share/dbus-1/services/`; sai 30 s depois do último pedido | 4 |
 | 8 | Bloqueio por Super+L, ociosidade e antes de suspender — **feito** 2026-10-21: `idle_lock` por máquina no `core.yaml` (`idle.rs`); antes de suspender, um inibidor `delay` do logind, solto quando o quadro preto está em todas as telas, 2 s no máximo (`sleep.rs`) | 2 |
 | 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar — **feito** 2026-10-21 (`fullscreen.rs`, `screensaver.rs`) | 2 |
 | 9 | Visual completo (seção 7.2), vários monitores — **feito** 2026-10-21: teclado, rede e bateria no canto (`status.rs` do greet; layouts do próprio keymap, clique troca pelo IPC do core, que o greet agora recebe), suspender/reiniciar/desligar embaixo (`power.rs`, comandos no `greet.yaml`; reiniciar e desligar perguntam no próprio cartão, "Não" focado, Esc volta); o greet segue o cursor entre monitores, os outros ficam pretos | 2 |
-| 10 | Seleção de usuário com a sessão carregando atrás da camada | 5 |
+| 10 | Seleção de usuário com a sessão carregando atrás da camada — feito em 2026-10-22 (§7.4, `orbit-login`); falta o teste real com dois usuários | 5 |
 | 11 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |
 
 **Pronto (login) quando:** o hp liga direto no greet do Orbit; a senha certa
 abre os olhos sobre a sessão com o chaveiro destravado e o autostart rodando;
 a errada não revela nada; matar o greet (ou o core) não destrava; Super+L,
 ociosidade e suspender fecham os olhos na mesma tela.
+
+### 7.4 Passo 10, seleção de usuário
+
+Proposta e código em 2026-10-22 (crate `orbit-login`; o Juliano criou um
+segundo usuário, `merilin`, e pediu para seguir com a proposta como está). O passo pede o que nenhum processo de
+um usuário pode fazer: abrir a sessão de **outro** usuário e conferir a senha
+dele (o `pam_unix` de um usuário só confere a própria senha). O hp tem um
+usuário só, então nada disso aparece nele enquanto não houver um segundo.
+
+**Proposta:**
+
+1. **`orbit-login`, serviço do sistema (root, `seat0`)**, no lugar do autologin do
+   getty no tty1. Pequeno, no papel do greetd: abre sessões PAM/logind e mais
+   nada. No boot, abre a sessão do usuário padrão sem senha (o autologin de
+   hoje, serviço PAM `orbit-login-autologin`) e roda `orbit-core --locked` dele
+   no VT1. Se o core cair, a sessão é refeita travada, como o getty faz hoje.
+2. **O greet lista os usuários** (AccountsService, `org.freedesktop.Accounts`),
+   só quando há mais de um. Escolher outro usuário pede ao `orbit-login`, por um
+   socket em `/run/orbit/login.sock`, "prepare B".
+3. **Pré-carregar:** o `orbit-login` abre a sessão de B (PAM, `pam_systemd`,
+   classe `user`) num VT livre, **sem trocar de VT**, e roda o
+   `orbit-core --locked` de B lá. A sessão de B carrega atrás enquanto a senha é
+   digitada.
+4. **A senha de B** vai do greet de A ao `orbit-login`, que confere com o PAM
+   (serviço `orbit-greet`, usuário B; o `pam_gnome_keyring` destrava o chaveiro
+   de B como no passo 7, com `XDG_RUNTIME_DIR=/run/user/<uid de B>`). Se a senha
+   estiver certa: `Session.Activate` do logind (troca para o VT de B) e o core de
+   B destrava.
+5. **Quem destrava o core de B:** uma mensagem `unlock` no socket do core, aceita
+   só de um par com uid 0 (`SO_PEERCRED`), além do greet de hoje. É a única
+   porta nova no core.
+6. **Voltar:** Super+L em B mostra o greet de B, com A na lista; escolher A
+   ativa o VT1, onde o greet de A pede a senha de A.
+
+**Feito assim (2026-10-22):**
+
+- `orbit-login` (root) roda a si mesmo para cada trabalho com PAM —
+  `--session USER VT COMMAND` (o líder da sessão no logind, que fecha a sessão
+  quando o comando acaba) e `--check USER` (senha pela entrada padrão) —
+  porque os módulos do PAM fazem fork, o que um processo com threads não deve.
+  A sessão roda `COMMAND` pelo shell de login do usuário (`-l -c`), com a
+  entrada fora do tty: o ramo do tty1 do `~/.profile` não dispara.
+- O core de uma sessão aberta atrás **espera ser mostrado** (logind,
+  `Session.Active`) antes de pegar a tela: a GPU não é dele até lá. O que
+  carrega atrás são os serviços do usuário (systemd `--user`, chaveiro,
+  Syncthing); o core e o `startup:` sobem na troca, já travados, e o `unlock`
+  do `orbit-login` (tentado por até 30 s) abre os olhos.
+- O greet mostra os outros abaixo do cartão só com o `orbit-login` no ar, a
+  ligação com o core e mais de uma pessoa (uid 1000–59999 com shell, de
+  `/etc/passwd`); Esc volta ao próprio usuário.
+- O `orbit-login` só atende programas das sessões que ele abriu (uid por
+  `SO_PEERCRED`), uma pergunta por vez, e espera 2, 4, 8… até 30 s depois de
+  3 senhas erradas para o mesmo usuário.
+- Se a sessão padrão morre em menos de 10 s e nada mais está aberto, o
+  serviço falha e o `OnFailure=` devolve o tty1 ao getty (login de texto).
+- Instalação: `scripts/install-login.sh` (como root) põe `orbit-login`,
+  `orbit-core` e `orbit-greet` em `/usr/local/bin` (de root; os outros
+  usuários não têm cópia em `~/.local/bin`), o PAM, a unit e
+  `/etc/orbit/login.yaml`; `--remove` volta ao autologin do getty.
+- Testado sem root: o `unlock` de um usuário comum é recusado (core aninhado),
+  `--check` recusa a senha errada, a lista de usuários e o protocolo (testes).
+  **Falta o teste real** (root, dois usuários, troca de VT).
+
+**Decisões tomadas** (eram as perguntas abertas da proposta):
+
+- Um serviço root próprio no lugar do autologin do getty: sim.
+- Pré-carregar só ao escolher o usuário, não no boot.
+- O canal root → core: o `unlock` no IPC, aceito só de uid 0.
+- Fazer agora: sim, com o segundo usuário criado no hp.
 
 ## 8. Fases
 
