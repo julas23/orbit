@@ -1,4 +1,8 @@
 # orbit-greet: the login and lock screen of Orbit. It runs as the session's
 # own user, so pam_unix checks that user's password through unix_chkpwd.
 @include common-auth
+# The same password unlocks the login keyring: the greet hands the module
+# XDG_RUNTIME_DIR, where the daemon's control socket is (the systemd user
+# socket starts the daemon on the first connection).
+auth optional pam_gnome_keyring.so
 @include common-account

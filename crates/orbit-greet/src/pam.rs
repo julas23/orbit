@@ -3,7 +3,9 @@
 //! package). The service is `orbit-greet` (`/etc/pam.d/orbit-greet`;
 //! without it PAM uses `other`). The greet runs as the session's user, so
 //! pam_unix can check only that user's password (through unix_chkpwd), as
-//! swaylock does.
+//! swaylock does. The right password also unlocks the login keyring
+//! (`pam_gnome_keyring` in the service, PLANO-CORE §7.3 step 7), which
+//! looks for the daemon through `XDG_RUNTIME_DIR` in the PAM environment.
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 
@@ -49,6 +51,7 @@ unsafe extern "C" {
     fn pam_acct_mgmt(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_end(pamh: *mut PamHandle, status: c_int) -> c_int;
     fn pam_strerror(pamh: *mut PamHandle, errnum: c_int) -> *const c_char;
+    fn pam_putenv(pamh: *mut PamHandle, name_value: *const c_char) -> c_int;
 }
 
 unsafe extern "C" {
@@ -113,6 +116,11 @@ pub fn check(user: &str, password: String) -> Result<(), Refused> {
         let rc = pam_start(SERVICE.as_ptr(), user.as_ptr(), &pam_conv, &mut handle);
         if rc != PAM_SUCCESS {
             return Err(Refused(format!("pam_start: {rc}")));
+        }
+        if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR")
+            && let Ok(pair) = CString::new([b"XDG_RUNTIME_DIR=".as_slice(), dir.as_encoded_bytes()].concat())
+        {
+            pam_putenv(handle, pair.as_ptr());
         }
         let mut rc = pam_authenticate(handle, 0);
         if rc == PAM_SUCCESS {

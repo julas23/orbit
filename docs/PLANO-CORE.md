@@ -258,8 +258,8 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar; o core põe a janela do greet no monitor ativo) — **feito** 2026-10-21 | 1 |
 | 4 | `ext-session-lock-v1` no core (para lockers de terceiros) | 1 |
 | 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) — **feito** 2026-10-21 | 1 |
-| 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar | 2 |
-| 7 | Destravar o gnome-keyring com a senha (conferir o caminho: PAM `pam_gnome_keyring` no serviço do greet ou a chamada D-Bus do daemon) | 2 |
+| 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar (`login:` no `core.yaml`) — **feito** 2026-10-21 | 2 |
+| 7 | Destravar o gnome-keyring com a senha — **feito** 2026-10-21: `auth optional pam_gnome_keyring.so` no serviço `orbit-greet`, com o greet pondo `XDG_RUNTIME_DIR` no ambiente do PAM (é onde o módulo acha o socket de controle do daemon, ativado pelo socket do systemd do usuário) | 2 |
 | 8 | Bloqueio por Super+L, ociosidade e antes de suspender | 2 |
 | 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar | 2 |
 | 9 | Visual completo (seção 7.2), vários monitores | 2 |

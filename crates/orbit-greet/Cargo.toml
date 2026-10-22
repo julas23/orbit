@@ -14,6 +14,7 @@ section = "x11"
 priority = "optional"
 extended-description = "Orbit-Greet: the face of Orbit-Core's locked state, login and screen lock in one. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
+recommends = "libpam-gnome-keyring"
 assets = [
     ["target/release/orbit-greet", "usr/bin/", "755"],
     ["../../data/pam/orbit-greet", "etc/pam.d/", "644"],
