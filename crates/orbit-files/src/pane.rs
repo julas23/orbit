@@ -679,7 +679,10 @@ impl Pane {
                 self.selection.select_item(position, true);
                 return;
             }
+            // No item under the click: the folder's own menu, not the one
+            // for what was selected before.
             if &w == widget {
+                self.selection.unselect_all();
                 return;
             }
             node = w.parent();

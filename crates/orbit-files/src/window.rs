@@ -839,6 +839,8 @@ impl Window {
                 item(&tr("files-paste"), "files.paste", None),
                 item(&tr("files-copy-path"), "files.copy-path", None),
             ]);
+            // Also here: a full folder may leave no empty space to click.
+            sections.push(vec![item(&tr("files-new-folder"), "files.new-folder", None)]);
             let mut manage = vec![item(&tr("files-rename-menu"), "files.rename", None)];
             if selected.iter().all(|e| actions::is_archive(&e.name)) {
                 manage.push(item(&tr("files-extract"), "files.extract", None));
