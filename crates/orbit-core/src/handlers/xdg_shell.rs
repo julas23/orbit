@@ -28,10 +28,19 @@ impl XdgShellHandler for Orbit {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
+        if self.is_greet(surface.wl_surface()) {
+            self.new_greet_window(surface);
+            return;
+        }
         self.add_window(Window::new_wayland_window(surface));
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        if self.greet_window(surface.wl_surface()).is_some() {
+            self.greet.window = None;
+            self.request_render();
+            return;
+        }
         if let Some(window) = self.window_for(surface.wl_surface()) {
             self.remove_window(&window);
         }

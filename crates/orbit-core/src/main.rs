@@ -12,7 +12,7 @@
 //! Mod+Shift+E leaves.
 //!
 //! `--locked` starts with the session hidden behind the lock (the login,
-//! PLANO-CORE §7). COMMAND (and the config's `startup:`) run as clients of
+//! PLANO-CORE §7), with the greet (`greet`) launched. COMMAND (and the config's `startup:`) run as clients of
 //! the core. The
 //! plan is `docs/PLANO-CORE.md`.
 //!
@@ -24,6 +24,7 @@ mod config;
 mod cursor;
 mod focus;
 mod grab;
+mod greet;
 mod handlers;
 mod input;
 mod ipc;

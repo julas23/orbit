@@ -1,0 +1,25 @@
+[package]
+name = "orbit-protocols"
+description = "Orbit's private Wayland protocols (orbit-greet-v1), for orbit-core and its clients"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+client = ["dep:wayland-client"]
+server = ["dep:wayland-server"]
+
+[dependencies]
+wayland-scanner.workspace = true
+wayland-client = { workspace = true, optional = true }
+wayland-server = { workspace = true, optional = true }
+
+[dev-dependencies]
+wayland-client.workspace = true
+
+[[example]]
+name = "greet-unlock"
+required-features = ["client"]

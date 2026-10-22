@@ -129,7 +129,8 @@ fn render(state: &mut Orbit) {
     }
     state.backend = Backend::Winit(winit);
 
-    // Locked, clients are not drawn, so they are not asked to draw.
+    // Locked, clients are not drawn, so they are not asked to draw; the
+    // greet is.
     let time = state.start_time.elapsed();
     for window in state.space.elements().filter(|_| !state.locked()) {
         window.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
@@ -137,6 +138,7 @@ fn render(state: &mut Orbit) {
     for layer in layer_map_for_output(&output).layers().filter(|_| !state.locked()) {
         layer.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
+    state.greet_send_frame(&output, time);
     state.space.refresh();
     state.popups.cleanup();
     layer_map_for_output(&output).cleanup();

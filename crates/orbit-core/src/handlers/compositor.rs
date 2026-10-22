@@ -43,7 +43,7 @@ impl CompositorHandler for Orbit {
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            if let Some(window) = self.window_for(&root) {
+            if let Some(window) = self.window_for(&root).or_else(|| self.greet_window(&root)) {
                 window.on_commit();
             }
         }
@@ -55,8 +55,9 @@ impl CompositorHandler for Orbit {
             // The first configure is always allowed.
             popup.send_configure().expect("initial popup configure");
         }
-        // Locked, a client changing is nothing to draw.
-        if !self.locked() {
+        // Locked, a client changing is nothing to draw, unless it is the
+        // greet.
+        if !self.locked() || self.is_greet(surface) {
             self.request_render();
         }
     }
@@ -67,7 +68,7 @@ impl Orbit {
     /// commit; a layer surface that changed its size or exclusive zone moves
     /// the windows.
     fn first_configure(&mut self, surface: &WlSurface) {
-        if let Some(window) = self.window_for(surface) {
+        if let Some(window) = self.window_for(surface).or_else(|| self.greet_window(surface)) {
             let sent = with_states(surface, |states| {
                 states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
             });

@@ -16,6 +16,7 @@ orbit-app = { path = "crates/orbit-app" }
 orbit-backend-x11 = { path = "crates/orbit-backend-x11" }
 orbit-backend-wayland = { path = "crates/orbit-backend-wayland" }
 orbit-ipc = { path = "crates/orbit-ipc" }
+orbit-protocols = { path = "crates/orbit-protocols" }
 
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 # Only to enable GLib 2.68 APIs (TimeZone::from_identifier); the code uses the
@@ -41,6 +42,10 @@ serde_yaml_ng = "0.10"
 # orbit-clip and orbit-blink: the clipboard (wlr-data-control) and screen
 # capture (wlr-screencopy).
 wayland-client = "0.31"
+# orbit-protocols: Orbit's own protocols (orbit-greet-v1), generated for
+# the core (the same wayland-server Smithay uses) and its clients.
+wayland-server = "0.31"
+wayland-scanner = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 rustix = { version = "1", features = ["event", "pipe", "time", "fs"] }
 # orbit-view: image decoding in a sandbox, the engine of GNOME's Loupe. The

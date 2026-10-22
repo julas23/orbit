@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="orbit_greet_v1">
+  <copyright>
+    Copyright (C) 2026 Juliano. GPL-3.0-or-later, as the rest of Orbit.
+  </copyright>
+
+  <description summary="the greet's side of the core's lock">
+    Login and screen lock are one state of orbit-core (PLANO-CORE §7): while
+    locked, no client is drawn or gets input, except the greet. The core
+    launches the greet itself, on a connection of its own (WAYLAND_SOCKET),
+    and only that connection sees this global: no other client can unlock.
+
+    The greet shows itself with an ordinary xdg_toplevel; the core places it
+    full screen on the monitor with the pointer while locked, and hides it
+    while unlocked. The greet may stay running between locks.
+  </description>
+
+  <interface name="orbit_greet_v1" version="1">
+    <description summary="unlocking the session">
+      Bound once by the greet. On bind the core sends the state it is in
+      (locked or unlocked), then each change.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="the greet no longer needs the object"/>
+    </request>
+
+    <request name="unlock">
+      <description summary="the user proved who they are">
+        The core shows the session again. Ignored while unlocked.
+      </description>
+    </request>
+
+    <event name="locked">
+      <description summary="the session is hidden">
+        The greet should be ready for a password: empty field, no message
+        of a previous attempt.
+      </description>
+    </event>
+
+    <event name="unlocked">
+      <description summary="the session is shown; the greet is hidden"/>
+    </event>
+  </interface>
+</protocol>

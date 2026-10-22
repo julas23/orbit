@@ -2979,6 +2979,7 @@ dependencies = [
  "anyhow",
  "glam",
  "orbit-ipc",
+ "orbit-protocols",
  "regex",
  "serde",
  "serde_json",
@@ -3114,6 +3115,15 @@ dependencies = [
  "log",
  "orbit-app",
  "orbit-common",
+]
+
+[[package]]
+name = "orbit-protocols"
+version = "0.1.0"
+dependencies = [
+ "wayland-client",
+ "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]

@@ -117,6 +117,8 @@ pub struct Orbit {
     pub xdisplay: Option<u32>,
     pub xwm: Option<X11Wm>,
     pub xwayland_shell_state: XWaylandShellState,
+    /// The client shown while locked (`greet`).
+    pub greet: crate::greet::Greet,
 }
 
 impl Orbit {
@@ -135,6 +137,7 @@ impl Orbit {
         let data_control_state = DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
         let viewporter_state = ViewporterState::new::<Self>(&dh);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
+        crate::greet::init(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "seat0");
@@ -187,6 +190,7 @@ impl Orbit {
             xdisplay: None,
             xwm: None,
             xwayland_shell_state,
+            greet: Default::default(),
         }
     }
 
@@ -568,9 +572,15 @@ fn xkb_config(kb: &crate::config::Keyboard) -> XkbConfig<'_> {
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
+    /// Set on the greet's connection only (`greet`): rung when it closes.
+    pub greet: Option<smithay::reexports::calloop::ping::Ping>,
 }
 
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
-    fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
+    fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {
+        if let Some(ping) = &self.greet {
+            ping.ping();
+        }
+    }
 }

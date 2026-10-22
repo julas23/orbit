@@ -333,8 +333,8 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
     send_frames(state, &output);
 }
 
-/// Tells the clients on `output` they may draw their next frame — none
-/// while locked: they are not drawn.
+/// Tells the clients on `output` they may draw their next frame — only
+/// the greet while locked: the others are not drawn.
 fn send_frames(state: &mut Orbit, output: &Output) {
     let time = state.start_time.elapsed();
     for window in state.space.elements_for_output(output).filter(|_| !state.locked()) {
@@ -343,6 +343,7 @@ fn send_frames(state: &mut Orbit, output: &Output) {
     for layer in layer_map_for_output(output).layers().filter(|_| !state.locked()) {
         layer.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
+    state.greet_send_frame(output, time);
     // The pointer's own surface, when a client gave one.
     if let CursorImageStatus::Surface(surface) = &state.cursor_status {
         with_surface_tree_downward(

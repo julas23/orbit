@@ -5,7 +5,7 @@
 //!
 //! `orbit-core --locked` starts that way, before any client connects;
 //! `lock` (IPC) locks a running session. Unlocking is the greet's alone
-//! (§7.3 step 3), so nothing in the session can open it.
+//! (`greet`), so nothing in the session can open it.
 
 use smithay::utils::SERIAL_COUNTER;
 
@@ -24,8 +24,8 @@ impl Orbit {
         self.lock != Lock::Unlocked
     }
 
-    /// Hides the session: the keyboard and the pointer leave every client,
-    /// and the next frame is black.
+    /// Hides the session: the keyboard and the pointer leave every client
+    /// for the greet, and the next frame is black.
     pub fn lock(&mut self) {
         if self.locked() {
             return;
@@ -34,27 +34,26 @@ impl Orbit {
         self.lock = Lock::Locked;
         // A client's pointer image would be a client drawn.
         self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
-        let serial = SERIAL_COUNTER.next_serial();
         if let Some(keyboard) = self.seat.get_keyboard() {
-            keyboard.set_focus(self, None, serial);
+            keyboard.set_focus(self, None, SERIAL_COUNTER.next_serial());
         }
-        if let Some(pointer) = self.seat.get_pointer() {
-            let location = pointer.current_location();
-            let time = smithay::backend::input::InputTime::now();
-            pointer.motion(self, None, &smithay::input::pointer::MotionEvent { location, serial, time });
-            pointer.frame(self);
-        }
+        self.greet_state();
+        self.place_greet();
+        self.focus_greet();
+        self.refresh_pointer();
+        self.launch_greet();
         self.request_render();
     }
 
-    /// Shows the session again, with the keyboard where it was.
-    #[allow(dead_code)] // The greet calls it (§7.3 step 3).
+    /// Shows the session again, with the keyboard where it was. The
+    /// greet's to call (`greet`).
     pub fn unlock(&mut self) {
         if !self.locked() {
             return;
         }
         tracing::info!("unlocked");
         self.lock = Lock::Unlocked;
+        self.greet_state();
         match self.exclusive_layer() {
             Some(layer) => self.focus_layer(&layer),
             None => {
@@ -63,6 +62,21 @@ impl Orbit {
                 self.focus_window(focus);
             }
         }
+        // The greet's pointer image goes with it.
+        self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
+        self.refresh_pointer();
         self.request_render();
+    }
+
+    /// Sends the pointer, where it is, to what is under it now: the greet
+    /// while locked, the session otherwise.
+    pub fn refresh_pointer(&mut self) {
+        let Some(pointer) = self.seat.get_pointer() else { return };
+        let location = pointer.current_location();
+        let under = if self.locked() { self.greet_surface_under(location) } else { self.surface_under(location) };
+        let serial = SERIAL_COUNTER.next_serial();
+        let time = smithay::backend::input::InputTime::now();
+        pointer.motion(self, under, &smithay::input::pointer::MotionEvent { location, serial, time });
+        pointer.frame(self);
     }
 }

@@ -82,7 +82,7 @@ fn shaders(state: &mut Orbit, renderer: &mut GlesRenderer) -> Option<Shaders> {
 }
 
 /// Everything on `output`, topmost first. `pointer` is drawn when the core
-/// owns the screen. Locked, the pointer is all there is.
+/// owns the screen. Locked, the pointer and the greet are all there is.
 pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRenderer, pointer: bool) -> Vec<OutputElement> {
     let Some(geo) = state.space.output_geometry(output) else { return Vec::new() };
     let scale = Scale::from(output.current_scale().fractional_scale());
@@ -115,6 +115,7 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
         );
     }
     if state.locked() {
+        crate::greet::elements(state, output, renderer, scale, &mut elements);
         return elements;
     }
 

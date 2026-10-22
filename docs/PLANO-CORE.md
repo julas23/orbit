@@ -255,7 +255,7 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 |---|---|---|
 | 1 | Estado `Locked` no core: com ele ligado, a tela é preta, nada de cliente é desenhado nem recebe entrada; `--locked`; teste headless provando que uma janela aberta não aparece no quadro capturado | 1 |
 | 2 | Abrir e fechar os olhos: fade do preto + blur (dual kawase, shader GLES próprio) da sessão numa textura fora da tela, só durante a transição | 1 |
-| 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar, saber o monitor ativo) | 1 |
+| 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar; o core põe a janela do greet no monitor ativo) — **feito** 2026-10-21 | 1 |
 | 4 | `ext-session-lock-v1` no core (para lockers de terceiros) | 1 |
 | 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) | 1 |
 | 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar | 2 |
@@ -383,6 +383,24 @@ desta fase — sem esperar o aninhado ficar completo.
     sem `exec` — sair (ou o core cair) deixa um shell logado no tty1, o que
     fura o lock. No passo 6 vira `exec orbit-core --locked`.
   - Ainda não: teste headless com captura de quadro (não há backend headless).
+- **2026-10-21 — o greet como cliente privilegiado** (§7.3 passo 3,
+  `greet.rs`, crate `orbit-protocols`). O core lança o greet (`greet:` no
+  `core.yaml`, padrão `orbit-greet`, por `sh -c`) numa ponta de um par de
+  sockets, entregue como `WAYLAND_SOCKET`: ser o greet é ter sido lançado
+  assim, nunca algo que o cliente declara. Só essa conexão vê o global
+  `orbit_greet_v1` (`protocols/orbit-greet-v1.xml`): pedido `unlock`, eventos
+  `locked`/`unlocked` (no bind e a cada mudança). Não há "monitor ativo" no
+  protocolo: o greet abre um `xdg_toplevel` comum, que **não entra no
+  tiling**; travado, ele ocupa o monitor do ponteiro (fullscreen, segue o
+  ponteiro entre monitores), recebe teclado, cliques e frame callbacks;
+  destravado, fica escondido e o processo pode continuar vivo. A cada
+  `lock` o core lança um greet se não houver. Greet que morre travado é
+  relançado: na hora se viveu ≥ 5 s, senão após 2, 4, 8… até 30 s; a tela
+  segue preta. Testado aninhado com `examples/greet-unlock` (greet de teste
+  que destrava N s depois de cada `locked`): `--locked`, `orbitctl lock`,
+  matar o greet travado, greet inexistente, e um cliente comum não achando
+  o global; com `foot` como greet: configure no tamanho da tela com
+  fullscreen, teclado nele e não na sessão.
 - **2026-10-21 — vários monitores, arrastar, cantos.** Pedidos do Juliano.
   - `output.rs`: monitores sem posição em `outputs:` (`core.yaml`) empilham
     **para baixo**, o do notebook (`eDP`/`LVDS`/`DSI`) em cima, cada um

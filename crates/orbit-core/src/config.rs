@@ -11,6 +11,7 @@
 //! border: 2
 //! corner_radius: 10
 //! startup: [orbit-session]
+//! greet: orbit-greet     # shown while locked; the only client that unlocks
 //! stride: 10             # area N: workspace N, 10+N, 20+N… down the monitors
 //! outputs:               # where each monitor sits; unnamed ones stack
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
@@ -43,6 +44,8 @@ pub struct Config {
     pub focus_follows_mouse: bool,
     /// Commands run once the core is up (through `sh -c`).
     pub startup: Vec<String>,
+    /// The greet, launched by the core at each lock (through `sh -c`).
+    pub greet: String,
     /// The pointer's theme and size (sway's `seat * xcursor_theme`); also
     /// handed to clients as XCURSOR_THEME and XCURSOR_SIZE.
     pub cursor_theme: String,
@@ -95,6 +98,7 @@ impl Default for Config {
             unfocused_color: "#4c566a".into(),
             focus_follows_mouse: true,
             startup: Vec::new(),
+            greet: "orbit-greet".into(),
             cursor_theme: "Breeze_Light".into(),
             cursor_size: 24,
             outputs: HashMap::new(),

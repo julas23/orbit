@@ -98,8 +98,15 @@ impl Orbit {
                 let pos = event.position_transformed(geo.size) + geo.loc.to_f64();
                 self.pointer_to(pos, Event::time(&event));
             }
-            // Locked, clicks and the wheel reach no client.
-            InputEvent::PointerButton { .. } | InputEvent::PointerAxis { .. } if self.locked() => {}
+            // Locked, clicks reach the greet alone (the pointer's focus
+            // is never another client's), and the wheel no one.
+            InputEvent::PointerButton { event, .. } if self.locked() => {
+                let Some(pointer) = self.seat.get_pointer() else { return };
+                let serial = SERIAL_COUNTER.next_serial();
+                pointer.button(self, &ButtonEvent { button: event.button_code(), state: event.state(), serial, time: Event::time(&event) });
+                pointer.frame(self);
+            }
+            InputEvent::PointerAxis { .. } if self.locked() => {}
             InputEvent::PointerButton { event, .. } => {
                 let Some(pointer) = self.seat.get_pointer() else { return };
                 let serial = SERIAL_COUNTER.next_serial();
@@ -150,9 +157,10 @@ impl Orbit {
                 state.suppressed.push(code);
                 return FilterResult::Intercept(Some(Action::Vt((vt - Keysym::XF86_Switch_VT_1.raw() + 1) as i32)));
             }
-            // Locked, no shortcut and no client: only the two above.
+            // Locked, no shortcut but the two above, and no client but
+            // the greet.
             if state.locked() {
-                return FilterResult::Intercept(None);
+                return if state.greet_has_keyboard() { FilterResult::Forward } else { FilterResult::Intercept(None) };
             }
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             match shortcut(modifier, mods, sym) {
@@ -269,7 +277,12 @@ impl Orbit {
     fn pointer_to(&mut self, pos: Point<f64, Logical>, time: smithay::backend::input::InputTime) {
         let Some(pointer) = self.seat.get_pointer() else { return };
         let serial = SERIAL_COUNTER.next_serial();
-        let under = if self.locked() { None } else { self.surface_under(pos) };
+        if self.locked()
+            && let Some(output) = self.output_at(pos)
+        {
+            self.greet_follow(&output);
+        }
+        let under = if self.locked() { self.greet_surface_under(pos) } else { self.surface_under(pos) };
         if !self.locked() && self.config.focus_follows_mouse && !pointer.is_grabbed() && self.exclusive_layer().is_none() {
             let window = self.window_under(pos);
             let over_layer = self.layer_at(pos, &[WlrLayer::Overlay, WlrLayer::Top]);
