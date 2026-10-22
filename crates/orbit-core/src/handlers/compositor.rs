@@ -57,7 +57,7 @@ impl CompositorHandler for Orbit {
         }
         // Locked, a client changing is nothing to draw, unless it is the
         // greet.
-        if !self.locked() || self.is_greet(surface) {
+        if self.session_shown() || self.is_greet(surface) {
             self.request_render();
         }
     }

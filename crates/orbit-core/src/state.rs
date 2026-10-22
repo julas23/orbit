@@ -125,6 +125,11 @@ pub struct Orbit {
     /// Input and its absence (`idle`).
     pub idle: crate::idle::Idle,
     pub idle_inhibit_state: IdleInhibitManagerState,
+    /// logind's sleep inhibitor, held from `PrepareForSleep` until the
+    /// lock is on screen (`sleep`).
+    pub sleep_inhibitor: Option<std::os::fd::OwnedFd>,
+    /// The textures of the eyes opening or closing (`eyes`).
+    pub eyes_cache: crate::eyes::Cache,
 }
 
 impl Orbit {
@@ -201,6 +206,8 @@ impl Orbit {
             greet: Default::default(),
             idle: Default::default(),
             idle_inhibit_state,
+            sleep_inhibitor: None,
+            eyes_cache: Default::default(),
         }
     }
 

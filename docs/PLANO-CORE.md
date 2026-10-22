@@ -254,7 +254,7 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | # | Passo | Fase |
 |---|---|---|
 | 1 | Estado `Locked` no core: com ele ligado, a tela é preta, nada de cliente é desenhado nem recebe entrada; `--locked`; teste headless provando que uma janela aberta não aparece no quadro capturado | 1 |
-| 2 | Abrir e fechar os olhos: fade do preto + blur (dual kawase, shader GLES próprio) da sessão numa textura fora da tela, só durante a transição | 1 |
+| 2 | Abrir e fechar os olhos: fade do preto + blur (dual kawase, shader GLES próprio) da sessão numa textura fora da tela, só durante a transição — **feito** 2026-10-21 (`eyes.rs`, estados `Closing`/`Opening` em `lock.rs`; 400 ms, curva cúbica; a meio caminho volta de onde está; antes de suspender trava sem transição) | 1 |
 | 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar; o core põe a janela do greet no monitor ativo) — **feito** 2026-10-21 | 1 |
 | 4 | `ext-session-lock-v1` no core (para lockers de terceiros) | 1 |
 | 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) — **feito** 2026-10-21 | 1 |
@@ -262,8 +262,8 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 7 | Destravar o gnome-keyring com a senha — **feito** 2026-10-21: `auth optional pam_gnome_keyring.so` no serviço `orbit-greet`, com o greet pondo `XDG_RUNTIME_DIR` no ambiente do PAM (é onde o módulo acha o socket de controle do daemon, ativado pelo socket do systemd do usuário) | 2 |
 | 7a | Agente polkit próprio, `orbit-polkit` (no lugar do `lxpolkit`): camada overlay com o teclado, o cartão no visual do greet; a senha conferida pelo `polkit-agent-helper-1` do próprio polkit — **feito** 2026-10-21 | 2 |
 | 7b | Prompter do chaveiro no visual do Orbit, no lugar do `gcr-prompter` (o pedido de senha quando um app abre um chaveiro travado ou cria um novo). O chaveiro em si continua o gnome-keyring (ver Riscos, "Chaveiro próprio") | 4 |
-| 8 | Bloqueio por Super+L, ociosidade e antes de suspender | 2 |
-| 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar | 2 |
+| 8 | Bloqueio por Super+L, ociosidade e antes de suspender — **feito** 2026-10-21: `idle_lock` por máquina no `core.yaml` (`idle.rs`); antes de suspender, um inibidor `delay` do logind, solto quando o quadro preto está em todas as telas, 2 s no máximo (`sleep.rs`) | 2 |
+| 8a | **Tela cheia impede o bloqueio por ociosidade** (§7.1 item 8): qualquer janela em tela cheia, em qualquer monitor, zera o contador de ociosidade e impede travar/apagar a tela; `idle-inhibit-v1` e o inibidor do portal também. Super+L e `orbitctl lock` travam sempre. Teste: vídeo em tela cheia passa do tempo de ociosidade sem travar; sair da tela cheia volta a contar — **feito** 2026-10-21 (`fullscreen.rs`, `screensaver.rs`) | 2 |
 | 9 | Visual completo (seção 7.2), vários monitores | 2 |
 | 10 | Seleção de usuário com a sessão carregando atrás da camada | 5 |
 | 11 | Extras: digital (fprintd), pareamento do `orbit-remote` exigindo a sessão destravada | 5 |

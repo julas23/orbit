@@ -3,7 +3,7 @@
 //! (menus, notifications), the windows — each with its menus, its surfaces
 //! cut to rounded corners (`rounded`) and its border — then the bottom and
 //! background layers. A fullscreen window hides most of that
-//! (`fullscreen`).
+//! (`fullscreen`); locking and unlocking blur it under black (`eyes`).
 //!
 //! The element types follow anvil `src/render.rs` @ 24647fc (Smithay, MIT,
 //! Copyright (c) 2017 Victor Berger and Victoria Brekenfeld); a window's
@@ -18,9 +18,11 @@ use smithay::{
     backend::renderer::{
         element::{
             AsRenderElements, Kind,
+            solid::SolidColorRenderElement,
             surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
+            texture::TextureRenderElement,
         },
-        gles::{GlesRenderer, element::PixelShaderElement},
+        gles::{GlesRenderer, GlesTexture, element::PixelShaderElement},
     },
     desktop::{PopupManager, Window, layer_map_for_output},
     input::pointer::{CursorImageStatus, CursorImageSurfaceData},
@@ -39,7 +41,7 @@ use crate::{
 };
 
 /// The screen behind the windows.
-const BACKGROUND: [f32; 4] = [0.106, 0.122, 0.153, 1.0];
+pub const BACKGROUND: [f32; 4] = [0.106, 0.122, 0.153, 1.0];
 /// The screen while locked (§7.1: eyes closed).
 const LOCKED: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
@@ -54,6 +56,8 @@ render_elements! {
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
     Rounded=RoundedElement,
     Border=PixelShaderElement,
+    Texture=TextureRenderElement<GlesTexture>,
+    Solid=SolidColorRenderElement,
 }
 
 /// A window's border, kept with the window so the damage tracker sees the
@@ -115,16 +119,29 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
                 .map(OutputElement::Pointer),
         );
     }
-    if state.locked() {
-        crate::greet::elements(state, output, renderer, scale, &mut elements);
+    state.step_eyes();
+    let shaders = shaders(state, renderer);
+    // Closing or opening: the session blurred under black and the greet
+    // (`eyes`).
+    if let (Some(closed), Some(shaders)) = (state.eyes(), shaders.as_ref()) {
+        state.eyes_elements(output, renderer, scale, closed, shaders, &mut elements);
         return elements;
     }
+    if state.locked() {
+        crate::greet::elements(state, output, renderer, scale, 1.0, &mut elements);
+        return elements;
+    }
+    session_elements(state, output, renderer, scale, shaders.as_ref(), &mut elements);
+    elements
+}
 
-    let shaders = shaders(state, renderer);
+/// The session on `output` — layers and windows — topmost first.
+pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: Option<&Shaders>, elements: &mut Vec<OutputElement>) {
+    let Some(geo) = state.space.output_geometry(output) else { return };
     // A fullscreen window hides the rest, but for the overlay, the top
     // layer's menus and X menus (`fullscreen`).
     if let Some(full) = state.fullscreen_on(output) {
-        layer_elements(output, renderer, scale, &[WlrLayer::Overlay], &mut elements);
+        layer_elements(output, renderer, scale, &[WlrLayer::Overlay], elements);
         let map = layer_map_for_output(output);
         for surface in crate::fullscreen::top_above(output) {
             let Some(at) = map.layer_geometry(&surface).map(|g| g.loc.to_physical_precise_round(scale)) else { continue };
@@ -142,17 +159,16 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
             .cloned()
             .collect();
         for window in menus.iter().rev().chain([&full]) {
-            window_elements(state, window, geo, renderer, scale, shaders.as_ref(), &mut elements);
+            window_elements(state, window, geo, renderer, scale, shaders, elements);
         }
-        return elements;
+        return;
     }
-    layer_elements(output, renderer, scale, &[WlrLayer::Overlay, WlrLayer::Top], &mut elements);
+    layer_elements(output, renderer, scale, &[WlrLayer::Overlay, WlrLayer::Top], elements);
     let windows: Vec<Window> = state.space.elements_for_output(output).cloned().collect();
     for window in windows.iter().rev() {
-        window_elements(state, window, geo, renderer, scale, shaders.as_ref(), &mut elements);
+        window_elements(state, window, geo, renderer, scale, shaders, elements);
     }
-    layer_elements(output, renderer, scale, &[WlrLayer::Bottom, WlrLayer::Background], &mut elements);
-    elements
+    layer_elements(output, renderer, scale, &[WlrLayer::Bottom, WlrLayer::Background], elements);
 }
 
 /// The layer surfaces of `layers` on `output`, topmost first.

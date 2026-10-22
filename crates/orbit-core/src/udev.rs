@@ -304,6 +304,7 @@ fn vblank(state: &mut Orbit, crtc: crtc::Handle) {
         surface.scheduled = true;
         state.loop_handle.insert_idle(move |state| render(state, crtc));
     }
+    state.lock_shown();
 }
 
 fn render(state: &mut Orbit, crtc: crtc::Handle) {
@@ -329,18 +330,26 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
             Err(err) => tracing::warn!("render: {err:?}"),
         }
     }
+    // The eyes moving: the next frame is drawn at this one's vblank.
+    if state.animating()
+        && let Some(surface) = drm.surfaces.get_mut(&crtc)
+    {
+        surface.dirty = true;
+    }
     state.backend = Backend::Drm(drm);
     send_frames(state, &output);
+    // Nothing new to show: no vblank comes.
+    state.lock_shown();
 }
 
 /// Tells the clients on `output` they may draw their next frame — only
 /// the greet while locked: the others are not drawn.
 fn send_frames(state: &mut Orbit, output: &Output) {
     let time = state.start_time.elapsed();
-    for window in state.space.elements_for_output(output).filter(|_| !state.locked()) {
+    for window in state.space.elements_for_output(output).filter(|_| state.session_shown()) {
         window.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
-    for layer in layer_map_for_output(output).layers().filter(|_| !state.locked()) {
+    for layer in layer_map_for_output(output).layers().filter(|_| state.session_shown()) {
         layer.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
     state.greet_send_frame(output, time);
@@ -365,6 +374,11 @@ fn send_frames(state: &mut Orbit, output: &Output) {
 }
 
 impl DrmData {
+    /// Every screen shows the last frame drawn, with nothing left to draw.
+    pub fn settled(&self) -> bool {
+        self.surfaces.values().all(|s| !s.dirty && !s.scheduled && !s.waiting)
+    }
+
     /// Switches to virtual terminal `vt` (Ctrl+Alt+F1…F12).
     pub fn change_vt(&mut self, vt: i32) {
         if let Err(err) = self.session.change_vt(vt) {

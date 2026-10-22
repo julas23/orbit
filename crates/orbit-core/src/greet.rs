@@ -99,7 +99,7 @@ fn is_greet_client(client: &Client) -> bool {
 impl GlobalDispatch2<OrbitGreetV1, Orbit> for GreetGlobal {
     fn bind(&self, state: &mut Orbit, _handle: &DisplayHandle, _client: &Client, resource: New<OrbitGreetV1>, data_init: &mut DataInit<'_, Orbit>) {
         let resource = data_init.init(resource, GreetData);
-        if state.locked() {
+        if state.greet_locked() {
             resource.locked();
         } else {
             resource.unlocked();
@@ -320,7 +320,7 @@ impl Orbit {
     /// Tells the greet the session's state.
     pub fn greet_state(&self) {
         for resource in &self.greet.resources {
-            if self.locked() {
+            if self.greet_locked() {
                 resource.locked();
             } else {
                 resource.unlocked();
@@ -339,8 +339,9 @@ impl Orbit {
     }
 }
 
-/// The greet's window and its menus, when it is shown on `output`.
-pub fn elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, elements: &mut Vec<OutputElement>) {
+/// The greet's window and its menus, when it is shown on `output`, at
+/// `alpha` (fading with the eyes).
+pub fn elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, alpha: f32, elements: &mut Vec<OutputElement>) {
     if state.greet.output.as_deref() != Some(&*output.name()) {
         return;
     }
@@ -351,13 +352,13 @@ pub fn elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, sca
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
         let offset = (geometry.loc + offset - popup.geometry().loc).to_physical_precise_round(scale);
         elements.extend(
-            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, popup.wl_surface(), at + offset, scale, 1.0, Kind::Unspecified)
+            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, popup.wl_surface(), at + offset, scale, alpha, Kind::Unspecified)
                 .into_iter()
                 .map(OutputElement::Surface),
         );
     }
     elements.extend(
-        render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, &surface, at, scale, 1.0, Kind::Unspecified)
+        render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, &surface, at, scale, alpha, Kind::Unspecified)
             .into_iter()
             .map(OutputElement::Surface),
     );

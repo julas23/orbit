@@ -3,35 +3,114 @@
 //! input — the session goes on behind, unseen. The core keeps the lock,
 //! not a client: a greet that dies leaves the session locked.
 //!
+//! Locking closes the eyes and unlocking opens them (`eyes`): for
+//! `eyes::DURATION` the session blurs and fades to black, or the other way.
+//! Input leaves the clients on the first frame of closing and comes back
+//! after the last of opening. Before the first frame (`--locked`), or when
+//! the shaders failed, and before sleeping, it is at once.
+//!
 //! `orbit-core --locked` starts that way, before any client connects;
 //! `lock` (IPC) locks a running session. Unlocking is the greet's alone
 //! (`greet`), so nothing in the session can open it.
 
+use std::time::Instant;
+
 use smithay::utils::SERIAL_COUNTER;
 
-use crate::state::Orbit;
+use crate::{eyes::DURATION, state::Orbit};
 
-/// Whether the session is shown.
+/// Whether the session is shown, and the eyes moving between.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Lock {
     #[default]
     Unlocked,
+    /// Locking since then.
+    Closing(Instant),
     Locked,
+    /// Unlocking since then.
+    Opening(Instant),
 }
 
 impl Orbit {
+    /// Whether the clients are cut off: locked, or the eyes moving.
     pub fn locked(&self) -> bool {
         self.lock != Lock::Unlocked
     }
 
-    /// Hides the session: the keyboard and the pointer leave every client
-    /// for the greet, and the next frame is black.
-    pub fn lock(&mut self) {
-        if self.locked() {
-            return;
+    /// Whether the greet is told the session is locked: locked or closing.
+    pub fn greet_locked(&self) -> bool {
+        matches!(self.lock, Lock::Locked | Lock::Closing(_))
+    }
+
+    /// Whether the session is on screen, sharp or not: everything but locked.
+    pub fn session_shown(&self) -> bool {
+        self.lock != Lock::Locked
+    }
+
+    /// How closed the eyes are (0 open, 1 closed) while they move.
+    pub fn eyes(&self) -> Option<f32> {
+        let progress = |start: Instant| (start.elapsed().as_secs_f32() / DURATION.as_secs_f32()).min(1.0);
+        match self.lock {
+            Lock::Closing(start) => Some(crate::eyes::ease(progress(start))),
+            Lock::Opening(start) => Some(1.0 - crate::eyes::ease(progress(start))),
+            _ => None,
         }
+    }
+
+    /// Whether frames must keep coming (the eyes moving).
+    pub fn animating(&self) -> bool {
+        matches!(self.lock, Lock::Closing(_) | Lock::Opening(_))
+    }
+
+    /// The eyes finish moving once their time is up; called at each frame.
+    pub fn step_eyes(&mut self) {
+        match self.lock {
+            Lock::Closing(start) if start.elapsed() >= DURATION => {
+                self.lock = Lock::Locked;
+                self.eyes_cache.clear();
+            }
+            Lock::Opening(start) if start.elapsed() >= DURATION => self.opened(),
+            _ => {}
+        }
+    }
+
+    /// The moment a turn the other way starts from, so the eyes go back
+    /// from where they are (the curve is symmetric).
+    fn turn(start: Instant) -> Instant {
+        let left = DURATION.saturating_sub(start.elapsed());
+        Instant::now().checked_sub(left).unwrap_or_else(Instant::now)
+    }
+
+    /// Whether locking and unlocking are drawn: the shaders are there.
+    fn can_animate(&self) -> bool {
+        matches!(self.shaders, Some(Some(_)))
+    }
+
+    /// Hides the session, closing the eyes: the keyboard and the pointer
+    /// leave every client for the greet at once.
+    pub fn lock(&mut self) {
+        self.lock = match self.lock {
+            Lock::Locked | Lock::Closing(_) => return,
+            Lock::Opening(start) => Lock::Closing(Self::turn(start)),
+            Lock::Unlocked if self.can_animate() => Lock::Closing(Instant::now()),
+            Lock::Unlocked => Lock::Locked,
+        };
         tracing::info!("locked");
-        self.lock = Lock::Locked;
+        self.cut_off();
+    }
+
+    /// Hides the session with no transition: the next frame is black.
+    pub fn lock_at_once(&mut self) {
+        let was = std::mem::replace(&mut self.lock, Lock::Locked);
+        self.eyes_cache.clear();
+        if !matches!(was, Lock::Locked | Lock::Closing(_)) {
+            tracing::info!("locked");
+            self.cut_off();
+        }
+    }
+
+    /// The clients lose the keyboard and the pointer to the greet.
+    fn cut_off(&mut self) {
         // A client's pointer image would be a client drawn.
         self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
         if let Some(keyboard) = self.seat.get_keyboard() {
@@ -45,15 +124,28 @@ impl Orbit {
         self.request_render();
     }
 
-    /// Shows the session again, with the keyboard where it was. The
-    /// greet's to call (`greet`).
+    /// Shows the session again, opening the eyes; the keyboard goes back
+    /// where it was once they are open. The greet's to call (`greet`).
     pub fn unlock(&mut self) {
-        if !self.locked() {
-            return;
+        match self.lock {
+            Lock::Unlocked | Lock::Opening(_) => return,
+            Lock::Closing(start) => self.lock = Lock::Opening(Self::turn(start)),
+            Lock::Locked if self.can_animate() => self.lock = Lock::Opening(Instant::now()),
+            Lock::Locked => {
+                self.lock = Lock::Opening(Instant::now());
+                self.opened();
+            }
         }
         tracing::info!("unlocked");
-        self.lock = Lock::Unlocked;
         self.greet_state();
+        self.request_render();
+        self.log_in();
+    }
+
+    /// The eyes are open: the clients get the keyboard and the pointer.
+    fn opened(&mut self) {
+        self.lock = Lock::Unlocked;
+        self.eyes_cache.clear();
         match self.exclusive_layer() {
             Some(layer) => self.focus_layer(&layer),
             None => {
@@ -66,7 +158,6 @@ impl Orbit {
         self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
         self.refresh_pointer();
         self.request_render();
-        self.log_in();
     }
 
     /// Runs the config's `login:` commands, the first time only.

@@ -112,6 +112,9 @@ void main() {
 pub struct Shaders {
     pub clip: GlesTexProgram,
     pub border: GlesPixelProgram,
+    /// The blur's passes down and up (`eyes`).
+    pub down: GlesTexProgram,
+    pub up: GlesTexProgram,
 }
 
 impl Shaders {
@@ -132,7 +135,8 @@ impl Shaders {
                 UniformName::new("width", UniformType::_1f),
             ],
         )?;
-        Ok(Self { clip, border })
+        let (down, up) = crate::eyes::compile(renderer)?;
+        Ok(Self { clip, border, down, up })
     }
 }
 

@@ -127,15 +127,23 @@ fn render(state: &mut Orbit) {
             tracing::warn!("submit: {err:?}");
         }
     }
+    // The eyes moving: another frame.
+    if state.animating() {
+        winit.backend.window().request_redraw();
+    }
+    // The eyes moving: another frame.
+    if state.animating() {
+        winit.backend.window().request_redraw();
+    }
     state.backend = Backend::Winit(winit);
 
     // Locked, clients are not drawn, so they are not asked to draw; the
     // greet is.
     let time = state.start_time.elapsed();
-    for window in state.space.elements().filter(|_| !state.locked()) {
+    for window in state.space.elements().filter(|_| state.session_shown()) {
         window.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
-    for layer in layer_map_for_output(&output).layers().filter(|_| !state.locked()) {
+    for layer in layer_map_for_output(&output).layers().filter(|_| state.session_shown()) {
         layer.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
     state.greet_send_frame(&output, time);

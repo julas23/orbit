@@ -9,7 +9,8 @@
 //! Inside a Wayland or X session it runs nested, as a window; from a text
 //! console it takes the screen (DRM/KMS, libinput, libseat), and logs to
 //! `$XDG_STATE_HOME/orbit/core/core.log`. Ctrl+Alt+F1…F12 switch consoles,
-//! Mod+L locks (and so does `idle_lock` seconds of no input, `idle`),
+//! Mod+L locks (and so do `idle_lock` seconds of no input, `idle`, and
+//! the machine going to sleep, `sleep`),
 //! Mod+Shift+E leaves.
 //!
 //! `--locked` starts with the session hidden behind the lock (the login,
@@ -24,6 +25,7 @@
 mod command;
 mod config;
 mod cursor;
+mod eyes;
 mod focus;
 mod fullscreen;
 mod grab;
@@ -37,6 +39,7 @@ mod output;
 mod render;
 mod rounded;
 mod screensaver;
+mod sleep;
 mod state;
 mod tile;
 mod udev;
@@ -89,6 +92,7 @@ fn main() -> anyhow::Result<()> {
     // Nested, the host session's own screensaver has the name.
     if drm {
         state.serve_screensaver();
+        state.lock_before_sleep();
     }
     if let Err(err) = ipc::listen(&mut event_loop, &mut state) {
         tracing::error!("no IPC: {err:#}");
