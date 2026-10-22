@@ -142,8 +142,8 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 
 | Component | What it is | Progress | Functional | Version |
 | --- | --- | :-: | :-: | :-: |
-| **orbit-remote-server** | orbit-core + remote streaming (Iced or Slint) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
-| **orbit-local-station** | Client pulling the server's greeter | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-remote-server** | orbit-core's sharing layer: the session streamed (Rust + Slint) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-local-station** | Slint client pulling the server's greeter and session | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
 
 ## Principles
 
@@ -199,16 +199,21 @@ A column (or row) of independent modules, anchored to a screen edge.
 | `brightness` | Backlight, or an external monitor over DDC/CI | kernel + logind / ddcutil |
 | `volume` | Default output volume and mute | PulseAudio protocol (PipeWire) |
 | `workspaces` | Global areas, shared by all monitors | sway IPC |
-| `network` | Connection name and IP/prefix; the icon opens the connection editor (left) or the network menu (right) | NetworkManager |
-| `keyboard` | Layout language and variant; click for the next layout | sway IPC |
-| `battery` | Charge and uptime | UPower |
+| `network` | Connection name and IP/prefix; click: networking and Wi-Fi switches, the Wi-Fi networks in reach and the VPNs; right click: the connection editor | NetworkManager |
+| `keyboard` | Layout language and variant; click: the next layout; right click: pick one; the wheel walks them | sway IPC |
+| `battery` | Charge and uptime; click: the details and the power profile (power-profiles-daemon); right click: `manager` | UPower |
 | `session` | Power off, reboot, log out — confirmed over a blurred screen | logind / sway |
-| `notifications` | The bell: unread count, opens the notification centre | orbit-notify |
+| `notifications` | The bell: unread count; click: the notification centre; right click: do not disturb, clear all | orbit-notify |
 | `bluetooth` | Adapter and connected devices; connect and pair | BlueZ |
 | `monitors` | How many monitors and where; arrange them by dragging, remembered by orbit-core | compositor IPC |
 | `spectrum` | Audio spectrum, as CAVA draws it: a line, 12 bars, or thin gradient bars on a grid | PulseAudio protocol (PipeWire) |
 | `cpu`, `ram`, `gpu`, `lan` | The last minute as a graph on a grid, with clock, temperature, swap, VRAM, rates | /proc, /sys (amdgpu) or nvidia-smi |
 | `disk` | A pie of used (red) and free (blue) with total, used and free; listed once per filesystem | GIO |
+
+**Clicks.** Every module answers the same way: a left click opens the quick
+part (switches and shortcuts, in a popover), a right click the full one (the
+module's own application or list), and the wheel steps through a value
+(volume, brightness, keyboard layout).
 
 **Layout.** A vertical panel is a grid of 30 px cells, four columns wide,
 10 px apart (154 px in all). Each module comes in up to three sizes —
@@ -405,7 +410,15 @@ and the best of Thunar, Caja, Nautilus, Konqueror and Nemo.
   the parent folder, the folder, and a preview of the selection (images,
   text highlighted, a PDF's first page, video and audio to play, a
   folder's contents).
-- **Tabs and two panes** (F3), F5 / F6 copy or move to the other pane.
+- **Tabs and two panes** (F10); F5 / F6 copy or move to the other pane or,
+  with one pane, to a folder chosen in a dialog.
+- **Selection** with a box on every entry, Ctrl+click or Ctrl+Space for one
+  more (or one less), Shift+click or Shift+arrows for a run, Ctrl+A all,
+  Ctrl+I the rest instead.
+- **The function keys** as in Total Commander: F1 the keys, F2 rename, F3
+  find, F4 edit (text in Orbit-Edit), F5 copy, F6 move, F7 new folder, F8 to
+  the trash, F9 view (in Orbit-View, Orbit-Read or Orbit-Play), F10 two
+  panes, F11 full screen, F12 a terminal here.
 - **Places**: home and the user's folders, GTK bookmarks, the trash, disks
   (mount, eject) and *Connect to server* — SMB, SFTP, FTP, WebDAV through
   GVfs, with the password asked for. Under "Devices", volumes only:
@@ -430,12 +443,19 @@ and the best of Thunar, Caja, Nautilus, Konqueror and Nemo.
 | --- | --- | --- | --- |
 | j k, ↓ ↑ | down, up | h l, ⌫ ⏎ | up a folder, open |
 | gg G | first, last | Space | mark and go on |
-| yy dd pp | copy, cut, paste | / or Ctrl+F | filter |
+| yy dd pp | copy, cut, paste | / or Ctrl+F | find (filter) |
 | Ctrl+C X V | copy, cut, paste | F2 | rename (many: bulk) |
 | Delete | to the trash | Shift+Delete | delete for good |
 | Alt+← → ↑ | back, forward, up | Ctrl+L | type a path or `smb://…` |
 | Ctrl+H | hidden files | Ctrl+T, Ctrl+W | new tab, close tab |
-| F3 | two panes | F5, F6 | copy, move to the other pane |
+| Ctrl+click, Ctrl+Space | one more or less | Shift+click, Shift+↑ ↓ | a run |
+| Ctrl+A | select all | Ctrl+I | invert the selection |
+| F1 | the keys | F3 | find in the folder |
+| F4 | edit | F5, F6 | copy, move (other pane or a folder) |
+| F7 | new folder | F8, Shift+F8 | to the trash, delete for good |
+| F9 | view | F10 | two panes |
+| F11 | full screen | F12 | a terminal here |
+| Ctrl+R | read the folder again | | |
 
 ## Orbit-Term
 
@@ -544,22 +564,30 @@ Debian's. The plan (in Portuguese) is in
 A later, remote edition of Orbit Linux, in the spirit of LTSP, made of a pair
 that works only together:
 
-- **orbit-remote-server:** orbit-core with a remote streaming layer. Its
-  interface is built with Iced or Slint instead of GTK4, for their
-  WebSocket/WebRTC path, so an Orbit machine can sit at home or in the cloud
-  and be used from anywhere.
+- **orbit-remote-server:** a sharing layer of orbit-core, not a second
+  Orbit: a separate process the core hands its frames to (straight from the
+  GPU) and takes the remote keyboard, mouse and gamepads from. The session
+  is the real one, every application included, so an Orbit machine can sit
+  at home or in the cloud and be used from anywhere. First it mirrors the
+  screens; then the client gets a screen of its own resolution in the same
+  session, the local screens locked meanwhile.
 - **orbit-local-station:** no local interface of its own; it pulls the
   greeter, and then the whole session, straight from the server. Later,
   orbit-greet will also let a full Orbit machine choose between its local
   desktop and a remote one.
+- **Clients:** in Rust and [Slint](https://slint.dev) — a web page in any
+  browser, the station (drawn straight on the screen, no compositor) and,
+  much later, Android and iOS. The desktop applications stay GTK4.
+- **Media:** GStreamer with the GPU's encoders (VA-API) over WebRTC, decoded
+  on the client's GPU; sound both ways, the microphone and webcam going up to
+  the server as PipeWire devices. The target is the latency of
+  Sunshine + Moonlight: 20 ms or less on the local network.
 - **Storage:** a USB drive or external disk plugged into the device in hand
   (TV, phone, stick) is seen and used by Orbit; the user's whole environment
   could even live on that disk and travel with them.
 - **Why:** it would replace the Sunshine/Moonlight streaming used today to
   reach a remote machine.
-- **The cost:** a second interface toolkit next to GTK4 means dealing with
-  differences in sound, input and font rendering, and some performance lost
-  against the native session. The think and a VM are its first test machines.
+- **Testing:** the think and a VM are its first test machines.
 
 ## Configuration
 

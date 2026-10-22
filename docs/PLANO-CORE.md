@@ -68,7 +68,7 @@ O que cada WM/DE ensina e como entra no core. Coluna "Fase" remete à seção 8.
 | **xmonad** | Layouts combináveis e trocáveis por workspace | Cada workspace tem seu layout; `layout next` cicla uma lista configurável | 3 |
 | | Modificadores de layout (espelhar, sem bordas se 1 janela, magnificar) | `layout_options:` (`mirror`, `smart_borders`, `magnify`) | 3 |
 | **dwm** | Mestre-pilha com `nmaster` e `mfact` | Layout `master` (`master_count`, `master_ratio`, lado do mestre) | 3 |
-| | Tags: janela em várias tags, ver várias tags juntas | Tags como camada sobre workspaces: `tag`, `view_tags` (opcional; workspaces continuam o padrão) | 3 |
+| | Tags: janela em várias tags, ver várias tags juntas | Fora por ora (decidido em 2026-10-22): talvez numa major version depois da versão final, como camada sobre workspaces (`tag`, `view_tags`) | — |
 | | Monocle | Layout `monocle` (uma janela por vez, cicla com foco) | 3 |
 | **spectrwm** | Funciona sem configurar; barra e regras simples | Padrões embutidos; `core.yaml` vazio = sessão usável | 1 |
 | | Workspaces e layout por monitor | Workspaces presos a monitor (`output:` por workspace, como a sua `workspace 11..24`) | 1 |
@@ -168,11 +168,11 @@ Tudo no workspace do repositório `orbit`, junto com os apps.
 | Crate | Papel |
 |---|---|
 | `orbit-core` | Binário: event loop (calloop), backends (winit aninhado, DRM/libinput via libseat, headless), estado de clientes, renderização |
-| `orbit-layout` | Biblioteca pura, sem Smithay: árvore, BSP, mestre-pilha, monocle, rolagem, tags. Entra uma lista de janelas + área, sai geometria. Testável com `cargo test` sem tela |
+| `orbit-layout` | Biblioteca pura, sem Smithay: árvore, BSP, mestre-pilha, monocle, rolagem. Entra uma lista de janelas + área, sai geometria. Testável com `cargo test` sem tela |
 | `orbit-ipc` | Protocolo i3/sway (servidor no core, cliente para `orbitctl` e para os apps). Substitui o `sway.rs` duplicado em `orbit-common` e `orbit-panel` |
 | `orbit-config` | YAML → configuração tipada, validação com mensagens claras, recarga a quente, importador do sway |
 | `orbit-render` | Efeitos: bordas, cantos, sombras, blur (dual kawase), animações com curvas. Isolado para poder ser desligado inteiro |
-| `orbit-remote-server` | Acesso remoto (o orbit-core com a camada de streaming; o cliente é o `orbit-local-station`): trait `Session { frames(); inject(); }`, captura por dmabuf, codificação VA-API, WebRTC, cliente web, pareamento. Implementações `WlrootsSession` (testar já sobre o sway) e `CoreSession` (dentro do core) |
+| `orbit-remote-server` | Acesso remoto: a camada de compartilhamento do orbit-core, processo à parte, cliente privilegiado por protocolo privado (como o greet); clientes em Slint, o `orbit-local-station` entre eles. Trait `Session { frames(); inject(); }`, captura por dmabuf, codificação VA-API, WebRTC (GStreamer `webrtcbin`), cliente web, pareamento. Implementações `WlrootsSession` (testar já sobre o sway) e `CoreSession` (dentro do core) |
 | `orbit-greet` | A face do login e do bloqueio (seção 7): GTK4, PAM, destrava o chaveiro. Processo à parte do core, cliente privilegiado dele |
 | `orbitctl` | Linha de comando (`swaymsg` do Orbit) |
 
@@ -554,7 +554,7 @@ a dia, portando do cosmic-comp o que falta:
 ### Fase 3 — os layouts dos outros
 
 - `bsp` (bspwm), `master` (dwm), `monocle`, `scroll` (niri), layouts por
-  workspace e `layout next` (xmonad), tags (dwm), scratchpads nomeados
+  workspace e `layout next` (xmonad), scratchpads nomeados
   (Hyprland), snap de flutuantes, marcas e preseleção.
 - **Pronto quando:** cada layout tem testes em `orbit-layout` cobrindo inserir,
   remover, mover e redimensionar, e você usou cada um por pelo menos um dia.
@@ -570,13 +570,21 @@ a dia, portando do cosmic-comp o que falta:
 
 ### Fase 5 — o que nenhum outro tem
 
-- `orbit-remote-server` + `orbit-local-station`: acesso remoto nativo. O
-  servidor é o orbit-core com a camada de streaming (WebRTC, VA-API,
-  pareamento por token/QR, TLS), acessível de fora pelo túnel WireGuard
-  casa↔VPS + TURN. A interface da versão remota usa Iced ou Slint no lugar
-  do GTK4, pelo caminho de WebSocket/WebRTC deles. O `orbit-local-station`
-  não tem interface local: puxa o greeter e a sessão direto do servidor.
-  Cobaias: o think e a VM Julas. A PoC pode começar **antes**, sobre o sway, com
+- `orbit-remote-server` + `orbit-local-station`: acesso remoto nativo
+  (decidido em 2026-10-22, detalhes no `docs/pending.md` §9). O servidor é a
+  **camada de compartilhamento** do orbit-core, não um segundo Orbit:
+  processo à parte, cliente privilegiado do core por protocolo privado; o
+  core entrega os quadros (dmabuf, sem cópia) e recebe a entrada remota
+  (libei). Mídia no GStreamer (`webrtcbin`, codificadores VA-API, Opus)
+  sobre WebRTC, pareamento por token/QR, TLS, acessível de fora pelo túnel
+  WireGuard casa↔VPS + TURN. **Rust + Slint** na interface do servidor e em
+  todos os clientes: página web (WASM), o `orbit-local-station` (backend
+  LinuxKMS do Slint, sem compositor; puxa o greeter e a sessão direto do
+  servidor) e, bem depois, Android e iOS; os apps do desktop continuam GTK4.
+  Primeiro o espelho das telas, depois uma saída virtual na resolução do
+  cliente com as telas locais travadas. **Pronto (fase 1) quando:** latência
+  ≤ 20 ms na rede local a 60 fps, medida com um relógio na tela do servidor
+  fotografado ao lado da do cliente. Cobaias: o think e a VM Julas. A PoC pode começar **antes**, sobre o sway, com
   `WlrootsSession`.
 - Wallpaper Jarvis: camada `background` que reage ao áudio (PipeWire) e sobe a
   `overlay` quando o orbit-aigent escuta; FPS limitado e pausa quando coberto.
@@ -660,4 +668,4 @@ Regras de porte:
 | Login automático | O autologin do tty1 abre a sessão do usuário **antes** da senha: serviços de usuário do systemd (Syncthing, PipeWire) já sobem no boot, embora nada apareça na tela até destravar. O `$HOME` não é criptografado, então a senha protege a tela, não os dados em disco. **Aceito em 2026-10-21**: é o preço de "a sessão já estava carregada atrás" (§7.1) |
 | Chaveiro no destravar | **Resolvido em 2026-10-21** (§7.3 passo 7): `pam_gnome_keyring` no serviço PAM do `orbit-greet` destrava o chaveiro `login` com a mesma senha |
 | Chaveiro próprio | **Decidido em 2026-10-21: não escrever um.** O gnome-keyring não amarra o Orbit ao GNOME: é um daemon do padrão Secret Service (`org.freedesktop.secrets`), que é o que os apps usam, e se troca sem mexer neles. Um chaveiro novo é cripto que guarda todas as senhas, com o formato do `login.keyring` a ler e a API inteira a manter. Se um dia trocar, o candidato é o **oo7** (Rust, do pessoal do GNOME, lê o formato do gnome-keyring), quando estiver maduro no Debian. O Orbit desenha o que se vê: o prompter (§7.3 passo 7b) e um app de senhas (Fase 5) |
-| Nome dos layouts e tags | Se tags (dwm) e workspaces convivem na mesma barra de áreas do painel ou só um dos dois — decidir antes da Fase 3 |
+| Tags (dwm) | Decidido em 2026-10-22: fora; workspaces (as áreas) são o único modelo. Talvez numa major version depois da versão final |

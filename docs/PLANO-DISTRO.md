@@ -50,7 +50,7 @@ copia os binários para `~/.local/bin` e os `.desktop` de `data/` para
 | `orbit-panel`, `orbit-dock` | Binários + `orbit-session` + padrões em `/etc/xdg/orbit/` |
 | `orbit-calc`, `orbit-clip`, `orbit-blink` | Binário + `.desktop` + ícone |
 | `orbit-view`, `orbit-read`, `orbit-play`, `orbit-edit`, `orbit-files` | Binário + `.desktop` com os tipos MIME + ícone |
-| `orbit-core`, `orbit-greet`, `orbitctl` | Quando existirem (PLANO-CORE); `orbit-greet` traz `/etc/pam.d/orbit-greet` |
+| `orbit-core`, `orbit-greet`, `orbit-login`, `orbitctl` | Existem desde 2026-10-22 (PLANO-CORE §7); `orbit-greet` traz `/etc/pam.d/orbit-greet`, `orbit-login` o serviço de sistema |
 | `orbit-common-data` | Paletas e CSS compartilhados (`palette-*.css`, `style.css`), traduções (`data/i18n`) |
 | `orbit-defaults` | Aplicativos padrão (`/usr/share/applications/orbit-mimeapps.list`), sessão em `/usr/share/wayland-sessions/`, tema de ícones e GTK, dock e painel iniciais |
 | `orbit-archive-keyring` | Chave e o arquivo `.sources` do repositório |
@@ -254,7 +254,6 @@ Amarradas às fases do PLANO-CORE.
 |---|---|
 | Popsicle, Ghostty, AniCraft, craft-fonts | Sem `.deb` oficial: AppImage gerenciada pelo Orbit, ou pacote próprio |
 | Nerd Font | O painel usa glifos Nerd Font, que o Debian não tem: pacote `orbit-fonts` (MIT) |
-| orbit-greet | Ainda não existe (PLANO-CORE §7.3, passos 3–5): a ISO depende dele |
 
 
 | Item | Risco / decisão em aberto |
