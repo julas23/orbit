@@ -16,10 +16,10 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 ## 2. Real tests not done yet
 
 - [ ] Two-user switch (§7.3 step 10): install as root with `scripts/install-login.sh juliano`, then switch VTs with a second user (uid 1001).
-- [ ] Suspend and resume (`sleep.rs`).
-- [ ] polkit: wrong password and cancel.
+- [x] Suspend and resume (`sleep.rs`).
+- [x] polkit: wrong password and cancel.
 - [ ] Keyring prompter: copy `data/dbus/org.gnome.keyring.SystemPrompter.service` to `~/.local/share/dbus-1/services/` and test with a real app.
-- [ ] Dock: drop an item off the dock under orbit-core's pointer grab, and type in the app search.
+- [x] Dock: drop an item off the dock under orbit-core's pointer grab, and type in the app search.
 
 ## 3. Login and biometrics (§7.3 step 11)
 
@@ -29,7 +29,10 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 
 ## 4. Core
 
-- [ ] Floating windows (X dialogs are still tiled).
+- [x] Floating windows: dialogs (X and Wayland) float at their own size, centred over their parent; `floating enable|disable|toggle` (Mod+Shift+Space); Mod+drag leaves a floating window where it is dropped. Nested-tested; awaiting the test on screen.
+- [x] Arrow shortcuts: Mod+↑ maximize, Mod+↓ restore, Mod+←/→ snap to a half; Alt+arrows focus that way, Mod+Ctrl+arrows move that way (other monitor, then the neighbouring area of the 2×2 grid; nothing at its edge). Nested-tested; awaiting the test on screen.
+- [x] Switching: Ctrl+Alt+arrows walk the areas; Alt+Tab (last used first, while Alt is held) on the workspace, Alt+Shift+Tab on every workspace; Mod+Tab the window cards (Looking Glass style, in perspective, over the blurred screen). Nested-tested with frame dumps; awaiting the test on screen.
+- [x] Blur: under the panel's confirmation dialog (`blur_layers`, done by the core — no screencopy for grim), and the lock's blur now runs ahead of the black so it shows.
 - [ ] Mod+right-drag resize (needs floating windows).
 - [ ] Rounded corners on rotated monitors.
 - [ ] Phase 2: hotplug, fractional scale, `wlr-output-management`, portal and screen sharing, VRR/tearing. Done when the hp gets a full day without going back to sway.
@@ -96,3 +99,6 @@ installed. Never used as a local desktop.
 - [ ] Tags (dwm) and workspaces in the same panel bar, or only one of them? Decide before Phase 3.
 - [ ] Installer: `/home` as a folder inside `/` — refuse, or install wiping everything but `/home`?
 - [ ] Orbit-Station: WASM UI (as in the note) or streaming the real session (`orbit-remote`)? My recommendation is streaming: one code base, and the apps stay native.
+
+## 11. Orbit-Edit
+- [x] Two look-alike search buttons in the toolbar: quick open (Ctrl+P) now has its own icon (`go-jump-symbolic`).
