@@ -8,6 +8,18 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Panel: the Orbit desktop panel. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+recommends = "upower, network-manager, pipewire-pulse, bluez, ddcutil, fonts-noto-color-emoji"
+assets = [
+    ["target/release/orbit-panel", "usr/bin/", "755"],
+    ["../../scripts/orbit-session", "usr/bin/", "755"],
+]
+
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true

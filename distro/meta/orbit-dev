@@ -1,0 +1,3 @@
+Description: Orbit development: editors, databases and what building Orbit needs
+ Rust itself comes from rustup (the Debian toolchain is older than Orbit's).
+Depends: build-essential, pkg-config, git, clang, mold, code, dbeaver-ce, libgtk-4-dev, libgtk4-layer-shell-dev, libseccomp-dev, libpoppler-glib-dev, libgstreamer1.0-dev, libgstreamer-plugins-base1.0-dev, libgstreamer-plugins-bad1.0-dev, libgtksourceview-5-dev, libvte-2.91-gtk4-dev, libwebkitgtk-6.0-dev, libseat-dev, libinput-dev, libudev-dev, libgbm-dev, libxkbcommon-dev, libdrm-dev, libsystemd-dev, libdisplay-info-dev, libpixman-1-dev, libssl-dev, libsqlite3-dev

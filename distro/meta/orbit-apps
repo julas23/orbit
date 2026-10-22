@@ -1,0 +1,4 @@
+Description: Orbit everyday applications
+ Browser, mail, scanner, camera, terminals, notes, passwords and the disk
+ and SD card tools of the Orbit Linux selection.
+Depends: firefox | firefox-esr, thunderbird, simple-scan, cheese, kitty, alacritty, cava, bitwarden, obsidian, simplenote, localsend, rpi-imager, gparted, mousepad

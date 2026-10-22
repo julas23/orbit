@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync the Orbit apt repository every night
+
+[Timer]
+OnCalendar=*-*-* 04:30
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

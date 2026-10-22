@@ -1,0 +1,63 @@
+# Debian 13 (trixie) packages the Orbit repository carries, with everything
+# they depend on (and recommend) — sync.sh adds what the Orbit, ArtCraft and
+# third-party packages depend on, and every package of priority required,
+# important and standard (what debootstrap and a usable base need).
+# One name per line; comments and blank lines are ignored.
+
+# --- base system
+sudo systemd systemd-sysv systemd-timesyncd systemd-resolved dbus dbus-user-session
+locales console-setup keyboard-configuration tzdata bash-completion man-db less nano vim-tiny
+curl wget git ca-certificates gnupg openssh-client openssh-server rsync zstd unzip zip p7zip-full xz-utils
+file htop lsof pciutils usbutils lshw dmidecode smartmontools
+apt-transport-https unattended-upgrades needrestart
+
+# --- kernel, firmware, microcode
+linux-image-amd64 linux-headers-amd64 initramfs-tools
+firmware-linux firmware-linux-nonfree firmware-misc-nonfree firmware-amd-graphics firmware-realtek
+firmware-iwlwifi firmware-atheros firmware-brcm80211 firmware-intel-sound firmware-sof-signed
+firmware-mediatek firmware-libertas amd64-microcode intel-microcode
+
+# --- boot: UKI through EFISTUB, Plymouth
+systemd-ukify systemd-boot-efi efibootmgr plymouth plymouth-themes
+
+# --- disks and the installer's tools
+cryptsetup cryptsetup-initramfs lvm2 btrfs-progs dosfstools e2fsprogs xfsprogs ntfs-3g exfatprogs
+parted gdisk fdisk debootstrap arch-install-scripts mdadm
+
+# --- the live ISO
+live-boot live-config live-config-systemd live-build squashfs-tools xorriso
+grub-efi-amd64-bin grub-pc-bin grub-efi-amd64-signed shim-signed syslinux-common isolinux mtools
+
+# --- network, bluetooth
+network-manager network-manager-applet wpasupplicant iw wireless-regdb bluez blueman modemmanager
+
+# --- sound
+pipewire pipewire-pulse pipewire-alsa pipewire-audio wireplumber alsa-utils pavucontrol rtkit
+
+# --- graphics and the session around orbit-core
+mesa-vulkan-drivers libgl1-mesa-dri mesa-va-drivers xwayland libinput10 libseat1
+xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-wlr xdg-user-dirs xdg-utils
+wl-clipboard grim upower udisks2 udiskie lxpolkit polkitd pkexec gnome-keyring
+ddcutil solaar power-profiles-daemon brightnessctl
+fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu fonts-liberation2 fonts-font-awesome
+
+# --- what the Orbit apps load at run time (their own .deb depend on the
+# libraries; these are the plugins and helpers no library names)
+glycin-loaders bubblewrap gvfs gvfs-backends gvfs-fuse
+gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+gstreamer1.0-libav gstreamer1.0-pipewire gstreamer1.0-gtk4
+
+# --- building Orbit (the orbit-dev metapackage; rustup brings the toolchain)
+build-essential pkg-config libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev libpoppler-glib-dev
+libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+libgtksourceview-5-dev libvte-2.91-gtk4-dev libwebkitgtk-6.0-dev libseat-dev libinput-dev
+libudev-dev libgbm-dev libxkbcommon-dev libdrm-dev libsystemd-dev libdisplay-info-dev libpixman-1-dev
+libssl-dev libsqlite3-dev clang mold
+
+# --- the user's applications (orbit-linux.txt) that Debian has
+thunderbird firefox-esr inkscape gimp blender sweethome3d simple-scan cheese ardour obs-studio
+kitty alacritty cava gparted
+
+# --- the classics beside ArtCraft (orbit-studio) and other daily ones
+scribus libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-l10n-pt-br
+audacity hydrogen rosegarden openscad mousepad rhythmbox

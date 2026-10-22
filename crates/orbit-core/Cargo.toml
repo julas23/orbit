@@ -8,6 +8,18 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Core: the Wayland compositor of the Orbit desktop. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+recommends = "xwayland, orbit-panel, orbit-dock, orbit-notify, orbitctl"
+assets = [
+    ["target/release/orbit-core", "usr/bin/", "755"],
+    ["../../data/orbit.desktop", "usr/share/wayland-sessions/", "644"],
+]
+
 [dependencies]
 smithay = { workspace = true, features = ["backend_winit", "backend_egl", "backend_drm", "backend_gbm", "backend_libinput", "backend_udev", "backend_session_libseat", "renderer_gl", "wayland_frontend", "desktop", "use_system_lib", "xwayland"] }
 tracing.workspace = true

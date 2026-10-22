@@ -1,0 +1,26 @@
+# Packages taken from GitHub releases: owner/repo, then a regular expression
+# for the asset (the newest release that has one, prereleases skipped).
+# ArtCraft (Apache-2.0)
+storytold/craft-launcher   ^artcraft-launcher-.*-linux-x86_64\.deb$
+storytold/gridcraft        -linux-x86_64\.deb$
+storytold/wordcraft        -linux-x86_64\.deb$
+storytold/deckcraft        -linux-x86_64\.deb$
+storytold/vectorcraft      -linux-x86_64\.deb$
+storytold/photocraft       -linux-x86_64\.deb$
+storytold/effectcraft      -linux-x86_64\.deb$
+storytold/lightcraft       -linux-x86_64\.deb$
+storytold/soundcraft       -linux-x86_64\.deb$
+storytold/figcraft         -linux-x86_64\.deb$
+storytold/filmcraft        -linux-x86_64\.deb$
+storytold/designcraft      -linux-x86_64\.deb$
+storytold/cadcraft         -linux-x86_64\.deb$
+storytold/pdfcraft         -linux-x86_64\.deb$
+# Third parties with an official .deb
+dbeaver/dbeaver                ^dbeaver-ce-.*-linux-x86_64\.deb$
+jgraph/drawio-desktop          ^drawio-amd64-.*\.deb$
+obsidianmd/obsidian-releases   ^obsidian_.*_amd64\.deb$
+Automattic/simplenote-electron ^Simplenote-linux-.*-amd64\.deb$
+bitwarden/clients              ^Bitwarden-.*-amd64\.deb$
+jeffvli/feishin                ^Feishin-linux-amd64\.deb$
+localsend/localsend            -linux-x86-64\.deb$
+raspberrypi/rpi-imager         ^rpi-imager_.*_amd64\.deb$

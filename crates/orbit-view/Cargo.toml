@@ -8,6 +8,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "graphics"
+priority = "optional"
+extended-description = "Orbit-View: image viewer. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, glycin-loaders, bubblewrap"
+assets = [
+    ["target/release/orbit-view", "usr/bin/", "755"],
+    ["../../data/io.github.julas23.Orbit.View.desktop", "usr/share/applications/", "644"],
+]
+
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true

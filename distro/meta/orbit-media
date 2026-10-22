@@ -1,0 +1,2 @@
+Description: Orbit media: music, recording and streaming
+Depends: feishin, ardour, obs-studio, audacity, hydrogen, rosegarden, rhythmbox, cava

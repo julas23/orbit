@@ -8,6 +8,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "utils"
+priority = "optional"
+extended-description = "Orbit-Calc: standard, scientific, HP-12C and IPv4 subnet calculator. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+assets = [
+    ["target/release/orbit-calc", "usr/bin/", "755"],
+    ["../../data/io.github.julas23.Orbit.Calc.desktop", "usr/share/applications/", "644"],
+]
+
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true

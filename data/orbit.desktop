@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Orbit
+Comment=The Orbit desktop: orbit-core with its panel, dock and applications
+Exec=orbit-core
+Type=Application
+DesktopNames=orbit

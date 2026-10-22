@@ -7,18 +7,22 @@ Orbit components — a Wayland compositor, a panel and a dock, and the
 everyday applications around them — designed to look and behave as one.
 It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
-> **Status:** early development. **Orbit-Panel** and **Orbit-Dock** work and
-> have replaced the [EWW](https://github.com/elkowar/eww) panel they were
-> rewritten from; **Orbit-Calc**, **Orbit-Clip**, **Orbit-Blink**,
-> **Orbit-View**, **Orbit-Read**, **Orbit-Play**, **Orbit-Edit** and
-> **Orbit-Files** work; the other components are planned.
-> Configuration and APIs may still change.
+> **Status:** alpha, in daily use. **orbit-core** is the only session on the
+> author's laptop — it takes the screen at boot (DRM/KMS), with several
+> monitors and XWayland for X programs — and hosts the panel, the dock and
+> every application below, which all work. Orbit is packaged as `.deb` and
+> served from its own apt repository, the first step of **Orbit Linux**, the
+> Debian-based distribution built around it; **Orbit-Station**, a remote
+> edition reached from any browser, is an idea for later. Still to come: the
+> login and lock screen (orbit-greet) and the installer. Configuration and
+> APIs may still change.
 
 ## The rack
 
 | Component | What it is | Status |
 | --- | --- | --- |
-| **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay): runs nested for now, tiles windows, hosts the panel and dock | in progress |
+| **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay): takes the screen (DRM/KMS, libinput, libseat) or runs nested, tiles windows, workspaces shared by every monitor, rounded corners, Mod+drag to move, XWayland for X programs, a sway-compatible IPC; hosts the panel and dock | **in daily use** |
+| orbit-greet | Login and lock screen, one layer of the core: black while locked, an "eyes open" transition | planned |
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
 | **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | **working** |
@@ -33,6 +37,8 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | **orbit-edit** | Text and code editor: several cursors, column selection, indent guides and folding, folder sidebar, session | **working** |
+| **orbit-term** | Terminal with the prompt fixed on top (date, exit code, git status, directory) and Tab completion; each output fills a box that never wraps, the last 50 that worked kept in a list; interactive programs run in a real terminal (VTE) | **working** |
+| orbit-install | The Orbit Linux installer | planned |
 
 Orbit is its own code. Existing desktops and compositors are studied as
 references; where orbit-core takes code from one (cosmic-comp, niri, anvil,
@@ -77,19 +83,31 @@ A column (or row) of independent modules, anchored to a screen edge.
 | `keyboard` | Layout language and variant; click for the next layout | sway IPC |
 | `battery` | Charge and uptime | UPower |
 | `session` | Power off, reboot, log out — confirmed over a blurred screen | logind / sway |
+| `notifications` | The bell: unread count, opens the notification centre | orbit-notify |
+| `bluetooth` | Adapter and connected devices; connect and pair | BlueZ |
+| `monitors` | How many monitors and where; arrange them by dragging, remembered by orbit-core | compositor IPC |
+| `spectrum` | Audio spectrum, as CAVA draws it: a line, 12 bars, or thin gradient bars on a grid | PulseAudio protocol (PipeWire) |
+| `cpu`, `ram`, `gpu`, `lan` | The last minute as a graph on a grid, with clock, temperature, swap, VRAM, rates | /proc, /sys (amdgpu) or nvidia-smi |
+| `disk` | A pie of used (red) and free (blue) with total, used and free; listed once per filesystem | GIO |
 
-**Layout.** Every size, gap and padding is a multiple of 5 px. A vertical
-panel is three columns wide (150 px by default) and each module has a *block*
-form; a horizontal panel is one line (50 px) and each module has a *line* form,
-with the details in tooltips and popovers. Small modules share a line in a
-vertical panel. `maintenance: true` draws the 5 px grid behind the panel to
-check alignment.
+**Layout.** A vertical panel is a grid of 30 px cells, four columns wide,
+10 px apart (154 px in all). Each module comes in up to three sizes —
+**Mini**, **Normal** and **Full** — and takes a block of cells for it;
+modules flow into the grid in order, the start part from the top, the end
+part from the bottom. A horizontal panel is one line, each module in a *line*
+form with the details in tooltips and popovers. The panel is edited in
+place: a right click on an empty spot turns editing on, and modules are then
+dragged, resized, moved between parts, added and removed, the result saved to
+`panel.yaml`. `maintenance: true` draws the grid behind the panel.
 
 ## Orbit-Dock
 
 A row of launchers on a screen edge, built from desktop files, in groups with
 separators between them. Icons come from the icon theme or from the files the
-desktop entries point to, loaded at display size.
+desktop entries point to, loaded at display size. A launcher's menu has the
+application's own actions and recent files, and an unread count shows on it
+when the application announces one. The dock is edited in place, as the
+panel: drag to reorder, drop off to remove, add launchers and separators.
 
 An AppImage — picked with "Add AppImage…" while editing the dock, or dropped
 on it — needs nothing else: its icon is taken out of it and kept next to it,
@@ -318,7 +336,13 @@ sets the font.
 
 ## Building and running
 
-Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
+**From packages.** Orbit is packaged as `.deb` (`distro/build-debs.sh`) and
+served, with the part of Debian 13 it needs, from the Orbit apt repository
+(see [Orbit Linux](#orbit-linux)). For now that repository is a pre-release
+on the author's network; once public, a Debian 13 system becomes Orbit with
+`apt install orbit-desktop`.
+
+**From source.** Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
 bubblewrap (its sandbox); for Orbit-Read the poppler-glib development
 files; for Orbit-Play GStreamer's (core, base and bad plugins) and
@@ -345,7 +369,7 @@ To install into `~/.local/bin` and start both in the right order from the
 compositor's configuration:
 
 ```sh
-scripts/install.sh                 # builds; installs orbit-panel, orbit-dock, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-session
+scripts/install.sh                 # builds and installs every program and orbit-session into ~/.local/bin
 orbit-session                      # (re)starts the panel, then the dock
 orbit-session --fallback 'eww …'   # runs another panel if Orbit cannot start
 ```
@@ -354,11 +378,63 @@ In sway, e.g. `exec ~/.local/bin/orbit-session` — and set `gaps top`/`gaps
 left` to 0 if they were reserving room for another panel: Orbit reserves its
 own.
 
-Runtime: a Wayland compositor with `wlr-layer-shell` (developed on sway; the
-`windows` and `workspaces` modules talk to sway's IPC). Optional: `grim` for
+Runtime: orbit-core, or another Wayland compositor with `wlr-layer-shell`
+(Orbit was first developed on sway; the `windows`, `workspaces` and
+`monitors` modules talk to a sway-compatible IPC, which orbit-core provides). Optional: `grim` for
 the blurred confirmation screen, `ddcutil` for external-monitor brightness.
 The panel and dock also have an X11 backend (EWMH dock hints and struts),
 tested on bspwm in earlier versions.
+
+## Orbit Linux
+
+A distribution built around Orbit: **Debian 13 plus the Orbit repository**,
+never a fork of Debian — kernel, drivers, security and firmware stay
+Debian's. The plan (in Portuguese) is in
+[`docs/PLANO-DISTRO.md`](docs/PLANO-DISTRO.md).
+
+- **Packages.** Every Orbit program is a `.deb`, and metapackages gather
+  them: `orbit-desktop` (core, panel, dock, the applications, sound,
+  network, portals), `orbit-studio` (the [ArtCraft](https://github.com/storytold)
+  suite — GridCraft, WordCraft, DeckCraft, VectorCraft, PhotoCraft,
+  EffectCraft, LightCraft, SoundCraft, FigCraft, FilmCraft, DesignCraft,
+  CADCraft, PdfCraft — beside the classics it may one day replace),
+  `orbit-apps`, `orbit-media` and `orbit-dev`.
+- **Repository.** Built with aptly from the lists in
+  [`distro/repo/`](distro/repo): the part of Debian 13 Orbit uses, with every
+  dependency and the security updates; Orbit's own packages; ArtCraft's and
+  other projects' official `.deb` releases; the newest VS Code and Firefox.
+  Signed, synced every night, and self-sufficient: a system debootstraps and
+  installs every metapackage from it alone. Running on the author's network
+  for now.
+- **Installation.** A live ISO with one screen and an **INSTALL** button
+  (orbit-install, in Rust and GTK like the rest), offline: disk, hostname,
+  user and password, and which metapackages. Boot is EFISTUB with a unified
+  kernel image — no boot loader — with a Plymouth splash, into orbit-greet
+  and orbit-core. **An existing `/home` is never erased:** a home partition,
+  LVM volume, LUKS volume or btrfs subvolume is kept and reused, and the new
+  user gets its owner's id.
+- **Status.** Packages and repository done; orbit-greet, the installer and
+  the ISO are next.
+
+## Orbit-Station
+
+The idea for a later, remote edition of Orbit Linux, in the spirit of LTSP:
+type the address of an Orbit machine into any browser — Chrome, Firefox or
+Safari, on a phone, a tablet, a smart TV, a Fire Stick or another computer —
+and the whole Orbit desktop is there, with nothing installed on that device.
+
+- **How:** the interface reaches the browser over the web — a client in
+  WebAssembly, with WebSocket/WebRTC to the host — so an Orbit machine can
+  sit at home or in the cloud and be used from anywhere.
+- **Storage:** a USB drive or external disk plugged into the device in hand
+  (TV, phone, stick) is seen and used by Orbit; the user's whole environment
+  could even live on that disk and travel with them.
+- **Why:** it would replace the Sunshine/Moonlight streaming used today to
+  reach a remote machine.
+- **The cost:** one interface that runs natively on Wayland and in the
+  browser means dealing with deep differences in concurrency, sound, input
+  and font rendering, and some performance lost against native. It is an
+  idea to study, not yet a plan.
 
 ## Configuration
 
@@ -430,9 +506,20 @@ follow the locale.
 | `orbit-play` | The media player |
 | `orbit-edit` | The text editor |
 | `orbit-files` | The file manager |
+| `orbit-pathfinder` | The web browser |
+| `orbit-term` | The terminal |
+| `orbit-notify` | The notification server |
+| `orbit-core` | The compositor |
+| `orbit-ipc` | The i3/sway IPC protocol: served by orbit-core, spoken by the panel, the applications and orbitctl |
+| `orbitctl` | Commands to the compositor |
+| `distro/` | Packaging: `build-debs.sh`, the metapackages, the apt repository's lists and sync |
 
-The plan for the panel (in Portuguese) is in
-[`docs/PLANO-PAINEL.md`](docs/PLANO-PAINEL.md).
+The plans (in Portuguese) are in [`docs/`](docs): the panel
+([`PLANO-PAINEL.md`](docs/PLANO-PAINEL.md)), the compositor
+([`PLANO-CORE.md`](docs/PLANO-CORE.md)), notifications
+([`PLANO-NOTIFY.md`](docs/PLANO-NOTIFY.md)), the browser
+([`PLANO-PATHFINDER.md`](docs/PLANO-PATHFINDER.md)) and the distribution
+([`PLANO-DISTRO.md`](docs/PLANO-DISTRO.md)).
 
 ## Contributing
 

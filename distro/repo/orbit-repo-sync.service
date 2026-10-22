@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync and publish the Orbit apt repository (distro/repo/sync.sh)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/orbit-repo-config/sync.sh /srv/orbit-repo-config
+StandardOutput=append:/var/log/orbit-repo-sync.log
+StandardError=append:/var/log/orbit-repo-sync.log
+Nice=10

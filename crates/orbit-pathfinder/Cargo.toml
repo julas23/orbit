@@ -8,6 +8,18 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "web"
+priority = "optional"
+extended-description = "Orbit-Pathfinder: a private web browser with a sidebar of services, on WebKitGTK. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+assets = [
+    ["target/release/orbit-pathfinder", "usr/bin/", "755"],
+    ["../../data/io.github.julas23.Orbit.Pathfinder.desktop", "usr/share/applications/", "644"],
+    ["../../data/pathfinder/recipes/**/*", "usr/share/orbit-pathfinder/recipes/", "644"],
+]
+
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true

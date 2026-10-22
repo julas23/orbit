@@ -8,6 +8,18 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "utils"
+priority = "optional"
+extended-description = "Orbit-Term: terminal with the prompt on top and outputs that never wrap. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+recommends = "git, bash-completion"
+assets = [
+    ["target/release/orbit-term", "usr/bin/", "755"],
+    ["../../data/io.github.julas23.Orbit.Term.desktop", "usr/share/applications/", "644"],
+]
+
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true

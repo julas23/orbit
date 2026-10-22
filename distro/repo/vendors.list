@@ -1,0 +1,5 @@
+# Vendors' apt repositories, of which only the newest version of the named
+# packages is taken: URL, suite, component, signing key URL, packages
+# (comma-separated).
+https://packages.microsoft.com/repos/code stable  main https://packages.microsoft.com/keys/microsoft.asc       code
+https://packages.mozilla.org/apt          mozilla main https://packages.mozilla.org/apt/repo-signing-key.gpg firefox,firefox-l10n-pt-br

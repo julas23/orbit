@@ -1,0 +1,3 @@
+Description: Orbit Studio: creative applications
+ The ArtCraft suite beside the classic applications it may one day replace.
+Depends: artcraft-launcher, gridcraft, wordcraft, deckcraft, vectorcraft, photocraft, effectcraft, lightcraft, soundcraft, figcraft, filmcraft, designcraft, cadcraft, pdfcraft, gimp, inkscape, scribus, libreoffice-writer, libreoffice-calc, libreoffice-impress, blender, sweethome3d, openscad, draw.io

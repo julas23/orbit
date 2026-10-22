@@ -1,6 +1,8 @@
 # Plano da Orbit Linux
 
-Status: **rascunho para validação** (2026-10-20).
+Status: **em andamento** (2026-10-20; revisto em 2026-10-21 com o
+`orbit-linux.txt` do Juliano — seção 10 — e com o repositório apt já no ar,
+seção 7).
 Origem: a ideia de 2026-10-20 de levar o Orbit um passo além do desktop: uma
 distribuição própria, com o orbit-core, os apps Orbit e as suítes criativas
 modernas (ArtCraft) já integrados. Depende de `docs/PLANO-CORE.md`: a distro só
@@ -116,13 +118,50 @@ Como entram:
 
 ## 6. Instalação e ISO
 
+Decidido em 2026-10-21 (seção 10): **instalador próprio** e **pacotes
+prontos** — nada é compilado na máquina de quem instala.
+
 - **Ferramenta da ISO:** `live-build` (a mesma do Debian live), com a lista de
   pacotes Orbit e os hooks de configuração versionados em `distro/` no repo.
-- **Instalador:** Calamares (o do Debian live), com marca Orbit e uma página
-  para escolher os metapacotes da seção 4. Disco: ext4 ou btrfs com
-  subvolumes; LUKS oferecido por padrão.
-- **Live:** a ISO sobe direto na sessão Orbit (usuário `orbit`, sem senha, greet
-  desligado), para experimentar antes de instalar.
+  A ISO leva os pacotes da instalação base e do `orbit-desktop`: **instala
+  sem internet**; a rede só serve aos extras (ArtCraft, apps de terceiros).
+- **Live mínima:** só a tela de apresentação e o botão **INSTALL**, rodando
+  no próprio orbit-core (o `cage` como reserva em placas onde o core falhar).
+- **Instalador `orbit-install`:** Rust + GTK4 com o `orbit-app` (o visual do
+  Orbit). Pergunta disco, hostname, usuário e senha, e os metapacotes da seção
+  4. O trabalho é um backend privilegiado em etapas, com progresso
+  ("etapa 3/7") e o log ao vivo na tela (a caixa de saída do orbit-term),
+  gravado em `/var/log/orbit-install.log` no sistema instalado. A senha nunca
+  passa por linha de comando nem por log. Swap temporário (zram) durante a
+  instalação.
+- **Base:** `debootstrap` a partir do repositório Orbit (seção 7), depois os
+  metapacotes escolhidos.
+- **Boot: EFISTUB com UKI** — kernel, initramfs e cmdline num único `.efi`
+  (`systemd-ukify`), sem GRUB:
+  - registrado com `efibootmgr` (com `/sys/firmware/efi/efivars` montado no
+    chroot) **e** copiado para `EFI/BOOT/BOOTX64.EFI`, o caminho que qualquer
+    firmware acha sozinho (um `vmlinuz` solto ali não teria `root=` nem
+    initrd: só a UKI funciona assim);
+  - **duas entradas, atual e anterior**: sem menu de boot, um kernel quebrado
+    deixaria a máquina sem boot;
+  - refeita nos hooks do kernel **e** do `update-initramfs` (o initrd muda sem
+    o kernel mudar);
+  - ESP de 1 GiB; `/boot` separado não é mais preciso;
+  - **Secure Boot desligado** (o kernel do Debian só é aceito via shim);
+    chaves próprias da Orbit ficam para depois;
+  - Plymouth no initramfs (`quiet splash`), passando ao orbit-greet.
+- **`/home` existente nunca é apagado** (regra do Juliano, inegociável). O
+  instalador reconhece e reaproveita, sem formatar:
+  - partição própria (ext4, btrfs, xfs…);
+  - volume LVM (o caso do hp: `hp-vg-home`);
+  - LUKS (pede a senha para abrir);
+  - subvolume `@home` do btrfs (recria só o da raiz);
+  - **`/home` como pasta dentro da raiz: em aberto** — recusar, ou instalar
+    limpando tudo menos `/home`.
+  O usuário novo recebe o **UID do dono** da pasta existente. Antes de tocar
+  no disco, uma tela "vou formatar X / vou manter Y" pede confirmação
+  explícita. Cada layout é testado em VM (Proxmox).
+- **Live para experimentar:** depois do instalador, se valer a pena.
 - **Primeiro boot:** o orbit-greet cria o usuário se a instalação foi OEM; tour
   rápido opcional (atalhos, painel, dock).
 - **Testes:** cada ISO de CI é instalada numa VM do Proxmox (Dell T430) por
@@ -131,11 +170,39 @@ Como entram:
 
 ## 7. Infraestrutura
 
+**Repositório apt no ar desde 2026-10-21:** LXC `10.0.0.111` (Debian 13), aptly
++ nginx, chave `Orbit Linux Archive (pre-release)`
+`285F 4964 06AB A347 4D1A 5983 9C2D 444C BEB0 4CC0` (ed25519, até 2029, gerada
+no próprio servidor — a chave definitiva, mestre offline, vem antes da Fase D).
+
+```
+# /etc/apt/sources.list.d/orbit.sources (chave em
+# http://10.0.0.111/orbit-archive-keyring.gpg → /usr/share/keyrings/)
+Types: deb
+URIs: http://10.0.0.111/debian http://10.0.0.111/orbit
+Suites: trixie
+Components: main
+Signed-By: /usr/share/keyrings/orbit-archive-keyring.gpg
+```
+
+| Repositório | Conteúdo |
+|---|---|
+| `/debian` | A parte do Debian 13 que o Orbit usa (`distro/repo/debian.list` + prioridades required/important/standard + o que os pacotes de `/orbit` pedem), **com todas as dependências e recomendações**, já com trixie-updates e trixie-security: 4.217 pacotes, 7,7 GB |
+| `/orbit` | Os 15 pacotes do Orbit e os 5 metapacotes (`distro/build-debs.sh`), a ArtCraft (14 `.deb` oficiais do GitHub), os terceiros com `.deb` oficial (`distro/repo/github.list`) e a versão mais nova do VS Code e do Firefox dos repositórios deles (`vendors.list`): 45 pacotes |
+
+`distro/repo/sync.sh` monta e publica tudo (snapshots datados, os 7 últimos
+guardados para voltar atrás); roda toda noite (`orbit-repo-sync.timer`).
+Testado: um `debootstrap` só desse repositório, e nele os cinco metapacotes,
+kernel, firmware, UKI, Plymouth, LUKS/LVM/btrfs e rede — 2.019 pacotes
+resolvidos e os 2.097 arquivos baixados sem erro, sem nenhuma outra fonte.
+Sem `GITHUB_TOKEN` (em `/etc/orbit-repo.env`) a API do GitHub dá 60
+consultas por hora; esgotadas, o que já foi baixado fica.
+
 | Peça | Onde |
 |---|---|
 | Código | Este repositório (`distro/` para ISO e metapacotes) |
 | CI dos pacotes e da ISO | GitHub Actions no começo; runner próprio no Proxmox quando o build pesar |
-| Repositório apt | `reprepro` ou `aptly` na VPS da Oracle (zonas DNS já estão na OCI), servindo por HTTPS; cópia em GitHub Pages/Releases como reserva |
+| Repositório apt | aptly na LXC `10.0.0.111` (rede de casa, HTTP); a VPS da Oracle com HTTPS para o público, na Fase D |
 | Chave de assinatura | Gerada offline; subchave de assinatura só no CI (segredo do Actions); chave mestre fora de qualquer máquina ligada à rede |
 | VMs de teste | Proxmox, uma VM descartável por ISO |
 | Downloads da ISO | Releases do GitHub + checksum assinado |
@@ -146,7 +213,10 @@ Amarradas às fases do PLANO-CORE.
 
 ### Fase A — pacotes (agora, antes do core)
 
-- `[package.metadata.deb]` em cada crate; `cargo deb` gerando os dez `.deb`.
+- **Feito em 2026-10-21:** `[package.metadata.deb]` em cada crate,
+  `distro/build-debs.sh` gerando os 15 `.deb` e os metapacotes
+  (`orbit-desktop`, `orbit-studio`, `orbit-apps`, `orbit-media`, `orbit-dev`),
+  e o repositório da seção 7. Falta: CI, e o hp/think usando os pacotes.
 - `orbit-common-data`, `orbit-defaults`, `orbit-ruffle`.
 - Repositório apt na VPS + `orbit-archive-keyring`; CI publicando a cada tag.
 - **Pronto quando:** o hp troca o `install.sh` pelos pacotes sem diferença no
@@ -180,6 +250,14 @@ Amarradas às fases do PLANO-CORE.
 
 | Item | Risco / decisão em aberto |
 |---|---|
+| `/home` dentro da raiz | O instalador recusa, ou instala limpando tudo menos `/home`? (seção 6) |
+| Popsicle, Ghostty, AniCraft, craft-fonts | Sem `.deb` oficial: AppImage gerenciada pelo Orbit, ou pacote próprio |
+| Nerd Font | O painel usa glifos Nerd Font, que o Debian não tem: pacote `orbit-fonts` (MIT) |
+| orbit-greet | Ainda não existe (PLANO-CORE §7.3, passos 3–5): a ISO depende dele |
+
+
+| Item | Risco / decisão em aberto |
+|---|---|
 | Manutenção | Uma distro é compromisso de longo prazo. A regra 1.1 (só Debian + repositório) existe para que o custo seja o dos pacotes Orbit, não o de um sistema inteiro |
 | ArtCraft em alpha | Formato de arquivo e interface podem mudar; por isso ficam opcionais e os clássicos continuam até a promoção (seção 5.3) |
 | egui x GTK | Visual diferente dos apps Orbit até existir tema/integração; risco de nunca ficar idêntico |
@@ -189,3 +267,25 @@ Amarradas às fases do PLANO-CORE.
 | Firmware não livre | Debian 13 já inclui `non-free-firmware` no instalador; a ISO segue o mesmo (o think precisa de `firmware-amd-graphics`) |
 | Chave de assinatura | Perder ou vazar a chave obriga a trocar em todas as máquinas; processo de rotação documentado antes da Fase D |
 | Steam, VS Code, Chrome | Repositórios de terceiros não livres; entram nos metapacotes opcionais configurando o repositório oficial deles, nunca redistribuídos pelo Orbit |
+
+## 10. O `orbit-linux.txt` (2026-10-21)
+
+O plano do Juliano para a distro: boot por EFISTUB com hooks do kernel,
+Plymouth, orbit-greet, orbit-core com o rack inteiro, a ArtCraft e uma lista
+de apps; uma ISO live com uma tela e um botão INSTALL; e a regra de nunca
+apagar um `/home` existente. Discutido e aceito com estas mudanças:
+
+- **Pacotes prontos em vez de compilar na instalação** (o txt clonava e
+  compilava tudo com `cargo build` no chroot): compilar na máquina de quem
+  instala leva horas, pode estourar a memória, deixa o sistema pela metade se
+  a rede cair, precisa de `curl | sh` no instalador, e cada atualização
+  pediria compilar de novo; o ganho de otimizar para o processador é pequeno
+  em apps gráficos. Compilar do código pode voltar como modo avançado.
+- **Instalador próprio** (como no txt, contra o Calamares), em Rust + GTK4
+  com o `orbit-app`, não Iced/Slint.
+- **EFISTUB na forma de UKI** (seção 6): a dica do txt de usar
+  `BOOTX64.EFI` só funciona assim.
+- **ISO com os pacotes dentro** (instala sem rede).
+- Correções do txt: o Orbit é `github.com/julas23/orbit` (não
+  `storytold/orbit-core`); `chroot -u` não existe; `sway` não entra;
+  "DeskCraft" é a **DeckCraft**.
