@@ -1,0 +1,33 @@
+[package]
+name = "orbit-greet"
+description = "Orbit-Greet: the login and lock screen of Orbit-Core, Rust + GTK4 + PAM"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Greet: the face of Orbit-Core's locked state, login and screen lock in one. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+assets = [
+    ["target/release/orbit-greet", "usr/bin/", "755"],
+    ["../../data/pam/orbit-greet", "etc/pam.d/", "644"],
+]
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+orbit-protocols = { workspace = true, features = ["client"] }
+gtk.workspace = true
+gdk4-wayland.workspace = true
+wayland-client.workspace = true
+wayland-backend.workspace = true
+log.workspace = true
+env_logger.workspace = true
+async-channel.workspace = true
+glib-unix.workspace = true

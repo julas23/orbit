@@ -1,0 +1,4 @@
+# orbit-greet: the login and lock screen of Orbit. It runs as the session's
+# own user, so pam_unix checks that user's password through unix_chkpwd.
+@include common-auth
+@include common-account

@@ -671,3 +671,10 @@ term-interactive = { $command } — in the terminal
 term-exit = exit { $code }
 term-stderr = wrote errors
 term-from-history = { $command }  ·  { $time }  ·  { $cwd }
+
+## Login and lock screen
+
+greet-password = Password
+greet-checking = Checking…
+greet-wrong = Wrong password
+greet-wait = Try again in { $seconds } s

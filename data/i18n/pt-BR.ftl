@@ -663,3 +663,10 @@ term-interactive = { $command } — no terminal
 term-exit = saída { $code }
 term-stderr = escreveu erros
 term-from-history = { $command }  ·  { $time }  ·  { $cwd }
+
+## Login e tela de bloqueio
+
+greet-password = Senha
+greet-checking = Verificando…
+greet-wrong = Senha incorreta
+greet-wait = Tente de novo em { $seconds } s

@@ -1,0 +1,52 @@
+/* Orbit-Greet built-in stylesheet: the locked screen. Black, as the core
+ * draws it while locked (the eyes closed), with the card in the middle.
+ * Colours come from the palette; ~/.config/orbit/style.css goes on top.
+ * Sizes on the 5 px grid, as in the panel. */
+
+window.orbit-greet {
+  background-color: #000000;
+  color: @orbit_fg;
+}
+
+window.orbit-greet .card {
+  min-width: 300px;
+}
+
+window.orbit-greet .time {
+  font-size: 80px;
+  font-weight: 300;
+}
+
+window.orbit-greet .date {
+  font-size: 20px;
+  color: @orbit_muted;
+  margin-bottom: 40px;
+}
+
+window.orbit-greet .avatar {
+  margin-bottom: 10px;
+  color: @orbit_muted;
+}
+
+window.orbit-greet .name {
+  font-size: 20px;
+  margin-bottom: 20px;
+}
+
+window.orbit-greet .password {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 20px;
+  background-color: @orbit_button;
+  border: 1px solid @orbit_border;
+}
+
+window.orbit-greet .password:focus-within {
+  border-color: @orbit_accent;
+}
+
+window.orbit-greet .message {
+  margin-top: 15px;
+  min-height: 40px;
+  color: @orbit_muted;
+}

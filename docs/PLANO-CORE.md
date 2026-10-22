@@ -257,7 +257,7 @@ troca de layout), botões de desligar/reiniciar/suspender (os mesmos do
 | 2 | Abrir e fechar os olhos: fade do preto + blur (dual kawase, shader GLES próprio) da sessão numa textura fora da tela, só durante a transição | 1 |
 | 3 | Socket privado para cliente privilegiado e o protocolo `orbit-greet-v1` (pedir destravar; o core põe a janela do greet no monitor ativo) — **feito** 2026-10-21 | 1 |
 | 4 | `ext-session-lock-v1` no core (para lockers de terceiros) | 1 |
-| 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) | 1 |
+| 5 | `orbit-greet` mínimo: campo de senha + PAM, rodando sobre o core aninhado; relançado se cair (teste: matar o greet não destrava) — **feito** 2026-10-21 | 1 |
 | 6 | Boot do hp com `--locked` + autostart adiado até o primeiro destravar | 2 |
 | 7 | Destravar o gnome-keyring com a senha (conferir o caminho: PAM `pam_gnome_keyring` no serviço do greet ou a chamada D-Bus do daemon) | 2 |
 | 8 | Bloqueio por Super+L, ociosidade e antes de suspender | 2 |
@@ -401,6 +401,22 @@ desta fase — sem esperar o aninhado ficar completo.
   matar o greet travado, greet inexistente, e um cliente comum não achando
   o global; com `foot` como greet: configure no tamanho da tela com
   fullscreen, teclado nele e não na sessão.
+- **2026-10-21 — `orbit-greet` mínimo** (§7.3 passo 5, crate `orbit-greet`).
+  GTK4, `NON_UNIQUE` (um greet relançado nunca entrega a vez a um que está
+  saindo). Tela preta com relógio e data no formato do painel, foto
+  (`~/.face` ou a do AccountsService), nome (GECOS) e campo de senha. O
+  protocolo vai na própria conexão Wayland do GDK, numa fila à parte
+  (`wayland-backend` `client_system`, `from_foreign_display`), lida pelo fd
+  no loop do GLib. PAM por FFI própria ligada em `libpam.so.0` (sem pacote
+  -dev), serviço `orbit-greet` (`data/pam/orbit-greet`: `common-auth` +
+  `common-account`; sem o arquivo o PAM usa `other`, que dá no mesmo no
+  Debian), em thread; a senha é apagada da memória depois. Duas senhas
+  erradas sem espera, depois 2, 4, 8… até 30 s com contagem (além dos ~2 s
+  do próprio `pam_unix`). A cada `locked` o campo zera. Fora do core (sem o
+  global) é uma prévia: a senha certa só fecha. Entrou no `build-debs.sh`
+  e no `orbit-desktop`. Testado: senha errada recusada pelo PAM (teste
+  automático); aninhado, o greet recebe `locked` pelo protocolo. Falta o
+  Juliano testar digitando a senha certa.
 - **2026-10-21 — vários monitores, arrastar, cantos.** Pedidos do Juliano.
   - `output.rs`: monitores sem posição em `outputs:` (`core.yaml`) empilham
     **para baixo**, o do notebook (`eDP`/`LVDS`/`DSI`) em cima, cada um

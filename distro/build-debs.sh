@@ -16,7 +16,7 @@ cd "$ROOT"
 UPLOAD=""
 [ "${1:-}" = --upload ] && UPLOAD=${2:?--upload needs a host}
 
-CRATES=(orbit-core orbitctl orbit-panel orbit-dock orbit-notify orbit-calc orbit-clip orbit-blink
+CRATES=(orbit-core orbit-greet orbitctl orbit-panel orbit-dock orbit-notify orbit-calc orbit-clip orbit-blink
         orbit-view orbit-read orbit-play orbit-edit orbit-files orbit-pathfinder orbit-term)
 BASE=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 VERSION="$BASE+git$(git log -1 --format=%cd --date=format:%Y%m%d%H%M).$(git rev-parse --short HEAD)"

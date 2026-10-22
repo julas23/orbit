@@ -22,7 +22,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | Component | What it is | Status |
 | --- | --- | --- |
 | **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay): takes the screen (DRM/KMS, libinput, libseat) or runs nested, tiles windows, workspaces shared by every monitor, rounded corners, Mod+drag to move, XWayland for X programs, a sway-compatible IPC; hosts the panel and dock | **in daily use** |
-| orbit-greet | Login and lock screen, one layer of the core: black while locked, an "eyes open" transition | planned |
+| orbit-greet | Login and lock screen, one layer of the core: launched by it as its only privileged client, password through PAM; black while locked, an "eyes open" transition to come | in progress |
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
 | **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | **working** |
