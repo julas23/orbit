@@ -1,0 +1,17 @@
+# orbit-login: opens the sessions of Orbit (PLANO-CORE §7.4). No password
+# is asked here: the session starts locked and orbit-greet asks for it; for
+# the switch to another user, orbit-login checks theirs with the
+# orbit-greet service. The session part is login's. The auth stack is
+# pam_permit, as gdm-autologin's: pam_setcred walks it before the session
+# opens, and pam_deny there fails the credentials ("Failure setting user
+# credentials"). Passing auth here gives nothing: only root opens sessions.
+auth     required pam_permit.so
+@include common-account
+session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so close
+session  required pam_loginuid.so
+session  optional pam_keyinit.so force revoke
+session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so open
+session  required pam_env.so readenv=1
+session  required pam_env.so readenv=1 envfile=/etc/default/locale
+@include common-session
+session  required pam_limits.so

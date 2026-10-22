@@ -1,0 +1,9 @@
+# /etc/orbit/login.yaml — Orbit-Login (PLANO-CORE §7.4).
+#
+# The user whose session opens at boot, locked: the greet asks for the
+# password. Others switch from the lock screen.
+user: juliano
+# Run through the user's login shell (its ~/.profile sets the PATH).
+command: orbit-core --locked
+# The default user's console.
+vt: 1

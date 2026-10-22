@@ -46,6 +46,8 @@ struct Client {
     output: Vec<u8>,
     /// The event types it subscribed to.
     events: Vec<u32>,
+    /// The peer's user: root may `unlock` (`orbit-login`, PLANO-CORE §7.4).
+    uid: Option<u32>,
 }
 
 impl Drop for Ipc {
@@ -101,9 +103,10 @@ fn remove_stale(runtime: &std::path::Path, uid: u32) {
 
 fn accept(state: &mut Orbit, stream: UnixStream) {
     let (Ok(reader), Ok(())) = (stream.try_clone(), stream.set_nonblocking(true)) else { return };
+    let uid = smithay::reexports::rustix::net::sockopt::socket_peercred(&stream).ok().map(|c| c.uid.as_raw());
     let id = state.ipc.next;
     state.ipc.next += 1;
-    state.ipc.clients.insert(id, Client { stream, input: Vec::new(), output: Vec::new(), events: Vec::new() });
+    state.ipc.clients.insert(id, Client { stream, input: Vec::new(), output: Vec::new(), events: Vec::new(), uid });
     let handle = state.loop_handle.clone();
     let inserted = handle.insert_source(Generic::new(reader, Interest::READ, Mode::Level), move |_, reader, state| {
         let mut chunk = [0u8; 8192];
@@ -221,6 +224,16 @@ impl Orbit {
     fn ipc_request(&mut self, client: u64, kind: u32, payload: &[u8]) -> Value {
         let text = String::from_utf8_lossy(payload);
         match kind {
+            // `orbit-login` opens the lock once it checked the password
+            // itself (the user switch, PLANO-CORE §7.4); no one else may.
+            proto::RUN_COMMAND if text.trim() == "unlock" => {
+                if self.ipc.clients.get(&client).and_then(|c| c.uid) != Some(0) {
+                    return json!([{ "success": false, "error": "only root may unlock" }]);
+                }
+                tracing::info!("unlocked by orbit-login");
+                self.unlock();
+                json!([{ "success": true }])
+            }
             proto::RUN_COMMAND => Value::Array(crate::command::run(self, &text)),
             proto::GET_WORKSPACES => Value::Array(self.workspaces.iter().map(|w| w.num).collect::<Vec<_>>().into_iter().map(|n| self.workspace_json(n)).collect()),
             proto::SUBSCRIBE => match serde_json::from_str::<Vec<String>>(&text) {

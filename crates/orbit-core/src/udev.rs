@@ -57,6 +57,37 @@ use crate::{
     state::{Backend, Orbit},
 };
 
+/// A session opened behind another (`orbit-login` preparing a user
+/// switch, PLANO-CORE §7.4) has no screen until logind shows it: the GPU
+/// is not its to set up. The core waits for that before taking the
+/// screen; the session's own services are already up meanwhile.
+fn wait_until_shown() {
+    let active = || -> zbus::Result<bool> {
+        let connection = zbus::blocking::Connection::system()?;
+        let session = zbus::blocking::Proxy::new(&connection, "org.freedesktop.login1", "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session")?;
+        session.get_property::<bool>("Active")
+    };
+    let mut told = false;
+    loop {
+        match active() {
+            Ok(false) => {
+                if !std::mem::replace(&mut told, true) {
+                    tracing::info!("the session is not on screen yet: waiting");
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            Ok(true) => break,
+            Err(err) => {
+                tracing::debug!("logind: {err}");
+                break;
+            }
+        }
+    }
+    if told {
+        tracing::info!("the session is on screen");
+    }
+}
+
 /// 8-bit colour: what every monitor takes.
 const FORMATS: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
@@ -88,7 +119,11 @@ struct Surface {
 }
 
 pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> anyhow::Result<()> {
+    // The seat first, even behind another session: taking control holds
+    // the console (graphics mode, keyboard off), so logind starts no getty
+    // on it when it is shown and the keys never reach one.
     let (mut session, notifier) = LibSeatSession::new().map_err(|e| anyhow::anyhow!("no seat session (run it from a text console): {e}"))?;
+    wait_until_shown();
     let seat = session.seat();
 
     let path = primary_gpu(&seat)?

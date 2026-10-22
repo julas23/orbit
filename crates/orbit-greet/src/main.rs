@@ -8,6 +8,11 @@
 //! corner (`status`), power off, reboot and suspend below (`power`, with
 //! its commands in `greet.yaml`).
 //!
+//! With more than one person on the machine and Orbit-Login running the
+//! seat (PLANO-CORE §7.4), the others are below the card: choosing one
+//! opens their session behind this one, and their password, checked by
+//! Orbit-Login, shows it. This session stays locked.
+//!
 //! It stays running between locks: at each `locked` the field is emptied
 //! and ready. Wrong passwords wait longer each time. Run anywhere else it
 //! is a preview: a right password just quits.
@@ -19,7 +24,12 @@ mod pam;
 mod power;
 mod status;
 
-use std::{cell::Cell, path::PathBuf, rc::Rc, time::Duration};
+use std::{
+    cell::{Cell, RefCell},
+    path::{Path, PathBuf},
+    rc::Rc,
+    time::Duration,
+};
 
 use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::{number, tr, tr_args};
@@ -87,7 +97,16 @@ fn config_dir() -> Result<PathBuf, String> {
 
 /// What the screen holds, for the handlers.
 struct Greet {
-    user: String,
+    /// Who the session is.
+    me: String,
+    /// Who the card is for: `me`, or someone to switch to.
+    chosen: RefCell<String>,
+    /// The people who can log in, when Orbit-Login can switch to them.
+    people: Vec<orbit_login::User>,
+    avatar: gtk::Image,
+    name: gtk::Label,
+    real_name: Option<String>,
+    others: gtk::Box,
     link: Option<Rc<Link>>,
     app: gtk::Application,
     password: gtk::PasswordEntry,
@@ -126,7 +145,8 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         });
     }
 
-    let avatar = avatar(&user);
+    let avatar = gtk::Image::builder().pixel_size(120).css_classes(["avatar"]).build();
+    show_avatar(&avatar, &user, &glib::home_dir());
     let name = gtk::Label::builder().label(real_name.as_deref().unwrap_or(&user)).css_classes(["name"]).build();
     let password = gtk::PasswordEntry::builder()
         .placeholder_text(tr("greet-password"))
@@ -158,7 +178,8 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         .valign(gtk::Align::Center)
         .css_classes(["card"])
         .build();
-    for widget in [time.upcast_ref::<gtk::Widget>(), date.upcast_ref(), pages.upcast_ref()] {
+    let others = gtk::Box::builder().spacing(10).halign(gtk::Align::Center).css_classes(["others"]).build();
+    for widget in [time.upcast_ref::<gtk::Widget>(), date.upcast_ref(), pages.upcast_ref(), others.upcast_ref()] {
         card.append(widget);
     }
     let screen = gtk::Overlay::builder().child(&card).build();
@@ -168,8 +189,18 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
     if link.is_none() {
         log::warn!("no orbit_greet_v1: not launched by orbit-core; a preview (the right password quits)");
     }
+    // Someone to switch to only from a lock the core holds, on a seat
+    // Orbit-Login runs.
+    let people = if link.is_some() && orbit_login::available() { orbit_login::users() } else { Vec::new() };
+    let people = if people.len() > 1 && people.iter().any(|p| p.name == user) { people } else { Vec::new() };
     let greet = Rc::new(Greet {
-        user,
+        chosen: RefCell::new(user.clone()),
+        me: user,
+        people,
+        avatar,
+        name,
+        real_name,
+        others,
         link: link.clone(),
         app: app.clone(),
         password: password.clone(),
@@ -205,6 +236,10 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
                 greet.back();
                 return glib::Propagation::Stop;
             }
+            if key == gdk::Key::Escape && *greet.chosen.borrow() != greet.me && !greet.busy.get() {
+                greet.choose(&greet.me.clone());
+                return glib::Propagation::Stop;
+            }
             glib::Propagation::Proceed
         });
     }
@@ -217,16 +252,20 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         let greet = greet.clone();
         link.watch(move |event| greet.event(event));
     }
+    greet.show_others();
     window.present();
     password.grab_focus();
 }
 
 impl Greet {
     /// The core locked or unlocked.
-    fn event(&self, event: Event) {
+    fn event(self: &Rc<Self>, event: Event) {
         log::info!("{event:?}");
         self.password.set_text("");
         self.back();
+        if !self.busy.get() && *self.chosen.borrow() != self.me {
+            self.choose(&self.me.clone());
+        }
         if event == Event::Locked && !self.busy.get() {
             self.message.set_text("");
             self.password.set_sensitive(true);
@@ -284,8 +323,11 @@ impl Greet {
         self.busy.set(true);
         self.password.set_sensitive(false);
         self.message.set_text(&tr("greet-checking"));
+        let user = self.chosen.borrow().clone();
+        if user != self.me {
+            return self.switch(user, password);
+        }
         let (tx, rx) = async_channel::bounded(1);
-        let user = self.user.clone();
         std::thread::spawn(move || {
             let _ = tx.send_blocking(pam::check(&user, password));
         });
@@ -294,6 +336,90 @@ impl Greet {
             let result = rx.recv().await.unwrap_or_else(|_| Err(pam::Refused("PAM thread died".into())));
             greet.checked(result);
         });
+    }
+
+    /// The password of someone else: Orbit-Login checks it and shows
+    /// their session; this one stays locked, back on its own user.
+    fn switch(self: &Rc<Self>, user: String, password: String) {
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let reply = orbit_login::call(&orbit_login::Request::Switch { user, password });
+            let _ = tx.send_blocking(reply);
+        });
+        let greet = self.clone();
+        glib::spawn_future_local(async move {
+            let reply = rx.recv().await.unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
+            match reply {
+                Ok(orbit_login::Reply::Ok) => {
+                    log::info!("switched to {}", greet.chosen.borrow());
+                    greet.failures.set(0);
+                    greet.busy.set(false);
+                    greet.message.set_text("");
+                    greet.password.set_sensitive(true);
+                    greet.choose(&greet.me.clone());
+                }
+                Ok(orbit_login::Reply::Refused(why)) => greet.checked(Err(pam::Refused(why))),
+                Ok(orbit_login::Reply::Error(why)) => {
+                    log::error!("orbit-login: {why}");
+                    greet.refused(&why, 0);
+                }
+                Err(err) => {
+                    log::error!("orbit-login: {err}");
+                    greet.refused(&err.to_string(), 0);
+                }
+            }
+        });
+    }
+
+    /// The card is for `user` now: their picture and name, and the others
+    /// below. Their session starts opening behind this one.
+    fn choose(self: &Rc<Self>, user: &str) {
+        let Some(person) = self.people.iter().find(|p| p.name == user) else { return };
+        *self.chosen.borrow_mut() = user.to_owned();
+        if user == self.me {
+            show_avatar(&self.avatar, user, &glib::home_dir());
+            self.name.set_text(self.real_name.as_deref().unwrap_or(user));
+        } else {
+            show_avatar(&self.avatar, user, &person.home);
+            self.name.set_text(person.shown());
+            let user = user.to_owned();
+            std::thread::spawn(move || match orbit_login::call(&orbit_login::Request::Prepare { user: user.clone() }) {
+                Ok(orbit_login::Reply::Ok) => log::info!("{user}'s session is ready"),
+                reply => log::warn!("preparing {user}: {reply:?}"),
+            });
+        }
+        self.failures.set(0);
+        self.password.set_text("");
+        self.message.set_text("");
+        self.show_others();
+        if self.password.is_sensitive() {
+            self.password.grab_focus();
+        }
+    }
+
+    /// The people the card is not for, as buttons.
+    fn show_others(self: &Rc<Self>) {
+        while let Some(child) = self.others.first_child() {
+            self.others.remove(&child);
+        }
+        let chosen = self.chosen.borrow().clone();
+        for person in self.people.iter().filter(|p| p.name != chosen) {
+            let picture = gtk::Image::builder().pixel_size(30).css_classes(["avatar"]).build();
+            let home = if person.name == self.me { glib::home_dir() } else { person.home.clone() };
+            show_avatar(&picture, &person.name, &home);
+            let row = gtk::Box::builder().spacing(10).build();
+            row.append(&picture);
+            row.append(&gtk::Label::new(Some(person.shown())));
+            let button = gtk::Button::builder().child(&row).css_classes(["other"]).can_focus(false).build();
+            let (greet, name) = (self.clone(), person.name.clone());
+            button.connect_clicked(move |_| {
+                if !greet.busy.get() {
+                    greet.choose(&name);
+                }
+            });
+            self.others.append(&button);
+        }
+        self.others.set_visible(self.others.first_child().is_some());
     }
 
     fn checked(self: &Rc<Self>, result: Result<(), pam::Refused>) {
@@ -356,15 +482,14 @@ fn tick(time: &gtk::Label, date: &gtk::Label) {
     date.set_text(&fmt("%a %-d %b"));
 }
 
-/// The user's picture: `~/.face`, or AccountsService's, or the theme's
-/// generic one.
-fn avatar(user: &str) -> gtk::Image {
-    let image = [glib::home_dir().join(".face"), PathBuf::from("/var/lib/AccountsService/icons").join(user)]
+/// A user's picture in `image`: their `~/.face` (if this user may read
+/// it), or AccountsService's, or the theme's generic one.
+fn show_avatar(image: &gtk::Image, user: &str, home: &Path) {
+    match [home.join(".face"), PathBuf::from("/var/lib/AccountsService/icons").join(user)]
         .into_iter()
-        .find(|p| p.is_file())
-        .map(gtk::Image::from_file)
-        .unwrap_or_else(|| gtk::Image::from_icon_name("avatar-default-symbolic"));
-    image.set_pixel_size(120);
-    image.add_css_class("avatar");
-    image
+        .find(|p| p.is_file() && std::fs::File::open(p).is_ok())
+    {
+        Some(path) => image.set_from_file(Some(&path)),
+        None => image.set_icon_name(Some("avatar-default-symbolic")),
+    }
 }

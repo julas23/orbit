@@ -11,6 +11,7 @@
 //! border: 2
 //! corner_radius: 10
 //! startup: [orbit-session]   # at once, behind the lock if locked
+//!                             # (without the key: see `DEFAULT_STARTUP`)
 //! login: [nm-applet]          # at the first unlock (at once if not locked)
 //! greet: orbit-greet     # shown while locked; the only client that unlocks
 //! stride: 10             # area N: workspace N, 10+N, 20+N… down the monitors
@@ -118,6 +119,15 @@ pub enum Modifier {
     Ctrl,
 }
 
+/// A user with no `startup:` of their own still gets the desktop: the
+/// session's variables handed to systemd and D-Bus (portals, the keyring's
+/// prompter), the polkit agent, and the panel, dock and notifications.
+const DEFAULT_STARTUP: &[&str] = &[
+    "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY ORBIT_SOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE",
+    "orbit-polkit",
+    "orbit-session",
+];
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -131,7 +141,7 @@ impl Default for Config {
             focused_color: "#4682b4".into(),
             unfocused_color: "#4c566a".into(),
             focus_follows_mouse: true,
-            startup: Vec::new(),
+            startup: DEFAULT_STARTUP.iter().map(|&c| c.into()).collect(),
             login: Vec::new(),
             greet: "orbit-greet".into(),
             cursor_theme: "Breeze_Light".into(),

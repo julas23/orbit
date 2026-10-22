@@ -51,6 +51,29 @@ window.orbit-greet .message {
   color: @orbit_muted;
 }
 
+/* The others who can log in, below the card (Orbit-Login). */
+window.orbit-greet .others {
+  margin-top: 20px;
+}
+
+window.orbit-greet .others button.other {
+  min-height: 40px;
+  padding: 0 15px 0 5px;
+  border-radius: 20px;
+  background: none;
+  border: 1px solid @orbit_border;
+  color: @orbit_muted;
+}
+
+window.orbit-greet .others button.other:hover {
+  border-color: @orbit_accent;
+  color: @orbit_fg;
+}
+
+window.orbit-greet .others .avatar {
+  margin: 0;
+}
+
 /* The question of a power button, in place of the password. */
 window.orbit-greet .confirm .question {
   font-size: 20px;

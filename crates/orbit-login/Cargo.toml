@@ -1,0 +1,36 @@
+[package]
+name = "orbit-login"
+description = "Orbit-Login: the sessions of Orbit on the seat, and the switch between users"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "admin"
+priority = "optional"
+extended-description = "Orbit-Login: a small root service in the place of a display manager. It opens the default user's Orbit session at boot, locked, and the sessions of other users on their own consoles when the lock screen switches to them. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, orbit-core, orbit-greet"
+assets = [
+    ["target/release/orbit-login", "usr/bin/", "755"],
+    ["../../data/pam/orbit-login", "etc/pam.d/", "644"],
+    ["../../data/systemd/orbit-login.service", "lib/systemd/system/", "644"],
+    ["../../data/login.yaml", "etc/orbit/", "644"],
+]
+conf-files = ["/etc/orbit/login.yaml"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+orbit-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+libc.workspace = true
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true

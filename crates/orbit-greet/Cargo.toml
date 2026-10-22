@@ -23,6 +23,7 @@ assets = [
 [dependencies]
 orbit-app.workspace = true
 orbit-common.workspace = true
+orbit-login.workspace = true
 orbit-protocols = { workspace = true, features = ["client"] }
 # The keyboard layouts of a gdk::Device are GTK 4.18 (Debian 13 has 4.18.6).
 gtk = { workspace = true, features = ["v4_18"] }

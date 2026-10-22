@@ -1990,6 +1990,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hkdf"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
+dependencies = [
+ "hmac",
+]
+
+[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2708,6 +2717,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c89e69e7e0f03bea5ef08013795c25018e101932225a656383bd384495ecc367"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3049,6 +3068,7 @@ dependencies = [
  "log",
  "orbit-app",
  "orbit-common",
+ "orbit-login",
  "orbit-protocols",
  "serde",
  "wayland-backend",
@@ -3061,6 +3081,20 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "orbit-login"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "libc",
+ "log",
+ "orbit-ipc",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
 ]
 
 [[package]]
@@ -3151,10 +3185,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-prompter"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "cbc",
+ "env_logger",
+ "getrandom 0.2.17",
+ "gtk4",
+ "gtk4-layer-shell",
+ "hkdf",
+ "log",
+ "num-bigint",
+ "orbit-app",
+ "orbit-common",
+ "sha2",
+ "zeroize",
+]
+
+[[package]]
 name = "orbit-protocols"
 version = "0.1.0"
 dependencies = [
+ "rustix 1.1.5",
  "wayland-client",
+ "wayland-protocols",
  "wayland-scanner",
  "wayland-server",
 ]
@@ -3816,6 +3872,17 @@ name = "sha1"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a978451301f4db1d02937a4ab3ccce137717b81826e79b7d49ffe3244a13c3b8"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest",
+]
+
+[[package]]
+name = "sha2"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",

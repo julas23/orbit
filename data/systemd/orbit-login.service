@@ -1,0 +1,20 @@
+# Orbit-Login: the sessions of Orbit on seat0, in the place of the getty's
+# autologin on tty1 (PLANO-CORE §7.4). If it fails, tty1 gets its getty
+# back: a text login to mend things with.
+[Unit]
+Description=Orbit login service
+Documentation=https://github.com/julas23/orbit
+After=systemd-user-sessions.service plymouth-quit-wait.service getty@tty1.service
+Conflicts=getty@tty1.service
+OnFailure=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/orbit-login
+RuntimeDirectory=orbit
+# The sessions live in logind's scopes, beyond the service; a stop leaves
+# them running.
+Restart=no
+
+[Install]
+WantedBy=graphical.target

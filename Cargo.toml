@@ -17,6 +17,7 @@ orbit-backend-x11 = { path = "crates/orbit-backend-x11" }
 orbit-backend-wayland = { path = "crates/orbit-backend-wayland" }
 orbit-ipc = { path = "crates/orbit-ipc" }
 orbit-protocols = { path = "crates/orbit-protocols" }
+orbit-login = { path = "crates/orbit-login" }
 
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 # Only to enable GLib 2.68 APIs (TimeZone::from_identifier); the code uses the
@@ -93,6 +94,9 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha1 = "0.10"
 libloading = "0.8"
 anyhow = "1"
+# orbit-login: the system calls of a login service (fork, setuid,
+# initgroups, the VT and peer credentials).
+libc = "0.2"
 # orbit-core: the criteria of sway commands ([app_id="(?i)…"]).
 regex = "1"
 # orbit-core: the compositor library, at an exact commit (its API changes
