@@ -216,6 +216,11 @@ impl Orbit {
         self.emit("output", |_| json!({ "change": "unspecified" }));
     }
 
+    /// A `lock` event: "locked" or "unlocked".
+    pub fn lock_event(&mut self, change: &str) {
+        self.emit("lock", |_| json!({ "change": change }));
+    }
+
     pub fn input_event(&mut self) {
         self.emit("input", |s| json!({ "change": "xkb_layout", "input": s.inputs_json()[0].clone() }));
     }
@@ -408,6 +413,10 @@ impl Orbit {
         let scratch: Vec<Value> = self.scratchpad.iter().map(|w| {
             let mut con = self.window_json(w);
             con["type"] = json!("floating_con");
+            // Orbit's own: the workspace it left (the panel's tab colour).
+            if let Some(from) = self.minimized_from.get(w) {
+                con["orbit_workspace"] = json!(from);
+            }
             con
         }).collect();
         let hidden = json!({

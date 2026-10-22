@@ -41,11 +41,12 @@ pub struct Info {
     pub id: u64,
     pub rect: (i32, i32, i32, i32),
     pub fullscreen: bool,
+    pub maximized: bool,
 }
 
 /// The window's info; given on the first call.
 pub fn info(window: &Window) -> &RefCell<Info> {
-    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false }));
+    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false, maximized: false }));
     window.user_data().get::<RefCell<Info>>().expect("just inserted")
 }
 
@@ -296,9 +297,13 @@ impl Orbit {
     /// Takes `window` off its workspace into the scratchpad.
     pub fn move_to_scratchpad(&mut self, window: &Window) {
         let was_focused = self.focused_window().as_ref() == Some(window);
+        let from = self.workspace_of(window);
         self.take(window);
         self.space.unmap_elem(window);
         self.scratchpad.push(window.clone());
+        if let Some(from) = from {
+            self.minimized_from.insert(window.clone(), from);
+        }
         self.arrange();
         if was_focused {
             let next = self.tiled().last().cloned();
@@ -329,6 +334,7 @@ impl Orbit {
             }
         }
         self.scratchpad.retain(|w| w != window);
+        self.minimized_from.remove(window);
     }
 
     /// Forgets a window that closed; the workspace it was on, if shown.

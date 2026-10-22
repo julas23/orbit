@@ -9,13 +9,14 @@
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
     desktop::{PopupKind, layer_map_for_output},
+    input::pointer::{CursorImageStatus, CursorImageSurfaceData},
     reexports::wayland_server::{
         Client,
         protocol::{wl_buffer, wl_surface::WlSurface},
     },
     wayland::{
         buffer::BufferHandler,
-        compositor::{CompositorClientState, CompositorHandler, CompositorState, get_parent, is_sync_subsurface, with_states},
+        compositor::{CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, get_parent, is_sync_subsurface, with_states},
         shell::{wlr_layer::LayerSurfaceData, xdg::XdgToplevelSurfaceData},
         shm::{ShmHandler, ShmState},
     },
@@ -38,6 +39,7 @@ impl CompositorHandler for Orbit {
 
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
+        self.move_hotspot(surface);
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();
             while let Some(parent) = get_parent(&root) {
@@ -64,6 +66,21 @@ impl CompositorHandler for Orbit {
 }
 
 impl Orbit {
+    /// The pointer's own surface moved its image (`wl_surface.offset`, or
+    /// `attach` with x and y): the hotspot moves the other way. GTK swaps
+    /// the image so, and a hotspot left behind clicks beside the arrow.
+    fn move_hotspot(&mut self, surface: &WlSurface) {
+        if !matches!(&self.cursor_status, CursorImageStatus::Surface(s) if s == surface) {
+            return;
+        }
+        with_states(surface, |states| {
+            let delta = states.cached_state.get::<SurfaceAttributes>().current().buffer_delta.take();
+            if let (Some(delta), Some(data)) = (delta, states.data_map.get::<CursorImageSurfaceData>()) {
+                data.lock().unwrap().hotspot -= delta;
+            }
+        });
+    }
+
     /// A new window or layer surface gets its first configure on its first
     /// commit; a layer surface that changed its size or exclusive zone moves
     /// the windows.

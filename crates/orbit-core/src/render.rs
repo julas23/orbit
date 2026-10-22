@@ -25,7 +25,7 @@ use smithay::{
         gles::{GlesRenderer, GlesTexture, element::PixelShaderElement},
     },
     desktop::{PopupManager, Window, layer_map_for_output},
-    input::pointer::{CursorImageStatus, CursorImageSurfaceData},
+    input::pointer::{CursorIcon, CursorImageStatus, CursorImageSurfaceData},
     output::Output,
     render_elements,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -109,7 +109,11 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
             .to_physical(1),
             _ => Point::default(),
         };
-        let (buffer, theme_hotspot) = state.cursor.buffer(state.start_time.elapsed());
+        let shape = match &state.cursor_status {
+            CursorImageStatus::Named(shape) => *shape,
+            _ => CursorIcon::Default,
+        };
+        let (buffer, theme_hotspot) = state.cursor.buffer(shape, state.start_time.elapsed());
         let hotspot = if matches!(state.cursor_status, CursorImageStatus::Named(_)) { theme_hotspot } else { hotspot };
         let at: Point<i32, Physical> = (location - geo.loc.to_f64()).to_physical(scale).to_i32_round() - hotspot;
         let element = PointerElement { status: state.cursor_status.clone(), buffer: Some(buffer) };

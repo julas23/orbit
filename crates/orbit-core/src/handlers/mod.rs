@@ -13,6 +13,7 @@ mod xdg_shell;
 use smithay::{
     input::{
         Seat, SeatHandler, SeatState,
+        tablet::TabletSeatHandler,
         dnd::{DnDGrab, DndGrabHandler, GrabType, Source},
         pointer::{CursorImageStatus, Focus},
     },
@@ -156,6 +157,11 @@ impl DmabufHandler for Orbit {
             notifier.failed();
         }
     }
+}
+
+/// No tablets yet; `cursor-shape-v1` needs the handler.
+impl TabletSeatHandler for Orbit {
+    type ToolFocus = WlSurface;
 }
 
 // Pointer locks (games) come later; the seat needs the handler.

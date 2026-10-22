@@ -35,6 +35,7 @@ mod handlers;
 mod idle;
 mod input;
 mod ipc;
+mod keys;
 mod lock;
 mod output;
 mod render;

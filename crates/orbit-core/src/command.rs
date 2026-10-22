@@ -202,6 +202,12 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.focus_output(&target);
             Ok(())
         }
+        // Orbit's own: kills the focused window's client (`kill -9`), for
+        // one that does not answer.
+        ["kill", "--force"] => {
+            state.kill_focused();
+            Ok(())
+        }
         ["kill"] => {
             for window in windows() {
                 state.close_window(&window);
@@ -277,11 +283,14 @@ fn workspace_number(state: &Orbit, rest: &[&str]) -> Result<i32, String> {
 
 impl Orbit {
     /// Gives the keyboard to `window` wherever it is: its workspace is
-    /// shown; from the scratchpad it comes to the workspace shown (tiled —
-    /// the panel's "restore").
+    /// shown; from the scratchpad it goes back to the workspace it left,
+    /// tiled (the panel's "restore"), or to the one shown.
     pub fn focus_anywhere(&mut self, window: &Window) {
+        if self.workspace_of(window).is_none() {
+            let to = self.minimized_from.get(window).copied().unwrap_or(self.current);
+            self.move_to_workspace(window, to);
+        }
         match self.workspace_of(window) {
-            None => self.move_to_workspace(window, self.current),
             Some(n) if n != self.current => self.switch_workspace(n),
             _ => {}
         }

@@ -1,13 +1,15 @@
 //! The pointer, drawn by the core when it owns the screen (the DRM
-//! backend; nested, the host draws its own): the image a client asked for
-//! (`wl_pointer.set_cursor`), or the theme's default arrow — the theme and
-//! size of the config, as sway's `seat * xcursor_theme`.
+//! backend; nested, the host draws its own): the image a client gave
+//! (`wl_pointer.set_cursor`), or a shape it named (`cursor-shape-v1`, and
+//! the default arrow) taken from the theme and size of the config, as
+//! sway's `seat * xcursor_theme`. Clients that name shapes (GTK, Firefox,
+//! Qt) then all show the same theme.
 //!
 //! Ported from anvil `src/cursor.rs` and `src/drawing.rs` @ 24647fc
 //! (Smithay, MIT, Copyright (c) 2017 Victor Berger and Victoria Brekenfeld),
 //! with its fallback image `resources/cursor.rgba`.
 
-use std::{io::Read, time::Duration};
+use std::{collections::HashMap, io::Read, time::Duration};
 
 use smithay::{
     backend::{
@@ -21,7 +23,7 @@ use smithay::{
             },
         },
     },
-    input::pointer::CursorImageStatus,
+    input::pointer::{CursorIcon, CursorImageStatus},
     render_elements,
     utils::{Physical, Point, Scale, Transform},
 };
@@ -32,9 +34,13 @@ use xcursor::{
 
 static FALLBACK: &[u8] = include_bytes!("../resources/cursor.rgba");
 
-/// The theme's default cursor, in every size the theme has.
+/// The theme's cursors, each in every size the theme has, loaded the first
+/// time a shape is asked for.
 pub struct Cursor {
-    icons: Vec<Image>,
+    theme: CursorTheme,
+    /// The default arrow, also what a shape the theme lacks falls back to.
+    default: Vec<Image>,
+    shapes: HashMap<CursorIcon, Vec<Image>>,
     size: u32,
     /// The image last drawn, uploaded once.
     buffer: Option<(Image, MemoryRenderBuffer)>,
@@ -42,21 +48,42 @@ pub struct Cursor {
 
 impl Cursor {
     pub fn load(theme: &str, size: u32) -> Self {
-        let icons = load_icon(&CursorTheme::load(theme)).unwrap_or_else(|err| {
+        let cursors = CursorTheme::load(theme);
+        let default = load_icon(&cursors, CursorIcon::Default).unwrap_or_else(|err| {
             tracing::warn!("cursor theme {theme}: {err}; using the built-in arrow");
             vec![Image { size: 32, width: 64, height: 64, xhot: 1, yhot: 1, delay: 1, pixels_rgba: FALLBACK.to_vec(), pixels_argb: Vec::new() }]
         });
-        Self { icons, size, buffer: None }
+        Self { theme: cursors, default, shapes: HashMap::new(), size, buffer: None }
     }
 
-    /// The image at its start, for XWayland's root window.
+    /// The default arrow at its start, for XWayland's root window.
     pub fn image(&self) -> Image {
-        frame(0, self.size, &self.icons)
+        frame(0, self.size, &self.default)
     }
 
-    /// The image to show at `time` (themes may animate it) and its hotspot.
-    pub fn buffer(&mut self, time: Duration) -> (MemoryRenderBuffer, Point<i32, Physical>) {
-        let image = frame(time.as_millis() as u32, self.size, &self.icons);
+    /// The images of `shape`, or the arrow's when the theme lacks it.
+    fn icons(&mut self, shape: CursorIcon) -> &[Image] {
+        if shape == CursorIcon::Default {
+            return &self.default;
+        }
+        if !self.shapes.contains_key(&shape) {
+            let icons = load_icon(&self.theme, shape).unwrap_or_else(|err| {
+                tracing::debug!("cursor {}: {err}; using the arrow", shape.name());
+                Vec::new()
+            });
+            self.shapes.insert(shape, icons);
+        }
+        match self.shapes.get(&shape) {
+            Some(icons) if !icons.is_empty() => icons,
+            _ => &self.default,
+        }
+    }
+
+    /// The image of `shape` to show at `time` (themes may animate it) and
+    /// its hotspot.
+    pub fn buffer(&mut self, shape: CursorIcon, time: Duration) -> (MemoryRenderBuffer, Point<i32, Physical>) {
+        let size = self.size;
+        let image = frame(time.as_millis() as u32, size, self.icons(shape));
         let hotspot = Point::from((image.xhot as i32, image.yhot as i32));
         if let Some((cached, buffer)) = &self.buffer
             && *cached == image
@@ -89,8 +116,12 @@ fn frame(mut millis: u32, size: u32, images: &[Image]) -> Image {
     unreachable!("the delays add up to the total")
 }
 
-fn load_icon(theme: &CursorTheme) -> Result<Vec<Image>, String> {
-    let path = theme.load_icon("default").ok_or("no default cursor")?;
+/// `shape` from `theme`, by its CSS name or one of the older X names.
+fn load_icon(theme: &CursorTheme, shape: CursorIcon) -> Result<Vec<Image>, String> {
+    let path = std::iter::once(shape.name())
+        .chain(shape.alt_names().iter().copied())
+        .find_map(|name| theme.load_icon(name))
+        .ok_or("not in the theme")?;
     let mut data = Vec::new();
     std::fs::File::open(path).and_then(|mut f| f.read_to_end(&mut data)).map_err(|e| e.to_string())?;
     parse_xcursor(&data).ok_or_else(|| "not an xcursor file".into())
@@ -120,7 +151,6 @@ where
     {
         match &self.status {
             CursorImageStatus::Hidden => Vec::new(),
-            // Any named shape is the default arrow, for now.
             CursorImageStatus::Named(_) => self
                 .buffer
                 .as_ref()

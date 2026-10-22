@@ -1,4 +1,4 @@
-//! Keyboard, pointer and wheel: the core's own shortcuts (Mod+Return,
+//! Keyboard, pointer and wheel: the core's own shortcuts (`keys`: Mod+Return,
 //! Mod+Q…) are taken before the focused client sees them; the
 //! window under the pointer takes the keyboard (`focus_follows_mouse`), as
 //! does whatever is clicked.
@@ -14,7 +14,7 @@ use smithay::{
     },
     desktop::{WindowSurfaceType, layer_map_for_output},
     input::{
-        keyboard::{FilterResult, Keysym, ModifiersState},
+        keyboard::{FilterResult, Keysym},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     utils::{Logical, Point, SERIAL_COUNTER},
@@ -24,68 +24,14 @@ use smithay::{
 use crate::{config::Modifier, state::Orbit};
 
 /// What a shortcut does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
-    Terminal,
-    /// Mod+Space: the application launcher (`launcher`).
-    Launcher,
-    /// Mod+Q: asks the focused window to close.
-    Close,
-    /// Mod+Shift+Q: kills the focused window's client (`kill -9`), for one
-    /// that does not answer.
-    Kill,
-    Quit,
-    FocusNext,
-    FocusPrevious,
-    MoveNext,
-    MovePrevious,
-    Workspace(i32),
-    MoveToWorkspace(i32),
+    /// A command of `keys.yaml` (`command`).
+    Command(String),
     /// Ctrl+Alt+F1…F12: another virtual terminal (on the screen only).
     Vt(i32),
     /// Ctrl+Alt+Backspace: out, whatever the config says (as in X).
     Emergency,
-    /// Mod+L: the lock (`lock`).
-    Lock,
-    /// Mod+F: the focused window in or out of fullscreen.
-    Fullscreen,
-}
-
-/// The action of `sym` with `mods` held, when `modifier` is the core's.
-pub fn shortcut(modifier: Modifier, mods: &ModifiersState, sym: Keysym) -> Option<Action> {
-    let held = match modifier {
-        Modifier::Super => mods.logo,
-        Modifier::Alt => mods.alt,
-        Modifier::Ctrl => mods.ctrl,
-    };
-    if !held {
-        return None;
-    }
-    let sym = Keysym::from(xkb_lower(sym.raw()));
-    // Mod+1…9, 0 = 10: show the workspace; with Shift, send the window there.
-    if let Some(d) = char::from_u32(sym.raw()).and_then(|c| c.to_digit(10)) {
-        let n = if d == 0 { 10 } else { d as i32 };
-        return Some(if mods.shift { Action::MoveToWorkspace(n) } else { Action::Workspace(n) });
-    }
-    Some(match (mods.shift, sym) {
-        (false, Keysym::Return) => Action::Terminal,
-        (false, Keysym::space) => Action::Launcher,
-        (false, Keysym::q) => Action::Close,
-        (true, Keysym::q) => Action::Kill,
-        (true, Keysym::e) => Action::Quit,
-        (false, Keysym::l) => Action::Lock,
-        (false, Keysym::f) => Action::Fullscreen,
-        (false, Keysym::Right | Keysym::Down | Keysym::j) => Action::FocusNext,
-        (false, Keysym::Left | Keysym::h | Keysym::Up | Keysym::k) => Action::FocusPrevious,
-        (true, Keysym::Right | Keysym::l | Keysym::Down | Keysym::j) => Action::MoveNext,
-        (true, Keysym::Left | Keysym::h | Keysym::Up | Keysym::k) => Action::MovePrevious,
-        _ => return None,
-    })
-}
-
-/// A Latin capital's small letter ("Q" with Shift is still Q).
-fn xkb_lower(raw: u32) -> u32 {
-    if (u32::from(b'A')..=u32::from(b'Z')).contains(&raw) { raw + 32 } else { raw }
 }
 
 impl Orbit {
@@ -153,7 +99,6 @@ impl Orbit {
         let serial = SERIAL_COUNTER.next_serial();
         let code = event.key_code();
         let pressed = event.state() == KeyState::Pressed;
-        let modifier = self.config.modifier;
         let action = keyboard.input::<Option<Action>, _>(self, code, event.state(), serial, Event::time(&event), |state, mods, handle| {
             if !pressed {
                 // The release of a key a shortcut took is not the client's.
@@ -179,10 +124,10 @@ impl Orbit {
                 return if state.face_has_keyboard() { FilterResult::Forward } else { FilterResult::Intercept(None) };
             }
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
-            match shortcut(modifier, mods, sym) {
-                Some(action) => {
+            match state.keys.command(mods, sym) {
+                Some(command) => {
                     state.suppressed.push(code);
-                    FilterResult::Intercept(Some(action))
+                    FilterResult::Intercept(Some(Action::Command(command.to_owned())))
                 }
                 None => FilterResult::Forward,
             }
@@ -194,48 +139,20 @@ impl Orbit {
 
     fn run(&mut self, action: Action) {
         match action {
-            Action::Terminal => {
-                let terminal = self.config.terminal.clone();
-                self.spawn(&terminal);
-            }
-            Action::Launcher => {
-                let launcher = self.config.launcher.clone();
-                self.spawn(&launcher);
-            }
-            Action::Close => {
-                if let Some(window) = self.focused_window() {
-                    self.close_window(&window);
+            Action::Command(command) => {
+                for result in crate::command::run(self, &command) {
+                    if result["success"] == false {
+                        tracing::warn!("shortcut {command}: {}", result["error"].as_str().unwrap_or_default());
+                    }
                 }
             }
-            Action::Kill => self.kill_focused(),
-            Action::Lock => self.lock(),
-            Action::Fullscreen => {
-                if let Some(window) = self.focused_window() {
-                    self.set_fullscreen(&window, !crate::fullscreen::is_fullscreen(&window));
-                }
-            }
-            Action::Quit => self.loop_signal.stop(),
             Action::Emergency => {
                 tracing::warn!("Ctrl+Alt+Backspace: leaving");
                 self.loop_signal.stop();
             }
-            Action::FocusNext | Action::FocusPrevious => {
-                let next = self.neighbour(action == Action::FocusNext);
-                if next.is_some() {
-                    self.focus_window(next);
-                }
-            }
-            Action::MoveNext | Action::MovePrevious => self.move_focused(action == Action::MoveNext),
-            Action::Workspace(n) => self.switch_workspace(self.resolve(n)),
             Action::Vt(n) => {
                 if let crate::state::Backend::Drm(drm) = &mut self.backend {
                     drm.change_vt(n);
-                }
-            }
-            Action::MoveToWorkspace(n) => {
-                if let Some(window) = self.focused_window() {
-                    let num = self.resolve_for(&window, n);
-                    self.move_to_workspace(&window, num);
                 }
             }
         }
@@ -383,30 +300,5 @@ impl Orbit {
         let Some(pointer) = self.seat.get_pointer() else { return };
         pointer.axis(self, frame);
         pointer.frame(self);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn mods(logo: bool, shift: bool) -> ModifiersState {
-        ModifiersState { logo, shift, ..Default::default() }
-    }
-
-    #[test]
-    fn shortcuts() {
-        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::Return), Some(Action::Terminal));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::q), Some(Action::Close));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::space), Some(Action::Launcher));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::f), Some(Action::Fullscreen));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Q), Some(Action::Kill));
-        assert_eq!(shortcut(Modifier::Super, &mods(false, true), Keysym::Q), None);
-        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::x), None);
-        assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::Left), Some(Action::MovePrevious));
-        let alt = ModifiersState { alt: true, ..Default::default() };
-        assert_eq!(shortcut(Modifier::Alt, &alt, Keysym::Return), Some(Action::Terminal));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, false), Keysym::_3), Some(Action::Workspace(3)));
-        assert_eq!(shortcut(Modifier::Super, &mods(true, true), Keysym::_0), Some(Action::MoveToWorkspace(10)));
     }
 }

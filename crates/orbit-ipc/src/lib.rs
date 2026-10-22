@@ -52,6 +52,8 @@ pub const EVENTS: &[(&str, u32)] = &[
     ("tick", EVENT | 7),
     ("bar_state_update", EVENT | 0x14),
     ("input", EVENT | 0x15),
+    // Orbit's own: the session locked or unlocked ({"change": "locked"}).
+    ("lock", EVENT | 0x16),
 ];
 
 /// The type of the event called `name`.

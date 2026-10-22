@@ -40,6 +40,7 @@ use smithay::{
         viewporter::ViewporterState,
         xwayland_shell::XWaylandShellState,
         idle_inhibit::IdleInhibitManagerState,
+        cursor_shape::CursorShapeManagerState,
         session_lock::SessionLockManagerState,
     },
     xwayland::X11Wm,
@@ -62,6 +63,8 @@ pub struct Orbit {
     pub config: Config,
     /// Where the config was read from, for `reload`.
     pub config_path: std::path::PathBuf,
+    /// The shortcuts, from `keys.yaml` beside the config (`keys`).
+    pub keys: crate::keys::Keys,
 
     /// What is on screen: the shown workspace's windows (the space keeps
     /// the stacking order) and the layer surfaces.
@@ -76,6 +79,8 @@ pub struct Orbit {
     pub previous_ws: Option<i32>,
     /// Windows off every workspace (the panel's "minimise").
     pub scratchpad: Vec<Window>,
+    /// The workspace each of them left, where restoring puts it back.
+    pub minimized_from: std::collections::HashMap<Window, i32>,
     /// The id the next window gets (sway's `con_id`).
     pub next_window_id: u64,
     pub popups: PopupManager,
@@ -101,6 +106,8 @@ pub struct Orbit {
     /// the theme, when the core draws it.
     pub cursor_status: smithay::input::pointer::CursorImageStatus,
     pub cursor: crate::cursor::Cursor,
+    /// Clients name a shape and the core draws it from its theme.
+    pub cursor_shape_state: CursorShapeManagerState,
     /// Something changed on screen since the last frame.
     pub needs_render: bool,
     /// The keyboard's layouts by name, and the active one (for the IPC).
@@ -154,6 +161,7 @@ impl Orbit {
         let viewporter_state = ViewporterState::new::<Self>(&dh);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
         let idle_inhibit_state = IdleInhibitManagerState::new::<Self>(&dh);
+        let cursor_shape_state = CursorShapeManagerState::new::<Self>(&dh);
         crate::greet::init(&dh);
         let session_lock_state = crate::session_lock::init(&dh);
 
@@ -168,6 +176,7 @@ impl Orbit {
 
         let socket_name = Self::listen(display, event_loop);
         let cursor = crate::cursor::Cursor::load(&config.cursor_theme, config.cursor_size);
+        let keys = crate::keys::Keys::load(&config_path, &config);
 
         Self {
             start_time: Instant::now(),
@@ -176,6 +185,7 @@ impl Orbit {
             loop_handle: event_loop.handle(),
             loop_signal: event_loop.get_signal(),
             config,
+            keys,
             config_path,
             space: Space::default(),
             workspaces: Vec::new(),
@@ -183,6 +193,7 @@ impl Orbit {
             current: 1,
             previous_ws: None,
             scratchpad: Vec::new(),
+            minimized_from: Default::default(),
             next_window_id: 100,
             popups: PopupManager::default(),
             ipc: Ipc::default(),
@@ -199,6 +210,7 @@ impl Orbit {
             backend: Backend::None,
             cursor_status: smithay::input::pointer::CursorImageStatus::default_named(),
             cursor,
+            cursor_shape_state,
             needs_render: true,
             suppressed: Vec::new(),
             dragging: None,
@@ -251,6 +263,7 @@ impl Orbit {
     /// colours apply at once; a bad file keeps the defaults (§1.5).
     pub fn reload_config(&mut self) {
         self.config = Config::load(&self.config_path);
+        self.keys = crate::keys::Keys::load(&self.config_path, &self.config);
         if let Some(keyboard) = self.seat.get_keyboard() {
             let kb = self.config.keyboard.clone();
             if let Err(err) = keyboard.set_xkb_config(self, xkb_config(&kb)) {
@@ -372,15 +385,19 @@ impl Orbit {
         self.request_render();
     }
 
-    /// The windows of workspace `num` in columns over `area`; a fullscreen
-    /// one over the whole monitor, `full`, above the others.
+    /// The windows of workspace `num` in columns over `area`; a maximized
+    /// one over all of `area`, a fullscreen one over the whole monitor,
+    /// `full`, above the others.
     fn arrange_on(&mut self, area: tile::Rect, full: tile::Rect, num: i32) {
         let windows = self.windows_of(num);
         let rects = tile::columns(windows.len(), area, self.config.gaps, self.config.border);
+        let whole = tile::columns(1, area, self.config.gaps, self.config.border).first().copied().unwrap_or(area);
         tracing::debug!(num, ?area, ?rects, "arrange");
         for (window, rect) in windows.into_iter().zip(rects) {
             let fullscreen = crate::fullscreen::is_fullscreen(&window);
-            let (x, y, w, h) = if fullscreen { full } else { rect };
+            let maximized = crate::fullscreen::is_maximized(&window);
+            let (x, y, w, h) = if fullscreen { full } else if maximized { whole } else { rect };
+            let above = fullscreen || maximized;
             info(&window).borrow_mut().rect = (x, y, w, h);
             if let Some(surface) = window.x11_surface() {
                 // X windows are placed in the root window's coordinates,
@@ -389,7 +406,7 @@ impl Orbit {
                     tracing::warn!("X window {}: {err}", surface.window_id());
                 }
                 if self.dragging.as_ref() != Some(&window) {
-                    self.space.map_element(window, (x, y), fullscreen);
+                    self.space.map_element(window, (x, y), above);
                 }
                 continue;
             }
@@ -409,7 +426,7 @@ impl Orbit {
             toplevel.send_pending_configure();
             // The one being dragged follows the pointer until it is let go.
             if self.dragging.as_ref() != Some(&window) {
-                self.space.map_element(window, (x, y), fullscreen);
+                self.space.map_element(window, (x, y), above);
             }
         }
     }

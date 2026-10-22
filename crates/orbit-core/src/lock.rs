@@ -128,6 +128,7 @@ impl Orbit {
             self.launch_greet();
         }
         self.request_render();
+        self.lock_event("locked");
     }
 
     /// Shows the session again, opening the eyes; the keyboard goes back
@@ -156,6 +157,7 @@ impl Orbit {
         self.greet_state();
         self.request_render();
         self.log_in();
+        self.lock_event("unlocked");
     }
 
     /// The eyes are open: the clients get the keyboard and the pointer.

@@ -234,6 +234,36 @@ impl XwmHandler for Orbit {
         }
     }
 
+    fn maximize_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        match self.x11_window(&surface) {
+            Some(window) => self.set_maximized(&window, true),
+            None => {
+                let _ = surface.set_maximized(true);
+            }
+        }
+    }
+
+    fn unmaximize_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        match self.x11_window(&surface) {
+            Some(window) => self.set_maximized(&window, false),
+            None => {
+                let _ = surface.set_maximized(false);
+            }
+        }
+    }
+
+    fn minimize_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        if let Some(window) = self.x11_window(&surface) {
+            self.move_to_scratchpad(&window);
+        }
+    }
+
+    fn unminimize_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        if let Some(window) = self.x11_window(&surface) {
+            self.focus_anywhere(&window);
+        }
+    }
+
     // Resizing waits for floating windows: a tiled window has its size.
     fn resize_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32, _edges: ResizeEdge) {}
 

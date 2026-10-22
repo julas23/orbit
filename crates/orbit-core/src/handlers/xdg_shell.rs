@@ -107,10 +107,31 @@ impl XdgShellHandler for Orbit {
         }
     }
 
-    /// A tiled window keeps its tile: told so, as the protocol wants an
-    /// answer.
+    /// Over what the panel and the dock leave free; back to its tile.
+    fn maximize_request(&mut self, surface: ToplevelSurface) {
+        match self.window_for(surface.wl_surface()) {
+            Some(window) => self.set_maximized(&window, true),
+            None => {
+                surface.send_configure();
+            }
+        }
+    }
+
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
-        surface.send_configure();
+        match self.window_for(surface.wl_surface()) {
+            Some(window) => self.set_maximized(&window, false),
+            None => {
+                surface.send_configure();
+            }
+        }
+    }
+
+    /// Into the scratchpad, as the panel's "minimise"; the panel brings it
+    /// back.
+    fn minimize_request(&mut self, surface: ToplevelSurface) {
+        if let Some(window) = self.window_for(surface.wl_surface()) {
+            self.move_to_scratchpad(&window);
+        }
     }
 
     /// A menu holds the pointer and the keyboard until it closes.

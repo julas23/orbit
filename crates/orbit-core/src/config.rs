@@ -7,6 +7,7 @@
 //! modifier: super        # or alt (nested in a session that takes Super)
 //! terminal: kitty
 //! launcher: gapplication action io.github.julas23.Orbit.Panel menu
+//! run: orbit-run         # Mod+R: a command typed and run
 //! gaps: 6
 //! border: 2
 //! corner_radius: 10
@@ -32,10 +33,13 @@ pub struct Config {
     pub keyboard: Keyboard,
     /// The key the core's own shortcuts are held with.
     pub modifier: Modifier,
-    /// What Mod+Return opens.
+    /// `$terminal` in `keys.yaml`: what Mod+Return opens.
     pub terminal: String,
-    /// What Mod+Space runs: the panel's application menu, at its search.
+    /// `$launcher`: what Mod+Space runs, the panel's application menu at
+    /// its search.
     pub launcher: String,
+    /// `$run`: what Mod+R opens, a line to type a command in and run it.
+    pub run: String,
     /// Space between windows, and between them and the screen's edges.
     pub gaps: i32,
     /// Width of the border drawn around each window.
@@ -135,6 +139,7 @@ impl Default for Config {
             modifier: Modifier::Super,
             terminal: "kitty".into(),
             launcher: "gapplication action io.github.julas23.Orbit.Panel menu".into(),
+            run: "orbit-run".into(),
             gaps: 6,
             border: 2,
             corner_radius: 10,
