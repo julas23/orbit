@@ -109,3 +109,6 @@ for this pair.
 
 ## 11. Orbit-Edit
 - [x] Two look-alike search buttons in the toolbar: quick open (Ctrl+P) now has its own icon (`go-jump-symbolic`).
+
+## 12. Orbit-Files
+- [ ] Multiple selection with the mouse: Shift+click selects a range, Ctrl+click adds or removes a single file.
