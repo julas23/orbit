@@ -1,6 +1,6 @@
 # Orbit Rack
 
-![Orbit: the core, panel, dock and applications of the shell](orbit.png)
+![Orbit: the core, panel, dock and applications of the shell](images/orbit.png)
 
 **Orbit Rack** is a desktop for Linux written in **Rust**: the full set of
 Orbit components — a Wayland compositor, a panel and a dock, and the
@@ -9,20 +9,25 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** alpha, in daily use. **orbit-core** is the only session on the
 > author's laptop — it takes the screen at boot (DRM/KMS), with several
-> monitors and XWayland for X programs — and hosts the panel, the dock and
-> every application below, which all work. Orbit is packaged as `.deb` and
-> served from its own apt repository, the first step of **Orbit Linux**, the
-> Debian-based distribution built around it; **orbit-remote-server** with
-> **orbit-local-station**, a remote edition, is planned for later. Still to come: the
-> login and lock screen (orbit-greet) and the installer. Configuration and
+> monitors and XWayland for X programs — behind its own login and lock
+> screen (orbit-greet), with switching between users. It hosts the panel,
+> the dock and every application below, all working as alphas. Orbit is
+> packaged as `.deb` and served from its own apt repository, the first step
+> of **Orbit Linux**, the Debian-based distribution built around it. Still to
+> come: orbit-aigent, the installer, and a remote edition
+> (**orbit-remote-server** with **orbit-local-station**). Configuration and
 > APIs may still change.
 
 ## The rack
 
 | Component | What it is | Status |
 | --- | --- | --- |
-| **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay): takes the screen (DRM/KMS, libinput, libseat) or runs nested, tiles windows, workspaces shared by every monitor, rounded corners, Mod+drag to move, XWayland for X programs, a sway-compatible IPC; hosts the panel and dock | **in daily use** |
-| orbit-greet | Login and lock screen, one layer of the core: launched by it as its only privileged client, password through PAM; black while locked, an "eyes open" transition to come | in progress |
+| **orbit-core** | The compositor, built on [Smithay](https://github.com/Smithay/smithay): takes the screen (DRM/KMS, libinput, libseat) or runs nested, tiles windows, floating windows and dialogs, workspaces shared by every monitor, rounded corners, Mod+drag to move and Mod+right-drag to resize, Alt+Tab and the window cards, fullscreen, idle lock, XWayland for X programs, shortcuts in `keys.yaml`, a sway-compatible IPC; hosts the panel and dock | **in daily use** |
+| **orbit-greet** | Login and lock screen, one layer of the core: launched by it as its only privileged client, password through PAM (unlocking the keyring too); black while locked, the screen "opening its eyes" when unlocked; keyboard, network and battery, power buttons, the list of users | **working** |
+| **orbit-login** | A small root service in place of a display manager: opens the default user's session, locked, at boot, and switches between users, the other session loading behind the lock | **working** |
+| **orbit-polkit** | The polkit authentication agent, in the greet's look | **working** |
+| **orbit-prompter** | The keyring's password prompts (gnome-keyring), in the greet's look, in place of gcr-prompter | **working** |
+| **orbit-run** | Type a command and run it (Mod+R): Tab completes programs then files, history | **working** |
 | **orbit-panel** | Panel with independent modules (clock, calendar, weather, tray, windows…) | **working** |
 | **orbit-dock** | Application launcher dock | **working** |
 | **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | **working** |
@@ -39,12 +44,106 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-edit** | Text and code editor: several cursors, column selection, indent guides and folding, folder sidebar, session | **working** |
 | **orbit-term** | Terminal with the prompt fixed on top (date, exit code, git status, directory) and Tab completion; each output fills a box that never wraps, the last 50 that worked kept in a list; interactive programs run in a real terminal (VTE) | **working** |
 | orbit-install | The Orbit Linux installer | planned |
+| orbit-remote-server, orbit-local-station | The remote edition (see [below](#orbit-remote-server-and-orbit-local-station)) | planned |
 
 Orbit is its own code. Existing desktops and compositors are studied as
 references; where orbit-core takes code from one (cosmic-comp, niri, anvil,
 sway), the file says where it came from and keeps that project's licence —
 code from cosmic-comp is GPL-3.0-only, so the orbit-core binary is too, while
 the rest of Orbit stays GPL-3.0-or-later (see `docs/PLANO-CORE.md`, section 9).
+
+## Progress
+
+Every component of Orbit. **Progress** is how much of what is planned for it
+is built; **functional** is how much of what is built works in daily use.
+Both go from red (0%) to green (100%) in ten steps. **Version** is the
+version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pending-ffffff), ![Alpha](https://img.shields.io/badge/A%20Alpha-007ec6), ![Beta](https://img.shields.io/badge/B%20Beta-dfb317), ![Sigma](https://img.shields.io/badge/S%20Sigma-4c1).
+
+### Session and compositor
+
+| Component | What it is | Progress | Functional | Version |
+| --- | --- | :-: | :-: | :-: |
+| **orbit-core** | The compositor | ![40%](https://img.shields.io/badge/40%25-fdae61) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-greet** | Login and lock screen | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-login** | Sessions on the seat, user switch | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-polkit** | polkit agent | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-prompter** | Keyring prompts | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-run** | Command line (Mod+R) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbitctl** | Commands to the compositor | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-ipc** | i3/sway IPC protocol | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-protocols** | Private Wayland protocols | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![100%](https://img.shields.io/badge/100%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+
+### Shell
+
+| Component | What it is | Progress | Functional | Version |
+| --- | --- | :-: | :-: | :-: |
+| **orbit-panel** | The panel | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-dock** | The dock | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-notify** | Notification server | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-common** | Configuration, CSS, backends | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-app** | Shared startup, icons, theme, i18n | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-backend-wayland** | layer-shell backend | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-backend-x11** | X11 backend (EWMH, struts) | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+
+### Panel modules
+
+| Component | What it is | Progress | Functional | Version |
+| --- | --- | :-: | :-: | :-: |
+| `menu` | Application menu | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `windows` | Open windows | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `clock` | Date, time, world clocks | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `calendar` | Month grid | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `weather` | Current conditions | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `forecast` | Next days | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `tray` | System tray | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `brightness` | Backlight / DDC | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `volume` | Output volume | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `workspaces` | Areas | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `network` | Connection | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `keyboard` | Layout | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `battery` | Charge | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `session` | Power, log out | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `notifications` | The bell | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `bluetooth` | Devices | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `monitors` | Monitor layout | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `spectrum` | Audio spectrum | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `cpu, ram, gpu, lan` | Graphs | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `disk` | Usage pie | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+
+### Applications
+
+| Component | What it is | Progress | Functional | Version |
+| --- | --- | :-: | :-: | :-: |
+| **orbit-calc** | Calculator | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-clip** | Clipboard history | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-blink** | Screen capture | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-view** | Image viewer | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-read** | PDF, Markdown, text reader | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-play** | Video and audio player | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-edit** | Text and code editor | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-files** | File manager | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-term** | Terminal | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-pathfinder** | Web browser | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-aigent** | Voice layer for coding agents | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-safe** | Passwords and TOTP (with orbit-keys) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+
+### Orbit Linux
+
+| Component | What it is | Progress | Functional | Version |
+| --- | --- | :-: | :-: | :-: |
+| **Packages (.deb)** | `distro/build-debs.sh`, metapackages | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **apt repository** | aptly on the LXC, nightly sync | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **CI** | Builds and publishes the debs | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-studio** | ArtCraft metapackage | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-install** | The installer | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **ISO** | Offline live ISO, EFISTUB, Plymouth | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+
+### Remote edition
+
+| Component | What it is | Progress | Functional | Version |
+| --- | --- | :-: | :-: | :-: |
+| **orbit-remote-server** | orbit-core + remote streaming (Iced or Slint) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-local-station** | Client pulling the server's greeter | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
 
 ## Principles
 
@@ -62,6 +161,27 @@ the rest of Orbit stays GPL-3.0-or-later (see `docs/PLANO-CORE.md`, section 9).
   crash in one leaves the other running.
 - **Follows the system.** Light or dark and the accent colour come from the
   desktop (XDG portal) and switch live; the language comes from the locale.
+
+## Orbit-Core
+
+The compositor and the session. Windows tile side by side in columns —
+Mod+right-drag moves the line between two — and dialogs float over their
+parent. Workspaces are shared by every monitor, and laid out as a grid of
+areas walked with Ctrl+Alt+arrows. Shortcuts live in
+`~/.config/orbit/keys.yaml`, a combination to an IPC command (`none` removes
+one); the defaults, Mod being the Super key:
+
+| Key | | Key | |
+| --- | --- | --- | --- |
+| Mod+Return | terminal | Mod+Space | launcher |
+| Mod+R | run a command | Mod+L | lock |
+| Mod+Q, Mod+Shift+Q | close, kill | Mod+F | fullscreen |
+| Mod+Shift+Space, Mod+Esc | float or tile | Mod+↑ ↓ | maximize, restore |
+| Mod+← → | snap to a half | Alt+arrows | focus that way |
+| Mod+Ctrl+arrows | move that way | Ctrl+Alt+arrows | next area |
+| Alt+Tab, Alt+Shift+Tab | windows of the workspace, of all | Mod+Tab | the window cards |
+| Mod+1…0 | workspace | Mod+Shift+1…0 | move to workspace |
+| Mod+drag | move a window | Mod+right-drag | resize it |
 
 ## Orbit-Panel
 
@@ -410,10 +530,13 @@ Debian's. The plan (in Portuguese) is in
   (orbit-install, in Rust and GTK like the rest), offline: disk, hostname,
   user and password, and which metapackages. Boot is EFISTUB with a unified
   kernel image — no boot loader — with a Plymouth splash, into orbit-greet
-  and orbit-core. **An existing `/home` is never erased:** a home partition,
-  LVM volume, LUKS volume or btrfs subvolume is kept and reused, and the new
-  user gets its owner's id.
-- **Status.** Packages and repository done; orbit-greet, the installer and
+  and orbit-core. **An existing `/home` is never erased:** a partition that
+  clearly holds `/home` (plain, LVM, LUKS or a btrfs subvolume) is kept as it
+  is; on a single partition with `/` and `/home` together, everything but
+  `/home` is deleted and Orbit installs there. Wiping everything and starting
+  from scratch is always offered too. The new user gets the old home's
+  owner's id.
+- **Status.** Packages, repository and orbit-greet done; the installer and
   the ISO are next.
 
 ## orbit-remote-server and orbit-local-station
@@ -511,7 +634,13 @@ follow the locale.
 | `orbit-pathfinder` | The web browser |
 | `orbit-term` | The terminal |
 | `orbit-notify` | The notification server |
+| `orbit-run` | The command line (Mod+R) |
 | `orbit-core` | The compositor |
+| `orbit-greet` | The login and lock screen |
+| `orbit-login` | The sessions on the seat, and the switch between users |
+| `orbit-polkit` | The polkit authentication agent |
+| `orbit-prompter` | The keyring's password prompts |
+| `orbit-protocols` | Orbit's private Wayland protocols (`orbit_greet_v1`) |
 | `orbit-ipc` | The i3/sway IPC protocol: served by orbit-core, spoken by the panel, the applications and orbitctl |
 | `orbitctl` | Commands to the compositor |
 | `distro/` | Packaging: `build-debs.sh`, the metapackages, the apt repository's lists and sync |
