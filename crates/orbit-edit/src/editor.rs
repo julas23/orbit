@@ -75,7 +75,7 @@ impl Editor {
         let open_folder = button("folder-open-symbolic", "edit-open-folder", "Ctrl+Shift+O");
         let save = button("document-save-symbolic", "edit-save", "Ctrl+S");
         let find = button("edit-find-symbolic", "edit-find", "Ctrl+F");
-        let quick = button("system-search-symbolic", "edit-quick-open", "Ctrl+P");
+        let quick = button("go-jump-symbolic", "edit-quick-open", "Ctrl+P");
         let row = gtk::Box::builder().spacing(5).css_classes(["bar"]).build();
         for w in [
             sidebar_toggle.upcast_ref::<gtk::Widget>(),
