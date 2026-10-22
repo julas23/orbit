@@ -169,6 +169,8 @@ impl Orbit {
         let idle_inhibit_state = IdleInhibitManagerState::new::<Self>(&dh);
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(&dh);
         crate::greet::init(&dh);
+        // Orbit-Blink, grim: screenshots (`screencopy`).
+        crate::screencopy::init(&dh);
         let session_lock_state = crate::session_lock::init(&dh);
 
         let mut seat_state = SeatState::new();

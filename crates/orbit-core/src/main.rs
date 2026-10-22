@@ -44,6 +44,7 @@ mod output;
 mod render;
 mod resize;
 mod rounded;
+mod screencopy;
 mod screensaver;
 mod sleep;
 mod state;

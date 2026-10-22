@@ -116,7 +116,7 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | --- | --- | :-: | :-: | :-: |
 | **orbit-calc** | Calculator | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-clip** | Clipboard history | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| **orbit-blink** | Screen capture | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-blink** | Screen capture | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-view** | Image viewer | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-read** | PDF, Markdown, text reader | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-play** | Video and audio player | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
@@ -288,8 +288,8 @@ frozen picture of the screens. Each capture is saved in `$HOME`, copied to the
 clipboard, and shown on a card with a thumbnail and buttons to copy it again
 (if something else was copied since) or save a copy elsewhere. Without a
 mode it opens an options window (mode, delay, whether to include the
-cursor). It needs sway (for the layout of the screens and windows) and
-`wlr-screencopy`.
+cursor). It needs a compositor with `wlr-screencopy` and a sway-compatible
+IPC (for the layout of the screens and windows): orbit-core or sway.
 
 ```
 bindsym Print       exec orbit-blink screen

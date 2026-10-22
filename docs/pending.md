@@ -35,6 +35,8 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [x] Switching: Ctrl+Alt+arrows walk the areas; Alt+Tab (last used first, while Alt is held) on the workspace, Alt+Shift+Tab on every workspace; Mod+Tab the window cards (Looking Glass style, in perspective, over the blurred screen). Verified on screen 2026-10-22.
 - [x] Blur: under the panel's confirmation dialog (`blur_layers`, done by the core — no screencopy for grim), and the lock's blur now runs ahead of the black so it shows.
 - [x] Mod+right-drag resize: a floating window by the corner nearest the pointer (a snapped one floats first); a tiled one moves the line to the neighbouring column (column weights); the clients' own frame edges too (xdg and X). Mod+Esc toggles floating, as Mod+Shift+Space. Verified on screen 2026-10-22.
+- [x] Screen capture for clients (`wlr-screencopy`, `screencopy.rs`): Orbit-Blink and grim work on orbit-core; refused while locked. Nested-tested 2026-10-22; installed, awaiting a session restart.
+- [ ] Screencopy with damage (frames only when the screen changes), for recording and the portal's screen sharing (Phase 2).
 - [ ] Rounded corners on rotated monitors.
 - [ ] Phase 2: hotplug, fractional scale, `wlr-output-management`, portal and screen sharing, VRR/tearing. Done when the hp gets a full day without going back to sway.
 - [ ] Phase 3: layouts `bsp`, `master`, `monocle`, `scroll`, per-workspace layouts, named scratchpads. (Tags left out on 2026-10-22: maybe in a later major version.)
