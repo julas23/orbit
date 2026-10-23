@@ -24,7 +24,9 @@
 //!
 //! A Bluetooth headset's microphone is a poor choice: it records as a phone
 //! call does, which Whisper hears badly, and while it is open the headset
-//! plays everything else as a phone call too.
+//! plays everything else as a phone call too. With speakers, the best is
+//! `orbit-aigent-mic`, the microphone with the speakers' sound taken out
+//! (data/pipewire/60-orbit-aigent-aec.conf): otherwise it hears itself.
 //!
 //! The models are `ggml-<name>.bin` in `~/.local/share/orbit/aigent/models`.
 //! Their defaults, above, are for Whisper on the GPU (the `vulkan`

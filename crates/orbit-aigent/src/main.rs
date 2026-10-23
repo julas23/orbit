@@ -401,7 +401,9 @@ struct Engine {
     running: agent::Running,
     request_id: u64,
     speaker: Speaker,
-    /// What is being said, and what comes after it.
+    /// What is being said, and what comes after it; its text, to know
+    /// its own voice heard back through the speakers.
+    saying: String,
     speech: u64,
     speaking: Option<(u64, Then)>,
     /// Bands of the voice: its analyser, and how far into the sentence
@@ -481,6 +483,7 @@ impl Engine {
             running: agent::Running::default(),
             request_id: 0,
             speaker,
+            saying: String::new(),
             speech: 0,
             speaking: None,
             voice: Analyzer::new(VOICE_RATE, BANDS, 80.0, 6_000.0, 0.77, FRAME_RATE),
@@ -750,6 +753,11 @@ impl Engine {
                 if self.state != State::Idle && !self.interruptible() {
                     return;
                 }
+                if self.state == State::Speaking && echo(&heard.text, &self.saying) {
+                    log::debug!("aigent: its own voice heard back: {:?}", heard.text);
+                    self.after_wake = None;
+                    return;
+                }
                 let Some((taken, rest)) = wake::split_at(&heard.text, &self.wake_words) else {
                     if job == Job::Wake && wake::near(&heard.text, &self.wake_words) {
                         log::debug!("aigent: {:?} is close to a wake word, hearing it again", heard.text);
@@ -818,6 +826,11 @@ impl Engine {
                     return;
                 }
                 self.request(request, heard.language);
+            }
+            // Its own question heard back (it stopped for it): listen again.
+            Job::Reply if echo(&heard.text, &self.saying) => {
+                log::debug!("aigent: its own question heard back: {:?}", heard.text);
+                self.enter(State::Confirm);
             }
             Job::Reply => match yes_or_no(&heard.text) {
                 Some(yes) => self.decide(yes),
@@ -904,6 +917,7 @@ impl Engine {
 
     /// Says `text` in the request's language, then `then`.
     fn say(&mut self, text: &str, then: Then) {
+        self.saying = text.to_owned();
         self.speech += 1;
         self.speaking = Some((self.speech, then));
         self.speaker.hush.store(false, Ordering::SeqCst);
@@ -1312,6 +1326,18 @@ fn is_stop(request: &str) -> bool {
     !words.is_empty() && words.len() <= 2 && words.iter().all(|w| STOP.contains(&w.as_str()))
 }
 
+/// Whether `heard` is `saying` coming back through the speakers: most of
+/// its words (at least two) are words of what is being said. The echo
+/// canceller takes most of it out, not always all.
+fn echo(heard: &str, saying: &str) -> bool {
+    let words = |text: &str| -> Vec<String> {
+        text.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_lowercase).collect()
+    };
+    let (heard, saying) = (words(heard), words(saying));
+    let common = heard.iter().filter(|w| saying.contains(w)).count();
+    heard.len() >= 2 && common * 10 >= heard.len() * 7
+}
+
 /// Yes or no in what was said, Portuguese or English; `None` when unclear.
 fn yes_or_no(text: &str) -> Option<bool> {
     let words: Vec<String> = text
@@ -1365,6 +1391,15 @@ mod tests {
             }
         }
         out
+    }
+
+    #[test]
+    fn its_own_voice_is_known() {
+        let saying = "São vinte e duas e quarenta e oito. Quer mais alguma coisa?";
+        assert!(echo("vinte e duas e quarenta", saying));
+        assert!(!echo("Jarvis, para.", saying));
+        assert!(!echo("Sim.", "Posso abrir o kitty?"));
+        assert!(echo("Posso abrir o kitty", "Posso abrir o kitty?"));
     }
 
     #[test]

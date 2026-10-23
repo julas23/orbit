@@ -53,6 +53,11 @@ install -m 644 "$ROOT/data/io.github.julas23.Orbit.Edit.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Files.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Pathfinder.desktop" "$APPS/"
 install -m 644 "$ROOT/data/io.github.julas23.Orbit.Term.desktop" "$APPS/"
+# Orbit-Aigent's microphone without echo (PipeWire's echo canceller), for
+# when its voice comes out of speakers; read at PipeWire's next start.
+mkdir -p "$HOME/.config/pipewire/pipewire.conf.d"
+[ -e "$HOME/.config/pipewire/pipewire.conf.d/60-orbit-aigent-aec.conf" ] \
+  || install -m 644 "$ROOT/data/pipewire/60-orbit-aigent-aec.conf" "$HOME/.config/pipewire/pipewire.conf.d/"
 # The Ferdium recipes Pathfinder reads unread counts with (MIT, see
 # data/pathfinder/recipes/LICENSE.md); your own go in
 # ~/.local/share/orbit/pathfinder/recipes and win over these.
