@@ -14,6 +14,9 @@
 //! model: large-v3-turbo-q5_0   # and hearing the request
 //! microphone: alsa_input.usb-…   # a source's node name (`wpctl inspect`);
 //!                          # the default one when left out
+//! voices:                  # Piper's, in ~/.local/share/orbit/aigent/voices
+//!   pt: pt_BR-faber-medium
+//!   en: en_US-ryan-medium
 //! ```
 //!
 //! A Bluetooth headset's microphone is a poor choice: it records as a phone
@@ -45,6 +48,8 @@ pub struct Config {
     pub wake_model: String,
     pub model: String,
     pub microphone: Option<String>,
+    /// Piper's voice for each language, `voices/<name>.onnx`.
+    pub voices: std::collections::HashMap<String, String>,
 }
 
 impl Default for Config {
@@ -56,6 +61,7 @@ impl Default for Config {
             wake_model: if cfg!(feature = "vulkan") { "small-q5_1" } else { "base-q5_1" }.into(),
             model: if cfg!(feature = "vulkan") { "large-v3-turbo-q5_0" } else { "small-q5_1" }.into(),
             microphone: None,
+            voices: Default::default(),
         }
     }
 }

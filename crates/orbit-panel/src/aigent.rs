@@ -16,7 +16,8 @@
 //! while something still moves. Without the daemon the sphere is dim.
 //!
 //! Left click: listen (or stop); while it asks for a confirmation, yes.
-//! Right click: the agents to choose from, and cancel.
+//! Right click: the agents to choose from, and cancel; while it asks, yes
+//! and no.
 
 use std::{
     cell::{Cell, RefCell},
@@ -331,6 +332,16 @@ fn menu(root: &gtk::Widget, frame: &Frame, at: (f64, f64)) {
         agents.append_item(&item);
     }
     model.append_section(Some(&tr("aigent-agents")), &agents);
+    if frame.state == State::Confirm {
+        let answers = gio::Menu::new();
+        for (name, command) in [("yes", Command::Yes), ("no", Command::No)] {
+            let action = gio::SimpleAction::new(name, None);
+            action.connect_activate(move |_, _| send(&command));
+            group.add_action(&action);
+            answers.append(Some(&tr(&format!("aigent-{name}"))), Some(&format!("aigent.{name}")));
+        }
+        model.append_section(Some(&frame.text), &answers);
+    }
     if frame.state != State::Idle {
         let cancel = gio::SimpleAction::new("cancel", None);
         cancel.connect_activate(|_, _| send(&Command::Cancel));

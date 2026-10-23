@@ -3,17 +3,22 @@
 //!   orbit-aigent                 the daemon (started with the session)
 //!   orbit-aigent toggle|listen|cancel|yes|no|demo
 //!   orbit-aigent agent <name>    use another agent from now on
+//!   orbit-aigent approve         the agent's permission prompt (MCP, stdio)
 //!
 //! The daemon keeps the microphone open, waits for its wake word, hears
 //! the request until a pause, hands it to the agent in use and speaks the
 //! answer, telling the panel's aigent module what it is doing (`Frame`).
-//! Four threads: the microphone's, the socket's (one more per client
-//! reading its commands), Whisper's, and the engine, which owns the state
-//! and is the only one that writes to the clients.
+//! Threads: the microphone's, the socket's (one more per client reading
+//! its commands), Whisper's, the speaker's, one per request to the agent,
+//! and the engine, which owns the state and is the only one that writes to
+//! the clients.
 
+mod agent;
+mod approve;
 mod config;
 mod mic;
 mod stt;
+mod tts;
 mod vad;
 mod wake;
 
@@ -22,7 +27,11 @@ use std::{
     io::{BufRead, BufReader, Write},
     os::unix::net::{UnixListener, UnixStream},
     path::PathBuf,
-    sync::mpsc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 
@@ -47,6 +56,16 @@ enum Event {
         heard: Option<stt::Heard>,
         audio: Vec<f32>,
     },
+    /// The agent wants to use a tool; the answer goes to `reply`.
+    Approve {
+        tool: String,
+        input: serde_json::Value,
+        reply: UnixStream,
+    },
+    /// The agent's answer to request `id`.
+    Answered { id: u64, answer: anyhow::Result<agent::Answer> },
+    /// The speaker said all of `id`.
+    Spoken { id: u64 },
 }
 
 fn main() {
@@ -64,6 +83,7 @@ fn main() {
 /// `orbit-aigent <command>`.
 fn client(args: &[String]) -> i32 {
     let command = match args {
+        [one] if one == "approve" => return approve::serve(),
         [one] => match one.as_str() {
             "toggle" => Command::Toggle,
             "listen" => Command::Listen,
@@ -86,7 +106,7 @@ fn client(args: &[String]) -> i32 {
 }
 
 fn usage() -> i32 {
-    eprintln!("usage: orbit-aigent [toggle|listen|cancel|yes|no|demo|agent <name>]");
+    eprintln!("usage: orbit-aigent [toggle|listen|cancel|yes|no|demo|agent <name>|approve]");
     2
 }
 
@@ -123,10 +143,24 @@ fn daemon() -> anyhow::Result<()> {
             .name("whisper".into())
             .spawn(move || whisper(&config, &queue, &events))?;
     }
+    let (say, orders) = mpsc::channel();
+    let now = tts::Now::default();
+    let hush = Arc::new(AtomicBool::new(false));
+    {
+        let events = events.clone();
+        let voices = tts::voices(&config.voices);
+        let (now, hush) = (now.clone(), hush.clone());
+        std::thread::Builder::new().name("speaker".into()).spawn(move || {
+            tts::speak(&voices, &orders, &now, &hush, |id| {
+                let _ = events.send(Event::Spoken { id });
+            });
+        })?;
+    }
+    let engine = Engine::new(&config, jobs, events.clone(), Speaker { say, now, hush });
     std::thread::Builder::new()
         .name("socket".into())
         .spawn(move || serve(&listener, &events))?;
-    Engine::new(&config, jobs).run(&inbox);
+    engine.run(&inbox);
     Ok(())
 }
 
@@ -149,12 +183,20 @@ fn serve(listener: &UnixListener, events: &mpsc::Sender<Event>) {
         }
         let events = events.clone();
         let _ = std::thread::Builder::new().name("client".into()).spawn(move || {
+            let reply = stream.try_clone();
             for line in BufReader::new(stream).lines() {
                 let Ok(line) = line else { break };
                 if line.trim().is_empty() {
                     continue;
                 }
                 match serde_json::from_str::<Command>(&line) {
+                    Ok(Command::Approve { tool, input }) => {
+                        let Ok(reply) = reply.as_ref().map(UnixStream::try_clone) else { break };
+                        let Ok(reply) = reply else { break };
+                        if events.send(Event::Approve { tool, input, reply }).is_err() {
+                            break;
+                        }
+                    }
                     Ok(command) => {
                         if events.send(Event::Command(command)).is_err() {
                             break;
@@ -180,6 +222,8 @@ enum Job {
     WakeAgain,
     /// The request, with the larger one.
     Request,
+    /// Yes or no to a question, with the faster one.
+    Reply,
 }
 
 /// Runs Whisper off the engine's thread: it takes a second or more, and
@@ -206,9 +250,10 @@ fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events:
         }
         let stt = match job {
             Job::Wake if audio.len() > SHORT_WAKE || !config.wake_model.starts_with("base") => wake.as_mut(),
+            Job::Reply => wake.as_mut().or(request.as_mut()),
             Job::Wake | Job::WakeAgain | Job::Request => request.as_mut().or(wake.as_mut()),
         };
-        let prompt = if job == Job::Request { "" } else { &prompt };
+        let prompt = if matches!(job, Job::Request | Job::Reply) { "" } else { &prompt };
         let heard = stt.and_then(|stt| {
             stt.hear(&audio, prompt, job == Job::Request)
                 .inspect_err(|err| log::warn!("aigent: Whisper: {err:#}"))
@@ -259,7 +304,25 @@ enum Demo {
     On,
 }
 
+/// The speaker's end the engine holds: orders to it, what it is playing,
+/// and the flag that hushes it.
+struct Speaker {
+    say: mpsc::Sender<tts::Order>,
+    now: tts::Now,
+    hush: Arc<AtomicBool>,
+}
+
+/// What follows when the speaker is done.
+#[derive(Clone, Copy, PartialEq)]
+enum Then {
+    Wait,
+    /// Listen for the answer to the question just asked.
+    Confirm,
+}
+
 struct Engine {
+    config: Config,
+    events: mpsc::Sender<Event>,
     agents: Vec<String>,
     agent: String,
     wake_words: Vec<String>,
@@ -294,7 +357,30 @@ struct Engine {
     clients: Vec<UnixStream>,
     /// Something changed since the last frame went out.
     dirty: bool,
+    /// The language of the request under way, `pt` or `en`.
+    language: &'static str,
+    /// The agent's conversation, resumed by each request; its run under
+    /// way, and the request whose answer counts.
+    session: Option<String>,
+    running: agent::Running,
+    request_id: u64,
+    speaker: Speaker,
+    /// What is being said, and what comes after it.
+    speech: u64,
+    speaking: Option<(u64, Then)>,
+    /// Bands of the voice: its analyser, and how far into the sentence
+    /// playing it has got (that sentence's start).
+    voice: Analyzer,
+    voice_rate: u32,
+    voice_at: (Option<Instant>, usize),
+    /// Where the answer to the question asked goes.
+    approval: Option<UnixStream>,
 }
+
+/// Piper's rate, until a sentence says otherwise.
+const VOICE_RATE: u32 = 22_050;
+/// From spawning pw-play to its sound.
+const PLAY_LATENCY: Duration = Duration::from_millis(80);
 
 /// Speech while waiting this short may be the name alone.
 const SHORT_WAKE: usize = 5 * mic::RATE as usize / 2;
@@ -303,7 +389,7 @@ const LONGEST_WAKE: usize = 10 * mic::RATE as usize;
 const BEFORE: usize = 3 * mic::RATE as usize / 10;
 
 impl Engine {
-    fn new(config: &Config, jobs: mpsc::Sender<(u64, Job, Vec<f32>)>) -> Self {
+    fn new(config: &Config, jobs: mpsc::Sender<(u64, Job, Vec<f32>)>, events: mpsc::Sender<Event>, speaker: Speaker) -> Self {
         let agents = config.usable();
         let agent = if agents.contains(&config.agent) {
             config.agent.clone()
@@ -315,6 +401,8 @@ impl Engine {
         };
         log::info!("aigent: agents {agents:?}, using {agent:?}, woken by {:?}", config.wake);
         Self {
+            config: config.clone(),
+            events,
             agents,
             agent,
             wake_words: config.wake.clone(),
@@ -336,6 +424,17 @@ impl Engine {
             demo: Demo::Off,
             clients: Vec::new(),
             dirty: true,
+            language: stt::LANGUAGES[0],
+            session: None,
+            running: agent::Running::default(),
+            request_id: 0,
+            speaker,
+            speech: 0,
+            speaking: None,
+            voice: Analyzer::new(VOICE_RATE, BANDS, 80.0, 6_000.0, 0.77, FRAME_RATE),
+            voice_rate: VOICE_RATE,
+            voice_at: (None, 0),
+            approval: None,
         }
     }
 
@@ -355,6 +454,23 @@ impl Engine {
                     if self.waiting_for == Some(id) {
                         self.waiting_for = None;
                         self.heard_back(job, heard, audio);
+                    }
+                }
+                Ok(Event::Approve { tool, input, reply }) => self.approve(&tool, &input, reply),
+                Ok(Event::Answered { id, answer }) => {
+                    if id == self.request_id {
+                        self.answered(answer);
+                    }
+                }
+                Ok(Event::Spoken { id }) => {
+                    if let Some((speech, then)) = self.speaking
+                        && speech == id
+                    {
+                        self.speaking = None;
+                        match then {
+                            Then::Wait => self.enter(State::Idle),
+                            Then::Confirm => self.enter(State::Confirm),
+                        }
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -418,10 +534,12 @@ impl Engine {
     fn command(&mut self, command: Command) {
         match command {
             Command::Toggle if self.state == State::Idle => self.enter(State::Listening),
-            Command::Toggle | Command::Cancel => self.enter(State::Idle),
+            Command::Toggle | Command::Cancel => self.cancel(),
             Command::Listen => self.enter(State::Listening),
-            // Nothing asks yet: the agents come next.
+            Command::Yes | Command::No if self.approval.is_some() => self.decide(command == Command::Yes),
             Command::Yes | Command::No => {}
+            // Comes as Event::Approve, with the connection to answer on.
+            Command::Approve { .. } => {}
             Command::Agent { name } => {
                 if self.agents.contains(&name) {
                     log::info!("aigent: using {name}");
@@ -498,20 +616,26 @@ impl Engine {
         }
     }
 
-    /// The request is over: the pause after it, or too long.
+    /// The request (or the answer to a question) is over: the pause after
+    /// it, or too long.
     fn heard_all(&mut self) {
         let audio = self.recording.take().unwrap_or_default();
         log::info!("aigent: heard {:.1} s", audio.len() as f32 / mic::RATE as f32);
+        let job = if self.state == State::Confirm { Job::Reply } else { Job::Request };
         self.enter(State::Thinking);
         if self.demo == Demo::Off {
-            self.ask(Job::Request, audio);
+            self.ask(job, audio);
         }
     }
 
     /// Whisper's answer to the job still wanted.
     fn heard_back(&mut self, job: Job, heard: Option<stt::Heard>, audio: Vec<f32>) {
         let Some(heard) = heard else {
-            self.enter(State::Idle);
+            if job == Job::Reply {
+                self.decide(false);
+            } else {
+                self.enter(State::Idle);
+            }
             return;
         };
         match job {
@@ -570,6 +694,15 @@ impl Engine {
                 let request = wake::split(&heard.text, &self.wake_words).unwrap_or(heard.text);
                 self.request(request, heard.language);
             }
+            Job::Reply => match yes_or_no(&heard.text) {
+                Some(yes) => self.decide(yes),
+                None if !self.retried => {
+                    self.retried = true;
+                    let again = if self.language == "en" { "Yes or no?" } else { "Sim ou não?" };
+                    self.say(again, Then::Confirm);
+                }
+                None => self.decide(false),
+            },
         }
     }
 
@@ -581,9 +714,135 @@ impl Engine {
             return;
         }
         log::info!("aigent: request ({language}) for {}: {request:?}", self.agent);
-        self.text = request;
-        // The agents come next: for now the request is shown.
+        self.language = if language == "en" { "en" } else { "pt" };
+        self.text = request.clone();
+        self.retried = false;
+        let Some(agent) = self.config.agents.get(&self.agent).cloned() else {
+            let none = if self.language == "en" {
+                "There is no agent installed to do that."
+            } else {
+                "Não há nenhum agente instalado para isso."
+            };
+            self.say(none, Then::Wait);
+            return;
+        };
+        self.enter(State::Thinking);
+        self.request_id += 1;
+        let (id, name, session) = (self.request_id, self.agent.clone(), self.session.clone());
+        let (running, events) = (self.running.clone(), self.events.clone());
+        let spawned = std::thread::Builder::new().name("agent".into()).spawn(move || {
+            let answer = agent::ask(&name, &agent, &request, session.as_deref(), &running);
+            let _ = events.send(Event::Answered { id, answer });
+        });
+        if let Err(err) = spawned {
+            log::error!("aigent: starting the agent: {err}");
+            self.enter(State::Idle);
+        }
+    }
+
+    /// The agent's answer, said.
+    fn answered(&mut self, answer: anyhow::Result<agent::Answer>) {
+        // An approval left asking (the agent gave up meanwhile).
+        if let Some(mut reply) = self.approval.take() {
+            let _ = reply.write_all(b"{\"approved\":false}\n");
+        }
+        match answer {
+            Ok(answer) => {
+                log::info!("aigent: {} answered: {:?}", self.agent, answer.text);
+                self.session = answer.session;
+                self.text = answer.text.clone();
+                self.say(&answer.text, Then::Wait);
+            }
+            Err(err) => {
+                log::warn!("aigent: {}: {err:#}", self.agent);
+                let sorry = if self.language == "en" {
+                    "Sorry, the agent could not answer."
+                } else {
+                    "Desculpe, o agente não conseguiu responder."
+                };
+                self.say(sorry, Then::Wait);
+            }
+        }
+    }
+
+    /// Says `text` in the request's language, then `then`.
+    fn say(&mut self, text: &str, then: Then) {
+        self.speech += 1;
+        self.speaking = Some((self.speech, then));
+        self.speaker.hush.store(false, Ordering::SeqCst);
+        let order = tts::Order::Say {
+            id: self.speech,
+            text: text.to_owned(),
+            language: self.language.to_owned(),
+        };
+        if self.speaker.say.send(order).is_err() {
+            log::error!("aigent: the speaker is gone");
+        }
+        self.enter(State::Speaking);
+    }
+
+    /// The agent asks to use `tool`: the question said, then listened for.
+    fn approve(&mut self, tool: &str, input: &serde_json::Value, mut reply: UnixStream) {
+        if self.approval.is_some() || !matches!(self.state, State::Thinking) {
+            let _ = reply.write_all(b"{\"approved\":false}\n");
+            return;
+        }
+        let (question, detail) = question(tool, input, self.language);
+        log::info!("aigent: asking: {question} ({detail})");
+        self.text = detail;
+        self.approval = Some(reply);
+        self.retried = false;
+        self.say(&question, Then::Confirm);
+    }
+
+    /// The answer to the question asked.
+    fn decide(&mut self, yes: bool) {
+        log::info!("aigent: the answer is {}", if yes { "yes" } else { "no" });
+        if let Some(mut reply) = self.approval.take() {
+            let line = format!("{{\"approved\":{yes}}}\n");
+            let _ = reply.write_all(line.as_bytes());
+        }
+        self.speaker.hush.store(true, Ordering::SeqCst);
+        self.speaking = None;
+        self.enter(State::Thinking);
+    }
+
+    /// Stops everything: the agent, the voice, a question.
+    fn cancel(&mut self) {
+        if let Some(mut reply) = self.approval.take() {
+            let _ = reply.write_all(b"{\"approved\":false}\n");
+        }
+        // Its answer, should it still come, no longer counts.
+        self.request_id += 1;
+        agent::stop(&self.running);
+        self.speaker.hush.store(true, Ordering::SeqCst);
+        self.speaking = None;
         self.enter(State::Idle);
+    }
+
+    /// The voice's bands now: what of the sentence playing has been heard
+    /// since the last frame, through the analyser.
+    fn voice_bands(&mut self) -> Vec<f32> {
+        let playing = self.speaker.now.lock().unwrap().clone();
+        let Some(playing) = playing else {
+            // Between sentences: the bars fall.
+            self.voice.push(&vec![0.0; (self.voice_rate / FRAME_RATE) as usize]);
+            return self.voice.frame();
+        };
+        if self.voice_at.0 != Some(playing.since) {
+            self.voice_at = (Some(playing.since), 0);
+            if playing.rate != self.voice_rate {
+                self.voice_rate = playing.rate;
+                self.voice = Analyzer::new(playing.rate, BANDS, 80.0, 6_000.0, 0.77, FRAME_RATE);
+            }
+        }
+        // pw-play starts a little after it is spawned.
+        let heard = playing.since.elapsed().saturating_sub(PLAY_LATENCY).as_secs_f32();
+        let at = ((heard * playing.rate as f32) as usize).min(playing.samples.len());
+        let from = self.voice_at.1.min(at);
+        self.voice.push(&playing.samples[from..at]);
+        self.voice_at.1 = at;
+        self.voice.frame()
     }
 
     /// Every tick: timeouts, the demo's script, and the frame to the clients.
@@ -594,6 +853,9 @@ impl Engine {
                 if (!self.heard && elapsed >= NO_SPEECH) || elapsed >= LONGEST {
                     if self.heard {
                         self.heard_all();
+                    } else if self.state == State::Confirm {
+                        log::info!("aigent: no answer");
+                        self.decide(false);
                     } else {
                         log::info!("aigent: nothing heard");
                         if self.demo == Demo::On {
@@ -617,6 +879,7 @@ impl Engine {
                     self.bands = voice(elapsed.as_secs_f32());
                 }
             }
+            State::Speaking => self.bands = self.voice_bands(),
             _ => {}
         }
         if self.dirty || moves(self.state) {
@@ -689,6 +952,59 @@ fn bursts(levels: &[f32], loudest: f32) -> Vec<(usize, usize)> {
     runs
 }
 
+/// The question for the agent's wish to use `tool` with `input`, in
+/// `language`, and the whole of it for the tooltip.
+fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, String) {
+    let en = language == "en";
+    let file = || {
+        input["file_path"]
+            .as_str()
+            .or(input["notebook_path"].as_str())
+            .map(|path| path.rsplit('/').next().unwrap_or(path).to_owned())
+            .unwrap_or_default()
+    };
+    match tool {
+        "Bash" => {
+            let command = input["command"].as_str().unwrap_or_default();
+            let what = input["description"].as_str().filter(|d| !d.is_empty());
+            let said = match (what, en) {
+                (Some(what), true) => format!("May I run a command? {what}."),
+                (Some(what), false) => format!("Posso executar um comando? {what}."),
+                (None, true) => "May I run a command?".to_owned(),
+                (None, false) => "Posso executar um comando?".to_owned(),
+            };
+            (said, format!("$ {command}"))
+        }
+        "Write" | "Edit" | "MultiEdit" | "NotebookEdit" => {
+            let name = file();
+            let said = if en { format!("May I change the file {name}?") } else { format!("Posso alterar o arquivo {name}?") };
+            (said, format!("{tool} {}", input["file_path"].as_str().unwrap_or(&name)))
+        }
+        _ => {
+            let said = if en { format!("May I use {tool}?") } else { format!("Posso usar {tool}?") };
+            (said, format!("{tool} {input}"))
+        }
+    }
+}
+
+/// Yes or no in what was said, Portuguese or English; `None` when unclear.
+fn yes_or_no(text: &str) -> Option<bool> {
+    let words: Vec<String> = text
+        .split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    let has = |list: &[&str]| words.iter().any(|w| list.contains(&w.as_str()));
+    // "Não pode" is no: the no words first.
+    if has(&["não", "nao", "no", "nope", "cancela", "cancelar", "negativo", "pare", "don't", "stop"]) {
+        return Some(false);
+    }
+    if has(&["sim", "pode", "claro", "ok", "okay", "confirmo", "confirma", "manda", "vai", "faz", "faça", "yes", "yeah", "yep", "sure", "go"]) {
+        return Some(true);
+    }
+    None
+}
+
 /// Whether the sphere moves in `state`, so frames go out all the time.
 fn moves(state: State) -> bool {
     matches!(state, State::Listening | State::Speaking | State::Confirm)
@@ -723,6 +1039,21 @@ mod tests {
             }
         }
         out
+    }
+
+    #[test]
+    fn yes_and_no_in_both_languages() {
+        assert_eq!(yes_or_no("Sim, pode."), Some(true));
+        assert_eq!(yes_or_no("Não pode não."), Some(false));
+        assert_eq!(yes_or_no("Yes, go ahead."), Some(true));
+        assert_eq!(yes_or_no("No."), Some(false));
+        assert_eq!(yes_or_no("Hmm, talvez."), None);
+    }
+
+    #[test]
+    fn the_question_names_the_file() {
+        let input = serde_json::json!({"file_path": "/home/u/notas.txt", "content": "x"});
+        assert_eq!(question("Write", &input, "pt").0, "Posso alterar o arquivo notas.txt?");
     }
 
     #[test]

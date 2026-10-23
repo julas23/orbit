@@ -740,3 +740,5 @@ prompter-mismatch = As senhas não conferem
 aigent-offline = Orbit-Aigent não está rodando
 aigent-agents = Agentes
 aigent-cancel = Cancelar
+aigent-yes = Sim
+aigent-no = Não

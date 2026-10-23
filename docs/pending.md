@@ -155,7 +155,9 @@ and anything that changes something confirmed by a spoken "yes" or a click.
 - [x] Panel module: the sphere in both sizes, clicks and the agents' menu (2026-10-22). Awaiting a look on screen.
 - [x] Whisper (whisper.cpp in the daemon, CPU): base finds the wake word, small hears the request; pt and en, Portuguese on a near tie; the name cut off a request said in one breath; the microphone chosen in `aigent.yaml` (2026-10-22). Tried with the user's voice on the K66.
 - [x] Whisper on the iGPU (Vulkan, the `vulkan` feature, built by `install.sh` when `glslc` is there): small finds the wake word in 0.4 s, large-v3-turbo hears the request in about 2 s, and hears right what small and medium misheard (2026-10-22).
-- [ ] The agents: Claude Code, Gemini CLI, OpenCode, Kimi Code headless, the session kept between requests; choose in `aigent.yaml` or the menu.
-- [ ] Piper: the answer spoken in the language it was asked in; the sphere moving with the voice.
-- [ ] Confirmation of actions that change something, by voice or click.
+- [x] Claude Code headless (`claude -p`, stream-json), the session resumed between requests, told its answer is spoken; reading tools and look-only commands free (2026-10-22).
+- [x] Piper: the answer said sentence by sentence in the request's language (`pw-play`), the sphere moving with the voice (2026-10-22).
+- [x] Confirmation: anything else goes through `--permission-prompt-tool` to `orbit-aigent approve` (MCP); the daemon asks aloud and takes a spoken yes/no or a click (2026-10-22). Tried end to end with a file write.
+- [ ] Gemini CLI, OpenCode and Kimi Code (not installed on the hp yet): their headless modes and how each asks for permission.
+- [ ] Interrupting it while it speaks (the wake word or a click), and a short sound when woken.
 - [ ] Start with the session; a shortcut in `keys.yaml`; packaging.

@@ -748,3 +748,5 @@ prompter-mismatch = The passwords do not match
 aigent-offline = Orbit-Aigent is not running
 aigent-agents = Agents
 aigent-cancel = Cancel
+aigent-yes = Yes
+aigent-no = No
