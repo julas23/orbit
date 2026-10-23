@@ -381,8 +381,16 @@ struct Engine {
     voice: Analyzer,
     voice_rate: u32,
     voice_at: (Option<Instant>, usize),
-    /// Where the answer to the question asked goes.
+    /// Where the answer to the question asked goes; what it would allow
+    /// (a program, a file), and what was allowed so far in this request,
+    /// not asked again.
     approval: Option<UnixStream>,
+    asked: Vec<String>,
+    allowed: Vec<String>,
+    /// Blocks heard, for a word in the log now and then, and the loudest
+    /// since the last.
+    blocks: u64,
+    loudest: f32,
 }
 
 /// Piper's rate, until a sentence says otherwise.
@@ -443,6 +451,10 @@ impl Engine {
             voice_rate: VOICE_RATE,
             voice_at: (None, 0),
             approval: None,
+            asked: Vec::new(),
+            allowed: Vec::new(),
+            blocks: 0,
+            loudest: f32::NEG_INFINITY,
         }
     }
 
@@ -569,6 +581,22 @@ impl Engine {
     /// and while listening, for the request.
     fn block(&mut self, block: &[f32]) {
         let event = self.vad.push(block);
+        if let Some(event) = event {
+            log::debug!("aigent: speech {event:?} ({:?}, {:.0} dB)", self.state, vad::level(block));
+        }
+        self.blocks += 1;
+        self.loudest = self.loudest.max(vad::level(block));
+        if self.blocks.is_multiple_of(1000) {
+            log::debug!(
+                "aigent: {:?}, room at {:.0} dB, loudest {:.0} dB, speaking {}, Whisper busy {}",
+                self.state,
+                self.vad.floor().unwrap_or(0.0),
+                self.loudest,
+                self.vad.speaking(),
+                self.waiting_for.is_some()
+            );
+            self.loudest = f32::NEG_INFINITY;
+        }
         if let Some(recording) = &mut self.recording {
             recording.extend_from_slice(block);
         }
@@ -711,6 +739,13 @@ impl Engine {
                 }
                 // The wake word, when the request came with it.
                 let request = wake::split(&heard.text, &self.wake_words).unwrap_or(heard.text);
+                // The name again and nothing else: still listening.
+                if request.is_empty() && !self.retried {
+                    log::info!("aigent: the name again, listening on");
+                    self.enter(State::Listening);
+                    self.retried = true;
+                    return;
+                }
                 self.request(request, heard.language);
             }
             Job::Reply => match yes_or_no(&heard.text) {
@@ -736,6 +771,7 @@ impl Engine {
         self.language = if language == "en" { "en" } else { "pt" };
         self.text = request.clone();
         self.retried = false;
+        self.allowed.clear();
         let Some(agent) = self.config.agents.get(&self.agent).cloned() else {
             let none = if self.language == "en" {
                 "There is no agent installed to do that."
@@ -806,8 +842,15 @@ impl Engine {
             let _ = reply.write_all(b"{\"approved\":false}\n");
             return;
         }
+        let wants = wants(tool, input);
+        if !wants.is_empty() && wants.iter().all(|w| self.allowed.contains(w)) {
+            log::info!("aigent: {tool} allowed already in this request: {wants:?}");
+            let _ = reply.write_all(b"{\"approved\":true}\n");
+            return;
+        }
         let (question, detail) = question(tool, input, self.language);
         log::info!("aigent: asking: {question} ({detail})");
+        self.asked = wants;
         self.text = detail;
         self.approval = Some(reply);
         self.retried = false;
@@ -817,6 +860,9 @@ impl Engine {
     /// The answer to the question asked.
     fn decide(&mut self, yes: bool) {
         log::info!("aigent: the answer is {}", if yes { "yes" } else { "no" });
+        if yes {
+            self.allowed.append(&mut self.asked);
+        }
         if let Some(mut reply) = self.approval.take() {
             let line = format!("{{\"approved\":{yes}}}\n");
             let _ = reply.write_all(line.as_bytes());
@@ -874,7 +920,13 @@ impl Engine {
                     if self.heard {
                         self.heard_all();
                     } else if self.state == State::Confirm {
-                        log::info!("aigent: no answer");
+                        let heard = self.recording.as_deref().unwrap_or_default();
+                        let loudest = heard.chunks(mic::BLOCK).map(vad::level).fold(f32::NEG_INFINITY, f32::max);
+                        log::info!("aigent: no answer (the loudest 30 ms at {loudest:.0} dB)");
+                        if let Some(dir) = std::env::var_os("ORBIT_AIGENT_DUMP") {
+                            let path = PathBuf::from(dir).join(format!("{:04}-NoAnswer.wav", self.job));
+                            let _ = write_wav(&path, heard);
+                        }
                         self.decide(false);
                     } else {
                         log::info!("aigent: nothing heard");
@@ -987,9 +1039,14 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
         "Bash" => {
             // The programs, not the command line, which is no pleasure to
             // hear; nor Claude's description of it, written in English.
+            // A command to the desktop, what it does.
             let command = input["command"].as_str().unwrap_or_default();
             let programs = programs(command);
             let and = if en { " and " } else { " e " };
+            if let Some(actions) = desktop_actions(command, en) {
+                let said = if en { format!("May I {}?", actions.join(and)) } else { format!("Posso {}?", actions.join(and)) };
+                return (said, format!("$ {command}"));
+            }
             let said = match (programs.is_empty(), en) {
                 (true, true) => "May I run a command?".to_owned(),
                 (true, false) => "Posso executar um comando?".to_owned(),
@@ -1008,6 +1065,79 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
             (said, format!("{tool} {input}"))
         }
     }
+}
+
+/// What a command to the desktop (`orbitctl` or `swaymsg` with a command
+/// of sway's) does, said: "abrir o kitty", "mover a janela para o monitor
+/// HDMI-A-1". `None` for any other command line.
+fn desktop_actions(command: &str, en: bool) -> Option<Vec<String>> {
+    let words = shell_words(command);
+    let (program, rest) = words.split_first()?;
+    if !matches!(program.rsplit('/').next(), Some("orbitctl" | "swaymsg")) || rest.first().is_some_and(|w| w.starts_with('-')) {
+        return None;
+    }
+    let mut out = Vec::new();
+    for part in rest.join(" ").split([';', ',']) {
+        // Criteria first: `[app_id="kitty"] move …`.
+        let part = part.trim();
+        let part = match part.strip_prefix('[') {
+            Some(after) => after.split_once(']').map_or("", |(_, rest)| rest.trim()),
+            None => part,
+        };
+        let w: Vec<&str> = part.split_whitespace().collect();
+        let said = match (w.as_slice(), en) {
+            ([], _) => continue,
+            (["exec", program, ..], true) => format!("open {}", program.rsplit('/').next().unwrap_or(program)),
+            (["exec", program, ..], false) => format!("abrir o {}", program.rsplit('/').next().unwrap_or(program)),
+            ([.., "output", name], true) if w[0] == "move" => format!("move the window to the monitor {name}"),
+            ([.., "output", name], false) if w[0] == "move" => format!("mover a janela para o monitor {name}"),
+            (["move", .., "workspace", n], true) => format!("move the window to workspace {n}"),
+            (["move", .., "workspace", n], false) => format!("mover a janela para a área {n}"),
+            (["move", ..], true) => "move the window".to_owned(),
+            (["move", ..], false) => "mover a janela".to_owned(),
+            (["focus", ..], _) => continue,
+            (["workspace", n, ..], true) => format!("go to workspace {n}"),
+            (["workspace", n, ..], false) => format!("ir para a área {n}"),
+            (["kill", ..], true) => "close the window".to_owned(),
+            (["kill", ..], false) => "fechar a janela".to_owned(),
+            (_, true) => "change the desktop".to_owned(),
+            (_, false) => "mudar a área de trabalho".to_owned(),
+        };
+        if !out.contains(&said) {
+            out.push(said);
+        }
+    }
+    if out.is_empty() {
+        out.push(if en { "change the focus" } else { "mudar o foco" }.to_owned());
+    }
+    Some(out)
+}
+
+/// `command` split into words as a shell would, quotes taken off; only
+/// for one simple command (it stops at `|`, `;` or `&` outside quotes).
+fn shell_words(command: &str) -> Vec<String> {
+    let (mut words, mut word, mut quote, mut any) = (Vec::new(), String::new(), None, false);
+    for c in command.chars() {
+        match (quote, c) {
+            (None, '\'' | '"') => (quote, any) = (Some(c), true),
+            (Some(q), c) if c == q => quote = None,
+            (None, '|' | ';' | '&') => break,
+            (None, c) if c.is_whitespace() => {
+                if any {
+                    words.push(std::mem::take(&mut word));
+                    any = false;
+                }
+            }
+            _ => {
+                word.push(c);
+                any = true;
+            }
+        }
+    }
+    if any {
+        words.push(word);
+    }
+    words
 }
 
 /// The programs a command line runs, at most three, each once: the first
@@ -1043,6 +1173,18 @@ fn programs(command: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// What a yes to `tool` with `input` allows for the rest of the request:
+/// its programs (for a command) or its file.
+fn wants(tool: &str, input: &serde_json::Value) -> Vec<String> {
+    match tool {
+        "Bash" => programs(input["command"].as_str().unwrap_or_default()),
+        _ => match input["file_path"].as_str().or(input["notebook_path"].as_str()) {
+            Some(path) => vec![format!("{tool} {path}")],
+            None => vec![tool.to_owned()],
+        },
+    }
 }
 
 /// Yes or no in what was said, Portuguese or English; `None` when unclear.
@@ -1112,6 +1254,17 @@ mod tests {
     fn the_question_names_the_programs() {
         let input = serde_json::json!({"command": "swaymsg -t get_outputs -r | jq -r '.[] | .name'; LANG=C /usr/bin/kitty &", "description": "x"});
         assert_eq!(question("Bash", &input, "pt").0, "Posso executar swaymsg e jq e kitty?");
+    }
+
+    #[test]
+    fn a_desktop_command_is_said_as_what_it_does() {
+        let ask = |command: &str| question("Bash", &serde_json::json!({ "command": command }), "pt").0;
+        assert_eq!(ask("orbitctl 'focus output HDMI-A-1; exec kitty'"), "Posso abrir o kitty?");
+        assert_eq!(
+            ask("orbitctl '[app_id=\"kitty\"] move container to output HDMI-A-1, focus'"),
+            "Posso mover a janela para o monitor HDMI-A-1?"
+        );
+        assert_eq!(ask("swaymsg -t get_tree"), "Posso executar swaymsg?");
     }
 
     #[test]
