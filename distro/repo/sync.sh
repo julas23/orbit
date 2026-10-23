@@ -238,10 +238,11 @@ gpg --export "$KEY" > /srv/aptly/public/orbit-archive-keyring.gpg
 
 log "Old snapshots"
 # The last 7 of each kind stay (to switch back to); packages none of them
-# holds leave the pool.
-for kind in debian debian-updates debian-security debian-all orbit-local; do
+# holds leave the pool. The merged ones first: aptly refuses to drop a
+# snapshot another one was made from. A refusal is said, not fatal.
+for kind in debian-all orbit-local debian debian-updates debian-security; do
     aptly snapshot list -raw -sort=time | grep -E "^$kind-[0-9]{8}-[0-9]{6}$" | head -n -7 | while read -r old; do
-        aptly snapshot drop "$old" >/dev/null 2>&1 && echo "dropped $old"
+        if aptly snapshot drop "$old" >/dev/null 2>&1; then echo "dropped $old"; else echo "kept $old (still used)"; fi
     done
 done
 aptly db cleanup >/dev/null
