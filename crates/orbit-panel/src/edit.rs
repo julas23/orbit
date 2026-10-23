@@ -76,6 +76,8 @@ struct Editor {
     board: Board,
     dir: ConfigDir,
     edge: Edge,
+    /// The panel's thickness.
+    size: i32,
     slots: RefCell<Vec<Slot>>,
     built: RefCell<HashMap<u64, Built>>,
     next: Cell<u64>,
@@ -96,6 +98,7 @@ pub fn new(dir: &ConfigDir, config: &PanelConfig) -> gtk::Widget {
         board: board.clone(),
         dir: dir.clone(),
         edge: config.edge,
+        size: config.size,
         slots: RefCell::default(),
         built: RefCell::default(),
         next: Cell::new(0),
@@ -332,7 +335,8 @@ impl Editor {
     }
 }
 
-/// The menu of the panel itself: edit it, add a module where it was clicked.
+/// The menu of the panel itself: edit it, move it, add a module where it
+/// was clicked.
 fn panel_menu(editor: &Rc<Editor>, x: f64, y: f64) {
     let model = gio::Menu::new();
     let group = gio::SimpleActionGroup::new();
@@ -347,6 +351,25 @@ fn panel_menu(editor: &Rc<Editor>, x: f64, y: f64) {
         editor.set_editing(on);
     });
     group.add_action(&editing);
+
+    if orbit_app::mover::supported() {
+        model.append(Some(&tr("panel-move")), Some("edit.move"));
+        let action = gio::SimpleAction::new("move", None);
+        let weak = Rc::downgrade(editor);
+        action.connect_activate(move |_, _| {
+            let Some(editor) = weak.upgrade() else { return };
+            // Only the vertical panel is laid out on the grid, and edited.
+            let surface = orbit_app::mover::Surface {
+                file: "panel.yaml",
+                edges: &[Edge::Left, Edge::Right],
+                size: editor.size,
+                edge: editor.edge,
+                monitor: None,
+            };
+            orbit_app::mover::start(surface, &editor.board, &editor.dir);
+        });
+        group.add_action(&action);
+    }
 
     let missing: Vec<&str> = {
         let slots = editor.slots.borrow();

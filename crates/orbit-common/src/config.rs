@@ -85,6 +85,14 @@ impl ConfigDir {
         self.rewrite("dock.yaml", &["apps"], &list, first)
     }
 
+    /// Writes where a surface goes, `edge:` and `monitor:` (an output
+    /// name), into `name` (`panel.yaml`, `dock.yaml`); the rest stays, and
+    /// the old file is kept as `.bak`.
+    pub fn save_place(&self, name: &str, edge: Edge, monitor: &str) -> anyhow::Result<()> {
+        let blocks = format!("edge: {}\nmonitor: {monitor}\n", edge.name());
+        self.rewrite(name, &["edge", "monitor"], &blocks, true)
+    }
+
     /// File `name` with its top-level `keys` replaced by `blocks`.
     fn rewrite(&self, name: &str, keys: &[&str], blocks: &str, first: bool) -> anyhow::Result<()> {
         let path = self.path.join(name);
@@ -148,6 +156,16 @@ pub enum Edge {
 impl Edge {
     pub fn is_vertical(self) -> bool {
         matches!(self, Edge::Left | Edge::Right)
+    }
+
+    /// Its name in the config files.
+    pub fn name(self) -> &'static str {
+        match self {
+            Edge::Top => "top",
+            Edge::Bottom => "bottom",
+            Edge::Left => "left",
+            Edge::Right => "right",
+        }
     }
 }
 

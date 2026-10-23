@@ -46,25 +46,38 @@ pub trait Backend {
     /// Turns `window` into an edge-anchored surface. Must be called before the
     /// window is realized (that is, before `present()`).
     fn attach(&self, window: &gtk::Window, placement: Placement) -> anyhow::Result<()>;
+
+    /// Keeps `window`, once attached, on the monitor `spec` names: back on
+    /// it when it shows up (after the surface, or plugged in again), on
+    /// another while it is gone. By default it stays where it was put.
+    fn follow(&self, _window: &gtk::Window, _spec: &MonitorSpec) {}
 }
 
-/// Looks up a monitor by index or output name, falling back to the first one.
-pub fn monitor(display: &gdk::Display, spec: &MonitorSpec) -> anyhow::Result<gdk::Monitor> {
+/// The monitor `spec` names, if it is there.
+pub fn find_monitor(display: &gdk::Display, spec: &MonitorSpec) -> Option<gdk::Monitor> {
     let monitors = display.monitors();
     let pick = |i: u32| {
         monitors
             .item(i)
             .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
     };
-    let found = match spec {
+    match spec {
         MonitorSpec::Index(index) => pick(*index as u32),
         MonitorSpec::Name(name) => (0..monitors.n_items())
             .filter_map(pick)
             .find(|m| m.connector().as_deref() == Some(name.as_str())),
-    };
-    if let Some(monitor) = found {
+    }
+}
+
+/// Looks up a monitor by index or output name, falling back to the first one.
+pub fn monitor(display: &gdk::Display, spec: &MonitorSpec) -> anyhow::Result<gdk::Monitor> {
+    if let Some(monitor) = find_monitor(display, spec) {
         return Ok(monitor);
     }
     log::warn!("monitor {spec:?} not found, using monitor 0");
-    pick(0).ok_or_else(|| anyhow::anyhow!("no monitors found"))
+    display
+        .monitors()
+        .item(0)
+        .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
+        .ok_or_else(|| anyhow::anyhow!("no monitors found"))
 }

@@ -205,6 +205,18 @@ window.confirm            { background: transparent; }
   padding: 20px 25px;
 }
 .confirm-box .question    { font-size: 15px; }
+
+/* Moving the panel or the dock (orbit-app's mover): every monitor dimmed,
+ * its edges drawn, and what to do. */
+window.orbit-mover        { background: transparent; color: @orbit_fg; }
+.mover-hint {
+  background-color: @orbit_surface;
+  color: @orbit_fg;
+  border: 1px solid @orbit_outline;
+  border-radius: 15px;
+  padding: 15px 25px;
+  font-size: 15px;
+}
 .confirm-box button {
   background-color: @orbit_button;
   border: 1px solid @orbit_button;

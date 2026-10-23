@@ -82,7 +82,7 @@ fn window(app: &gtk::Application, dir: &ConfigDir, config: &DockConfig) -> gtk::
         dir,
         &config.apps,
         config.icon_size,
-        config.edge.is_vertical(),
+        (config.edge, config.size),
         &root,
         &launchers,
     );

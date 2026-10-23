@@ -23,7 +23,10 @@ use std::{
 use gtk::{gdk, gio, glib, prelude::*};
 use gtk4_layer_shell::{KeyboardMode, LayerShell};
 use orbit_app::i18n::tr;
-use orbit_common::{ConfigDir, config::DockApp};
+use orbit_common::{
+    ConfigDir,
+    config::{DockApp, Edge},
+};
 
 use crate::{Launcher, SystemApps, appimage, badges::Badges};
 
@@ -63,6 +66,9 @@ pub struct Editor {
     /// Where the menu was opened, for what it adds.
     menu_at: Cell<(f64, f64)>,
     weak: RefCell<std::rc::Weak<Editor>>,
+    /// The dock's edge and thickness, for moving it.
+    edge: Edge,
+    size: i32,
 }
 
 /// Where a drag would end.
@@ -80,14 +86,14 @@ impl Editor {
         dir: &ConfigDir,
         apps: &[DockApp],
         icon_size: i32,
-        vertical: bool,
+        (edge, size): (Edge, i32),
         root: &gtk::Box,
         launchers: &gtk::Box,
     ) -> Rc<Self> {
         let editor = Rc::new(Self {
             dir: dir.clone(),
             icon_size,
-            vertical,
+            vertical: edge.is_vertical(),
             root: root.clone(),
             launchers: launchers.clone(),
             badges: Badges::new(launchers),
@@ -100,6 +106,8 @@ impl Editor {
             mark: RefCell::default(),
             menu_at: Cell::new((0.0, 0.0)),
             weak: RefCell::default(),
+            edge,
+            size,
         });
         editor.weak.replace(Rc::downgrade(&editor));
         let mut last: Option<Option<&str>> = None;
@@ -506,6 +514,20 @@ fn dock_menu(editor: &Rc<Editor>, x: f64, y: f64) {
         model.append_section(None, &last);
     } else {
         add(&section, &tr("dock-edit"), "edit", |e| e.set_editing(true));
+        model.append_section(None, &section);
+    }
+    if orbit_app::mover::supported() {
+        let section = gio::Menu::new();
+        add(&section, &tr("dock-move"), "move", |e| {
+            let surface = orbit_app::mover::Surface {
+                file: "dock.yaml",
+                edges: &[Edge::Top, Edge::Bottom, Edge::Left, Edge::Right],
+                size: e.size,
+                edge: e.edge,
+                monitor: None,
+            };
+            orbit_app::mover::start(surface, &e.root, &e.dir);
+        });
         model.append_section(None, &section);
     }
     let popover = gtk::PopoverMenu::from_model(Some(&model));

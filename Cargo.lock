@@ -3157,6 +3157,7 @@ dependencies = [
  "gdk4-wayland",
  "gdk4-x11",
  "gtk4",
+ "gtk4-layer-shell",
  "log",
  "orbit-backend-wayland",
  "orbit-backend-x11",

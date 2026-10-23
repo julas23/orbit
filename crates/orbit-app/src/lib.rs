@@ -17,6 +17,7 @@ use gtk::{gdk, gio, glib, prelude::*};
 use orbit_common::{Backend, ConfigDir, Placement, config::expand_home, style::Style};
 
 pub mod i18n;
+pub mod mover;
 pub mod popup;
 pub mod theme;
 
@@ -229,7 +230,9 @@ fn start(
     let style = Style::install(&display, BUILTIN_CSS, &dir.style_path());
     // The system's light/dark choice and accent colour, followed live.
     let theme = theme::install(&display);
+    let spec = placement.monitor.clone();
     backend.attach(&window, placement)?;
+    backend.follow(&window, &spec);
     window.present();
     Ok(Some((style, theme)))
 }

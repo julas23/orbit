@@ -16,7 +16,13 @@
 # session is never left without one.
 set -u
 
+# A program beside this script, else the one on PATH: an install in
+# ~/.local/bin may lack some of them, which the system's (/usr/local/bin)
+# then provides.
 BIN=$(dirname "$(readlink -f "$0")")
+bin() {
+  if [ -x "$BIN/$1" ]; then echo "$BIN/$1"; else command -v "$1"; fi
+}
 PANEL_ID=io.github.julas23.Orbit.Panel
 FALLBACK=""
 if [ "${1:-}" = --fallback ]; then
@@ -31,7 +37,7 @@ for _ in $(seq 1 20); do
   sleep 0.1
 done
 
-setsid "$BIN/orbit-panel" >/dev/null 2>&1 < /dev/null &
+setsid "$(bin orbit-panel)" >/dev/null 2>&1 < /dev/null &
 
 up=false
 for _ in $(seq 1 30); do
@@ -54,20 +60,21 @@ fi
 
 # Give the panel's surface a moment to be mapped before the dock's.
 sleep 0.5
-setsid "$BIN/orbit-dock" >/dev/null 2>&1 < /dev/null &
+setsid "$(bin orbit-dock)" >/dev/null 2>&1 < /dev/null &
 
 # Notifications (the panel's "syncing before leaving" among them). Left
 # running on a restart, so the centre keeps its history; a second launch
 # would only toggle the centre.
 if ! busctl --user status org.freedesktop.Notifications >/dev/null 2>&1; then
-  setsid "$BIN/orbit-notify" --background >/dev/null 2>&1 < /dev/null &
+  setsid "$(bin orbit-notify)" --background >/dev/null 2>&1 < /dev/null &
 fi
 
 # The voice assistant, likewise left running on a restart (a request may be
 # under way). Its log, kept from the last start only, is
 # ~/.local/state/orbit/aigent.log.
-if [ -x "$BIN/orbit-aigent" ] && ! pgrep -x orbit-aigent >/dev/null; then
+AIGENT=$(bin orbit-aigent)
+if [ -n "$AIGENT" ] && ! pgrep -x orbit-aigent >/dev/null; then
   STATE=${XDG_STATE_HOME:-$HOME/.local/state}/orbit
   mkdir -p "$STATE"
-  RUST_LOG=${RUST_LOG:-info,whisper_rs=warn} setsid "$BIN/orbit-aigent" >"$STATE/aigent.log" 2>&1 < /dev/null &
+  RUST_LOG=${RUST_LOG:-info,whisper_rs=warn} setsid "$AIGENT" >"$STATE/aigent.log" 2>&1 < /dev/null &
 fi

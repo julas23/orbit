@@ -167,6 +167,7 @@ dock-open = Open
 dock-recent = Recent
 dock-edit = Edit dock
 dock-edit-done = Done editing
+dock-move = Move dock…
 dock-add-launcher = Add launcher…
 dock-add-appimage = Add AppImage…
 dock-add-separator = Add separator
@@ -663,6 +664,7 @@ monitors-tooltip = Click: quick layout · Right click: editor
 ## Editing the panel
 
 panel-edit = Edit panel
+panel-move = Move panel…
 panel-edit-done = Done editing
 panel-add = Add module
 panel-size-mini = Mini
@@ -750,3 +752,6 @@ aigent-agents = Agents
 aigent-cancel = Cancel
 aigent-yes = Yes
 aigent-no = No
+
+# Moving the panel or the dock (orbit-app mover.rs).
+mover-hint = Click the edge it goes to, or drag it there · Esc or right click: cancel

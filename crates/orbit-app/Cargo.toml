@@ -13,6 +13,7 @@ orbit-common.workspace = true
 orbit-backend-x11.workspace = true
 orbit-backend-wayland.workspace = true
 gtk.workspace = true
+gtk4-layer-shell.workspace = true
 gdk4-x11.workspace = true
 gdk4-wayland.workspace = true
 anyhow.workspace = true

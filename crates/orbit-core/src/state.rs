@@ -619,7 +619,19 @@ impl Orbit {
             };
             return in_layer(WlrLayer::Overlay).or_else(in_top).or_else(window);
         }
+        // X menus over the top layer, as they are drawn.
+        let x_menu = || {
+            self.space
+                .elements()
+                .rev()
+                .filter(|w| w.x11_surface().is_some_and(|x| x.is_override_redirect()))
+                .find_map(|window| {
+                    let location = self.space.element_location(window)?;
+                    window.surface_under(pos - location.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + location).to_f64()))
+                })
+        };
         in_layer(WlrLayer::Overlay)
+            .or_else(x_menu)
             .or_else(|| in_layer(WlrLayer::Top))
             .or_else(|| {
                 self.space.element_under(pos).and_then(|(window, location)| {

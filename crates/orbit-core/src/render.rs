@@ -205,14 +205,26 @@ pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRende
         return;
     }
     layer_elements(output, renderer, scale, overlay, elements);
+    // X menus and tooltips over the panel and the dock: they are where the
+    // program asked, often over them.
+    let menus: Vec<Window> = state
+        .space
+        .elements_for_output(output)
+        .filter(|w| w.x11_surface().is_some_and(|x| x.is_override_redirect()))
+        .cloned()
+        .collect();
+    for window in menus.iter().rev() {
+        window_elements(state, window, geo, renderer, scale, shaders, elements);
+    }
     layer_elements(output, renderer, scale, &[WlrLayer::Top], elements);
     // Only this monitor's: a window of the next one that reaches over the
-    // edge (its shadow, a frame of the old size) is not drawn here. X menus
-    // and the window being dragged go where they are.
+    // edge (its shadow, a frame of the old size) is not drawn here. The
+    // window being dragged goes where it is.
     let shown = state.visible.get(&output.name()).copied();
     let windows: Vec<Window> = state
         .space
         .elements_for_output(output)
+        .filter(|w| !w.x11_surface().is_some_and(|x| x.is_override_redirect()))
         .filter(|w| !state.all_windows().any(|m| m == *w) || state.dragging.as_ref() == Some(*w) || state.workspace_of(w) == shown)
         .cloned()
         .collect();
