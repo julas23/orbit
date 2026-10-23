@@ -641,25 +641,52 @@ impl Engine {
 
 /// Where in `audio` the first `taken` words of `text` (the wake word) end,
 /// in samples. Whisper's own word times are no help: with a little noise
-/// it puts every word at the end. Instead: the speech's span, from the
-/// first loud 10 ms to the last; the name's share of it by its share of
-/// the letters; and from there, the quietest moment within a quarter of a
-/// second, the gap between two words.
+/// it puts every word at the end. Instead, by the sound's loudness in 10 ms
+/// frames: the bursts of speech, apart from a breath or a click before
+/// them (short, or well below the loudest); where the name should end, by
+/// its share of the letters; and the pause between two bursts nearest to
+/// that, cut in its middle. Said without a pause, the quietest moment
+/// within a quarter of a second of it.
 fn name_end(audio: &[f32], text: &str, taken: usize) -> usize {
     const FRAME: usize = mic::RATE as usize / 100;
     let levels: Vec<f32> = audio.chunks(FRAME).map(vad::level).collect();
     let loudest = levels.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-    let loud = |l: &f32| *l > loudest - 30.0;
-    let (Some(first), Some(last)) = (levels.iter().position(loud), levels.iter().rposition(loud)) else {
+    let bursts = bursts(&levels, loudest);
+    let (Some(first), Some(last)) = (bursts.first(), bursts.last()) else {
         return 0;
     };
+    let (start, stop) = (first.0, last.1);
     let letters = |words: &[&str]| words.iter().map(|w| w.chars().filter(|c| c.is_alphanumeric()).count()).sum::<usize>();
     let words: Vec<&str> = text.split_whitespace().collect();
     let share = letters(&words[..taken.min(words.len())]) as f32 / letters(&words).max(1) as f32;
-    let guess = first + ((last - first) as f32 * share) as usize;
-    let (from, to) = (guess.saturating_sub(25).max(first), (guess + 25).min(last));
-    let quietest = (from..=to).min_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap_or(guess);
-    (quietest * FRAME).min(audio.len())
+    let guess = start + ((stop - start) as f32 * share) as usize;
+    let pause = bursts
+        .windows(2)
+        .map(|pair| (pair[0].1 + pair[1].0) / 2)
+        .min_by_key(|middle| middle.abs_diff(guess));
+    let frame = pause.unwrap_or_else(|| {
+        let (from, to) = (guess.saturating_sub(25).max(start), (guess + 25).min(stop));
+        (from..=to).min_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap_or(guess)
+    });
+    (frame * FRAME).min(audio.len())
+}
+
+/// The bursts of speech in `levels` (dB, 10 ms frames), as frame ranges:
+/// runs within 25 dB of the loudest, joined across gaps under 80 ms, at
+/// least 150 ms long and reaching within 12 dB of it.
+fn bursts(levels: &[f32], loudest: f32) -> Vec<(usize, usize)> {
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for (i, level) in levels.iter().enumerate() {
+        if *level <= loudest - 25.0 {
+            continue;
+        }
+        match runs.last_mut() {
+            Some(run) if i - run.1 < 8 => run.1 = i + 1,
+            _ => runs.push((i, i + 1)),
+        }
+    }
+    runs.retain(|&(a, b)| b - a >= 15 && levels[a..b].iter().any(|l| *l >= loudest - 12.0));
+    runs
 }
 
 /// Whether the sphere moves in `state`, so frames go out all the time.
@@ -680,4 +707,37 @@ fn voice(t: f32) -> Vec<f32> {
             (syllable * phrase * formants * shimmer).clamp(0.0, 1.0)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 10 ms frames at these levels (dB), as sound.
+    fn sound(levels: &[(f32, usize)]) -> Vec<f32> {
+        let mut out = Vec::new();
+        for &(db, frames) in levels {
+            let amplitude = 10f32.powf(db / 20.0) * std::f32::consts::SQRT_2;
+            for i in 0..frames * 160 {
+                out.push(amplitude * (i as f32 * 0.2).sin());
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_name_is_cut_in_the_pause_after_it() {
+        // A breath, "Jarvis", a pause, "que horas são", as the K66 gave it.
+        let audio = sound(&[(-66.0, 10), (-45.0, 30), (-58.0, 50), (-30.0, 60), (-62.0, 35), (-35.0, 50), (-65.0, 80)]);
+        let cut = name_end(&audio, "Jarvis, que a ração.", 1) as f32 / mic::RATE as f32;
+        assert!((1.5..1.85).contains(&cut), "{cut}");
+    }
+
+    #[test]
+    fn without_a_pause_it_goes_by_the_letters() {
+        // "Orbit" and the request run together, a dip between the words.
+        let audio = sound(&[(-60.0, 20), (-30.0, 30), (-40.0, 3), (-30.0, 120), (-60.0, 20)]);
+        let cut = name_end(&audio, "Orbit list the files in my home folder", 1) as f32 / mic::RATE as f32;
+        assert!((0.5..0.53).contains(&cut), "{cut}");
+    }
 }
