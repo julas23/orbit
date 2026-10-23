@@ -42,6 +42,8 @@ use crate::config::Config;
 
 /// Listening gives up after this long without speech.
 const NO_SPEECH: Duration = Duration::from_secs(6);
+/// A question waits this long for its answer.
+const NO_ANSWER: Duration = Duration::from_secs(10);
 /// And stops after this long of it.
 const LONGEST: Duration = Duration::from_secs(30);
 
@@ -579,6 +581,17 @@ impl Engine {
         }
         match self.state {
             State::Idle => self.wait(event),
+            // Answering while the question is still being said: it stops,
+            // and the answer is heard from its start.
+            State::Speaking
+                if matches!(self.speaking, Some((_, Then::Confirm))) && event == Some(vad::Event::Started) =>
+            {
+                log::info!("aigent: answered over the question");
+                self.speaker.hush.store(true, Ordering::SeqCst);
+                self.speaking = None;
+                self.after_wake = Some(self.before.iter().copied().collect());
+                self.enter(State::Confirm);
+            }
             State::Listening | State::Confirm => {
                 self.analyzer.push(block);
                 match event {
@@ -856,7 +869,8 @@ impl Engine {
         let elapsed = self.since.elapsed();
         match self.state {
             State::Listening | State::Confirm => {
-                if (!self.heard && elapsed >= NO_SPEECH) || elapsed >= LONGEST {
+                let patience = if self.state == State::Confirm { NO_ANSWER } else { NO_SPEECH };
+                if (!self.heard && elapsed >= patience) || elapsed >= LONGEST {
                     if self.heard {
                         self.heard_all();
                     } else if self.state == State::Confirm {
@@ -971,13 +985,16 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
     };
     match tool {
         "Bash" => {
+            // The programs, not the command line, which is no pleasure to
+            // hear; nor Claude's description of it, written in English.
             let command = input["command"].as_str().unwrap_or_default();
-            let what = input["description"].as_str().filter(|d| !d.is_empty());
-            let said = match (what, en) {
-                (Some(what), true) => format!("May I run a command? {what}."),
-                (Some(what), false) => format!("Posso executar um comando? {what}."),
-                (None, true) => "May I run a command?".to_owned(),
-                (None, false) => "Posso executar um comando?".to_owned(),
+            let programs = programs(command);
+            let and = if en { " and " } else { " e " };
+            let said = match (programs.is_empty(), en) {
+                (true, true) => "May I run a command?".to_owned(),
+                (true, false) => "Posso executar um comando?".to_owned(),
+                (false, true) => format!("May I run {}?", programs.join(and)),
+                (false, false) => format!("Posso executar {}?", programs.join(and)),
             };
             (said, format!("$ {command}"))
         }
@@ -991,6 +1008,41 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
             (said, format!("{tool} {input}"))
         }
     }
+}
+
+/// The programs a command line runs, at most three, each once: the first
+/// word of each part between pipes, `;` and `&&` (not quoted), past `sudo`
+/// and settings of variables.
+fn programs(command: &str) -> Vec<String> {
+    let mut parts = vec![String::new()];
+    let mut quote = None;
+    for c in command.chars() {
+        match (quote, c) {
+            (None, '\'' | '"') => quote = Some(c),
+            (Some(q), c) if c == q => quote = None,
+            (None, '|' | ';' | '&' | '\n') => parts.push(String::new()),
+            _ => {}
+        }
+        if let Some(part) = parts.last_mut() {
+            part.push(c);
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    for part in &parts {
+        let part = part.trim_start_matches(['|', ';', '&', '\n']);
+        let program = part
+            .split_whitespace()
+            .find(|w| *w != "sudo" && !w.contains('=') && !w.starts_with('('))
+            .map(|w| w.rsplit('/').next().unwrap_or(w).trim_matches(['"', '\'', '`', ')']).to_owned());
+        if let Some(program) = program
+            && !program.is_empty()
+            && !out.contains(&program)
+            && out.len() < 3
+        {
+            out.push(program);
+        }
+    }
+    out
 }
 
 /// Yes or no in what was said, Portuguese or English; `None` when unclear.
@@ -1054,6 +1106,12 @@ mod tests {
         assert_eq!(yes_or_no("Yes, go ahead."), Some(true));
         assert_eq!(yes_or_no("No."), Some(false));
         assert_eq!(yes_or_no("Hmm, talvez."), None);
+    }
+
+    #[test]
+    fn the_question_names_the_programs() {
+        let input = serde_json::json!({"command": "swaymsg -t get_outputs -r | jq -r '.[] | .name'; LANG=C /usr/bin/kitty &", "description": "x"});
+        assert_eq!(question("Bash", &input, "pt").0, "Posso executar swaymsg e jq e kitty?");
     }
 
     #[test]

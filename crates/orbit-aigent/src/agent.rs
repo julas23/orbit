@@ -29,7 +29,11 @@ do not read out long paths, URLs or command lines, describe them instead; \
 write numbers as they are said. \
 The request was transcribed from speech and may have small mistakes: take the likeliest meaning, \
 and ask back briefly only when it is truly unclear. \
-When asked to do something on the computer, do it with your tools and then say briefly what you did.";
+When asked to do something on the computer, do it with your tools and then say briefly what you did. \
+The desktop is Orbit: its compositor, orbit-core, speaks sway's IPC, so swaymsg (or orbitctl) lists the \
+outputs, workspaces and windows and runs commands such as `swaymsg exec <program>` or moving a window \
+to an output. Each command that changes something is confirmed by the user by voice first, so use few \
+and well-chosen ones.";
 
 /// What it may do without asking: tools that only read, and commands that
 /// only look.
@@ -60,6 +64,30 @@ const READ_ONLY: &[&str] = &[
     "Bash(git status:*)",
     "Bash(git log:*)",
     "Bash(git diff:*)",
+    "Bash(echo:*)",
+    "Bash(hostname)",
+    "Bash(whoami)",
+    "Bash(id)",
+    "Bash(command -v:*)",
+    "Bash(type:*)",
+    "Bash(printenv:*)",
+    "Bash(pgrep:*)",
+    "Bash(grep:*)",
+    "Bash(jq:*)",
+    "Bash(sort:*)",
+    "Bash(uniq:*)",
+    "Bash(cut:*)",
+    "Bash(tr:*)",
+    "Bash(wpctl status)",
+    "Bash(wpctl get-volume:*)",
+    "Bash(swaymsg -t get_outputs:*)",
+    "Bash(swaymsg -t get_workspaces:*)",
+    "Bash(swaymsg -t get_tree:*)",
+    "Bash(swaymsg -t get_inputs:*)",
+    "Bash(swaymsg -t get_version:*)",
+    "Bash(orbitctl -t get_outputs:*)",
+    "Bash(orbitctl -t get_workspaces:*)",
+    "Bash(orbitctl -t get_tree:*)",
 ];
 
 /// The agent's answer.
