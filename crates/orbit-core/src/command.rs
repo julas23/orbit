@@ -234,6 +234,16 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.focus_anywhere(&window);
             Ok(())
         }
+        // sway's `move [container|window] [to] output NAME|DIR`: to the
+        // workspace that monitor shows.
+        ["move", .., "output", which] => {
+            let target = state.output_toward(which).ok_or_else(|| format!("There is no output called {which}"))?;
+            let num = *state.visible.get(&target).ok_or_else(|| format!("Output {target} shows no workspace"))?;
+            for window in windows() {
+                state.move_to_workspace(&window, num);
+            }
+            Ok(())
+        }
         ["move", rest @ ..] if rest.contains(&"workspace") => {
             let at = rest.iter().position(|w| *w == "workspace").unwrap_or(0);
             let num = workspace_number(state, &rest[at + 1..])?;
