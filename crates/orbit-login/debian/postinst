@@ -1,0 +1,17 @@
+#!/bin/sh
+# Orbit-Login takes tty1 from the next boot on (its unit conflicts with
+# getty@tty1, and gives it back if it fails). Another display manager
+# would fight it for the screen: it is left installed, but turned off.
+set -e
+if [ "$1" = configure ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    for dm in greetd gdm3 gdm sddm lightdm lxdm; do
+        if systemctl is-enabled --quiet "$dm.service" 2>/dev/null; then
+            echo "orbit-login: turning $dm off" >&2
+            systemctl disable "$dm.service" >/dev/null 2>&1 || true
+        fi
+    done
+    systemctl enable orbit-login.service >/dev/null 2>&1 || true
+    systemctl set-default graphical.target >/dev/null 2>&1 || true
+fi
+exit 0

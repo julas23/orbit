@@ -21,6 +21,8 @@ assets = [
     ["../../data/login.yaml", "etc/orbit/", "644"],
 ]
 conf-files = ["/etc/orbit/login.yaml"]
+# Enables the service on install (and turns other display managers off).
+maintainer-scripts = "debian/"
 
 [lib]
 path = "src/lib.rs"

@@ -129,6 +129,31 @@ struct Surface {
 /// logs out) would stay black until something moved.
 const RETRY: Duration = Duration::from_millis(50);
 
+/// The GPU to draw with: `$ORBIT_DRM_DEVICE` when set (as sway's
+/// `WLR_DRM_DEVICES`), otherwise the one the firmware booted with when it
+/// can render, otherwise the first that can. A virtual machine's console
+/// adapter (Proxmox's bochs, 1234:1111) boots first but has no render
+/// node, and drawing with it is not possible: the passed-through card
+/// beside it is taken instead.
+fn gpu(seat: &str) -> anyhow::Result<std::path::PathBuf> {
+    if let Some(path) = std::env::var_os("ORBIT_DRM_DEVICE") {
+        return Ok(path.into());
+    }
+    let renders = |path: &std::path::Path| {
+        DrmNode::from_path(path).is_ok_and(|node| node.node_with_type(NodeType::Render).is_some_and(|r| r.is_ok()))
+    };
+    let primary = primary_gpu(seat)?;
+    let all = all_gpus(seat).unwrap_or_default();
+    primary
+        .iter()
+        .chain(&all)
+        .find(|path| renders(path))
+        .or(primary.as_ref())
+        .or(all.first())
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("no GPU"))
+}
+
 pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> anyhow::Result<()> {
     // The seat first, even behind another session: taking control holds
     // the console (graphics mode, keyboard off), so logind starts no getty
@@ -137,9 +162,7 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     wait_until_shown();
     let seat = session.seat();
 
-    let path = primary_gpu(&seat)?
-        .or_else(|| all_gpus(&seat).ok()?.into_iter().next())
-        .ok_or_else(|| anyhow::anyhow!("no GPU"))?;
+    let path = gpu(&seat)?;
     let node = DrmNode::from_path(&path)?;
     tracing::info!("GPU {} ({})", path.display(), node);
     let fd = session

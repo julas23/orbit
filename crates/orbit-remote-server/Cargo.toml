@@ -8,6 +8,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "net"
+priority = "optional"
+extended-description = "Orbit-Remote-Server: shares an Orbit session over the network. It captures the screen as it changes (orbit-core's screen copies), encodes it on the GPU (VA-API, or NVENC on NVIDIA) and sends it over WebRTC to a browser, which pairs with a code shown on the screen. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-nice, libnotify-bin"
+recommends = "mesa-va-drivers"
+assets = [
+    ["target/release/orbit-remote-server", "usr/bin/", "755"],
+]
+
 [dependencies]
 anyhow.workspace = true
 log.workspace = true

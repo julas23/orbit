@@ -1,8 +1,15 @@
-//! Encoding the captured frames: H.264 on the GPU (VA-API), for low
-//! latency. The dmabuf the compositor drew into goes into GStreamer as it
-//! is (`memory:DMABuf`), `vapostproc` turns it into NV12 on the GPU and
-//! `vah264enc` encodes it: constant bitrate, no B-frames, a key frame every
-//! two seconds and whenever the other end asks (a lost frame).
+//! Encoding the captured frames: H.264 on the GPU, for low latency. The
+//! dmabuf the compositor drew into goes into GStreamer as it is
+//! (`memory:DMABuf`) and is turned into NV12 and encoded on the GPU:
+//! constant bitrate, no B-frames, a key frame every two seconds and
+//! whenever the other end asks (a lost frame).
+//!
+//!   VA-API (AMD, Intel)   vapostproc → vah264enc
+//!   NVENC (NVIDIA)        glupload → glcolorconvert → nvh264enc
+//!
+//! VA-API when its encoder is there (GStreamer's `va` plugin makes it only
+//! for a GPU that encodes), NVENC otherwise; `$ORBIT_REMOTE_ENCODER`
+//! (`va`, `nvenc`) chooses.
 //!
 //! The capture's buffers are taken in turn (`capture::BUFFERS`): one is
 //! drawn into again three frames after it was pushed, 50 ms at 60 fps,
@@ -67,22 +74,19 @@ impl Encoder {
             .max_buffers(2)
             .leaky_type(gst_app::AppLeakyType::Downstream)
             .build();
-        let convert = gst::ElementFactory::make("vapostproc").build().context("no vapostproc (gstreamer1.0-plugins-bad)")?;
-        let nv12 = gst::Caps::builder("video/x-raw").features(["memory:VAMemory"]).field("format", "NV12").build();
-        let filter = gst::ElementFactory::make("capsfilter").property("caps", &nv12).build()?;
-        let encoder = gst::ElementFactory::make("vah264enc")
-            .property_from_str("rate-control", "cbr")
-            .property("bitrate", BITRATE_KBPS)
-            .property("b-frames", 0u32)
-            .property("ref-frames", 1u32)
-            .property("key-int-max", KEY_INTERVAL)
-            .property("target-usage", 7u32)
-            .build()
-            .context("no vah264enc (VA-API H.264 encoding)")?;
+        let chain = match std::env::var("ORBIT_REMOTE_ENCODER").as_deref() {
+            Ok("nvenc") => nvenc()?,
+            Ok("va") => va()?,
+            _ if gst::ElementFactory::find("vah264enc").is_some() => va()?,
+            _ => nvenc().context("no H.264 encoder on the GPU: neither VA-API's nor NVENC")?,
+        };
         let parse = gst::ElementFactory::make("h264parse").property("config-interval", -1i32).build()?;
         let pipeline = gst::Pipeline::new();
-        pipeline.add_many([source.upcast_ref(), &convert, &filter, &encoder, &parse])?;
-        gst::Element::link_many([source.upcast_ref(), &convert, &filter, &encoder, &parse])?;
+        let mut elements: Vec<gst::Element> = vec![source.clone().upcast()];
+        elements.extend(chain);
+        elements.push(parse.clone());
+        pipeline.add_many(&elements)?;
+        gst::Element::link_many(&elements)?;
         let sink = match tail {
             Tail::Sink => {
                 let au = gst::Caps::builder("video/x-h264").field("stream-format", "byte-stream").field("alignment", "au").build();
@@ -151,6 +155,49 @@ impl Encoder {
         self.sink.as_ref()?.try_pull_sample(gst::ClockTime::from_nseconds(wait.as_nanos() as u64))
     }
 
+}
+
+/// VA-API: NV12 by the GPU's video processor, then its encoder.
+fn va() -> anyhow::Result<Vec<gst::Element>> {
+    log::info!("remote: encoding with VA-API");
+    let convert = gst::ElementFactory::make("vapostproc").build().context("no vapostproc (gstreamer1.0-plugins-bad)")?;
+    let nv12 = gst::Caps::builder("video/x-raw").features(["memory:VAMemory"]).field("format", "NV12").build();
+    let filter = gst::ElementFactory::make("capsfilter").property("caps", &nv12).build()?;
+    let encoder = gst::ElementFactory::make("vah264enc")
+        .property_from_str("rate-control", "cbr")
+        .property("bitrate", BITRATE_KBPS)
+        .property("b-frames", 0u32)
+        .property("ref-frames", 1u32)
+        .property("key-int-max", KEY_INTERVAL)
+        .property("target-usage", 7u32)
+        .build()
+        .context("no vah264enc (VA-API H.264 encoding)")?;
+    Ok(vec![convert, filter, encoder])
+}
+
+/// NVENC: the dmabuf into OpenGL, NV12 by a shader, then NVIDIA's encoder
+/// (which takes OpenGL memory), tuned for the least latency.
+fn nvenc() -> anyhow::Result<Vec<gst::Element>> {
+    log::info!("remote: encoding with NVENC");
+    let upload = gst::ElementFactory::make("glupload").build().context("no glupload (gstreamer1.0-gl)")?;
+    let convert = gst::ElementFactory::make("glcolorconvert").build()?;
+    let nv12 = gst::Caps::builder("video/x-raw").features(["memory:GLMemory"]).field("format", "NV12").build();
+    let filter = gst::ElementFactory::make("capsfilter").property("caps", &nv12).build()?;
+    let encoder = gst::ElementFactory::make("nvh264enc").build().context("no nvh264enc (NVENC)")?;
+    // Its properties differ between versions: each set only if it is there.
+    let set = |name: &str, value: &str| {
+        if encoder.find_property(name).is_some() {
+            encoder.set_property_from_str(name, value);
+        }
+    };
+    set("preset", "low-latency-hp");
+    set("rc-mode", "cbr");
+    set("bitrate", &BITRATE_KBPS.to_string());
+    set("gop-size", &KEY_INTERVAL.to_string());
+    set("bframes", "0");
+    set("zerolatency", "true");
+    set("rc-lookahead", "0");
+    Ok(vec![upload, convert, filter, encoder])
 }
 
 impl Drop for Encoder {
