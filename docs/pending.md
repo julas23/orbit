@@ -157,6 +157,7 @@ Pending:
 - [ ] Several monitors, only when the station has two or more (the hp has two): the server gives the session as many screens (phase 2's virtual outputs, one stream each), the station shows each on its own monitor, the pointer crossing between them as locally. With one monitor everything stays as it is.
 - [ ] Phase 3: gamepads, microphone and webcam.
 - [ ] The station's USB and Bluetooth devices in the session. To decide: recreated on the server (read on the station, a virtual device there, as the gamepads, microphone and webcam) or passed through whole (USB/IP). Bluetooth devices stay paired on the station; headphones need only the audio channel.
+- [ ] PXE boot: a station machine boots from the network, with nothing installed, straight into the greet pointing at its orbit-remote-server (DHCP/TFTP or iPXE over HTTP, a small kernel and initramfs with the greet and `orbit-local-station`, the server's address given by the boot).
 - [ ] Later: Android and iOS clients (check Slint's iOS support then).
 - [ ] External drive on the client (TV, FireStick, Android, iOS) visible to the session; the user's whole environment possibly living on it.
 - [ ] Goal: replace Sunshine + Moonlight on the Julas VM.
