@@ -50,7 +50,10 @@ impl Stt {
     pub fn load(name: &str) -> anyhow::Result<Self> {
         whisper_rs::install_logging_hooks();
         let path = data_dir().join("models").join(format!("ggml-{name}.bin"));
-        let context = WhisperContext::new_with_params(&path, WhisperContextParameters::default())
+        let mut params = WhisperContextParameters::default();
+        // whisper-rs turns the GPU on only with its own GPU features.
+        params.use_gpu(cfg!(feature = "vulkan"));
+        let context = WhisperContext::new_with_params(&path, params)
             .with_context(|| format!("loading {}", path.display()))?;
         let state = context.create_state()?;
         // Half the threads: the desktop stays responsive while it works.
@@ -104,7 +107,10 @@ impl Stt {
                 let (heard, sure) = self.read();
                 log::debug!("aigent: as {other}: {heard:?} ({sure:.2}), against {:?} ({:.2})", best.1, best.2);
                 let bonus = if other == LANGUAGES[0] { FIRST_BONUS } else { 0.0 };
-                if best.0.is_none() || sure + bonus > best.2 {
+                // The same words as another language ("List the files…"
+                // heard as Portuguese): it was that language after all.
+                let same = best.0.is_some() && letters(&heard) == letters(&best.1);
+                if !same && (best.0.is_none() || sure + bonus > best.2) {
                     best = (Some(other), heard, sure);
                 }
             }
@@ -165,6 +171,11 @@ pub fn prompt(wake: &[String]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// `text` in lower case, letters only, to compare two hearings.
+fn letters(text: &str) -> String {
+    text.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
 
 /// Greedy, one segment, nothing printed, no context from the last run.

@@ -2990,6 +2990,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "whisper-rs",
+ "whisper-rs-sys",
 ]
 
 [[package]]

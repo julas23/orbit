@@ -28,3 +28,10 @@ anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true
 whisper-rs.workspace = true
+whisper-rs-sys = { version = "0.15", optional = true }
+
+[features]
+# Whisper on the GPU, through Vulkan (needs glslc and libvulkan-dev to
+# build). whisper.cpp built with it, not whisper-rs's own Vulkan module,
+# which needs bindings generated with libclang.
+vulkan = ["dep:whisper-rs-sys", "whisper-rs-sys/vulkan"]

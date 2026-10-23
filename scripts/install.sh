@@ -16,7 +16,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEST=${PREFIX:-$HOME/.local}/bin
 APPS=${PREFIX:-$HOME/.local}/share/applications
 
-cargo build --release --manifest-path "$ROOT/Cargo.toml" -p orbit-panel -p orbit-dock -p orbit-notify -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder -p orbit-term -p orbit-run -p orbit-aigent -p orbitctl
+# Orbit-Aigent's Whisper on the GPU when Vulkan's shader compiler is there.
+FEATURES=
+command -v glslc >/dev/null && FEATURES="--features orbit-aigent/vulkan"
+cargo build --release --manifest-path "$ROOT/Cargo.toml" $FEATURES -p orbit-panel -p orbit-dock -p orbit-notify -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder -p orbit-term -p orbit-run -p orbit-aigent -p orbitctl
 
 mkdir -p "$DEST"
 # install(1) replaces the file instead of writing into it, so a running

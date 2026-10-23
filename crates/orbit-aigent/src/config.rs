@@ -10,8 +10,8 @@
 //!     dir: ~/Vault/GIT     # where it works; the home by default
 //!     args: [--model, opus]
 //! wake: [orbit, jarvis]    # the words that wake it, in any language
-//! wake_model: base-q5_1    # Whisper, hearing for the wake word
-//! model: small-q5_1        # and hearing the request
+//! wake_model: small-q5_1   # Whisper, hearing for the wake word
+//! model: large-v3-turbo-q5_0   # and hearing the request
 //! microphone: alsa_input.usb-…   # a source's node name (`wpctl inspect`);
 //!                          # the default one when left out
 //! ```
@@ -21,6 +21,10 @@
 //! plays everything else as a phone call too.
 //!
 //! The models are `ggml-<name>.bin` in `~/.local/share/orbit/aigent/models`.
+//! Their defaults, above, are for Whisper on the GPU (the `vulkan`
+//! feature): small in 0.4 s and large-v3-turbo in 1.7 s on the hp's
+//! integrated Radeon. On the CPU they would take 1.4 and over 5 s, so
+//! without the feature they are base and small.
 //!
 //! Without the file, the four kinds are offered under their own names and
 //! those whose program is not installed are left out of the panel's list.
@@ -49,8 +53,8 @@ impl Default for Config {
             agent: "claude".into(),
             agents: Kind::ALL.iter().map(|kind| (kind.name().to_owned(), Agent::default())).collect(),
             wake: vec!["orbit".into(), "jarvis".into()],
-            wake_model: "base-q5_1".into(),
-            model: "small-q5_1".into(),
+            wake_model: if cfg!(feature = "vulkan") { "small-q5_1" } else { "base-q5_1" }.into(),
+            model: if cfg!(feature = "vulkan") { "large-v3-turbo-q5_0" } else { "small-q5_1" }.into(),
             microphone: None,
         }
     }

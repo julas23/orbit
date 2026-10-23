@@ -171,9 +171,9 @@ fn serve(listener: &UnixListener, events: &mpsc::Sender<Event>) {
 /// What Whisper is asked to hear.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Job {
-    /// Speech while waiting: is it the wake word? With the small model,
-    /// but for the name alone, which it hears badly ("Jarvis." comes out
-    /// "É viz."): short bits go to the larger one.
+    /// Speech while waiting: is it the wake word? With the faster model,
+    /// but for the name alone, which base hears badly ("Jarvis." comes out
+    /// "É viz."): short bits go to the larger one when base is it.
     Wake,
     /// The same with the larger model, when the small one heard something
     /// close to the wake word.
@@ -205,7 +205,7 @@ fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events:
             }
         }
         let stt = match job {
-            Job::Wake if audio.len() > SHORT_WAKE => wake.as_mut(),
+            Job::Wake if audio.len() > SHORT_WAKE || !config.wake_model.starts_with("base") => wake.as_mut(),
             Job::Wake | Job::WakeAgain | Job::Request => request.as_mut().or(wake.as_mut()),
         };
         let prompt = if job == Job::Request { "" } else { &prompt };
