@@ -28,7 +28,7 @@ fi
 USER_NAME=${1:?the user opened at boot, e.g. juliano}
 RACK="orbit-login orbit-core orbit-greet orbit-polkit orbit-run orbit-prompter orbit-panel orbit-dock orbit-notify
   orbit-calc orbit-clip orbit-blink orbit-view orbit-read orbit-play orbit-edit orbit-files orbit-pathfinder
-  orbit-term orbitctl"
+  orbit-term orbitctl orbit-local-station"
 for bin in $RACK; do
   [ -x "$ROOT/target/release/$bin" ] || { echo "no target/release/$bin: build it first" >&2; exit 1; }
 done

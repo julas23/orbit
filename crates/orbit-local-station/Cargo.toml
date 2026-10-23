@@ -8,6 +8,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "net"
+priority = "optional"
+extended-description = "Orbit-Local-Station: a thin client for orbit-remote-server. It takes the screen and keyboard straight from a text console, with no compositor, pairs once with the code shown on the server's screen and shows that session. The Orbit greeter opens it when Remote is chosen. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-nice"
+recommends = "mesa-va-drivers"
+assets = [
+    ["target/release/orbit-local-station", "usr/bin/", "755"],
+]
+
 [dependencies]
 anyhow.workspace = true
 log.workspace = true
@@ -18,3 +29,4 @@ serde.workspace = true
 serde_yaml_ng.workspace = true
 serde_json.workspace = true
 tungstenite.workspace = true
+zbus.workspace = true

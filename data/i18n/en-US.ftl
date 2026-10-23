@@ -723,6 +723,8 @@ greet-password = Password
 greet-checking = Checking…
 greet-wrong = Wrong password
 greet-wait = Try again in { $seconds } s
+greet-local = Local
+greet-remote = Remote
 greet-suspend = suspend
 
 ## The polkit password dialog

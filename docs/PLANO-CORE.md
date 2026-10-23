@@ -306,6 +306,8 @@ usuário só, então nada disso aparece nele enquanto não houver um segundo.
 6. **Voltar:** Super+L em B mostra o greet de B, com A na lista; escolher A
    ativa o VT1, onde o greet de A pede a senha de A.
 
+**Sessão remota (2026-10-23):** o cartão do greet escolhe Local ou Remoto, como um gerenciador de login escolhe o desktop. Remoto manda a mesma senha ao `orbit-login` (pedido `station`), que confere com o PAM, abre uma segunda sessão do usuário num VT livre rodando `orbit-local-station` (`station:` no `login.yaml`) e a mostra; a sessão local fica travada no VT1 e volta quando a estação sai. Só aparece com o `orbit-login` e a estação instalados.
+
 **Feito assim (2026-10-22):**
 
 - `orbit-login` (root) roda a si mesmo para cada trabalho com PAM —

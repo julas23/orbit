@@ -29,6 +29,10 @@ pub enum Request {
     Prepare { user: String },
     /// Check `user`'s password and, if right, show their session unlocked.
     Switch { user: String, password: String },
+    /// Check the asker's own password and, if right, open a session of
+    /// theirs running orbit-local-station (the remote one, pending §9) and
+    /// show it; their local session stays locked behind.
+    Station { password: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +93,10 @@ pub fn user(name: &str) -> Option<User> {
     users().into_iter().find(|u| u.name == name)
 }
 
+pub fn user_by_uid(uid: u32) -> Option<User> {
+    users().into_iter().find(|u| u.uid == uid)
+}
+
 fn parse(line: &str) -> Option<User> {
     let fields: Vec<&str> = line.split(':').collect();
     let [name, _, uid, gid, gecos, home, shell] = fields[..] else { return None };
@@ -128,5 +136,7 @@ mod tests {
         assert!(!text.contains('\n'));
         assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request);
         assert_eq!(serde_json::to_string(&Reply::Ok).unwrap(), "\"ok\"");
+        let station = Request::Station { password: "x".into() };
+        assert_eq!(serde_json::to_string(&station).unwrap(), r#"{"station":{"password":"x"}}"#);
     }
 }

@@ -33,6 +33,31 @@ window.orbit-greet .name {
   margin-bottom: 20px;
 }
 
+/* Local or Remote (orbit-local-station), above the password. */
+window.orbit-greet .modes {
+  margin-bottom: 15px;
+}
+
+window.orbit-greet .modes button {
+  min-height: 30px;
+  background: none;
+  border: 1px solid @orbit_border;
+  color: @orbit_muted;
+}
+
+window.orbit-greet .modes button:first-child {
+  border-radius: 15px 0 0 15px;
+}
+
+window.orbit-greet .modes button:last-child {
+  border-radius: 0 15px 15px 0;
+}
+
+window.orbit-greet .modes button:checked {
+  border-color: @orbit_accent;
+  color: @orbit_fg;
+}
+
 window.orbit-greet .password {
   min-height: 40px;
   padding: 0 10px;

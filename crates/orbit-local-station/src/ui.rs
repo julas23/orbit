@@ -1,5 +1,5 @@
-//! The station's own screens (connecting, the pairing code, what went
-//! wrong), in Slint. Slint draws them with its software renderer into a
+//! The station's own screens (the server's address, connecting, the
+//! pairing code, what went wrong), in Slint. Slint draws them with its software renderer into a
 //! buffer of the monitor's size, which the station puts on the screen
 //! (`screen::draw`); the keys never go to Slint, the station types the code
 //! into it (`Station::key`).
@@ -25,6 +25,10 @@ slint::slint! {
         in property <bool> asking;
         in property <string> code;
         in property <string> problem;
+        // The server's address being typed (F2, or no server yet).
+        in property <bool> editing;
+        in property <string> address;
+        in property <string> keys;
         // Sizes follow the screen (a 54th of its height, set by `Ui::new`):
         // a 4K monitor gets the same look as a 1080p one.
         in property <length> unit: 20px;
@@ -52,6 +56,22 @@ slint::slint! {
                 color: #c9d1d9;
                 horizontal-alignment: center;
             }
+            if root.editing: HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: root.unit * 24;
+                    height: root.unit * 3;
+                    border-radius: root.unit * 0.5;
+                    border-width: 2px;
+                    border-color: #58a6ff;
+                    background: #161b22;
+                    Text {
+                        text: root.address + "▏";
+                        font-size: root.unit * 1.6;
+                        color: #e6edf3;
+                    }
+                }
+            }
             if root.asking: HorizontalLayout {
                 alignment: center;
                 spacing: root.unit;
@@ -75,6 +95,15 @@ slint::slint! {
                 color: #f85149;
                 horizontal-alignment: center;
             }
+        }
+        Text {
+            x: 0;
+            y: parent.height - self.height - root.unit * 2;
+            width: parent.width;
+            text: root.keys;
+            font-size: root.unit;
+            color: #7d8590;
+            horizontal-alignment: center;
         }
     }
 }

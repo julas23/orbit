@@ -138,6 +138,9 @@ Done:
 - [x] Encoding on the GPU, the dmabuf as it is: VA-API (`vapostproc → vah264enc`) or NVENC (`glupload → glcolorconvert → nvh264enc`), CBR 20 Mbit/s, no B-frames. Measured: hp VA-API 7 ms (nested), VM NVENC 58 fps at 1080p, 5.0 ms median, 5.6 ms at 95% from the copy to H.264 (2026-10-23).
 - [x] Serving: port 7311, the page and its WebSocket (pairing, signalling), a six-digit code by notification (five wrong ones make a new one), one client, `webrtcbin` with zero-latency RTP; the page asks the browser for no buffering and shows fps, buffer and decode times (2026-10-23).
 - [x] Remote mouse and keys: the page sends moves as fractions of the picture, buttons, the wheel and keys by place (`KeyboardEvent.code`); the server's virtual pointer is over the shared monitor, its keyboard uses the seat's keymap; full screen holds the keyboard (Chrome's Keyboard Lock). Tested from the hp: works (b61d73e).
+- [x] `orbit-local-station` started (2026-10-23): the screen and keyboard straight from a text console through Smithay's backend (libseat, DRM, libinput; no compositor), its own screens in Slint's software renderer (Slint's LinuxKMS backend hands over keys only as text, the server wants them by place). Pairs once by the code; the server hands back a token (it keeps only the SHA-256, `~/.local/state/orbit/remote-tokens`; the station keeps it with the server's address). The server's address typed on the screen when none is set (`~/.config/orbit/station.yaml`, over `/etc/orbit/station.yaml`), F2 for another; Ctrl+Alt+Backspace quits. Tested on the hp against its own server: pairing, token, reconnecting (b386573).
+- [x] The greet chooses Local or Remote, as a display manager chooses a desktop (2026-10-23): Remote has Orbit-Login check the same password (`station` request) and open a second session of the user on a free console running `orbit-local-station`; the local session stays locked on tty1 and comes back when the station quits. Shown only with Orbit-Login and the station installed.
+- [x] Server: keys also by their evdev code (the station's); view only when the compositor has no virtual pointer, instead of dropping the client.
 - [x] Julas VM as the server: sway, rofi and Sunshine removed, Orbit and its metapackages from the repo, its own home on its disk (data folders linked to `/mnt/jas`), session open at boot (`/etc/orbit/login.yaml`, backup `.antes-remoto`), packages `orbit-login`, `orbit-prompter`, `orbit-remote-server` added to the build (2026-10-23).
 
 Pending:
@@ -150,7 +153,8 @@ Pending:
 - [ ] Audio (Opus) to the client.
 - [ ] Ctrl+Alt+Backspace from the client ends the server's session: hold it back from remote keyboards.
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
-- [ ] Phase 3: gamepads, microphone and webcam; `orbit-local-station` on Slint's LinuxKMS.
+- [ ] `orbit-local-station`: the video (webrtcbin, VA-API decoding into a dmabuf drawn as a GLES texture), then the keys and mouse to the server (evdev codes, relative motion), Ctrl+Alt+Backspace held back locally.
+- [ ] Phase 3: gamepads, microphone and webcam.
 - [ ] Later: Android and iOS clients (check Slint's iOS support then).
 - [ ] External drive on the client (TV, FireStick, Android, iOS) visible to the session; the user's whole environment possibly living on it.
 - [ ] Goal: replace Sunshine + Moonlight on the Julas VM.

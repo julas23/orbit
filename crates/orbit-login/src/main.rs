@@ -13,7 +13,11 @@
 //! the one on screen (its services start, its core waits to be shown);
 //! `switch` checks their password, shows their session (logind's
 //! `Activate`) and tells its core to unlock — the core takes that only
-//! from root. Only programs of the sessions it opened may ask.
+//! from root. `station` checks the asker's own password and opens a
+//! second session of theirs, on a free console, running the remote one
+//! (`orbit-local-station`, pending §9); when it ends the screen goes back
+//! to the locked local one. Only programs of the sessions it opened may
+//! ask.
 //!
 //!   orbit-login                   the service, as root
 //!
@@ -22,6 +26,7 @@
 //!   user: juliano                 opened at boot
 //!   command: orbit-core --locked  run through the user's login shell
 //!   vt: 1                         the default user's console
+//!   station: orbit-local-station  the remote session's command
 
 mod pam;
 mod worker;
@@ -63,11 +68,12 @@ struct Config {
     user: String,
     command: String,
     vt: u32,
+    station: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { user: String::new(), command: "orbit-core --locked".into(), vt: 1 }
+        Self { user: String::new(), command: "orbit-core --locked".into(), vt: 1, station: "orbit-local-station".into() }
     }
 }
 
@@ -84,6 +90,7 @@ struct Session {
 struct Service {
     config: Config,
     exe: PathBuf,
+    /// By the user's name, or `NAME:station` for a remote one.
     sessions: Mutex<HashMap<String, Session>>,
     /// Sessions open one at a time: each takes the next free console.
     opening: Mutex<()>,
@@ -153,8 +160,14 @@ fn serve() -> anyhow::Result<()> {
 impl Service {
     /// Opens `user`'s session on `vt`, or on the next free console.
     fn open(self: &Arc<Self>, user: &User, vt: Option<u32>) -> Result<(), String> {
+        let command = self.config.command.clone();
+        self.open_as(&user.name, user, vt, &command)
+    }
+
+    /// Opens a session of `user` running `command`, known as `key`.
+    fn open_as(self: &Arc<Self>, key: &str, user: &User, vt: Option<u32>, command: &str) -> Result<(), String> {
         let _turn = self.opening.lock().unwrap_or_else(|e| e.into_inner());
-        if self.sessions.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&user.name) {
+        if self.sessions.lock().unwrap_or_else(|e| e.into_inner()).contains_key(key) {
             return Ok(());
         }
         let vt = match vt {
@@ -162,7 +175,7 @@ impl Service {
             None => self.free_vt()?,
         };
         let mut child = Command::new(&self.exe)
-            .args(["--session", &user.name, &vt.to_string(), &self.config.command])
+            .args(["--session", &user.name, &vt.to_string(), command])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .spawn()
@@ -184,10 +197,10 @@ impl Service {
         }
         let id = words.next().filter(|w| *w != "-").map(str::to_owned);
         let core = words.next().and_then(|w| w.parse().ok());
-        log::info!("{}: session {} on tty{vt}", user.name, id.as_deref().unwrap_or("?"));
-        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).insert(user.name.clone(), Session { uid: user.uid, vt, id, core });
+        log::info!("{key}: session {} on tty{vt}", id.as_deref().unwrap_or("?"));
+        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).insert(key.to_owned(), Session { uid: user.uid, vt, id, core });
         let service = self.clone();
-        let name = user.name.clone();
+        let name = key.to_owned();
         std::thread::spawn(move || {
             let status = child.wait();
             service.ended(&name, started.elapsed(), status);
@@ -284,11 +297,16 @@ impl Service {
             log::warn!("uid {peer} asked, with no session of orbit-login");
             return Reply::Error("only the sessions of orbit-login may ask".into());
         }
-        let name = match &request {
-            Request::Prepare { user } | Request::Switch { user, .. } => user,
+        let target = match &request {
+            Request::Prepare { user } | Request::Switch { user, .. } => orbit_login::user(user).ok_or_else(|| format!("{user}: no such user")),
+            Request::Station { .. } => orbit_login::user_by_uid(peer).ok_or_else(|| format!("uid {peer}: no such user")),
         };
-        let Some(target) = orbit_login::user(name) else { return Reply::Error(format!("{name}: no such user")) };
+        let target = match target {
+            Ok(target) => target,
+            Err(err) => return Reply::Error(err),
+        };
         match request {
+            Request::Station { password } => self.station(&target, password),
             Request::Prepare { .. } => {
                 if target.uid == peer {
                     return Reply::Ok;
@@ -333,6 +351,33 @@ impl Service {
                 Reply::Ok
             }
         }
+    }
+
+    /// `user`'s remote session: their password, then orbit-local-station
+    /// on a free console, shown.
+    fn station(self: &Arc<Self>, user: &User, password: String) -> Reply {
+        log::info!("{} asks for the remote session", user.name);
+        if let Some(wait) = self.wait_left(&user.name) {
+            return Reply::Refused(format!("Too many tries: wait {wait} s"));
+        }
+        if let Err(why) = self.check(user, password) {
+            log::warn!("{}: password refused: {why}", user.name);
+            let mut failures = self.failures.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = failures.entry(user.name.clone()).or_insert((0, Instant::now()));
+            *entry = (entry.0 + 1, Instant::now());
+            return Reply::Refused(why);
+        }
+        self.failures.lock().unwrap_or_else(|e| e.into_inner()).remove(&user.name);
+        let key = format!("{}:station", user.name);
+        let command = self.config.station.clone();
+        if let Err(err) = self.open_as(&key, user, None, &command) {
+            return Reply::Error(err);
+        }
+        let Some(id) = self.session_id(&key) else { return Reply::Error("the session has no logind id".into()) };
+        if !activate(&id) {
+            return Reply::Error("logind did not show the session".into());
+        }
+        Reply::Ok
     }
 
     /// The seconds still to wait before `user`'s password is tried again.

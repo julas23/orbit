@@ -13,6 +13,12 @@
 //! opens their session behind this one, and their password, checked by
 //! Orbit-Login, shows it. This session stays locked.
 //!
+//! With Orbit-Login and orbit-local-station installed, the card also
+//! chooses where the session runs, as a display manager chooses a
+//! desktop: Local unlocks this one, Remote has Orbit-Login check the same
+//! password and open the station (pending §9) on another console, this
+//! session staying locked behind.
+//!
 //! It stays running between locks: at each `locked` the field is emptied
 //! and ready. Wrong passwords wait longer each time. Run anywhere else it
 //! is a preview: a right password just quits.
@@ -107,6 +113,11 @@ struct Greet {
     name: gtk::Label,
     real_name: Option<String>,
     others: gtk::Box,
+    /// Local or Remote, when the station can be opened.
+    modes: gtk::Box,
+    remote: gtk::ToggleButton,
+    /// Orbit-Login and orbit-local-station are there.
+    can_station: bool,
     link: Option<Rc<Link>>,
     app: gtk::Application,
     password: gtk::PasswordEntry,
@@ -154,9 +165,14 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         .css_classes(["password"])
         .build();
     let message = gtk::Label::builder().css_classes(["message"]).wrap(true).justify(gtk::Justification::Center).build();
+    let local = gtk::ToggleButton::builder().label(tr("greet-local")).active(true).can_focus(false).hexpand(true).build();
+    let remote = gtk::ToggleButton::builder().label(tr("greet-remote")).group(&local).can_focus(false).hexpand(true).build();
+    let modes = gtk::Box::builder().homogeneous(true).css_classes(["modes", "linked"]).visible(false).build();
+    modes.append(&local);
+    modes.append(&remote);
 
     let login = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
-    for widget in [avatar.upcast_ref::<gtk::Widget>(), name.upcast_ref(), password.upcast_ref(), message.upcast_ref()] {
+    for widget in [avatar.upcast_ref::<gtk::Widget>(), name.upcast_ref(), modes.upcast_ref(), password.upcast_ref(), message.upcast_ref()] {
         login.append(widget);
     }
     let question = gtk::Label::builder().css_classes(["question"]).wrap(true).justify(gtk::Justification::Center).build();
@@ -193,6 +209,9 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
     // Orbit-Login runs.
     let people = if link.is_some() && orbit_login::available() { orbit_login::users() } else { Vec::new() };
     let people = if people.len() > 1 && people.iter().any(|p| p.name == user) { people } else { Vec::new() };
+    // The remote session likewise, with the station installed.
+    let can_station = link.is_some() && orbit_login::available() && glib::find_program_in_path("orbit-local-station").is_some();
+    modes.set_visible(can_station);
     let greet = Rc::new(Greet {
         chosen: RefCell::new(user.clone()),
         me: user,
@@ -201,6 +220,9 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         name,
         real_name,
         others,
+        modes,
+        remote,
+        can_station,
         link: link.clone(),
         app: app.clone(),
         password: password.clone(),
@@ -267,6 +289,7 @@ impl Greet {
             self.choose(&self.me.clone());
         }
         if event == Event::Locked && !self.busy.get() {
+            self.choose_local();
             self.message.set_text("");
             self.password.set_sensitive(true);
             self.password.grab_focus();
@@ -327,6 +350,9 @@ impl Greet {
         if user != self.me {
             return self.switch(user, password);
         }
+        if self.modes.is_visible() && self.remote.is_active() {
+            return self.station(password);
+        }
         let (tx, rx) = async_channel::bounded(1);
         std::thread::spawn(move || {
             let _ = tx.send_blocking(pam::check(&user, password));
@@ -371,11 +397,53 @@ impl Greet {
         });
     }
 
+    /// Remote: Orbit-Login checks the password and shows the station on
+    /// another console; this session stays locked, back on Local.
+    fn station(self: &Rc<Self>, password: String) {
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = tx.send_blocking(orbit_login::call(&orbit_login::Request::Station { password }));
+        });
+        let greet = self.clone();
+        glib::spawn_future_local(async move {
+            let reply = rx.recv().await.unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
+            match reply {
+                Ok(orbit_login::Reply::Ok) => {
+                    log::info!("the remote session is on screen");
+                    greet.failures.set(0);
+                    greet.busy.set(false);
+                    greet.message.set_text("");
+                    greet.password.set_sensitive(true);
+                    greet.choose_local();
+                }
+                Ok(orbit_login::Reply::Refused(why)) => greet.checked(Err(pam::Refused(why))),
+                Ok(orbit_login::Reply::Error(why)) => {
+                    log::error!("orbit-login: {why}");
+                    greet.refused(&why, 0);
+                }
+                Err(err) => {
+                    log::error!("orbit-login: {err}");
+                    greet.refused(&err.to_string(), 0);
+                }
+            }
+        });
+    }
+
+    /// Local again, the default at every lock.
+    fn choose_local(&self) {
+        if let Some(local) = self.modes.first_child().and_downcast::<gtk::ToggleButton>() {
+            local.set_active(true);
+        }
+    }
+
     /// The card is for `user` now: their picture and name, and the others
     /// below. Their session starts opening behind this one.
     fn choose(self: &Rc<Self>, user: &str) {
         let Some(person) = self.people.iter().find(|p| p.name == user) else { return };
         *self.chosen.borrow_mut() = user.to_owned();
+        // Another person's session is always local.
+        self.modes.set_visible(self.can_station && user == self.me);
+        self.choose_local();
         if user == self.me {
             show_avatar(&self.avatar, user, &glib::home_dir());
             self.name.set_text(self.real_name.as_deref().unwrap_or(user));
