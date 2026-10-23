@@ -260,7 +260,9 @@ fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events:
         let prompt = match job {
             Job::Wake | Job::WakeAgain => &prompt,
             Job::Request => &config.hints,
-            Job::Reply => "",
+            // Short answers heard as words ("sim", not "sem"; "pode",
+            // not "Podge").
+            Job::Reply => "Sim. Não. Pode. Yes. No.",
         };
         let heard = stt.and_then(|stt| {
             stt.hear(&audio, prompt, job == Job::Request)
@@ -1071,6 +1073,20 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
 /// of sway's) does, said: "abrir o kitty", "mover a janela para o monitor
 /// HDMI-A-1". `None` for any other command line.
 fn desktop_actions(command: &str, en: bool) -> Option<Vec<String>> {
+    // Each simple command of the line (`a && b`) must be one to the desktop.
+    let mut out = Vec::new();
+    for simple in simple_commands(command) {
+        for said in desktop_command(&simple, en)? {
+            if !out.contains(&said) {
+                out.push(said);
+            }
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// `desktop_actions` for one simple command.
+fn desktop_command(command: &str, en: bool) -> Option<Vec<String>> {
     let words = shell_words(command);
     let (program, rest) = words.split_first()?;
     if !matches!(program.rsplit('/').next(), Some("orbitctl" | "swaymsg")) || rest.first().is_some_and(|w| w.starts_with('-')) {
@@ -1140,10 +1156,9 @@ fn shell_words(command: &str) -> Vec<String> {
     words
 }
 
-/// The programs a command line runs, at most three, each once: the first
-/// word of each part between pipes, `;` and `&&` (not quoted), past `sudo`
-/// and settings of variables.
-fn programs(command: &str) -> Vec<String> {
+/// The simple commands of a command line: its parts between pipes, `;`
+/// and `&&` that are not quoted.
+fn simple_commands(command: &str) -> Vec<String> {
     let mut parts = vec![String::new()];
     let mut quote = None;
     for c in command.chars() {
@@ -1157,9 +1172,18 @@ fn programs(command: &str) -> Vec<String> {
             part.push(c);
         }
     }
+    parts
+        .iter()
+        .map(|part| part.trim_start_matches(['|', ';', '&', '\n']).trim().to_owned())
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
+/// The programs a command line runs, at most three, each once: the first
+/// word of each simple command, past `sudo` and settings of variables.
+fn programs(command: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for part in &parts {
-        let part = part.trim_start_matches(['|', ';', '&', '\n']);
+    for part in &simple_commands(command) {
         let program = part
             .split_whitespace()
             .find(|w| *w != "sudo" && !w.contains('=') && !w.starts_with('('))
@@ -1199,7 +1223,8 @@ fn yes_or_no(text: &str) -> Option<bool> {
     if has(&["não", "nao", "no", "nope", "cancela", "cancelar", "negativo", "pare", "don't", "stop"]) {
         return Some(false);
     }
-    if has(&["sim", "pode", "claro", "ok", "okay", "confirmo", "confirma", "manda", "vai", "faz", "faça", "yes", "yeah", "yep", "sure", "go"]) {
+    // Also as Whisper sometimes writes them, heard alone.
+    if has(&["sim", "sem", "si", "pode", "podge", "pod", "claro", "ok", "okay", "confirmo", "confirma", "manda", "vai", "faz", "faça", "yes", "yeah", "yep", "sure", "go"]) {
         return Some(true);
     }
     None
@@ -1248,6 +1273,8 @@ mod tests {
         assert_eq!(yes_or_no("Yes, go ahead."), Some(true));
         assert_eq!(yes_or_no("No."), Some(false));
         assert_eq!(yes_or_no("Hmm, talvez."), None);
+        assert_eq!(yes_or_no("sem"), Some(true));
+        assert_eq!(yes_or_no("Podge."), Some(true));
     }
 
     #[test]
@@ -1265,6 +1292,7 @@ mod tests {
             "Posso mover a janela para o monitor HDMI-A-1?"
         );
         assert_eq!(ask("swaymsg -t get_tree"), "Posso executar swaymsg?");
+        assert_eq!(ask("orbitctl workspace 11 && orbitctl exec iptvnator"), "Posso ir para a área 11 e abrir o iptvnator?");
     }
 
     #[test]
