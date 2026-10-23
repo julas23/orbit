@@ -112,7 +112,9 @@ impl Input {
                 self.pointer.frame();
             }
             Some("key") => {
-                let Some(key) = message["code"].as_str().and_then(evdev) else { return Ok(true) };
+                // The station sends evdev's own code; the browser, the key's name.
+                let key = message["evdev"].as_u64().and_then(|k| u32::try_from(k).ok()).or_else(|| message["code"].as_str().and_then(evdev));
+                let Some(key) = key else { return Ok(true) };
                 self.keyboard.key(time, key, u32::from(down));
             }
             _ => return Ok(false),

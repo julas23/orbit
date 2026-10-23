@@ -5,6 +5,9 @@
 //!
 //! Pairing: a six-digit code shows on the server's screen (a notification)
 //! and the browser must send it first; five wrong codes make a new one.
+//! A client that asks to be remembered (`orbit-local-station`) gets a token
+//! back and gives it instead of the code from then on; the server keeps
+//! only the tokens' SHA-256, in `~/.local/state/orbit/remote-tokens`.
 //! One client at a time.
 //!
 //! A session: `webrtcbin` at the encoder's tail (`encode::Tail::WebRtc`),
@@ -14,6 +17,7 @@
 
 use std::{
     io::ErrorKind,
+    os::unix::fs::OpenOptionsExt,
     net::{TcpListener, TcpStream},
     sync::{
         Arc, Mutex,
@@ -26,6 +30,7 @@ use std::{
 use anyhow::{Context, anyhow};
 use gst::prelude::*;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use tungstenite::{Message, WebSocket};
 
 use crate::{
@@ -66,6 +71,43 @@ pub fn serve(port: u16, output: Option<String>) -> anyhow::Result<()> {
         });
     }
     Ok(())
+}
+
+/// Where the remembered clients' tokens are kept, one SHA-256 a line.
+fn tokens_path() -> std::path::PathBuf {
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"));
+    state.join("orbit/remote-tokens")
+}
+
+fn hash(token: &str) -> String {
+    Sha256::digest(token.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// A token given before (by `remember`).
+fn known(token: &str) -> bool {
+    let wanted = hash(token);
+    std::fs::read_to_string(tokens_path()).is_ok_and(|text| text.lines().any(|line| line.trim() == wanted))
+}
+
+/// A new token for a client paired by its code, kept for next time.
+fn remember() -> anyhow::Result<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).map_err(|e| anyhow!("random bytes: {e}"))?;
+    let token: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    let path = tokens_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(&path)
+        .with_context(|| format!("opening {}", path.display()))?;
+    std::io::Write::write_all(&mut file, format!("{}\n", hash(&token)).as_bytes())?;
+    Ok(token)
 }
 
 /// Six digits from the system's random source.
@@ -116,9 +158,21 @@ fn connection(stream: TcpStream, shared: &Shared) -> anyhow::Result<()> {
 fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> {
     let peer = ws.get_ref().peer_addr()?;
     let first = read_json(&mut ws)?;
+    if first["type"] != "pair" {
+        ws.send(Message::text(json!({ "type": "refused" }).to_string()))?;
+        return Ok(());
+    }
+    // A remembered client: its token, not the code.
+    if let Some(token) = first["token"].as_str() {
+        if !known(token) {
+            log::warn!("remote: {peer} gave an unknown token");
+            ws.send(Message::text(json!({ "type": "forgotten" }).to_string()))?;
+            return Ok(());
+        }
+        return paired(ws, shared, None);
+    }
     let given = first["code"].as_str().unwrap_or_default();
-    let right = first["type"] == "pair" && given == *shared.code.lock().unwrap();
-    if !right {
+    if given != *shared.code.lock().unwrap() {
         let mut wrong = shared.wrong.lock().unwrap();
         *wrong += 1;
         log::warn!("remote: {peer} gave a wrong code ({} of {TRIES})", *wrong);
@@ -131,11 +185,27 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
         ws.send(Message::text(json!({ "type": "refused" }).to_string()))?;
         return Ok(());
     }
+    *shared.wrong.lock().unwrap() = 0;
+    let token = if first["remember"] == true { Some(remember()?) } else { None };
+    paired(ws, shared, token)
+}
+
+/// A client that gave the right code or a known token: told so (with its
+/// new token, if it asked for one), then streamed to.
+fn paired(mut ws: WebSocket<TcpStream>, shared: &Shared, token: Option<String>) -> anyhow::Result<()> {
+    let peer = ws.get_ref().peer_addr()?;
     if shared.busy.swap(true, Ordering::SeqCst) {
         ws.send(Message::text(json!({ "type": "busy" }).to_string()))?;
         return Ok(());
     }
-    *shared.wrong.lock().unwrap() = 0;
+    let reply = match token {
+        Some(token) => json!({ "type": "paired", "token": token }),
+        None => json!({ "type": "paired" }),
+    };
+    if let Err(err) = ws.send(Message::text(reply.to_string())) {
+        shared.busy.store(false, Ordering::SeqCst);
+        return Err(anyhow!("websocket: {err}"));
+    }
     log::info!("remote: {peer} paired");
     let result = stream(&mut ws, shared);
     shared.busy.store(false, Ordering::SeqCst);
@@ -158,7 +228,15 @@ fn read_json(ws: &mut WebSocket<TcpStream>) -> anyhow::Result<Value> {
 /// Streams to the paired browser on `ws` until it closes.
 fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> {
     let mut capture = Capture::open(shared.output.as_deref(), true)?;
-    let mut input = Input::open(&capture.name)?;
+    // A compositor without virtual input (an older orbit-core) still
+    // shows the session: the client only watches.
+    let mut input = match Input::open(&capture.name) {
+        Ok(input) => Some(input),
+        Err(err) => {
+            log::warn!("remote: no remote mouse and keys, the session is view only: {err:#}");
+            None
+        }
+    };
     let webrtc = gst::ElementFactory::make("webrtcbin")
         .property_from_str("bundle-policy", "max-bundle")
         .build()
@@ -227,7 +305,11 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
             Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => break Ok(()),
             Err(err) => break Err(anyhow!("websocket: {err}")),
         };
-        if input.handle(&message)? {
+        let handled = match &mut input {
+            Some(input) => input.handle(&message)?,
+            None => matches!(message["type"].as_str(), Some("move" | "button" | "wheel" | "key")),
+        };
+        if handled {
             continue;
         }
         match message["type"].as_str() {
