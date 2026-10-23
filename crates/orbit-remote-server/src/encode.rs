@@ -60,7 +60,8 @@ impl Encoder {
         let caps = gst::Caps::builder("video/x-raw")
             .features([gst_allocators::CAPS_FEATURE_MEMORY_DMABUF])
             .field("format", "DMA_DRM")
-            .field("drm-format", "XR24")
+            // Linear: the format alone; otherwise with its modifier.
+            .field("drm-format", if first.modifier == 0 { "XR24".to_owned() } else { format!("XR24:{:#018x}", first.modifier) })
             .field("width", first.width as i32)
             .field("height", first.height as i32)
             // Nominal: frames come as the screen changes, at most this often.
@@ -221,7 +222,9 @@ pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
         let frame = capture.next()?;
         let pushed = Instant::now();
         encoder.push(&capture.planes, &frame)?;
-        let sample = encoder.pull(Duration::from_millis(500)).context("no encoded frame within 500 ms")?;
+        // The first takes long: NVENC makes its CUDA context and encoder.
+        let wait = if frames == 0 { Duration::from_secs(5) } else { Duration::from_millis(500) };
+        let sample = encoder.pull(wait).with_context(|| format!("no encoded frame within {wait:?}"))?;
         latencies.push(pushed.elapsed());
         let buffer = sample.buffer().context("an empty sample")?;
         let map = buffer.map_readable()?;

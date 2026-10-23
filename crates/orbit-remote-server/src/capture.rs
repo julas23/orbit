@@ -5,8 +5,10 @@
 //! then, PLANO-CORE §8), saying what. Nothing goes through the CPU: the
 //! encoder takes the same dmabuf.
 //!
-//! The buffers are made by GBM on the render node, linear (what VA-API
-//! imports everywhere), a few of them in turn: the one just captured is
+//! The buffers are made by GBM on the render node, linear where the driver
+//! allows (what VA-API imports everywhere; NVIDIA's GBM refuses the LINEAR
+//! flag but takes the linear modifier), otherwise in the layout it picks,
+//! its modifier passed on; a few of them in turn: the one just captured is
 //! the encoder's while the next is being drawn.
 
 use std::{
@@ -33,7 +35,6 @@ use wayland_protocols_wlr::screencopy::v1::client::{
 pub const BUFFERS: usize = 4;
 /// DRM's XRGB8888 (`XR24`), what orbit-core copies into.
 const XRGB8888: u32 = u32::from_le_bytes(*b"XR24");
-const LINEAR: u64 = 0;
 
 /// One of our dmabufs, as the encoder needs it.
 pub struct Plane {
@@ -42,6 +43,18 @@ pub struct Plane {
     pub height: u32,
     pub stride: u32,
     pub offset: u32,
+    /// Its layout (DRM format modifier); 0 is linear.
+    pub modifier: u64,
+}
+
+/// A buffer the compositor can draw into: linear by the flag, by the
+/// modifier, or as the driver likes.
+fn allocate(device: &gbm::Device<std::fs::File>, width: u32, height: u32) -> std::io::Result<gbm::BufferObject<()>> {
+    use gbm::{BufferObjectFlags as Flags, Format, Modifier};
+    device
+        .create_buffer_object::<()>(width, height, Format::Xrgb8888, Flags::RENDERING | Flags::LINEAR)
+        .or_else(|_| device.create_buffer_object_with_modifiers2(width, height, Format::Xrgb8888, [Modifier::Linear].into_iter(), Flags::RENDERING))
+        .or_else(|_| device.create_buffer_object(width, height, Format::Xrgb8888, Flags::RENDERING))
 }
 
 /// A frame captured into buffer `index`.
@@ -121,23 +134,18 @@ impl Capture {
         )?;
         let (mut planes, mut buffers, mut objects) = (Vec::new(), Vec::new(), Vec::new());
         for _ in 0..BUFFERS {
-            let object = device
-                .create_buffer_object::<()>(
-                    width,
-                    height,
-                    gbm::Format::Xrgb8888,
-                    gbm::BufferObjectFlags::RENDERING | gbm::BufferObjectFlags::LINEAR,
-                )
-                .context("making a dmabuf")?;
+            let object = allocate(&device, width, height).context("making a dmabuf")?;
+            let modifier: u64 = object.modifier().into();
             let plane = Plane {
                 fd: object.fd_for_plane(0).context("its file")?,
                 width,
                 height,
                 stride: object.stride_for_plane(0),
                 offset: object.offset(0),
+                modifier,
             };
             let params = dmabuf.create_params(&qh, ());
-            params.add(plane.fd.as_fd(), 0, plane.offset, plane.stride, (LINEAR >> 32) as u32, LINEAR as u32);
+            params.add(plane.fd.as_fd(), 0, plane.offset, plane.stride, (modifier >> 32) as u32, modifier as u32);
             let buffer = params.create_immed(width as i32, height as i32, fourcc, zwp_linux_buffer_params_v1::Flags::empty(), &qh, ());
             params.destroy();
             planes.push(plane);
