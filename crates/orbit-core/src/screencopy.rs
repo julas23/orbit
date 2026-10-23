@@ -2,12 +2,14 @@
 //! grim and the like ask for a monitor, or a rectangle of one, and get it
 //! copied into a buffer of theirs — shared memory or a dmabuf.
 //!
-//! Each copy is drawn on the spot, off screen, from the same elements the
-//! monitor shows (`render::output_elements`), the pointer only when asked
-//! for. `copy_with_damage` is answered the same way, with the whole frame
-//! as damage: enough for screenshots, not yet for recording (a screencast
-//! would get frames as fast as it asks). Locked, every copy fails, so the
-//! lock screen never shows the session.
+//! Each copy is drawn off screen from the same elements the monitor shows
+//! (`render::output_elements`), the pointer only when asked for. `copy` is
+//! answered at once. `copy_with_damage`, what a screencast uses
+//! (orbit-remote-server, the portal), waits until something has changed on
+//! that monitor since the client's last copy of it, and says what: each
+//! client has a damage tracker per monitor and region, and the queue is
+//! looked at again after every frame drawn for that monitor. Locked, every
+//! copy fails, so the lock screen never shows the session.
 //!
 //! The protocol's handling follows niri `src/protocols/screencopy.rs` and
 //! `render_helpers/mod.rs` (`render_to_shm`, `render_to_dmabuf`) @ aee25c9
@@ -72,12 +74,37 @@ pub struct FrameInfo {
     cursor: bool,
 }
 
+/// The copies with damage waiting for a change, and the trackers that tell
+/// one: per client, monitor, region and pointer, what that client was
+/// last given.
+#[derive(Default)]
+pub struct Queue {
+    waiting: Vec<Waiting>,
+    trackers: Vec<(Key, OutputDamageTracker)>,
+}
+
+struct Waiting {
+    frame: ZwlrScreencopyFrameV1,
+    info: FrameInfo,
+    target: Target,
+    key: Key,
+}
+
+#[derive(Clone, PartialEq)]
+struct Key {
+    client: ClientId,
+    output: String,
+    region: (Point<i32, Physical>, Size<i32, Physical>),
+    cursor: bool,
+}
+
 pub enum FrameData {
     Failed,
     Pending { info: FrameInfo, copied: AtomicBool },
 }
 
 /// The buffer a frame is copied into.
+#[derive(Clone)]
 enum Target {
     Shm(WlBuffer),
     Dmabuf(Dmabuf),
@@ -173,47 +200,127 @@ impl Dispatch2<ZwlrScreencopyFrameV1, Orbit> for FrameData {
             frame.failed();
             return;
         }
-        match state.capture(info, &target) {
-            Ok(()) => {
-                frame.flags(Flags::empty());
-                if with_damage {
-                    frame.damage(0, 0, size.w as u32, size.h as u32);
+        if !with_damage {
+            match state.capture(info, &target, None) {
+                Ok(_) => ready(frame, None),
+                Err(err) => {
+                    tracing::warn!("screencopy: {err:?}");
+                    frame.failed();
                 }
-                let now: Duration = Clock::<Monotonic>::new().now().into();
-                frame.ready((now.as_secs() >> 32) as u32, now.as_secs() as u32, now.subsec_nanos());
             }
-            Err(err) => {
-                tracing::warn!("screencopy: {err:?}");
-                frame.failed();
-            }
+            return;
         }
+        let Some(client) = frame.client() else { return };
+        let key = Key {
+            client: client.id(),
+            output: info.output.name(),
+            region: (info.region_loc, info.size),
+            cursor: info.cursor,
+        };
+        state.screencopy.waiting.push(Waiting { frame: frame.clone(), info: info.clone(), target, key });
+        // Answered now if something changed since the last one.
+        state.screencopy_after_frame(&info.output);
     }
 
-    fn destroyed(&self, _state: &mut Orbit, _client: ClientId, _frame: &ZwlrScreencopyFrameV1) {}
+    fn destroyed(&self, state: &mut Orbit, _client: ClientId, frame: &ZwlrScreencopyFrameV1) {
+        state.screencopy.waiting.retain(|w| w.frame != *frame);
+    }
+}
+
+/// Tells the client its copy is there, with what changed when it asked.
+fn ready(frame: &ZwlrScreencopyFrameV1, damage: Option<&[Rectangle<i32, Physical>]>) {
+    frame.flags(Flags::empty());
+    for rect in damage.into_iter().flatten() {
+        frame.damage(rect.loc.x.max(0) as u32, rect.loc.y.max(0) as u32, rect.size.w as u32, rect.size.h as u32);
+    }
+    let now: Duration = Clock::<Monotonic>::new().now().into();
+    frame.ready((now.as_secs() >> 32) as u32, now.as_secs() as u32, now.subsec_nanos());
 }
 
 impl Orbit {
-    /// Draws what `info` asks for into `target`, off screen.
-    fn capture(&mut self, info: &FrameInfo, target: &Target) -> anyhow::Result<()> {
+    /// Answers the copies with damage waiting on `output` whose picture has
+    /// changed since their client's last one; called after each frame drawn
+    /// for it, and when one is asked for. Locked, they fail.
+    pub fn screencopy_after_frame(&mut self, output: &Output) {
+        let name = output.name();
+        if !self.screencopy.waiting.iter().any(|w| w.key.output == name) {
+            return;
+        }
+        let waiting = std::mem::take(&mut self.screencopy.waiting);
+        let mut kept = Vec::new();
+        for job in waiting {
+            if job.key.output != name || !job.frame.is_alive() {
+                if job.frame.is_alive() {
+                    kept.push(job);
+                }
+                continue;
+            }
+            if self.locked() {
+                job.frame.failed();
+                continue;
+            }
+            let mut tracker = match self.screencopy.trackers.iter().position(|(k, _)| *k == job.key) {
+                Some(i) => self.screencopy.trackers.swap_remove(i).1,
+                // First copy for this client: all of it is new.
+                None => OutputDamageTracker::new(job.info.size, output.current_scale().fractional_scale(), output.current_transform()),
+            };
+            let captured = self.capture(&job.info, &job.target, Some(&mut tracker));
+            self.screencopy.trackers.push((job.key.clone(), tracker));
+            match captured {
+                Ok(Some(damage)) => ready(&job.frame, Some(&damage)),
+                Ok(None) => kept.push(job),
+                Err(err) => {
+                    tracing::warn!("screencopy: {err:?}");
+                    job.frame.failed();
+                }
+            }
+        }
+        // Clients gone take their trackers with them.
+        let handle = self.display_handle.backend_handle();
+        self.screencopy.trackers.retain(|(k, _)| handle.get_client_data(k.client.clone()).is_ok());
+        kept.append(&mut self.screencopy.waiting);
+        self.screencopy.waiting = kept;
+    }
+
+    /// Draws what `info` asks for into `target`, off screen. With a
+    /// `tracker`, only when something changed since its last frame, and
+    /// what did; without, always (`Some` then holds nothing).
+    fn capture(&mut self, info: &FrameInfo, target: &Target, tracker: Option<&mut OutputDamageTracker>) -> anyhow::Result<Option<Vec<Rectangle<i32, Physical>>>> {
         // Taken out while drawing, as for a frame on screen.
         let mut backend = std::mem::replace(&mut self.backend, Backend::None);
         let result = match &mut backend {
             Backend::Drm(drm) if !drm.session.is_active() => Err(anyhow::anyhow!("on another console")),
-            Backend::Drm(drm) => self.capture_with(&mut drm.renderer, info, target),
-            Backend::Winit(winit) => self.capture_with(winit.backend.renderer(), info, target),
+            Backend::Drm(drm) => self.capture_with(&mut drm.renderer, info, target, tracker),
+            Backend::Winit(winit) => self.capture_with(winit.backend.renderer(), info, target, tracker),
             Backend::None => Err(anyhow::anyhow!("no backend")),
         };
         self.backend = backend;
         result
     }
 
-    fn capture_with(&mut self, renderer: &mut GlesRenderer, info: &FrameInfo, target: &Target) -> anyhow::Result<()> {
+    fn capture_with(
+        &mut self,
+        renderer: &mut GlesRenderer,
+        info: &FrameInfo,
+        target: &Target,
+        tracker: Option<&mut OutputDamageTracker>,
+    ) -> anyhow::Result<Option<Vec<Rectangle<i32, Physical>>>> {
         let output = &info.output;
         let offset = info.region_loc.upscale(-1);
         let elements: Vec<_> = output_elements(self, output, renderer, info.cursor)
             .into_iter()
             .map(|e| RelocateRenderElement::from_element(e, offset, Relocate::Relative))
             .collect();
+        // The change since this client's last copy, told by its tracker
+        // (a new tracker: all of it). The client's buffers come and go, so
+        // the picture itself is always drawn whole.
+        let damage = match tracker {
+            None => Vec::new(),
+            Some(tracker) => match tracker.damage_output(1, &elements).context("damage")?.0 {
+                Some(damage) if !damage.is_empty() => damage.clone(),
+                _ => return Ok(None),
+            },
+        };
         let clear = background(self);
         let mut tracker = OutputDamageTracker::new(info.size, output.current_scale().fractional_scale(), output.current_transform());
         match target {
@@ -221,7 +328,7 @@ impl Orbit {
                 let mut dmabuf = dmabuf.clone();
                 let mut frame = renderer.bind(&mut dmabuf).context("binding the dmabuf")?;
                 tracker.render_output(renderer, &mut frame, 0, &elements, clear).context("drawing into the dmabuf")?;
-                Ok(())
+                Ok(Some(damage))
             }
             Target::Shm(buffer) => {
                 let buffer_size = info.size.to_logical(1).to_buffer(1, Transform::Normal);
@@ -231,7 +338,8 @@ impl Orbit {
                 let mapping = renderer.copy_framebuffer(&frame, Rectangle::from_size(buffer_size), Fourcc::Xrgb8888).context("copying")?;
                 drop(frame);
                 let bytes = renderer.map_texture(&mapping).context("mapping")?;
-                write_shm(buffer, info.size, bytes)
+                write_shm(buffer, info.size, bytes)?;
+                Ok(Some(damage))
             }
         }
     }

@@ -121,6 +121,8 @@ pub struct Orbit {
     pub suppressed: Vec<smithay::input::keyboard::Keycode>,
     /// Whether the session is shown (`lock`).
     pub lock: crate::lock::Lock,
+    /// Screen copies waiting for something to change on their monitor.
+    pub screencopy: crate::screencopy::Queue,
     /// XWayland's display number, from when it is spawned, and its window
     /// manager, once it is ready (`xwayland`).
     pub xdisplay: Option<u32>,
@@ -225,6 +227,7 @@ impl Orbit {
             shaders: None,
             layouts: (Vec::new(), 0),
             lock: crate::lock::Lock::default(),
+            screencopy: Default::default(),
             xdisplay: None,
             xwm: None,
             xwayland_shell_state,

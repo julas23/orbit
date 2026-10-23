@@ -132,6 +132,8 @@ fn render(state: &mut Orbit) {
         winit.backend.window().request_redraw();
     }
     state.backend = Backend::Winit(winit);
+    // Screencasts waiting for a change on this monitor.
+    state.screencopy_after_frame(&output);
     state.confirm_lock();
 
     // Locked, clients are not drawn, so they are not asked to draw; the

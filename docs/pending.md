@@ -36,7 +36,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [x] Blur: under the panel's confirmation dialog (`blur_layers`, done by the core — no screencopy for grim), and the lock's blur now runs ahead of the black so it shows.
 - [x] Mod+right-drag resize: a floating window by the corner nearest the pointer (a snapped one floats first); a tiled one moves the line to the neighbouring column (column weights); the clients' own frame edges too (xdg and X). Mod+Esc toggles floating, as Mod+Shift+Space. Verified on screen 2026-10-22.
 - [x] Screen capture for clients (`wlr-screencopy`, `screencopy.rs`): Orbit-Blink and grim work on orbit-core; refused while locked. Nested-tested 2026-10-22; installed, awaiting a session restart.
-- [ ] Screencopy with damage (frames only when the screen changes), for recording and the portal's screen sharing (Phase 2).
+- [x] Screencopy with damage: `copy_with_damage` waits until the monitor changed since the client's last copy and says what (a tracker per client, monitor and region, looked at after each frame drawn); nested-tested with orbit-remote-server's `capture`: 1.3 fps on a still screen (2026-10-23).
 - [ ] Rounded corners on rotated monitors.
 - [ ] Phase 2: hotplug, fractional scale, `wlr-output-management`, portal and screen sharing, VRR/tearing. Done when the hp gets a full day without going back to sway.
 - [ ] Phase 3: layouts `bsp`, `master`, `monocle`, `scroll`, per-workspace layouts, named scratchpads. (Tags left out on 2026-10-22: maybe in a later major version.)
@@ -123,7 +123,7 @@ Decided on 2026-10-22:
 The think and the Julas VM are set aside for now: they are the test machines
 for this pair.
 
-- [ ] Not started yet.
+- [x] Started 2026-10-23. Decided then: the phase-1 web client is a small HTML/JS page served by the server (Slint stays for `orbit-local-station`, the server's own interface and the phones); the ≤ 20 ms mark is for the native client, the browser's latency measured and noted; the first client is a browser on the think. Capture through wlr-screencopy with damage into a dmabuf first (works on sway too), the private protocol later.
 - [ ] Phase 1, the mirror: capture in the core, VA-API, WebRTC, the browser, pairing. **Done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps.
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
 - [ ] Phase 3: gamepads, microphone and webcam; `orbit-local-station` on Slint's LinuxKMS.

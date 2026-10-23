@@ -421,6 +421,8 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
         surface.dirty = true;
     }
     state.backend = Backend::Drm(drm);
+    // Screencasts waiting for a change on this monitor.
+    state.screencopy_after_frame(&output);
     send_frames(state, &output);
     // Nothing new to show: no vblank comes.
     state.lock_shown();
