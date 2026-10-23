@@ -139,8 +139,13 @@ fn gpu(seat: &str) -> anyhow::Result<std::path::PathBuf> {
     if let Some(path) = std::env::var_os("ORBIT_DRM_DEVICE") {
         return Ok(path.into());
     }
+    // A render node beside it in sysfs (`/sys/class/drm/card1/device/drm/
+    // renderD128`). Smithay's `node_with_type` cannot tell: it works the
+    // render node's name out of the card's number, there or not.
     let renders = |path: &std::path::Path| {
-        DrmNode::from_path(path).is_ok_and(|node| node.node_with_type(NodeType::Render).is_some_and(|r| r.is_ok()))
+        let Some(card) = path.file_name() else { return false };
+        let dir = std::path::Path::new("/sys/class/drm").join(card).join("device/drm");
+        std::fs::read_dir(dir).is_ok_and(|entries| entries.flatten().any(|e| e.file_name().to_string_lossy().starts_with("renderD")))
     };
     let primary = primary_gpu(seat)?;
     let all = all_gpus(seat).unwrap_or_default();
