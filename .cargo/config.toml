@@ -1,0 +1,4 @@
+[env]
+# whisper-rs-sys (Orbit-Aigent): use the bindings it ships instead of
+# generating them, which needs libclang, not installed for building Orbit.
+WHISPER_DONT_GENERATE_BINDINGS = "1"

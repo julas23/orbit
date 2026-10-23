@@ -10,7 +10,17 @@
 //!     dir: ~/Vault/GIT     # where it works; the home by default
 //!     args: [--model, opus]
 //! wake: [orbit, jarvis]    # the words that wake it, in any language
+//! wake_model: base-q5_1    # Whisper, hearing for the wake word
+//! model: small-q5_1        # and hearing the request
+//! microphone: alsa_input.usb-…   # a source's node name (`wpctl inspect`);
+//!                          # the default one when left out
 //! ```
+//!
+//! A Bluetooth headset's microphone is a poor choice: it records as a phone
+//! call does, which Whisper hears badly, and while it is open the headset
+//! plays everything else as a phone call too.
+//!
+//! The models are `ggml-<name>.bin` in `~/.local/share/orbit/aigent/models`.
 //!
 //! Without the file, the four kinds are offered under their own names and
 //! those whose program is not installed are left out of the panel's list.
@@ -28,6 +38,9 @@ pub struct Config {
     pub agent: String,
     pub agents: BTreeMap<String, Agent>,
     pub wake: Vec<String>,
+    pub wake_model: String,
+    pub model: String,
+    pub microphone: Option<String>,
 }
 
 impl Default for Config {
@@ -36,6 +49,9 @@ impl Default for Config {
             agent: "claude".into(),
             agents: Kind::ALL.iter().map(|kind| (kind.name().to_owned(), Agent::default())).collect(),
             wake: vec!["orbit".into(), "jarvis".into()],
+            wake_model: "base-q5_1".into(),
+            model: "small-q5_1".into(),
+            microphone: None,
         }
     }
 }

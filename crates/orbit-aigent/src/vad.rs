@@ -4,12 +4,13 @@
 //! louder ones slowly; speech is a run of blocks well above it, and it ends
 //! after a pause long enough not to be a breath between words.
 
-/// A block this far over the floor is voice, in dB.
-const OVER_FLOOR: f32 = 12.0;
+/// A block this far over the floor is voice, in dB: less, and a chair or a
+/// keyboard ends listening before the request is said.
+const OVER_FLOOR: f32 = 18.0;
 /// And at least this loud, so a silent room's hiss is never voice.
 const MIN_LEVEL: f32 = -50.0;
-/// Blocks of voice in a row before speech starts: 90 ms.
-const START_BLOCKS: u32 = 3;
+/// Blocks of voice in a row before speech starts: 180 ms.
+const START_BLOCKS: u32 = 6;
 /// Blocks of quiet that end it: 810 ms.
 const END_BLOCKS: u32 = 27;
 
@@ -66,6 +67,11 @@ impl Vad {
             }
         }
         None
+    }
+
+    /// Whether speech is under way.
+    pub fn speaking(&self) -> bool {
+        self.speaking
     }
 
     /// Forgets a speech under way (the floor is kept).

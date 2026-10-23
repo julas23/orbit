@@ -7,17 +7,21 @@
 //! The daemon keeps the microphone open, waits for its wake word, hears
 //! the request until a pause, hands it to the agent in use and speaks the
 //! answer, telling the panel's aigent module what it is doing (`Frame`).
-//! Three threads: the microphone's, the socket's (one more per client
-//! reading its commands) and the engine, which owns the state and is the
-//! only one that writes to the clients.
+//! Four threads: the microphone's, the socket's (one more per client
+//! reading its commands), Whisper's, and the engine, which owns the state
+//! and is the only one that writes to the clients.
 
 mod config;
 mod mic;
+mod stt;
 mod vad;
+mod wake;
 
 use std::{
+    collections::VecDeque,
     io::{BufRead, BufReader, Write},
     os::unix::net::{UnixListener, UnixStream},
+    path::PathBuf,
     sync::mpsc,
     time::{Duration, Instant},
 };
@@ -36,6 +40,13 @@ enum Event {
     Block(Vec<f32>),
     Command(Command),
     Client(UnixStream),
+    /// Whisper's answer to job `id`, with the audio it was given.
+    Heard {
+        id: u64,
+        job: Job,
+        heard: Option<stt::Heard>,
+        audio: Vec<f32>,
+    },
 }
 
 fn main() {
@@ -89,17 +100,33 @@ fn daemon() -> anyhow::Result<()> {
     let listener = UnixListener::bind(&path)?;
     log::info!("aigent: listening on {}", path.display());
 
+    let config = Config::load();
     let (events, inbox) = mpsc::channel();
     {
         let events = events.clone();
+        let microphone = config.microphone.clone();
         std::thread::Builder::new()
             .name("mic".into())
-            .spawn(move || mic::record(|block| events.send(Event::Block(block.to_vec())).is_ok()))?;
+            .spawn(move || {
+                let send = |block: &[f32]| events.send(Event::Block(block.to_vec())).is_ok();
+                match std::env::var_os("ORBIT_AIGENT_INPUT") {
+                    Some(files) => mic::play_files(&files, send),
+                    None => mic::record(microphone.as_deref(), send),
+                }
+            })?;
+    }
+    let (jobs, queue) = mpsc::channel();
+    {
+        let events = events.clone();
+        let config = config.clone();
+        std::thread::Builder::new()
+            .name("whisper".into())
+            .spawn(move || whisper(&config, &queue, &events))?;
     }
     std::thread::Builder::new()
         .name("socket".into())
         .spawn(move || serve(&listener, &events))?;
-    Engine::new(Config::load()).run(&inbox);
+    Engine::new(&config, jobs).run(&inbox);
     Ok(())
 }
 
@@ -140,6 +167,90 @@ fn serve(listener: &UnixListener, events: &mpsc::Sender<Event>) {
     }
 }
 
+
+/// What Whisper is asked to hear.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Job {
+    /// Speech while waiting: is it the wake word? With the small model,
+    /// but for the name alone, which it hears badly ("Jarvis." comes out
+    /// "É viz."): short bits go to the larger one.
+    Wake,
+    /// The same with the larger model, when the small one heard something
+    /// close to the wake word.
+    WakeAgain,
+    /// The request, with the larger one.
+    Request,
+}
+
+/// Runs Whisper off the engine's thread: it takes a second or more, and
+/// the sphere must keep moving meanwhile. The models load here too, so the
+/// daemon answers the panel at once on start.
+fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events: &mpsc::Sender<Event>) {
+    let load = |name: &str| {
+        stt::Stt::load(name)
+            .inspect_err(|err| log::error!("aigent: Whisper: {err:#}"))
+            .ok()
+    };
+    let mut wake = load(&config.wake_model);
+    let mut request = if config.model == config.wake_model { None } else { load(&config.model) };
+    let prompt = stt::prompt(&config.wake);
+    // Each bit heard, kept as a WAV file for a look at what the microphone
+    // gives: `ORBIT_AIGENT_DUMP=dir`.
+    let dump = std::env::var_os("ORBIT_AIGENT_DUMP").map(PathBuf::from);
+    for (id, job, audio) in jobs {
+        if let Some(dir) = &dump {
+            let path = dir.join(format!("{id:04}-{job:?}.wav"));
+            if let Err(err) = write_wav(&path, &audio) {
+                log::warn!("aigent: {}: {err}", path.display());
+            }
+        }
+        let stt = match job {
+            Job::Wake if audio.len() > SHORT_WAKE => wake.as_mut(),
+            Job::Wake | Job::WakeAgain | Job::Request => request.as_mut().or(wake.as_mut()),
+        };
+        let prompt = if job == Job::Request { "" } else { &prompt };
+        let heard = stt.and_then(|stt| {
+            stt.hear(&audio, prompt, job == Job::Request)
+                .inspect_err(|err| log::warn!("aigent: Whisper: {err:#}"))
+                .ok()
+        });
+        if events.send(Event::Heard { id, job, heard, audio }).is_err() {
+            return;
+        }
+    }
+}
+
+/// 16 kHz mono, 16-bit.
+fn write_wav(path: &std::path::Path, audio: &[f32]) -> std::io::Result<()> {
+    let data = (audio.len() * 2) as u32;
+    let mut out = Vec::with_capacity(44 + data as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&mic::RATE.to_le_bytes());
+    out.extend_from_slice(&(mic::RATE * 2).to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data.to_le_bytes());
+    for s in audio {
+        out.extend_from_slice(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+    }
+    std::fs::write(path, out)
+}
+
+/// Speech after the name, while Whisper hears it.
+#[derive(Clone, Copy, PartialEq)]
+enum Said {
+    Nothing,
+    Started,
+    /// Started and ended: a whole request.
+    All,
+}
+
 /// The made-up run of `Command::Demo`: it listens for real, then thinks
 /// and speaks with sound of its own.
 #[derive(Clone, Copy, PartialEq)]
@@ -151,6 +262,7 @@ enum Demo {
 struct Engine {
     agents: Vec<String>,
     agent: String,
+    wake_words: Vec<String>,
     state: State,
     /// When the state was entered.
     since: Instant,
@@ -158,6 +270,24 @@ struct Engine {
     vad: vad::Vad,
     /// Whether speech started since listening began.
     heard: bool,
+    /// Whether listening began again after hearing only noise.
+    retried: bool,
+    /// The last 300 ms, so speech is recorded from just before the voice
+    /// detector noticed it.
+    before: VecDeque<f32>,
+    /// The speech being recorded, while waiting or listening.
+    recording: Option<Vec<f32>>,
+    /// What came after speech went to Whisper for the wake word, until it
+    /// answers: the request said straight after the name, which listening
+    /// then starts with.
+    after_wake: Option<Vec<f32>>,
+    /// How much of something was said in it.
+    after_wake_said: Said,
+    /// To Whisper, and the job whose answer counts: a newer one, or a
+    /// cancel, makes an older answer moot.
+    jobs: mpsc::Sender<(u64, Job, Vec<f32>)>,
+    job: u64,
+    waiting_for: Option<u64>,
     analyzer: Analyzer,
     bands: Vec<f32>,
     demo: Demo,
@@ -166,8 +296,14 @@ struct Engine {
     dirty: bool,
 }
 
+/// Speech while waiting this short may be the name alone.
+const SHORT_WAKE: usize = 5 * mic::RATE as usize / 2;
+/// Speech while waiting longer than this is not someone calling it.
+const LONGEST_WAKE: usize = 10 * mic::RATE as usize;
+const BEFORE: usize = 3 * mic::RATE as usize / 10;
+
 impl Engine {
-    fn new(config: Config) -> Self {
+    fn new(config: &Config, jobs: mpsc::Sender<(u64, Job, Vec<f32>)>) -> Self {
         let agents = config.usable();
         let agent = if agents.contains(&config.agent) {
             config.agent.clone()
@@ -177,15 +313,24 @@ impl Engine {
             }
             agents.first().cloned().unwrap_or_default()
         };
-        log::info!("aigent: agents {agents:?}, using {agent:?}");
+        log::info!("aigent: agents {agents:?}, using {agent:?}, woken by {:?}", config.wake);
         Self {
             agents,
             agent,
+            wake_words: config.wake.clone(),
             state: State::Idle,
             since: Instant::now(),
             text: String::new(),
             vad: vad::Vad::default(),
             heard: false,
+            retried: false,
+            before: VecDeque::with_capacity(BEFORE + mic::BLOCK),
+            recording: None,
+            after_wake: None,
+            after_wake_said: Said::Nothing,
+            jobs,
+            job: 0,
+            waiting_for: None,
             analyzer: Analyzer::new(mic::RATE, BANDS, 80.0, 6_000.0, 0.77, FRAME_RATE),
             bands: Vec::new(),
             demo: Demo::Off,
@@ -205,6 +350,12 @@ impl Engine {
                 Ok(Event::Client(client)) => {
                     self.clients.push(client);
                     self.dirty = true;
+                }
+                Ok(Event::Heard { id, job, heard, audio }) => {
+                    if self.waiting_for == Some(id) {
+                        self.waiting_for = None;
+                        self.heard_back(job, heard, audio);
+                    }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => return,
@@ -229,14 +380,38 @@ impl Engine {
         self.dirty = true;
         match state {
             State::Listening | State::Confirm => {
-                self.vad.reset();
-                self.heard = false;
+                // Woken: from just after the name, perhaps already talking.
+                if let Some(after) = self.after_wake.take() {
+                    self.heard = self.vad.speaking();
+                    self.recording = Some(after);
+                } else {
+                    self.vad.reset();
+                    self.heard = false;
+                    self.recording = Some(self.before.iter().copied().collect());
+                }
             }
-            State::Idle => self.demo = Demo::Off,
-            _ => {}
+            State::Idle => {
+                self.demo = Demo::Off;
+                self.retried = false;
+                self.recording = None;
+                // Whatever Whisper is still hearing no longer counts.
+                self.waiting_for = None;
+            }
+            _ => self.recording = None,
         }
+        self.after_wake = None;
         if !moves(state) {
             self.bands.clear();
+        }
+    }
+
+    /// Hands `audio` to Whisper; only the answer to the newest job counts.
+    fn ask(&mut self, job: Job, audio: Vec<f32>) {
+        self.job += 1;
+        self.waiting_for = Some(self.job);
+        if self.jobs.send((self.job, job, audio)).is_err() {
+            log::error!("aigent: Whisper is gone");
+            self.waiting_for = None;
         }
     }
 
@@ -264,30 +439,151 @@ impl Engine {
     }
 
     /// A block from the microphone. The voice detector hears them all, to
-    /// know the room; the rest only while listening.
+    /// know the room; while waiting, speech is recorded for the wake word,
+    /// and while listening, for the request.
     fn block(&mut self, block: &[f32]) {
         let event = self.vad.push(block);
-        if !matches!(self.state, State::Listening | State::Confirm) {
-            return;
+        if let Some(recording) = &mut self.recording {
+            recording.extend_from_slice(block);
         }
-        self.analyzer.push(block);
+        if let Some(after) = &mut self.after_wake {
+            after.extend_from_slice(block);
+        }
+        self.before.extend(block);
+        while self.before.len() > BEFORE {
+            self.before.pop_front();
+        }
+        match self.state {
+            State::Idle => self.wait(event),
+            State::Listening | State::Confirm => {
+                self.analyzer.push(block);
+                match event {
+                    Some(vad::Event::Started) => self.heard = true,
+                    Some(vad::Event::Ended) => self.heard_all(),
+                    None => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Waiting: each bit of speech goes to Whisper for the wake word, one
+    /// at a time (speech while it is busy is not called for it).
+    fn wait(&mut self, event: Option<vad::Event>) {
         match event {
-            Some(vad::Event::Started) => self.heard = true,
-            Some(vad::Event::Ended) => self.heard_all(),
-            None => {}
+            Some(vad::Event::Started) if self.waiting_for.is_none() => {
+                self.recording = Some(self.before.iter().copied().collect());
+            }
+            Some(vad::Event::Started) => {
+                if self.after_wake.is_some() {
+                    self.after_wake_said = Said::Started;
+                }
+            }
+            Some(vad::Event::Ended) => {
+                if let Some(recording) = self.recording.take() {
+                    self.ask(Job::Wake, recording);
+                    // From 300 ms back: the next words may have begun,
+                    // softly, before the pause was long enough to end it.
+                    self.after_wake = Some(self.before.iter().copied().collect());
+                    self.after_wake_said = Said::Nothing;
+                } else if self.after_wake_said == Said::Started {
+                    self.after_wake_said = Said::All;
+                }
+            }
+            _ => {
+                if self.recording.as_ref().is_some_and(|r| r.len() > LONGEST_WAKE) {
+                    self.recording = None;
+                }
+            }
         }
     }
 
     /// The request is over: the pause after it, or too long.
     fn heard_all(&mut self) {
-        let took = self.since.elapsed().as_secs_f32();
-        self.text = format!("{took:.1} s heard");
-        log::info!("aigent: heard {took:.1} s");
-        if self.demo == Demo::On {
-            self.enter(State::Thinking);
-        } else {
-            self.enter(State::Idle);
+        let audio = self.recording.take().unwrap_or_default();
+        log::info!("aigent: heard {:.1} s", audio.len() as f32 / mic::RATE as f32);
+        self.enter(State::Thinking);
+        if self.demo == Demo::Off {
+            self.ask(Job::Request, audio);
         }
+    }
+
+    /// Whisper's answer to the job still wanted.
+    fn heard_back(&mut self, job: Job, heard: Option<stt::Heard>, audio: Vec<f32>) {
+        let Some(heard) = heard else {
+            self.enter(State::Idle);
+            return;
+        };
+        match job {
+            Job::Wake | Job::WakeAgain => {
+                if self.state != State::Idle {
+                    return;
+                }
+                let Some((taken, rest)) = wake::split_at(&heard.text, &self.wake_words) else {
+                    if job == Job::Wake && wake::near(&heard.text, &self.wake_words) {
+                        log::debug!("aigent: {:?} is close to a wake word, hearing it again", heard.text);
+                        let after = self.after_wake.take();
+                        self.ask(Job::WakeAgain, audio);
+                        self.after_wake = after;
+                    } else {
+                        self.after_wake = None;
+                    }
+                    return;
+                };
+                if !rest.is_empty() {
+                    // Called and asked in one breath: the request heard
+                    // again, from after the name. With the name, an English
+                    // word, Whisper takes a short Portuguese request for
+                    // English ("Jarvis, que horas são?" as "Jarvis
+                    // Kerasom.").
+                    log::info!("aigent: woken, with a request");
+                    self.enter(State::Thinking);
+                    let cut = name_end(&audio, &heard.text, taken);
+                    log::debug!(
+                        "aigent: the name ends at {:.2} s of {:.2} s",
+                        cut as f32 / mic::RATE as f32,
+                        audio.len() as f32 / mic::RATE as f32
+                    );
+                    self.ask(Job::Request, audio[cut..].to_vec());
+                } else if self.after_wake_said == Said::All {
+                    // The name, a pause, and the request, all said before
+                    // Whisper had the name.
+                    log::info!("aigent: woken, the request already said");
+                    let audio = self.after_wake.take().unwrap_or_default();
+                    self.enter(State::Thinking);
+                    self.ask(Job::Request, audio);
+                } else {
+                    log::info!("aigent: woken");
+                    self.enter(State::Listening);
+                }
+            }
+            Job::Request => {
+                // Nothing said after all (a noise the voice detector took
+                // for speech): listen once more.
+                if heard.text.is_empty() && !self.retried {
+                    log::info!("aigent: nothing said, listening again");
+                    self.enter(State::Listening);
+                    self.retried = true;
+                    return;
+                }
+                // The wake word, when the request came with it.
+                let request = wake::split(&heard.text, &self.wake_words).unwrap_or(heard.text);
+                self.request(request, heard.language);
+            }
+        }
+    }
+
+    /// What to do, in `language`.
+    fn request(&mut self, request: String, language: &str) {
+        if request.trim().is_empty() {
+            log::info!("aigent: nothing to do");
+            self.enter(State::Idle);
+            return;
+        }
+        log::info!("aigent: request ({language}) for {}: {request:?}", self.agent);
+        self.text = request;
+        // The agents come next: for now the request is shown.
+        self.enter(State::Idle);
     }
 
     /// Every tick: timeouts, the demo's script, and the frame to the clients.
@@ -341,6 +637,29 @@ impl Engine {
         line.push(b'\n');
         self.clients.retain_mut(|client| client.write_all(&line).is_ok());
     }
+}
+
+/// Where in `audio` the first `taken` words of `text` (the wake word) end,
+/// in samples. Whisper's own word times are no help: with a little noise
+/// it puts every word at the end. Instead: the speech's span, from the
+/// first loud 10 ms to the last; the name's share of it by its share of
+/// the letters; and from there, the quietest moment within a quarter of a
+/// second, the gap between two words.
+fn name_end(audio: &[f32], text: &str, taken: usize) -> usize {
+    const FRAME: usize = mic::RATE as usize / 100;
+    let levels: Vec<f32> = audio.chunks(FRAME).map(vad::level).collect();
+    let loudest = levels.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let loud = |l: &f32| *l > loudest - 30.0;
+    let (Some(first), Some(last)) = (levels.iter().position(loud), levels.iter().rposition(loud)) else {
+        return 0;
+    };
+    let letters = |words: &[&str]| words.iter().map(|w| w.chars().filter(|c| c.is_alphanumeric()).count()).sum::<usize>();
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let share = letters(&words[..taken.min(words.len())]) as f32 / letters(&words).max(1) as f32;
+    let guess = first + ((last - first) as f32 * share) as usize;
+    let (from, to) = (guess.saturating_sub(25).max(first), (guess + 25).min(last));
+    let quietest = (from..=to).min_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap_or(guess);
+    (quietest * FRAME).min(audio.len())
 }
 
 /// Whether the sphere moves in `state`, so frames go out all the time.

@@ -153,7 +153,8 @@ and anything that changes something confirmed by a spoken "yes" or a click.
 
 - [x] Daemon: microphone, voice detection, states, socket; `orbit-aigent demo` (2026-10-22).
 - [x] Panel module: the sphere in both sizes, clicks and the agents' menu (2026-10-22). Awaiting a look on screen.
-- [ ] Whisper (whisper.cpp in the daemon): the wake word (`orbit`, `jarvis`) and the request, pt and en.
+- [x] Whisper (whisper.cpp in the daemon, CPU): base finds the wake word, small hears the request; pt and en, Portuguese on a near tie; the name cut off a request said in one breath; the microphone chosen in `aigent.yaml` (2026-10-22). Tried with the user's voice on the K66.
+- [ ] A short request said fast right after the name is still misheard now and then ("que horas são" as "que aração"); medium is no better on the CPU. Try large-v3-turbo on the iGPU (whisper.cpp's Vulkan, needs `glslc`).
 - [ ] The agents: Claude Code, Gemini CLI, OpenCode, Kimi Code headless, the session kept between requests; choose in `aigent.yaml` or the menu.
 - [ ] Piper: the answer spoken in the language it was asked in; the sphere moving with the voice.
 - [ ] Confirmation of actions that change something, by voice or click.

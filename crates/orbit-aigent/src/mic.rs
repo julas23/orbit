@@ -1,4 +1,4 @@
-//! The microphone: the default source, recorded over PulseAudio's native
+//! The microphone: the default source or the one named, recorded over PulseAudio's native
 //! protocol (served by pipewire-pulse), mono 32-bit float at 16 kHz — what
 //! Whisper takes — in blocks of 30 ms.
 
@@ -6,6 +6,7 @@ use std::{
     ffi::CString,
     io::{self, BufReader, Read},
     os::unix::net::UnixStream,
+    path::PathBuf,
     time::Duration,
 };
 
@@ -20,12 +21,14 @@ fn other(err: impl std::fmt::Display) -> io::Error {
     io::Error::other(err.to_string())
 }
 
-/// Records for good on the calling thread, handing each block to
-/// `on_block` until it returns `false`; records again when the default
-/// source changes or the sound server goes away.
-pub fn record(mut on_block: impl FnMut(&[f32]) -> bool) {
+/// Records `source` (a node name; the default source when `None`) for
+/// good on the calling thread, handing each block to `on_block` until it
+/// returns `false`; records again when the default source changes or the
+/// sound server goes away.
+pub fn record(source: Option<&str>, mut on_block: impl FnMut(&[f32]) -> bool) {
+    let source = CString::new(source.unwrap_or("@DEFAULT_SOURCE@")).unwrap_or_else(|_| c"@DEFAULT_SOURCE@".to_owned());
     loop {
-        match record_once(&mut on_block) {
+        match record_once(&source, &mut on_block) {
             Ok(true) => return,
             Ok(false) => log::info!("aigent: the default source changed, recording again"),
             Err(err) => {
@@ -36,8 +39,56 @@ pub fn record(mut on_block: impl FnMut(&[f32]) -> bool) {
     }
 }
 
+/// In place of the microphone, for trying the daemon without speaking:
+/// the files in `files` (separated by `:`, 16 kHz mono f32 as `ffmpeg -i x
+/// -ar 16000 -ac 1 -f f32le x.raw` writes), each after 3 s of quiet, at
+/// the pace they would be spoken, then quiet for good.
+pub fn play_files(files: &std::ffi::OsStr, mut on_block: impl FnMut(&[f32]) -> bool) {
+    let block_time = Duration::from_secs(BLOCK as u64) / RATE;
+    // A faint hiss, as a room has: the voice detector learns its floor.
+    let mut seed = 1u32;
+    let mut quiet = move || -> Vec<f32> {
+        (0..BLOCK)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                0.002 * ((seed >> 8) as f32 / (1 << 23) as f32 - 1.0)
+            })
+            .collect()
+    };
+    let files: Vec<PathBuf> = std::env::split_paths(files).collect();
+    for file in &files {
+        let samples: Vec<f32> = match std::fs::read(file) {
+            Ok(bytes) => bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect(),
+            Err(err) => {
+                log::error!("aigent: {}: {err}", file.display());
+                continue;
+            }
+        };
+        log::info!("aigent: playing {} instead of the microphone", file.display());
+        for _ in 0..100 {
+            if !on_block(&quiet()) {
+                return;
+            }
+            std::thread::sleep(block_time);
+        }
+        for chunk in samples.chunks(BLOCK) {
+            let mut block = quiet();
+            for (out, s) in block.iter_mut().zip(chunk) {
+                *out += s;
+            }
+            if !on_block(&block) {
+                return;
+            }
+            std::thread::sleep(block_time);
+        }
+    }
+    while on_block(&quiet()) {
+        std::thread::sleep(block_time);
+    }
+}
+
 /// `Ok(true)` when `on_block` asked to stop, `Ok(false)` to record again.
-fn record_once(on_block: &mut impl FnMut(&[f32]) -> bool) -> io::Result<bool> {
+fn record_once(source: &CString, on_block: &mut impl FnMut(&[f32]) -> bool) -> io::Result<bool> {
     let path = pulseaudio::socket_path_from_env()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no PulseAudio socket"))?;
     let mut sock = BufReader::new(UnixStream::connect(path)?);
@@ -72,7 +123,7 @@ fn record_once(on_block: &mut impl FnMut(&[f32]) -> bool) -> io::Result<bool> {
     protocol::read_ack_message(&mut sock).map_err(other)?;
 
     let params = protocol::RecordStreamParams {
-        source_name: Some(CString::new("@DEFAULT_SOURCE@").expect("no NUL")),
+        source_name: Some(source.clone()),
         sample_spec: protocol::SampleSpec {
             format: protocol::SampleFormat::Float32Le,
             channels: 1,
@@ -98,7 +149,7 @@ fn record_once(on_block: &mut impl FnMut(&[f32]) -> bool) -> io::Result<bool> {
         .map_err(other)?;
     let (_, stream) =
         protocol::read_reply_message::<protocol::CreateRecordStreamReply>(&mut sock, version).map_err(other)?;
-    log::info!("aigent: recording the microphone, {} µs behind", stream.stream_latency);
+    log::info!("aigent: recording {source:?}, {} µs behind", stream.stream_latency);
 
     // The server's fragments are cut into blocks of exactly `BLOCK`.
     let mut bytes = Vec::new();

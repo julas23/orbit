@@ -27,3 +27,4 @@ serde_yaml_ng.workspace = true
 anyhow.workspace = true
 log.workspace = true
 env_logger.workspace = true
+whisper-rs.workspace = true
