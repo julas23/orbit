@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # orbit-session — starts (or restarts) Orbit-Panel and Orbit-Dock for a
-# Wayland session, in the right order, and Orbit-Notify when no
-# notification server is running (sway's config used to start it).
+# Wayland session, in the right order, Orbit-Notify when no notification
+# server is running (sway's config used to start it), and Orbit-Aigent when
+# it is installed and not running yet.
 #
 #   orbit-session [--fallback COMMAND]
 #
@@ -60,4 +61,13 @@ setsid "$BIN/orbit-dock" >/dev/null 2>&1 < /dev/null &
 # would only toggle the centre.
 if ! busctl --user status org.freedesktop.Notifications >/dev/null 2>&1; then
   setsid "$BIN/orbit-notify" --background >/dev/null 2>&1 < /dev/null &
+fi
+
+# The voice assistant, likewise left running on a restart (a request may be
+# under way). Its log, kept from the last start only, is
+# ~/.local/state/orbit/aigent.log.
+if [ -x "$BIN/orbit-aigent" ] && ! pgrep -x orbit-aigent >/dev/null; then
+  STATE=${XDG_STATE_HOME:-$HOME/.local/state}/orbit
+  mkdir -p "$STATE"
+  RUST_LOG=${RUST_LOG:-info,whisper_rs=warn} setsid "$BIN/orbit-aigent" >"$STATE/aigent.log" 2>&1 < /dev/null &
 fi

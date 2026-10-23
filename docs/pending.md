@@ -160,4 +160,5 @@ and anything that changes something confirmed by a spoken "yes" or a click.
 - [x] Confirmation: anything else goes through `--permission-prompt-tool` to `orbit-aigent approve` (MCP); the daemon asks aloud and takes a spoken yes/no or a click (2026-10-22). Tried end to end with a file write.
 - [ ] Gemini CLI, OpenCode and Kimi Code (not installed on the hp yet): their headless modes and how each asks for permission.
 - [ ] Interrupting it while it speaks (the wake word or a click), and a short sound when woken.
-- [ ] Start with the session; a shortcut in `keys.yaml`; packaging.
+- [x] Started by `orbit-session` (left running on a restart), its log in `~/.local/state/orbit/aigent.log`; deaf while the session is locked (the core sends the lock state on subscribing) (2026-10-23). The lock path awaits a login with the new core.
+- [ ] A shortcut in `keys.yaml` (listen/cancel); packaging (the `vulkan` feature, Piper and the models).

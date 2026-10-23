@@ -68,6 +68,8 @@ enum Event {
     Answered { id: u64, answer: anyhow::Result<agent::Answer> },
     /// The speaker said all of `id`.
     Spoken { id: u64 },
+    /// The session locked (or unlocked).
+    Locked(bool),
 }
 
 fn main() {
@@ -158,12 +160,36 @@ fn daemon() -> anyhow::Result<()> {
             });
         })?;
     }
+    {
+        let events = events.clone();
+        std::thread::Builder::new().name("lock".into()).spawn(move || follow_lock(&events))?;
+    }
     let engine = Engine::new(&config, jobs, events.clone(), Speaker { say, now, hush });
     std::thread::Builder::new()
         .name("socket".into())
         .spawn(move || serve(&listener, &events))?;
     engine.run(&inbox);
     Ok(())
+}
+
+/// Tells the engine when the session locks and unlocks (orbit-core's
+/// `lock` event, sent once at once on subscribing). Under sway, or without
+/// a compositor, nothing is said, and the engine takes it as unlocked.
+fn follow_lock(events: &mpsc::Sender<Event>) {
+    let Ok(mut ipc) = orbit_ipc::Connection::open() else { return };
+    if ipc.request(orbit_ipc::SUBSCRIBE, r#"["lock"]"#).is_err() {
+        return;
+    }
+    let Some(lock) = orbit_ipc::event_type("lock") else { return };
+    while let Ok((kind, body)) = ipc.receive() {
+        if kind != lock {
+            continue;
+        }
+        let change: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+        if events.send(Event::Locked(change["change"] == "locked")).is_err() {
+            return;
+        }
+    }
 }
 
 /// Accepts clients: the engine gets a copy to write to, and a thread reads
@@ -389,11 +415,19 @@ struct Engine {
     approval: Option<UnixStream>,
     asked: Vec<String>,
     allowed: Vec<String>,
+    /// Whether the session is locked: nothing is heard or done then. Not
+    /// known yet at start, which counts as locked until the compositor
+    /// says (or, after 2 s, has nothing to say).
+    locked: Option<bool>,
+    started: Instant,
     /// Blocks heard, for a word in the log now and then, and the loudest
     /// since the last.
     blocks: u64,
     loudest: f32,
 }
+
+/// How long the compositor has to say whether the session is locked.
+const LOCK_UNSAID: Duration = Duration::from_secs(2);
 
 /// Piper's rate, until a sentence says otherwise.
 const VOICE_RATE: u32 = 22_050;
@@ -455,6 +489,8 @@ impl Engine {
             approval: None,
             asked: Vec::new(),
             allowed: Vec::new(),
+            locked: None,
+            started: Instant::now(),
             blocks: 0,
             loudest: f32::NEG_INFINITY,
         }
@@ -477,6 +513,13 @@ impl Engine {
                         self.waiting_for = None;
                         self.heard_back(job, heard, audio);
                     }
+                }
+                Ok(Event::Locked(locked)) => {
+                    log::info!("aigent: the session is {}", if locked { "locked: deaf" } else { "unlocked" });
+                    if locked {
+                        self.cancel();
+                    }
+                    self.locked = Some(locked);
                 }
                 Ok(Event::Approve { tool, input, reply }) => self.approve(&tool, &input, reply),
                 Ok(Event::Answered { id, answer }) => {
@@ -554,6 +597,11 @@ impl Engine {
     }
 
     fn command(&mut self, command: Command) {
+        // Locked, only what stops it.
+        if self.locked != Some(false) && !matches!(command, Command::Cancel | Command::No | Command::Agent { .. }) {
+            log::info!("aigent: locked, {command:?} ignored");
+            return;
+        }
         match command {
             Command::Toggle if self.state == State::Idle => self.enter(State::Listening),
             Command::Toggle | Command::Cancel => self.cancel(),
@@ -582,6 +630,13 @@ impl Engine {
     /// know the room; while waiting, speech is recorded for the wake word,
     /// and while listening, for the request.
     fn block(&mut self, block: &[f32]) {
+        if self.locked != Some(false) {
+            if self.locked.is_none() && self.started.elapsed() > LOCK_UNSAID {
+                log::info!("aigent: the compositor says nothing of a lock: taken as unlocked");
+                self.locked = Some(false);
+            }
+            return;
+        }
         let event = self.vad.push(block);
         if let Some(event) = event {
             log::debug!("aigent: speech {event:?} ({:?}, {:.0} dB)", self.state, vad::level(block));
@@ -840,7 +895,7 @@ impl Engine {
 
     /// The agent asks to use `tool`: the question said, then listened for.
     fn approve(&mut self, tool: &str, input: &serde_json::Value, mut reply: UnixStream) {
-        if self.approval.is_some() || !matches!(self.state, State::Thinking) {
+        if self.approval.is_some() || !matches!(self.state, State::Thinking) || self.locked != Some(false) {
             let _ = reply.write_all(b"{\"approved\":false}\n");
             return;
         }

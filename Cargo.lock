@@ -2985,6 +2985,7 @@ dependencies = [
  "env_logger",
  "log",
  "orbit-audio",
+ "orbit-ipc",
  "pulseaudio",
  "serde",
  "serde_json",
