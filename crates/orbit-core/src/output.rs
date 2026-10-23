@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn the_config_wins_and_the_rest_go_below() {
         let mut config = HashMap::new();
-        config.insert("HDMI-A-1".to_string(), OutputConfig { position: Some((0, 0)) });
+        config.insert("HDMI-A-1".to_string(), OutputConfig { position: Some((0, 0)), ..Default::default() });
         let places = place(&outputs(&[("eDP-1", 1920, 1080), ("HDMI-A-1", 2560, 1440)]), &config);
         assert_eq!(places, vec![(320, 1440), (0, 0)]);
     }

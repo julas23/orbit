@@ -24,6 +24,8 @@
 //! # idle_lock: { default: 600, think: 0, julas: 0 }
 //! outputs:               # where each monitor sits; unnamed ones stack
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
+//!   DP-1: { mode: 1920x1080@60 }        # not its preferred mode (or 1920x1080:
+//!                                       # the fastest at that size)
 //! ```
 
 use std::{collections::HashMap, path::PathBuf};
@@ -111,6 +113,19 @@ pub fn hostname() -> String {
 pub struct OutputConfig {
     /// Top-left corner, in the layout's logical pixels (sway's `position`).
     pub position: Option<(i32, i32)>,
+    /// `WIDTHxHEIGHT` or `WIDTHxHEIGHT@HZ`, instead of the monitor's
+    /// preferred mode (sway's `mode`).
+    pub mode: Option<String>,
+}
+
+/// `1920x1080@60` as (1920, 1080, Some(60.0)); `1920x1080` without the rate.
+pub fn parse_mode(text: &str) -> Option<(u16, u16, Option<f64>)> {
+    let (size, rate) = match text.split_once('@') {
+        Some((size, rate)) => (size, Some(rate.trim_end_matches("Hz").parse().ok()?)),
+        None => (text, None),
+    };
+    let (w, h) = size.split_once('x')?;
+    Some((w.trim().parse().ok()?, h.trim().parse().ok()?, rate))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -291,6 +306,10 @@ mod tests {
         assert!(serde_yaml_ng::from_str::<Config>("gapz: 1").is_err());
         let config: Config = serde_yaml_ng::from_str("outputs: { HDMI-A-1: { position: [0, 1080] } }").unwrap();
         assert_eq!(config.outputs["HDMI-A-1"].position, Some((0, 1080)));
+        assert_eq!(parse_mode("1920x1080@60"), Some((1920, 1080, Some(60.0))));
+        assert_eq!(parse_mode("1920x1080@59.94Hz"), Some((1920, 1080, Some(59.94))));
+        assert_eq!(parse_mode("3840x2160"), Some((3840, 2160, None)));
+        assert_eq!(parse_mode("big"), None);
     }
 
     #[test]

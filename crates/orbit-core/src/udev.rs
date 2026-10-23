@@ -42,7 +42,7 @@ use smithay::{
             EventLoop,
             timer::{TimeoutAction, Timer},
         },
-        drm::control::{ModeTypeFlags, connector, crtc},
+        drm::control::{Mode, ModeTypeFlags, connector, crtc},
         input::Libinput,
         rustix::fs::OFlags,
         wayland_server::backend::GlobalId,
@@ -300,10 +300,38 @@ fn scan(state: &mut Orbit) {
     state.arrange();
 }
 
+/// The mode `wanted` in core.yaml (`1920x1080@60`; without the rate, the
+/// fastest at that size), or the monitor's preferred one.
+fn choose_mode(name: &str, modes: &[Mode], wanted: Option<&str>) -> Option<Mode> {
+    let preferred = || modes.iter().find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED)).or_else(|| modes.first()).copied();
+    let Some(text) = wanted else { return preferred() };
+    let Some((w, h, rate)) = crate::config::parse_mode(text) else {
+        tracing::warn!("{name}: mode {text:?} is not WIDTHxHEIGHT[@HZ]; using the preferred one");
+        return preferred();
+    };
+    // DRM's refresh in millihertz, from the clock and the totals.
+    let hz = |m: &Mode| {
+        let (_, _, htotal) = m.hsync();
+        let (_, _, vtotal) = m.vsync();
+        f64::from(m.clock()) * 1000.0 / (f64::from(htotal) * f64::from(vtotal)).max(1.0)
+    };
+    let sized = modes.iter().filter(|m| m.size() == (w, h));
+    let found = match rate {
+        Some(rate) => sized.min_by(|a, b| (hz(a) - rate).abs().total_cmp(&(hz(b) - rate).abs())),
+        None => sized.max_by(|a, b| hz(a).total_cmp(&hz(b))),
+    }
+    .copied();
+    if found.is_none() {
+        tracing::warn!("{name}: no mode {text}; using the preferred one");
+    }
+    found.or_else(preferred)
+}
+
 fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) {
     let name = format!("{}-{}", connector.interface().as_str(), connector.interface_id());
     let Backend::Drm(drm) = &mut state.backend else { return };
-    let Some(mode) = connector.modes().iter().find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED)).or_else(|| connector.modes().first()).copied() else {
+    let wanted = state.config.outputs.get(&name).and_then(|o| o.mode.clone());
+    let Some(mode) = choose_mode(&name, connector.modes(), wanted.as_deref()) else {
         tracing::warn!("{name}: no modes");
         return;
     };
