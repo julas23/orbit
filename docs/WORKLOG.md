@@ -86,3 +86,10 @@ along), the session open at boot for remote tests, the TV at 1920×1080@60
   monitor and a keyboard with the seat's keymap; the page sends moves as
   fractions of the picture and keys by their place. Tested from the hp:
   works.
+- The deb build's metapackages name no versions: upgrading means
+  `apt-get install --only-upgrade` on every installed `orbit-*`.
+
+### Not tried yet
+
+The latency (the clock photo), the server started with the session, a
+client other than Chrome on the hp. Paused here to go back to orbit-core.

@@ -41,7 +41,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [ ] Phase 2: hotplug, fractional scale, `wlr-output-management`, portal and screen sharing, VRR/tearing. Done when the hp gets a full day without going back to sway.
 - [ ] Phase 3: layouts `bsp`, `master`, `monocle`, `scroll`, per-workspace layouts, named scratchpads. (Tags left out on 2026-10-22: maybe in a later major version.)
 - [ ] Phase 4: animations, shadows, blur, gestures, overview, effects off on battery.
-- [ ] Phase 5: `orbit-remote-server` (§9), Jarvis wallpaper, orbit-aigent integrated with the core, own monitor settings, `orbit-keys` (password app).
+- [ ] Phase 5: `orbit-remote-server` (§9, phase 1 working 2026-10-23), Jarvis wallpaper, orbit-aigent integrated with the core, own monitor settings, `orbit-keys` (password app).
 
 ## 5. Panel
 
@@ -123,13 +123,32 @@ Decided on 2026-10-22:
 The think and the Julas VM are set aside for now: they are the test machines
 for this pair.
 
-- [x] Started 2026-10-23. Decided then: the phase-1 web client is a small HTML/JS page served by the server (Slint stays for `orbit-local-station`, the server's own interface and the phones); the ≤ 20 ms mark is for the native client, the browser's latency measured and noted; the first client is a browser on the think. Capture through wlr-screencopy with damage into a dmabuf first (works on sway too), the private protocol later.
-- [ ] Phase 1, the mirror: capture in the core, VA-API, WebRTC, the browser, pairing. **Done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps.
-  - [x] Working on the Julas VM, the browser on the hp (2026-10-23): orbit-core and the whole stack from the apt repo, the RTX 3050 at 1920×1080@60; capture into dmabufs (linear modifier: NVIDIA's GBM refuses the LINEAR flag), NVENC at 58 fps, 5.0 ms from the copy to H.264; pairing, WebRTC video, and the browser's mouse and keys through wlr-virtual-pointer and virtual-keyboard in the core (b61d73e).
-  - [ ] The latency measured (the clock photo); the browser's stats noted.
-  - [ ] The server started with the session (now started by hand on the VM, log `~/.local/state/orbit/remote.log`).
-  - [ ] Virtual pointer and keyboard open to every client of the session: limit them to orbit-remote-server.
-  - [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
+**Status (2026-10-23, paused):** phase 1 working end to end on the Julas
+VM, the browser on the hp as the client: the VM runs the whole Orbit stack
+from the apt repo (b61d73e) on its RTX 3050 at 1920×1080@60; a browser
+pairs with the code shown on its screen, gets the screen over WebRTC
+(NVENC) and drives it with its mouse and keys. Not measured yet: the
+latency. The day by day is in `docs/WORKLOG.md`.
+
+Done:
+
+- [x] Started 2026-10-23. Decided then: the phase-1 web client is a small HTML/JS page served by the server (Slint stays for `orbit-local-station`, the server's own interface and the phones); the ≤ 20 ms mark is for the native client, the browser's latency measured and noted; the first client is a browser (the hp's, in the end). Capture through wlr-screencopy with damage into a dmabuf first (works on sway too), the private protocol later.
+- [x] Core: screencopy with damage (`copy_with_damage` waits for a change), `outputs` mode in `core.yaml`, the GPU chosen by its render node in sysfs (not QEMU's VGA), wlr-virtual-pointer and virtual-keyboard taken as real devices (2026-10-23).
+- [x] Capture into GBM dmabufs on the render node, four in turn; linear by the flag, else the linear modifier (NVIDIA), else the driver's layout (2026-10-23).
+- [x] Encoding on the GPU, the dmabuf as it is: VA-API (`vapostproc → vah264enc`) or NVENC (`glupload → glcolorconvert → nvh264enc`), CBR 20 Mbit/s, no B-frames. Measured: hp VA-API 7 ms (nested), VM NVENC 58 fps at 1080p, 5.0 ms median, 5.6 ms at 95% from the copy to H.264 (2026-10-23).
+- [x] Serving: port 7311, the page and its WebSocket (pairing, signalling), a six-digit code by notification (five wrong ones make a new one), one client, `webrtcbin` with zero-latency RTP; the page asks the browser for no buffering and shows fps, buffer and decode times (2026-10-23).
+- [x] Remote mouse and keys: the page sends moves as fractions of the picture, buttons, the wheel and keys by place (`KeyboardEvent.code`); the server's virtual pointer is over the shared monitor, its keyboard uses the seat's keymap; full screen holds the keyboard (Chrome's Keyboard Lock). Tested from the hp: works (b61d73e).
+- [x] Julas VM as the server: sway, rofi and Sunshine removed, Orbit and its metapackages from the repo, its own home on its disk (data folders linked to `/mnt/jas`), session open at boot (`/etc/orbit/login.yaml`, backup `.antes-remoto`), packages `orbit-login`, `orbit-prompter`, `orbit-remote-server` added to the build (2026-10-23).
+
+Pending:
+
+- [ ] Phase 1 **done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps (for the native client; the browser's noted). Note the page's stats too.
+- [ ] The server started with the session (now by hand on the VM: `orbit-remote-server serve`, log `~/.local/state/orbit/remote.log`).
+- [ ] The virtual pointer and keyboard are open to every client of the session: only orbit-remote-server's (the private protocol, or a client check).
+- [ ] Pairing only while the session is unlocked; the remote greeter.
+- [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
+- [ ] Audio (Opus) to the client.
+- [ ] Ctrl+Alt+Backspace from the client ends the server's session: hold it back from remote keyboards.
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
 - [ ] Phase 3: gamepads, microphone and webcam; `orbit-local-station` on Slint's LinuxKMS.
 - [ ] Later: Android and iOS clients (check Slint's iOS support then).
