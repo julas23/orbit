@@ -253,7 +253,13 @@ fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events:
             Job::Reply => wake.as_mut().or(request.as_mut()),
             Job::Wake | Job::WakeAgain | Job::Request => request.as_mut().or(wake.as_mut()),
         };
-        let prompt = if matches!(job, Job::Request | Job::Reply) { "" } else { &prompt };
+        // The wake words for finding the name (in English, so not for a
+        // request); requests as they are often said for hearing one.
+        let prompt = match job {
+            Job::Wake | Job::WakeAgain => &prompt,
+            Job::Request => &config.hints,
+            Job::Reply => "",
+        };
         let heard = stt.and_then(|stt| {
             stt.hear(&audio, prompt, job == Job::Request)
                 .inspect_err(|err| log::warn!("aigent: Whisper: {err:#}"))

@@ -234,7 +234,7 @@ mod tests {
                     .chunks_exact(4)
                     .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
                     .collect();
-                let heard = stt.hear(&audio, "", true).unwrap();
+                let heard = stt.hear(&audio, &std::env::var("ORBIT_AIGENT_PROMPT").unwrap_or_default(), true).unwrap();
                 eprintln!("{model} {}: {heard:?}", file.rsplit('/').next().unwrap_or(file));
             }
         }

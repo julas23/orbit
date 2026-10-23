@@ -14,6 +14,9 @@
 //! model: large-v3-turbo-q5_0   # and hearing the request
 //! microphone: alsa_input.usb-…   # a source's node name (`wpctl inspect`);
 //!                          # the default one when left out
+//! hints: "Que horas são? …"  # Whisper's prompt for a request: requests as
+//!                          # they are often said, so short ones are heard
+//!                          # right ("que horas são", not "que oração")
 //! voices:                  # Piper's, in ~/.local/share/orbit/aigent/voices
 //!   pt: pt_BR-faber-medium
 //!   en: en_US-ryan-medium
@@ -48,6 +51,7 @@ pub struct Config {
     pub wake_model: String,
     pub model: String,
     pub microphone: Option<String>,
+    pub hints: String,
     /// Piper's voice for each language, `voices/<name>.onnx`.
     pub voices: std::collections::HashMap<String, String>,
 }
@@ -62,6 +66,9 @@ impl Default for Config {
             model: if cfg!(feature = "vulkan") { "large-v3-turbo-q5_0" } else { "small-q5_1" }.into(),
             microphone: None,
             voices: Default::default(),
+            hints: "Que horas são? Abra o terminal. Quanto espaço livre tem no disco? \
+                    What time is it? Open the browser."
+                .into(),
         }
     }
 }
