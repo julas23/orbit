@@ -153,7 +153,7 @@ impl Stt {
                 n += 1;
             }
         }
-        (text.trim().to_owned(), if n == 0 { f32::NEG_INFINITY } else { sum / n as f32 })
+        (unrepeated(text.trim()), if n == 0 { f32::NEG_INFINITY } else { sum / n as f32 })
     }
 }
 
@@ -171,6 +171,19 @@ pub fn prompt(wake: &[String]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// `text` with a sentence said again straight after itself said once:
+/// Whisper, on a short bit, may repeat it ("Para. Para. Para.").
+fn unrepeated(text: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for sentence in text.split_inclusive(['.', '!', '?']) {
+        if out.last().is_some_and(|last| letters(last) == letters(sentence)) {
+            continue;
+        }
+        out.push(sentence);
+    }
+    out.concat().trim().to_owned()
 }
 
 /// `text` in lower case, letters only, to compare two hearings.
@@ -216,6 +229,13 @@ mod tests {
     /// each model (or those in `$ORBIT_AIGENT_MODELS`, separated by `,`) as
     /// a request: `ORBIT_AIGENT_RAW=a.raw
     /// cargo test --release -p orbit-aigent hears -- --ignored --nocapture`.
+    #[test]
+    fn repeated_sentences_are_said_once() {
+        assert_eq!(unrepeated("Para. Para. Para."), "Para.");
+        assert_eq!(unrepeated("Sim. Não. Sim."), "Sim. Não. Sim.");
+        assert_eq!(unrepeated("Abra o terminal"), "Abra o terminal");
+    }
+
     #[test]
     fn the_prompt_names_the_words() {
         assert_eq!(prompt(&["jarvis".into(), "orbit".into()]), "Ok Jarvis. Ok Orbit.");

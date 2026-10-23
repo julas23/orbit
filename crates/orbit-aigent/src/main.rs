@@ -666,6 +666,9 @@ impl Engine {
         }
         match self.state {
             State::Idle => self.wait(event),
+            // Saying an answer, it listens for its name too, to be cut
+            // short ("Jarvis, para", or a new request).
+            State::Speaking if self.interruptible() => self.wait(event),
             // Answering while the question is still being said: it stops,
             // and the answer is heard from its start.
             State::Speaking
@@ -744,7 +747,7 @@ impl Engine {
         };
         match job {
             Job::Wake | Job::WakeAgain => {
-                if self.state != State::Idle {
+                if self.state != State::Idle && !self.interruptible() {
                     return;
                 }
                 let Some((taken, rest)) = wake::split_at(&heard.text, &self.wake_words) else {
@@ -758,6 +761,17 @@ impl Engine {
                     }
                     return;
                 };
+                if self.state == State::Speaking {
+                    log::info!("aigent: interrupted");
+                    self.speaker.hush.store(true, Ordering::SeqCst);
+                    self.speaking = None;
+                }
+                // "Jarvis, para": done, without hearing it again.
+                if is_stop(&rest) {
+                    log::info!("aigent: told to stop: {rest:?}");
+                    self.enter(State::Idle);
+                    return;
+                }
                 if !rest.is_empty() {
                     // Called and asked in one breath: the request heard
                     // again, from after the name. With the name, an English
@@ -817,10 +831,21 @@ impl Engine {
         }
     }
 
+    /// Whether what is being said may be cut short by the name: an answer,
+    /// not a question waiting for its own.
+    fn interruptible(&self) -> bool {
+        self.state == State::Speaking && matches!(self.speaking, Some((_, Then::Wait)))
+    }
+
     /// What to do, in `language`.
     fn request(&mut self, request: String, language: &str) {
         if request.trim().is_empty() {
             log::info!("aigent: nothing to do");
+            self.enter(State::Idle);
+            return;
+        }
+        if is_stop(&request) {
+            log::info!("aigent: told to stop: {request:?}");
             self.enter(State::Idle);
             return;
         }
@@ -1266,6 +1291,27 @@ fn wants(tool: &str, input: &serde_json::Value) -> Vec<String> {
     }
 }
 
+/// Whether a request only says to stop ("para", "chega", "stop"): it
+/// silences the voice and goes no further.
+fn is_stop(request: &str) -> bool {
+    // Said around the word that stops it, and left out.
+    const AROUND: [&str; 14] = ["por", "favor", "please", "ok", "a", "com", "isso", "boca", "agora", "now", "up", "it", "jarvis", "orbit"];
+    const STOP: [&str; 15] = [
+        "para", "pare", "parar", "chega", "cancela", "cancelar", "silêncio", "silencio", "quieto", "cala", "stop", "cancel", "enough",
+        "quiet", "shut",
+    ];
+    let words: Vec<String> = request
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .filter(|w| !AROUND.contains(&w.as_str()))
+        .collect();
+    // Whisper may say it over and over ("Para. Para. Para.").
+    let mut words = words;
+    words.dedup();
+    !words.is_empty() && words.len() <= 2 && words.iter().all(|w| STOP.contains(&w.as_str()))
+}
+
 /// Yes or no in what was said, Portuguese or English; `None` when unclear.
 fn yes_or_no(text: &str) -> Option<bool> {
     let words: Vec<String> = text
@@ -1319,6 +1365,16 @@ mod tests {
             }
         }
         out
+    }
+
+    #[test]
+    fn stop_requests_are_told_apart() {
+        for stop in ["Para.", "Chega!", "Cancela, por favor.", "Stop.", "Cala a boca.", "Para com isso.", "Para. Para. Para. Para."] {
+            assert!(is_stop(stop), "{stop}");
+        }
+        for request in ["Para onde vai o arquivo?", "Abre o terminal.", "Stop the music player.", "Isso"] {
+            assert!(!is_stop(request), "{request}");
+        }
     }
 
     #[test]
