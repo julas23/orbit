@@ -59,7 +59,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 | orbit-read | medium | Done (alpha) | TXT and MD are simple; PDF needs a rendering library |
 | orbit-files | high | Done (alpha) | A file manager has many edge cases (Yazi as reference) |
 | orbit-edit | high | Done (alpha) | A real text editor |
-| orbit-aigent | high | Started | Voice layer for talking to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget (§13) |
+| orbit-aigent | high | Working (alpha) | Voice layer for talking to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget (§13) |
 
 Only the station pair (§9) is still to be started.
 
@@ -150,16 +150,36 @@ across it: white waiting, red listening, yellow speaking, the colour
 sweeping in from the edge. Decided on 2026-10-22: a wake word (the
 microphone always open), Portuguese and English detected by themselves,
 and anything that changes something confirmed by a spoken "yes" or a click.
+The day by day is in `docs/WORKLOG.md`.
+
+**Status (2026-10-23):** working end to end on the hp with Claude Code, by
+the user's voice: "Jarvis, …" → Whisper on the iGPU → `claude -p` → Piper,
+with spoken confirmation of changes and interruption by the name. Started
+by `orbit-session`. Not tried yet: speakers (echo cancelling set up, tried
+only with the headset), the lock (needs a login with the new core), the
+other three agents (not installed).
+
+Done:
 
 - [x] Daemon: microphone, voice detection, states, socket; `orbit-aigent demo` (2026-10-22).
-- [x] Panel module: the sphere in both sizes, clicks and the agents' menu (2026-10-22). Awaiting a look on screen.
-- [x] Whisper (whisper.cpp in the daemon, CPU): base finds the wake word, small hears the request; pt and en, Portuguese on a near tie; the name cut off a request said in one breath; the microphone chosen in `aigent.yaml` (2026-10-22). Tried with the user's voice on the K66.
-- [x] Whisper on the iGPU (Vulkan, the `vulkan` feature, built by `install.sh` when `glslc` is there): small finds the wake word in 0.4 s, large-v3-turbo hears the request in about 2 s, and hears right what small and medium misheard (2026-10-22).
-- [x] Claude Code headless (`claude -p`, stream-json), the session resumed between requests, told its answer is spoken; reading tools and look-only commands free (2026-10-22).
+- [x] Panel module: the sphere in both sizes, clicks, the agents' menu, yes/no while it asks (2026-10-22).
+- [x] Whisper (whisper.cpp in the daemon): the wake word loosely matched ("Javis", "Já viz"), pt and en with Portuguese on a near tie, the name cut off a request said in one breath, a request said while the name was being heard kept (2026-10-22).
+- [x] Whisper on the iGPU (Vulkan, the `vulkan` feature, built by `install.sh` when `glslc` is there): small finds the wake word in 0.4 s, large-v3-turbo hears the request in about 2 s; hints for short requests and for yes/no answers (2026-10-22/23).
+- [x] Claude Code headless (`claude -p`, stream-json), the session resumed between requests, told its answer is spoken and that the desktop is Orbit; reading tools and look-only commands free (2026-10-22/23).
 - [x] Piper: the answer said sentence by sentence in the request's language (`pw-play`), the sphere moving with the voice (2026-10-22).
-- [x] Confirmation: anything else goes through `--permission-prompt-tool` to `orbit-aigent approve` (MCP); the daemon asks aloud and takes a spoken yes/no or a click (2026-10-22). Tried end to end with a file write.
+- [x] Confirmation: `--permission-prompt-tool` → `orbit-aigent approve` (MCP) → the daemon asks aloud ("Posso abrir o kitty?"), an answer said over the question counts, a yes holds for the rest of the request; spoken yes/no or a click (2026-10-23).
+- [x] Interrupting it while it speaks: "Jarvis, para" silences it, anything else after the name is a new request (2026-10-23).
+- [x] Started by `orbit-session` (left running on a restart), its log in `~/.local/state/orbit/aigent.log`; deaf while the session is locked (2026-10-23).
+- [x] Its own voice through speakers taken out: PipeWire's echo canceller as `orbit-aigent-mic` (`data/pipewire/60-orbit-aigent-aec.conf`), and speech that is mostly its own words ignored (2026-10-23).
+- [x] Core, for it: `move … to output`, and the lock state sent on subscribing (2026-10-23).
+
+Pending:
+
+- [ ] Try with speakers: no self-interruption, "Jarvis, para" and confirmations through the echo canceller.
+- [ ] Try the lock after a login with the new core (log: "the session is locked: deaf").
 - [ ] Gemini CLI, OpenCode and Kimi Code (not installed on the hp yet): their headless modes and how each asks for permission.
-- [x] Interrupting it while it speaks: the wake word cuts an answer short ("Jarvis, para" just silences it, anything else is a new request); a click as before (2026-10-23).
 - [ ] A short sound when woken.
-- [x] Started by `orbit-session` (left running on a restart), its log in `~/.local/state/orbit/aigent.log`; deaf while the session is locked (the core sends the lock state on subscribing) (2026-10-23). The lock path awaits a login with the new core.
-- [ ] A shortcut in `keys.yaml` (listen/cancel); packaging (the `vulkan` feature, Piper and the models).
+- [ ] A shortcut in `keys.yaml` (listen/cancel).
+- [ ] Packaging: the `vulkan` feature, Piper and its voices, the models (about 800 MB), the PipeWire file.
+- [ ] Speaking the answer while it is still being written (stream-json), for a shorter wait.
+- [ ] The diagnostics left in the log (room level every 30 s, `ORBIT_AIGENT_DUMP`) once it has run a while.
