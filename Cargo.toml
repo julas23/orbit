@@ -83,6 +83,8 @@ gst-video = { package = "gstreamer-video", version = "0.25", features = ["v1_24"
 gst-allocators = { package = "gstreamer-allocators", version = "0.25", features = ["v1_24"] }
 gst-webrtc = { package = "gstreamer-webrtc", version = "0.25", features = ["v1_24"] }
 gst-sdp = { package = "gstreamer-sdp", version = "0.25" }
+# orbit-remote-server: the browser's WebSocket (signalling only).
+tungstenite = "0.30"
 gst-plugin-gtk4 = { version = "0.15", features = ["wayland", "gtk_v4_14"] }
 # orbit-edit: GtkSourceView 5 — highlighting, search, the minimap.
 sourceview5 = { version = "0.11", features = ["v5_10"] }

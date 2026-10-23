@@ -2,6 +2,7 @@
 //!
 //!   orbit-remote-server capture [OUTPUT]   measure the capture for 10 s
 //!   orbit-remote-server encode [OUTPUT]    and the encoding
+//!   orbit-remote-server [serve] [OUTPUT]   share it with a browser (port 7311)
 //!
 //! A sharing layer of orbit-core, not a second desktop (pending §9): it
 //! takes the monitor's frames as they change (`capture`), encodes them on
@@ -10,6 +11,10 @@
 
 mod capture;
 mod encode;
+mod serve;
+
+/// The port of the page and its WebSocket.
+const PORT: u16 = 7311;
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -19,8 +24,10 @@ fn main() {
         ["capture", output] => capture::measure(Some(output)),
         ["encode"] => encode::measure(None),
         ["encode", output] => encode::measure(Some(output)),
+        [] | ["serve"] => serve::serve(PORT, None),
+        ["serve", output] => serve::serve(PORT, Some(output.to_string())),
         _ => {
-            eprintln!("usage: orbit-remote-server capture|encode [OUTPUT]");
+            eprintln!("usage: orbit-remote-server [serve|capture|encode] [OUTPUT]");
             std::process::exit(2);
         }
     };

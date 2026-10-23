@@ -29,8 +29,8 @@ use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
 
-/// Buffers taken in turn.
-const BUFFERS: usize = 3;
+/// Buffers taken in turn (see `encode`).
+pub const BUFFERS: usize = 4;
 /// DRM's XRGB8888 (`XR24`), what orbit-core copies into.
 const XRGB8888: u32 = u32::from_le_bytes(*b"XR24");
 const LINEAR: u64 = 0;
@@ -42,8 +42,6 @@ pub struct Plane {
     pub height: u32,
     pub stride: u32,
     pub offset: u32,
-    pub fourcc: u32,
-    pub modifier: u64,
 }
 
 /// A frame captured into buffer `index`.
@@ -51,8 +49,6 @@ pub struct Captured {
     pub index: usize,
     /// What changed since the last frame, in pixels (x, y, w, h).
     pub damage: Vec<(u32, u32, u32, u32)>,
-    /// When the compositor finished it (CLOCK_MONOTONIC).
-    pub presented: Duration,
 }
 
 pub struct Capture {
@@ -139,8 +135,6 @@ impl Capture {
                 height,
                 stride: object.stride_for_plane(0),
                 offset: object.offset(0),
-                fourcc,
-                modifier: LINEAR,
             };
             let params = dmabuf.create_params(&qh, ());
             params.add(plane.fd.as_fd(), 0, plane.offset, plane.stride, (LINEAR >> 32) as u32, LINEAR as u32);
@@ -179,7 +173,7 @@ impl Capture {
         }
         frame.copy_with_damage(&self.buffers[index]);
         self.conn.flush()?;
-        while self.state.frame.ready.is_none() && !self.state.frame.failed {
+        while !self.state.frame.ready && !self.state.frame.failed {
             self.queue.blocking_dispatch(&mut self.state)?;
         }
         frame.destroy();
@@ -189,7 +183,6 @@ impl Capture {
         Ok(Captured {
             index,
             damage: std::mem::take(&mut self.state.frame.damage),
-            presented: self.state.frame.ready.unwrap_or_default(),
         })
     }
 }
@@ -227,7 +220,7 @@ struct FrameState {
     dmabuf: Option<(u32, u32, u32)>,
     buffer_done: bool,
     damage: Vec<(u32, u32, u32, u32)>,
-    ready: Option<Duration>,
+    ready: bool,
     failed: bool,
 }
 
@@ -244,10 +237,7 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for State {
             frame::Event::LinuxDmabuf { format, width, height } => f.dmabuf = Some((format, width, height)),
             frame::Event::BufferDone => f.buffer_done = true,
             frame::Event::Damage { x, y, width, height } => f.damage.push((x, y, width, height)),
-            frame::Event::Ready { tv_sec_hi, tv_sec_lo, tv_nsec } => {
-                let secs = (u64::from(tv_sec_hi) << 32) | u64::from(tv_sec_lo);
-                f.ready = Some(Duration::new(secs, tv_nsec));
-            }
+            frame::Event::Ready { .. } => f.ready = true,
             frame::Event::Failed => f.failed = true,
             _ => {}
         }

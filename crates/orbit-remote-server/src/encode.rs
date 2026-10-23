@@ -4,17 +4,15 @@
 //! `vah264enc` encodes it: constant bitrate, no B-frames, a key frame every
 //! two seconds and whenever the other end asks (a lost frame).
 //!
-//! A buffer is the pipeline's from when it is pushed until its encoded
-//! frame comes out (one out for each in, in order: no B-frames); the
-//! capture waits for it meanwhile (`busy`).
+//! The capture's buffers are taken in turn (`capture::BUFFERS`): one is
+//! drawn into again three frames after it was pushed, 50 ms at 60 fps,
+//! while the pipeline lets go of it within the 8 ms it takes to encode.
+//!
+//! The encoded frames go to an `appsink` (`measure`) or, for a client,
+//! through `rtph264pay` to WebRTC (`Tail::WebRtc`).
 
 use std::{
-    collections::VecDeque,
     os::fd::AsFd,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
     time::{Duration, Instant},
 };
 
@@ -29,22 +27,27 @@ pub const BITRATE_KBPS: u32 = 20_000;
 /// A key frame at least this often, in frames.
 const KEY_INTERVAL: u32 = 120;
 
-/// The encoder: frames in (`push`), H.264 access units out of `sink`.
+/// Where the encoded frames go.
+pub enum Tail {
+    /// An `appsink`, to read them (`Encoder::pull`).
+    Sink,
+    /// RTP into this `webrtcbin`.
+    WebRtc(gst::Element),
+}
+
+/// The encoder: frames in (`push`), H.264 out of its tail.
 pub struct Encoder {
     pub pipeline: gst::Pipeline,
     source: gst_app::AppSrc,
-    pub sink: gst_app::AppSink,
+    sink: Option<gst_app::AppSink>,
     allocator: gst_allocators::DmaBufAllocator,
-    /// Per capture buffer: in the pipeline; and the buffers in it, oldest
-    /// first.
-    pub busy: Arc<Vec<AtomicBool>>,
-    in_flight: Mutex<VecDeque<usize>>,
     start: Instant,
 }
 
 impl Encoder {
-    /// A pipeline for `planes` (the capture's buffers, all the same size).
-    pub fn new(planes: &[Plane]) -> anyhow::Result<Self> {
+    /// A pipeline for `planes` (the capture's buffers, all the same size)
+    /// into `tail`, playing.
+    pub fn new(planes: &[Plane], tail: Tail) -> anyhow::Result<Self> {
         gst::init()?;
         let first = planes.first().context("no buffers")?;
         let caps = gst::Caps::builder("video/x-raw")
@@ -77,20 +80,40 @@ impl Encoder {
             .build()
             .context("no vah264enc (VA-API H.264 encoding)")?;
         let parse = gst::ElementFactory::make("h264parse").property("config-interval", -1i32).build()?;
-        let au = gst::Caps::builder("video/x-h264").field("stream-format", "byte-stream").field("alignment", "au").build();
-        let sink = gst_app::AppSink::builder().caps(&au).sync(false).max_buffers(4).build();
-
         let pipeline = gst::Pipeline::new();
-        pipeline.add_many([source.upcast_ref(), &convert, &filter, &encoder, &parse, sink.upcast_ref()])?;
-        gst::Element::link_many([source.upcast_ref(), &convert, &filter, &encoder, &parse, sink.upcast_ref()])?;
+        pipeline.add_many([source.upcast_ref(), &convert, &filter, &encoder, &parse])?;
+        gst::Element::link_many([source.upcast_ref(), &convert, &filter, &encoder, &parse])?;
+        let sink = match tail {
+            Tail::Sink => {
+                let au = gst::Caps::builder("video/x-h264").field("stream-format", "byte-stream").field("alignment", "au").build();
+                let sink = gst_app::AppSink::builder().caps(&au).sync(false).max_buffers(4).build();
+                pipeline.add(&sink)?;
+                parse.link(&sink)?;
+                Some(sink)
+            }
+            Tail::WebRtc(webrtc) => {
+                // Each frame sent as soon as it is there, not gathered.
+                let pay = gst::ElementFactory::make("rtph264pay")
+                    .property("config-interval", -1i32)
+                    .property_from_str("aggregate-mode", "zero-latency")
+                    .build()?;
+                let rtp = gst::Caps::builder("application/x-rtp")
+                    .field("media", "video")
+                    .field("encoding-name", "H264")
+                    .field("payload", 96i32)
+                    .build();
+                let filter = gst::ElementFactory::make("capsfilter").property("caps", &rtp).build()?;
+                pipeline.add_many([&pay, &filter, &webrtc])?;
+                gst::Element::link_many([&parse, &pay, &filter, &webrtc])?;
+                None
+            }
+        };
         pipeline.set_state(gst::State::Playing)?;
         Ok(Self {
             pipeline,
             source,
             sink,
             allocator: gst_allocators::DmaBufAllocator::new(),
-            busy: Arc::new(planes.iter().map(|_| AtomicBool::new(false)).collect()),
-            in_flight: Mutex::default(),
             start: Instant::now(),
         })
     }
@@ -118,26 +141,21 @@ impl Encoder {
             let pts = gst::ClockTime::from_nseconds(self.start.elapsed().as_nanos() as u64);
             buffer.set_pts(pts);
         }
-        self.busy[frame.index].store(true, Ordering::SeqCst);
-        self.in_flight.lock().unwrap().push_back(frame.index);
         self.source.push_buffer(buffer).map_err(|e| anyhow!("pushing a frame: {e:?}"))?;
         Ok(())
     }
 
-    /// The next encoded frame (an H.264 access unit), within `wait`; the
-    /// capture buffer it came from is free again.
+    /// The next encoded frame (an H.264 access unit), within `wait`; with
+    /// the `Sink` tail only.
     pub fn pull(&self, wait: Duration) -> Option<gst::Sample> {
-        let sample = self.sink.try_pull_sample(gst::ClockTime::from_nseconds(wait.as_nanos() as u64))?;
-        if let Some(index) = self.in_flight.lock().unwrap().pop_front() {
-            self.busy[index].store(false, Ordering::SeqCst);
-        }
-        Some(sample)
+        self.sink.as_ref()?.try_pull_sample(gst::ClockTime::from_nseconds(wait.as_nanos() as u64))
     }
 
-    /// Asks for a key frame now (the other end lost one).
-    pub fn key_frame(&self) {
-        let event = gst_video::UpstreamForceKeyUnitEvent::builder().all_headers(true).build();
-        self.sink.send_event(event);
+}
+
+impl Drop for Encoder {
+    fn drop(&mut self) {
+        let _ = self.pipeline.set_state(gst::State::Null);
     }
 }
 
@@ -146,7 +164,7 @@ impl Encoder {
 /// stream is, and writes it to `$XDG_RUNTIME_DIR/orbit-remote-test.h264`.
 pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
     let mut capture = Capture::open(output, true)?;
-    let encoder = Encoder::new(&capture.planes)?;
+    let encoder = Encoder::new(&capture.planes, Tail::Sink)?;
     let out_path = std::env::temp_dir().join("orbit-remote-test.h264");
     let path = std::env::var_os("XDG_RUNTIME_DIR").map_or(out_path, |d| std::path::PathBuf::from(d).join("orbit-remote-test.h264"));
     let mut file = std::fs::File::create(&path)?;
@@ -164,7 +182,7 @@ pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
         bytes += map.len();
         frames += 1;
     }
-    encoder.pipeline.set_state(gst::State::Null)?;
+    drop(encoder);
     latencies.sort();
     let at = |q: f64| latencies[((latencies.len() - 1) as f64 * q) as usize];
     let seconds = start.elapsed().as_secs_f64();
