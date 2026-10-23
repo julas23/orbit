@@ -64,3 +64,25 @@ end to end with Claude Code, by the user's voice, in one session.
 
 Speakers (echo cancelling), the lock with the new core, Gemini CLI,
 OpenCode and Kimi Code.
+
+## Orbit-Remote-Server — 2026-10-23
+
+The Julas VM became the server: sway, rofi and Sunshine removed, the whole
+Orbit stack from the local apt repo, its own home on its disk (the shared
+one was the hp's, mirrored, and brought the hp's binaries and SSH keys
+along), the session open at boot for remote tests, the TV at 1920×1080@60
+(`outputs` mode in core.yaml). The browser on the hp is the client.
+
+- The core took QEMU's VGA card: Smithay gives a card without a render
+  node one of another card; the GPU is now one whose render node sysfs
+  shows.
+- NVIDIA's GBM refuses the LINEAR flag; the linear modifier works.
+- nvh264enc was missing from a stale GStreamer registry cache.
+- NVENC's first frame takes over a second (its CUDA context).
+- Measured: 58 fps at 1080p, 5.0 ms median and 5.6 ms at 95% from the copy
+  to H.264 (VA-API on the hp, nested: 7 ms).
+- Remote mouse and keys: the core speaks wlr-virtual-pointer and
+  virtual-keyboard (Smithay's), the server makes a pointer over the shared
+  monitor and a keyboard with the seat's keymap; the page sends moves as
+  fractions of the picture and keys by their place. Tested from the hp:
+  works.

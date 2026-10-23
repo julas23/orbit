@@ -125,6 +125,11 @@ for this pair.
 
 - [x] Started 2026-10-23. Decided then: the phase-1 web client is a small HTML/JS page served by the server (Slint stays for `orbit-local-station`, the server's own interface and the phones); the ≤ 20 ms mark is for the native client, the browser's latency measured and noted; the first client is a browser on the think. Capture through wlr-screencopy with damage into a dmabuf first (works on sway too), the private protocol later.
 - [ ] Phase 1, the mirror: capture in the core, VA-API, WebRTC, the browser, pairing. **Done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps.
+  - [x] Working on the Julas VM, the browser on the hp (2026-10-23): orbit-core and the whole stack from the apt repo, the RTX 3050 at 1920×1080@60; capture into dmabufs (linear modifier: NVIDIA's GBM refuses the LINEAR flag), NVENC at 58 fps, 5.0 ms from the copy to H.264; pairing, WebRTC video, and the browser's mouse and keys through wlr-virtual-pointer and virtual-keyboard in the core (b61d73e).
+  - [ ] The latency measured (the clock photo); the browser's stats noted.
+  - [ ] The server started with the session (now started by hand on the VM, log `~/.local/state/orbit/remote.log`).
+  - [ ] Virtual pointer and keyboard open to every client of the session: limit them to orbit-remote-server.
+  - [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
 - [ ] Phase 3: gamepads, microphone and webcam; `orbit-local-station` on Slint's LinuxKMS.
 - [ ] Later: Android and iOS clients (check Slint's iOS support then).
