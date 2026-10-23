@@ -1,0 +1,23 @@
+[package]
+name = "orbit-remote-server"
+description = "Orbit-Remote-Server: the session, shared over the network (WebRTC), for a browser or orbit-local-station"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+wayland-protocols-wlr.workspace = true
+gbm.workspace = true
+rustix.workspace = true
+gst.workspace = true
+gst-app.workspace = true
+gst-video.workspace = true
+gst-allocators.workspace = true

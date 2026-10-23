@@ -1748,6 +1748,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "gstreamer-allocators"
+version = "0.25.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58945dc4d271f16e99fdea35cdbb1161c6cbfa0db9b8511d4e4ccf34bd4e8ef9"
+dependencies = [
+ "glib 0.22.10",
+ "gstreamer",
+ "gstreamer-allocators-sys",
+ "libc",
+]
+
+[[package]]
+name = "gstreamer-allocators-sys"
+version = "0.25.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c56f6a624f91b9cffbfcab33ce87743836ab36a1d14c1bb743c4fc3849bbe7c"
+dependencies = [
+ "glib-sys 0.22.9",
+ "gobject-sys 0.22.9",
+ "gstreamer-sys",
+ "libc",
+ "system-deps 9.0.0",
+]
+
+[[package]]
+name = "gstreamer-app"
+version = "0.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97f8ae9238c2352398dcc084de28df3f7099af216ac6c160b52318d23f25c010"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "glib 0.22.10",
+ "gstreamer",
+ "gstreamer-app-sys",
+ "gstreamer-base",
+ "libc",
+]
+
+[[package]]
+name = "gstreamer-app-sys"
+version = "0.25.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0798b8aef6694341d40bb81edc759f8979b896b59f9f0f45d8cfa3bb7bf2e743"
+dependencies = [
+ "glib-sys 0.22.9",
+ "gstreamer-base-sys",
+ "gstreamer-sys",
+ "libc",
+ "system-deps 9.0.0",
+]
+
+[[package]]
 name = "gstreamer-base"
 version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3336,6 +3389,24 @@ dependencies = [
  "orbit-common",
  "poppler-rs",
  "pulldown-cmark",
+]
+
+[[package]]
+name = "orbit-remote-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "gbm",
+ "gstreamer",
+ "gstreamer-allocators",
+ "gstreamer-app",
+ "gstreamer-video",
+ "log",
+ "rustix 1.1.5",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
 ]
 
 [[package]]

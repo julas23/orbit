@@ -54,6 +54,10 @@ wayland-scanner = "0.31"
 # orbit-greet: its own queue on GDK's Wayland connection (libwayland's).
 wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# orbit-remote-server: dmabufs for the screen copies (linux-dmabuf), made
+# by GBM on the render node, the versions Smithay uses.
+wayland-protocols = { version = "0.32", features = ["client"] }
+gbm = { version = "0.18", default-features = false }
 rustix = { version = "1", features = ["event", "pipe", "time", "fs"] }
 # orbit-view: image decoding in a sandbox, the engine of GNOME's Loupe. The
 # 2.x series reads the loaders Debian 13 ships (glycin-loaders 1.x, the
@@ -73,6 +77,12 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # gtk4paintablesink element (built in, registered at start).
 gst = { package = "gstreamer", version = "0.25" }
 gst-play = { package = "gstreamer-play", version = "0.25" }
+# orbit-remote-server: dmabufs into the pipeline, and WebRTC.
+gst-app = { package = "gstreamer-app", version = "0.25", features = ["v1_24"] }
+gst-video = { package = "gstreamer-video", version = "0.25", features = ["v1_24"] }
+gst-allocators = { package = "gstreamer-allocators", version = "0.25", features = ["v1_24"] }
+gst-webrtc = { package = "gstreamer-webrtc", version = "0.25", features = ["v1_24"] }
+gst-sdp = { package = "gstreamer-sdp", version = "0.25" }
 gst-plugin-gtk4 = { version = "0.15", features = ["wayland", "gtk_v4_14"] }
 # orbit-edit: GtkSourceView 5 — highlighting, search, the minimap.
 sourceview5 = { version = "0.11", features = ["v5_10"] }
