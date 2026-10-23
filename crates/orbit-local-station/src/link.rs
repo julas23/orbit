@@ -202,6 +202,11 @@ impl Link {
                     self.tell(Event::Busy);
                     self.sleep(RETRY)?;
                 }
+                // A server from before the tokens streams straight away.
+                Some("offer" | "ice") => {
+                    self.tell(Event::Unreachable(format!("{} is too old for the station: update orbit-remote-server", self.server)));
+                    self.sleep(RETRY)?;
+                }
                 other => {
                     self.tell(Event::Unreachable(format!("an unexpected reply: {other:?}")));
                     self.sleep(RETRY)?;
