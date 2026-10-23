@@ -2,7 +2,9 @@
 <!-- Orbit-Remote: the browser client of orbit-remote-server (phase 1, the
      mirror). Served by the server itself; the pairing code shows on the
      server's screen. The video comes over WebRTC, played with as little
-     buffering as the browser allows. -->
+     buffering as the browser allows; the mouse and keys go back on the
+     WebSocket. Full screen (the button, or F11) holds the keyboard too,
+     so the browser's own shortcuts reach the remote session. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -20,9 +22,11 @@
                 border: 1px solid #2a2f3a; background: #141821; color: var(--fg); }
   #pair button { padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: white; font-size: 15px; cursor: pointer; }
   #error { color: #ff6b6b; min-height: 1.4em; }
-  video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; background: black; display: none; }
+  /* The remote pointer is in the picture: the local one hidden over it. */
+  video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; background: black; display: none; cursor: none; }
   #stats { position: fixed; right: 8px; bottom: 8px; padding: 4px 8px; border-radius: 6px; background: #000a; color: var(--dim);
-           font: 12px ui-monospace, monospace; display: none; }
+           font: 12px ui-monospace, monospace; display: none; align-items: center; gap: 8px; }
+  #stats button { padding: 2px 8px; border: 0; border-radius: 4px; background: #2a2f3a; color: var(--fg); font: inherit; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -36,7 +40,7 @@
   </form>
 </div>
 <video id="video" autoplay muted playsinline></video>
-<div id="stats"></div>
+<div id="stats"><span id="numbers"></span><button id="full" title="Full screen, with the keyboard">⛶</button></div>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -83,8 +87,9 @@ async function start() {
     $("video").srcObject = e.streams[0] || new MediaStream([e.track]);
     $("pair").style.display = "none";
     $("video").style.display = "block";
-    $("stats").style.display = "block";
+    $("stats").style.display = "flex";
     stats(e.receiver);
+    input();
   };
 }
 
@@ -102,11 +107,75 @@ function stats(receiver) {
           ? 1000 * (s.jitterBufferDelay - last.jitterBufferDelay) / (s.jitterBufferEmittedCount - last.jitterBufferEmittedCount) : 0;
         const decode = s.framesDecoded > last.framesDecoded
           ? 1000 * (s.totalDecodeTime - last.totalDecodeTime) / (s.framesDecoded - last.framesDecoded) : 0;
-        $("stats").textContent = `${s.frameWidth}×${s.frameHeight} · ${fps.toFixed(0)} fps · buffer ${jitter.toFixed(0)} ms · decode ${decode.toFixed(1)} ms`;
+        $("numbers").textContent = `${s.frameWidth}×${s.frameHeight} · ${fps.toFixed(0)} fps · buffer ${jitter.toFixed(0)} ms · decode ${decode.toFixed(1)} ms`;
       }
       last = s;
     });
   }, 1000);
+}
+
+function send(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+}
+
+// Where on the remote screen a point of the page is, as fractions of it:
+// the picture is letterboxed (object-fit: contain).
+function place(e) {
+  const v = $("video");
+  const scale = Math.min(v.clientWidth / v.videoWidth, v.clientHeight / v.videoHeight);
+  const w = v.videoWidth * scale, h = v.videoHeight * scale;
+  const left = (v.clientWidth - w) / 2, top = (v.clientHeight - h) / 2;
+  return { x: (e.clientX - left) / w, y: (e.clientY - top) / h };
+}
+
+function input() {
+  const v = $("video");
+  v.addEventListener("pointermove", (e) => {
+    if (!v.videoWidth) return;
+    // All the moves since the last event, not only the last one.
+    const moves = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const m of moves.length ? moves : [e]) send({ type: "move", ...place(m) });
+  });
+  v.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    v.setPointerCapture(e.pointerId);
+    send({ type: "move", ...place(e) });
+    send({ type: "button", button: e.button, down: true });
+  });
+  v.addEventListener("pointerup", (e) => {
+    e.preventDefault();
+    send({ type: "button", button: e.button, down: false });
+  });
+  v.addEventListener("contextmenu", (e) => e.preventDefault());
+  v.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    // Lines or pages as pixels, about as the browser scrolls them.
+    const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1;
+    send({ type: "wheel", dx: e.deltaX * unit, dy: e.deltaY * unit });
+  }, { passive: false });
+  // Keys by their place; the remote session repeats them itself. Those
+  // still down when the tab is left are let go.
+  const held = new Set();
+  const key = (down) => (e) => {
+    if (e.target.tagName === "INPUT") return;
+    e.preventDefault();
+    if (down && e.repeat) return;
+    if (down) held.add(e.code); else held.delete(e.code);
+    send({ type: "key", code: e.code, down });
+  };
+  window.addEventListener("keydown", key(true));
+  window.addEventListener("keyup", key(false));
+  window.addEventListener("blur", () => {
+    held.forEach((code) => send({ type: "key", code, down: false }));
+    held.clear();
+  });
+  $("full").addEventListener("click", async () => {
+    if (document.fullscreenElement) return document.exitFullscreen();
+    await document.documentElement.requestFullscreen();
+    // Chrome: in full screen the keyboard can be held, Esc and all (hold
+    // Esc to leave).
+    if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
+  });
 }
 </script>
 </body>

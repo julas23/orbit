@@ -57,6 +57,8 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 # orbit-remote-server: dmabufs for the screen copies (linux-dmabuf), made
 # by GBM on the render node, the versions Smithay uses.
 wayland-protocols = { version = "0.32", features = ["client"] }
+# orbit-remote-server: the remote keys (virtual-keyboard).
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
 gbm = { version = "0.18", default-features = false }
 rustix = { version = "1", features = ["event", "pipe", "time", "fs"] }
 # orbit-view: image decoding in a sandbox, the engine of GNOME's Loupe. The

@@ -26,6 +26,7 @@ env_logger.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
 wayland-protocols-wlr.workspace = true
+wayland-protocols-misc.workspace = true
 gbm.workspace = true
 rustix.workspace = true
 gst.workspace = true

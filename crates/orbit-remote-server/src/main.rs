@@ -6,11 +6,13 @@
 //!
 //! A sharing layer of orbit-core, not a second desktop (pending §9): it
 //! takes the monitor's frames as they change (`capture`), encodes them on
-//! the GPU (VA-API) and sends them over WebRTC to a browser or to
-//! orbit-local-station, and takes the remote keyboard and mouse back.
+//! the GPU (VA-API or NVENC) and sends them over WebRTC to a browser or to
+//! orbit-local-station, and takes the remote keyboard and mouse back
+//! (`input`).
 
 mod capture;
 mod encode;
+mod input;
 mod serve;
 
 /// The port of the page and its WebSocket.

@@ -9,7 +9,8 @@
 //!
 //! A session: `webrtcbin` at the encoder's tail (`encode::Tail::WebRtc`),
 //! offering the video; a thread captures and pushes frames until the
-//! browser goes away.
+//! browser goes away. The browser's mouse and keys come back on the
+//! WebSocket (`input`).
 
 use std::{
     io::ErrorKind,
@@ -30,6 +31,7 @@ use tungstenite::{Message, WebSocket};
 use crate::{
     capture::Capture,
     encode::{Encoder, Tail},
+    input::Input,
 };
 
 const PAGE: &str = include_str!("../web/index.html");
@@ -156,6 +158,7 @@ fn read_json(ws: &mut WebSocket<TcpStream>) -> anyhow::Result<Value> {
 /// Streams to the paired browser on `ws` until it closes.
 fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> {
     let mut capture = Capture::open(shared.output.as_deref(), true)?;
+    let mut input = Input::open(&capture.name)?;
     let webrtc = gst::ElementFactory::make("webrtcbin")
         .property_from_str("bundle-policy", "max-bundle")
         .build()
@@ -224,6 +227,9 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
             Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => break Ok(()),
             Err(err) => break Err(anyhow!("websocket: {err}")),
         };
+        if input.handle(&message)? {
+            continue;
+        }
         match message["type"].as_str() {
             Some("answer") => {
                 let sdp = message["sdp"].as_str().unwrap_or_default();

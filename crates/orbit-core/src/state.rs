@@ -38,6 +38,8 @@ use smithay::{
         seat::WaylandFocus,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
+        virtual_keyboard::VirtualKeyboardManagerState,
+        virtual_pointer::VirtualPointerManagerState,
         xwayland_shell::XWaylandShellState,
         idle_inhibit::IdleInhibitManagerState,
         cursor_shape::CursorShapeManagerState,
@@ -173,6 +175,9 @@ impl Orbit {
         crate::greet::init(&dh);
         // Orbit-Blink, grim: screenshots (`screencopy`).
         crate::screencopy::init(&dh);
+        // orbit-remote-server: the remote mouse and keys (`input`).
+        VirtualPointerManagerState::new::<Self, _>(&dh, |_| true);
+        VirtualKeyboardManagerState::new::<Self, _>(&dh, |_| true);
         let session_lock_state = crate::session_lock::init(&dh);
 
         let mut seat_state = SeatState::new();

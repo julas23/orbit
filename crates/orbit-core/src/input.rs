@@ -3,6 +3,10 @@
 //! window under the pointer takes the keyboard (`focus_follows_mouse`), as
 //! does whatever is clicked.
 //!
+//! The virtual pointer and keyboard (wlr-virtual-pointer,
+//! virtual-keyboard: orbit-remote-server's remote mouse and keys) come in
+//! as the real ones do; their keys are read with the seat's keymap.
+//!
 //! Ported from Smithay's smallvil `src/input.rs` @ 24647fc (MIT, Copyright
 //! (c) 2017 Victor Berger and Victoria Brekenfeld); shortcuts held back from
 //! clients as anvil `src/input_handler.rs` @ 24647fc does (same licence).
@@ -14,11 +18,15 @@ use smithay::{
     },
     desktop::{WindowSurfaceType, layer_map_for_output},
     input::{
-        keyboard::{FilterResult, Keysym},
+        keyboard::{FilterResult, KeyboardSource, Keysym},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::shell::wlr_layer::Layer as WlrLayer,
+    wayland::{
+        shell::wlr_layer::Layer as WlrLayer,
+        virtual_keyboard::{VirtualKeyboardBackend, VirtualKeyboardHandler},
+        virtual_pointer::{VirtualPointerBackend, VirtualPointerHandler},
+    },
 };
 
 use crate::{config::Modifier, state::Orbit};
@@ -47,7 +55,7 @@ impl Orbit {
             self.touched();
         }
         match event {
-            InputEvent::Keyboard { event, .. } => self.key::<I>(event),
+            InputEvent::Keyboard { event, .. } => self.key::<I>(event, KeyboardSource::MAIN),
             // A mouse or touchpad: it moves the pointer by so much.
             InputEvent::PointerMotion { event, .. } => {
                 let Some(pointer) = self.seat.get_pointer() else { return };
@@ -98,12 +106,12 @@ impl Orbit {
         }
     }
 
-    fn key<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
+    fn key<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent, source: KeyboardSource) {
         let Some(keyboard) = self.seat.get_keyboard() else { return };
         let serial = SERIAL_COUNTER.next_serial();
         let code = event.key_code();
         let pressed = event.state() == KeyState::Pressed;
-        let action = keyboard.input::<Option<Action>, _>(self, code, event.state(), serial, Event::time(&event), |state, mods, handle| {
+        let action = keyboard.input_from_source::<Option<Action>, _>(source, self, code, event.state(), serial, Event::time(&event), |state, mods, handle| {
             // Escape while switching windows: back as it was.
             if pressed && state.switcher.is_some() && handle.modified_sym() == Keysym::Escape {
                 state.suppressed.push(code);
@@ -302,5 +310,38 @@ impl Orbit {
         let Some(pointer) = self.seat.get_pointer() else { return };
         pointer.axis(self, frame);
         pointer.frame(self);
+    }
+}
+
+impl VirtualPointerHandler for Orbit {
+    fn process_virtual_pointer_event(&mut self, event: InputEvent<VirtualPointerBackend>) {
+        // Absolute, over the monitor the pointer was made for, if one.
+        if let InputEvent::PointerMotionAbsolute { event } = &event
+            && let Some(output) = event.device().output()
+            && let Some(geo) = self.space.output_geometry(&output)
+        {
+            self.touched();
+            let pos = event.position_transformed(geo.size) + geo.loc.to_f64();
+            self.pointer_to(pos, Event::time(event));
+            return;
+        }
+        self.process_input_event(event);
+    }
+}
+
+impl VirtualKeyboardHandler for Orbit {
+    fn process_virtual_keyboard_event(&mut self, event: InputEvent<VirtualKeyboardBackend>) {
+        match event {
+            InputEvent::Keyboard { event } => {
+                let device = Event::device(&event);
+                if device.keymap().is_some() {
+                    tracing::debug!("a virtual keyboard's own keymap: its keys are read with the seat's");
+                }
+                self.touched();
+                self.key::<VirtualKeyboardBackend>(event, device.source());
+            }
+            // Modifiers come as their keys; keymaps are the seat's.
+            _ => {}
+        }
     }
 }
