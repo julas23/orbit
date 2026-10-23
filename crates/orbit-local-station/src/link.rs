@@ -9,21 +9,34 @@
 //! (`forgotten`) is dropped, and the code asked again; another server
 //! asks for its own.
 //!
+//! Paired, the server offers its video over WebRTC (`video`); the answer,
+//! the ICE candidates and the station's mouse and keys go on the same
+//! WebSocket. The session waits on the socket and on a wake-up (`Wake`)
+//! rung whenever there is something to send, so nothing waits its turn.
+//!
 //! The server lost or gone: tried again every few seconds, for ever. A new
-//! address typed on the station (F2) starts over with it.
+//! address typed on the station (F2) starts over with it. The session left
+//! on the server (`ended`, its compositor gone) is the station's end too.
 
 use std::{
-    io::ErrorKind,
+    io::{ErrorKind, Read, Write},
     net::{TcpStream, ToSocketAddrs},
+    os::unix::net::UnixStream,
     path::PathBuf,
-    sync::mpsc::{Receiver, RecvTimeoutError},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, RecvTimeoutError},
+    },
     time::Duration,
 };
 
 use anyhow::anyhow;
+use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use serde_json::{Value, json};
 use smithay::reexports::calloop::channel;
 use tungstenite::{Message, WebSocket, stream::MaybeTlsStream};
+
+use crate::video::{Frame, Video};
 
 /// What the link tells the station.
 pub enum Event {
@@ -36,10 +49,14 @@ pub enum Event {
     Code { wrong: bool },
     /// Another client is using the server.
     Busy,
-    /// Paired: the session comes next.
+    /// Paired: the video comes next.
     Paired,
+    /// A picture of the session.
+    Frame(Frame),
     /// The session ended (the reason).
     Lost(String),
+    /// The user left the session on the server: the station is done.
+    Ended,
 }
 
 /// What the station tells the link.
@@ -48,6 +65,33 @@ pub enum Command {
     Code(String),
     /// Another server, as `host:port`.
     Server(String),
+    /// The mouse or a key, for the server (`move`, `button`, `wheel`, `key`).
+    Input(Value),
+}
+
+/// Rung to wake the session when there is something to send.
+#[derive(Clone)]
+pub struct Wake(Arc<UnixStream>);
+
+impl Wake {
+    pub fn ring(&self) {
+        // Full means it is rung already.
+        let _ = (&*self.0).write(&[1]);
+    }
+}
+
+/// What the station gives the link.
+pub struct Commands {
+    sender: mpsc::Sender<Command>,
+    wake: Wake,
+}
+
+impl Commands {
+    pub fn send(&self, command: Command) {
+        if self.sender.send(command).is_ok() {
+            self.wake.ring();
+        }
+    }
 }
 
 /// Between tries to reach the server.
@@ -81,19 +125,29 @@ fn save_token(server: &str, token: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Starts the link to `server` (`host:port`); what the station types comes
-/// in on `commands`.
-pub fn start(server: String, events: channel::Sender<Event>, commands: Receiver<Command>) {
+/// Starts the link to `server` (`host:port`), for a monitor of `size`;
+/// what the station types goes to it through what is returned.
+pub fn start(server: String, size: (u32, u32), events: channel::Sender<Event>) -> anyhow::Result<Commands> {
+    let (ring, woken) = UnixStream::pair()?;
+    ring.set_nonblocking(true)?;
+    woken.set_nonblocking(true)?;
+    let wake = Wake(Arc::new(ring));
+    let (sender, commands) = mpsc::channel();
+    let link_wake = wake.clone();
     std::thread::spawn(move || {
-        let mut link = Link { server, events, commands };
+        let mut link = Link { server, size, events, commands, wake: link_wake, woken };
         link.run();
     });
+    Ok(Commands { sender, wake })
 }
 
 struct Link {
     server: String,
+    size: (u32, u32),
     events: channel::Sender<Event>,
     commands: Receiver<Command>,
+    wake: Wake,
+    woken: UnixStream,
 }
 
 /// Why a wait ended early.
@@ -102,6 +156,8 @@ enum Woken {
     Quit,
     /// Another server was typed: start over.
     Server,
+    /// The server said the session is over.
+    Ended,
 }
 
 impl Link {
@@ -118,10 +174,11 @@ impl Link {
         }
     }
 
-    /// A command when no code is wanted: a stale code is dropped.
+    /// A command when no code is wanted: a stale code is dropped, and so is
+    /// input with no session to take it.
     fn command(&mut self, command: Command) -> Result<(), Woken> {
         match command {
-            Command::Code(_) => Ok(()),
+            Command::Code(_) | Command::Input(_) => Ok(()),
             Command::Server(server) => {
                 log::info!("station: the server is now {server}");
                 self.server = server;
@@ -135,6 +192,10 @@ impl Link {
             match self.attempt() {
                 Ok(()) | Err(Woken::Server) => {}
                 Err(Woken::Quit) => return,
+                Err(Woken::Ended) => {
+                    log::info!("station: the session was left on the server");
+                    return self.tell(Event::Ended);
+                }
             }
         }
     }
@@ -215,27 +276,88 @@ impl Link {
         }
     }
 
-    /// The paired session, until it ends: why it did. For now only its
-    /// signalling is read (the video comes with WebRTC next).
+    /// The paired session, until it ends: why it did.
     fn session(&mut self, ws: &mut Socket) -> Result<String, Woken> {
-        if let MaybeTlsStream::Plain(stream) = ws.get_mut() {
-            let _ = stream.set_read_timeout(Some(Duration::from_millis(100)));
+        let (out, outbox) = mpsc::channel::<Value>();
+        let video = match Video::new(self.size, self.events.clone(), out.clone(), self.wake.clone()) {
+            Ok(video) => video,
+            Err(err) => return Ok(format!("{err:#}")),
+        };
+        if let MaybeTlsStream::Plain(stream) = ws.get_mut()
+            && let Err(err) = stream.set_nonblocking(true)
+        {
+            return Ok(err.to_string());
         }
+        let fd = match ws.get_ref() {
+            MaybeTlsStream::Plain(stream) => stream.try_clone().map_err(|_| Woken::Quit)?,
+            _ => return Ok("not a plain connection".into()),
+        };
         loop {
+            // Whatever rang, all is looked at below.
+            while (&self.woken).read(&mut [0u8; 64]).is_ok_and(|n| n > 0) {}
             while let Ok(command) = self.commands.try_recv() {
-                self.command(command)?;
-            }
-            match ws.read() {
-                Ok(Message::Text(text)) => {
-                    let message = serde_json::from_str::<Value>(&text).unwrap_or_default();
-                    log::debug!("station: {}", message["type"]);
+                match command {
+                    Command::Input(message) => {
+                        if let Err(why) = send(ws, &message) {
+                            return Ok(why);
+                        }
+                    }
+                    command => self.command(command)?,
                 }
-                Ok(Message::Close(_)) => return Ok("the server closed the session".into()),
-                Ok(_) => {}
-                Err(tungstenite::Error::Io(err)) if matches!(err.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
-                Err(err) => return Ok(err.to_string()),
             }
+            for message in outbox.try_iter() {
+                if let Err(why) = send(ws, &message) {
+                    return Ok(why);
+                }
+            }
+            if let Some(why) = video.failed() {
+                return Ok(why);
+            }
+            loop {
+                match ws.read() {
+                    Ok(Message::Text(text)) => {
+                        let message = serde_json::from_str::<Value>(&text).unwrap_or_default();
+                        match message["type"].as_str() {
+                            Some("offer") => {
+                                let sdp = message["sdp"].as_str().unwrap_or_default();
+                                if let Err(err) = video.offer(sdp, out.clone(), self.wake.clone()) {
+                                    return Ok(format!("{err:#}"));
+                                }
+                            }
+                            Some("ice") => video.ice(&message),
+                            Some("ended") => return Err(Woken::Ended),
+                            other => log::debug!("station: {other:?}"),
+                        }
+                    }
+                    Ok(Message::Close(_)) => return Ok("the server closed the session".into()),
+                    Ok(_) => {}
+                    Err(tungstenite::Error::Io(err)) if err.kind() == ErrorKind::WouldBlock => break,
+                    Err(err) => return Ok(err.to_string()),
+                }
+            }
+            if let Err(why) = flush(ws) {
+                return Ok(why);
+            }
+            let mut fds = [PollFd::new(&fd, PollFlags::IN), PollFd::new(&self.woken, PollFlags::IN)];
+            let _ = poll(&mut fds, Some(&Timespec { tv_sec: 0, tv_nsec: 100_000_000 }));
         }
+    }
+}
+
+/// A message to the server; a full socket keeps it for the next flush.
+fn send(ws: &mut Socket, message: &Value) -> Result<(), String> {
+    match ws.send(Message::text(message.to_string())) {
+        Ok(()) => Ok(()),
+        Err(tungstenite::Error::Io(err)) if err.kind() == ErrorKind::WouldBlock => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+fn flush(ws: &mut Socket) -> Result<(), String> {
+    match ws.flush() {
+        Ok(()) => Ok(()),
+        Err(tungstenite::Error::Io(err)) if err.kind() == ErrorKind::WouldBlock => Ok(()),
+        Err(err) => Err(err.to_string()),
     }
 }
 

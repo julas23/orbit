@@ -140,21 +140,23 @@ Done:
 - [x] Remote mouse and keys: the page sends moves as fractions of the picture, buttons, the wheel and keys by place (`KeyboardEvent.code`); the server's virtual pointer is over the shared monitor, its keyboard uses the seat's keymap; full screen holds the keyboard (Chrome's Keyboard Lock). Tested from the hp: works (b61d73e).
 - [x] `orbit-local-station` started (2026-10-23): the screen and keyboard straight from a text console through Smithay's backend (libseat, DRM, libinput; no compositor), its own screens in Slint's software renderer (Slint's LinuxKMS backend hands over keys only as text, the server wants them by place). Pairs once by the code; the server hands back a token (it keeps only the SHA-256, `~/.local/state/orbit/remote-tokens`; the station keeps it with the server's address). The server's address typed on the screen when none is set (`~/.config/orbit/station.yaml`, over `/etc/orbit/station.yaml`), F2 for another; Ctrl+Alt+Backspace quits. Tested on the hp against its own server: pairing, token, reconnecting (b386573).
 - [x] The greet chooses Local or Remote, as a display manager chooses a desktop (2026-10-23): Remote has Orbit-Login check the same password (`station` request) and open a second session of the user on a free console running `orbit-local-station`; the local session stays locked on tty1 and comes back when the station quits. Shown only with Orbit-Login and the station installed.
+- [x] `orbit-local-station` shows the session (2026-10-23): webrtcbin, VA-API decoding into a dmabuf put on the screen as it is, the picture fitted whole; the keys (evdev codes) and the mouse go to the server, Ctrl+Alt+Backspace and Ctrl+Alt+F1…F12 kept locally; leaving the session on the server (`ended`) quits the station. Tested on the hp: works.
 - [x] Server: keys also by their evdev code (the station's); view only when the compositor has no virtual pointer, instead of dropping the client.
 - [x] Julas VM as the server: sway, rofi and Sunshine removed, Orbit and its metapackages from the repo, its own home on its disk (data folders linked to `/mnt/jas`), session open at boot (`/etc/orbit/login.yaml`, backup `.antes-remoto`), packages `orbit-login`, `orbit-prompter`, `orbit-remote-server` added to the build (2026-10-23).
 
 Pending:
 
 - [ ] Phase 1 **done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps (for the native client; the browser's noted). Note the page's stats too.
-- [ ] The server started with the session (now by hand on the VM: `orbit-remote-server serve`, log `~/.local/state/orbit/remote.log`).
+- [x] The server started with the session: on the Julas VM a `startup:` line in `~/.config/orbit/core.yaml` (hostname-guarded, behind the lock, log `~/.local/state/orbit/remote.log`). Machine-local for now; a packaged default (user service or core option) still to decide.
 - [ ] The virtual pointer and keyboard are open to every client of the session: only orbit-remote-server's (the private protocol, or a client check).
 - [ ] Pairing only while the session is unlocked; the remote greeter.
 - [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
 - [ ] Audio (Opus) to the client.
 - [ ] Ctrl+Alt+Backspace from the client ends the server's session: hold it back from remote keyboards.
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
-- [ ] `orbit-local-station`: the video (webrtcbin, VA-API decoding into a dmabuf drawn as a GLES texture), then the keys and mouse to the server (evdev codes, relative motion), Ctrl+Alt+Backspace held back locally.
+- [ ] Several monitors, only when the station has two or more (the hp has two): the server gives the session as many screens (phase 2's virtual outputs, one stream each), the station shows each on its own monitor, the pointer crossing between them as locally. With one monitor everything stays as it is.
 - [ ] Phase 3: gamepads, microphone and webcam.
+- [ ] The station's USB and Bluetooth devices in the session. To decide: recreated on the server (read on the station, a virtual device there, as the gamepads, microphone and webcam) or passed through whole (USB/IP). Bluetooth devices stay paired on the station; headphones need only the audio channel.
 - [ ] Later: Android and iOS clients (check Slint's iOS support then).
 - [ ] External drive on the client (TV, FireStick, Android, iOS) visible to the session; the user's whole environment possibly living on it.
 - [ ] Goal: replace Sunshine + Moonlight on the Julas VM.

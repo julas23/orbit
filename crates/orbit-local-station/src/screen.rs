@@ -3,6 +3,8 @@
 //! logind) hands over the GPU and the input devices and takes them back on
 //! a VT switch; libinput reads the keyboard; one monitor shows the
 //! station, the first connected one or the one named in station.yaml.
+//! The session's video fills it; the station's own screens show over it
+//! when there is no video.
 //!
 //! The same pieces of Smithay as orbit-core's `udev.rs`, without its
 //! Wayland side: frames are drawn when something changed and the last one
@@ -24,11 +26,20 @@ use smithay::{
             output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
         },
         egl::{EGLContext, EGLDisplay},
-        input::{InputEvent, KeyState, KeyboardKeyEvent},
+        allocator::dmabuf::Dmabuf,
+        input::{
+            AbsolutePositionEvent, Axis, AxisSource, ButtonState, InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+            PointerMotionEvent,
+        },
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            element::{Kind, memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement}},
-            gles::GlesRenderer,
+            ImportDma, Renderer,
+            element::{
+                Id, Kind,
+                memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
+                texture::TextureRenderElement,
+            },
+            gles::{GlesRenderer, GlesTexture},
         },
         session::{Event as SessionEvent, Session, libseat::LibSeatSession},
         udev::{all_gpus, primary_gpu},
@@ -40,6 +51,7 @@ use smithay::{
         input::Libinput,
         rustix::fs::OFlags,
     },
+    render_elements,
     utils::{DeviceFd, Transform},
 };
 
@@ -49,7 +61,12 @@ use crate::Station;
 const FORMATS: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 type Output = DrmOutput<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
-type Element = MemoryRenderBufferRenderElement<GlesRenderer>;
+
+render_elements! {
+    Element<=GlesRenderer>;
+    Ui=MemoryRenderBufferRenderElement<GlesRenderer>,
+    Video=TextureRenderElement<GlesTexture>,
+}
 
 pub struct Screen {
     pub session: LibSeatSession,
@@ -69,6 +86,22 @@ pub struct Key {
     pub code: u32,
     pub down: bool,
 }
+
+/// The mouse.
+pub enum Pointer {
+    /// Moved by this much, in pixels.
+    By(f64, f64),
+    /// Moved to here, as fractions of the screen.
+    To(f64, f64),
+    /// A button (evdev's code) pressed or let go.
+    Button { code: u32, down: bool },
+    /// The wheel, in the browser's pixels (about 100 a notch).
+    Wheel { dx: f64, dy: f64 },
+}
+
+/// A touchpad's scroll (Wayland's units, about 15 a notch) in the
+/// browser's pixels, which the server takes.
+const SCROLL_TO_WHEEL: f64 = 100.0 / 15.0;
 
 /// The GPU to draw with: `$ORBIT_DRM_DEVICE` when set, otherwise the one the
 /// firmware booted with when it can render, otherwise the first that can
@@ -138,12 +171,25 @@ impl Screen {
         libinput.udev_assign_seat(&seat).map_err(|()| anyhow!("libinput: no seat {seat}"))?;
         event_loop
             .handle()
-            .insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, station| {
-                if let InputEvent::Keyboard { event } = event {
+            .insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, station| match event {
+                InputEvent::Keyboard { event } => {
                     // xkb's numbers are evdev's plus 8.
                     let code = event.key_code().raw().saturating_sub(8);
                     station.key(Key { code, down: event.state() == KeyState::Pressed });
                 }
+                InputEvent::PointerMotion { event } => station.pointer(Pointer::By(event.delta_x(), event.delta_y())),
+                InputEvent::PointerMotionAbsolute { event } => station.pointer(Pointer::To(event.x_transformed(1), event.y_transformed(1))),
+                InputEvent::PointerButton { event } => {
+                    station.pointer(Pointer::Button { code: event.button_code(), down: event.state() == ButtonState::Pressed });
+                }
+                InputEvent::PointerAxis { event } => {
+                    let amount = |axis| match event.source() {
+                        AxisSource::Wheel | AxisSource::WheelTilt => event.amount_v120(axis).map_or(0.0, |v| v / 120.0 * 100.0),
+                        _ => event.amount(axis).unwrap_or(0.0) * SCROLL_TO_WHEEL,
+                    };
+                    station.pointer(Pointer::Wheel { dx: amount(Axis::Horizontal), dy: amount(Axis::Vertical) });
+                }
+                _ => {}
             })
             .map_err(|e| anyhow!("libinput in the event loop: {e}"))?;
 
@@ -153,6 +199,7 @@ impl Screen {
             .insert_source(notifier, move |event, _, station| match event {
                 SessionEvent::PauseSession => {
                     log::info!("session paused");
+                    station.paused();
                     libinput.suspend();
                     station.screen.manager.pause();
                 }
@@ -193,16 +240,39 @@ impl Screen {
         self.dirty = true;
     }
 
-    /// Draws `ui` if something changed and the screen can take a frame.
-    pub fn draw(&mut self, ui: &MemoryRenderBuffer) {
+    /// Draws the `video`, with `ui` over it if given, if something changed
+    /// and the screen can take a frame.
+    pub fn draw(&mut self, ui: Option<&MemoryRenderBuffer>, video: Option<&Dmabuf>) {
         if !self.dirty || self.waiting || !self.session.is_active() {
             return;
         }
-        let element = match MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), ui, None, None, None, Kind::Unspecified) {
-            Ok(element) => element,
-            Err(err) => return log::warn!("the station's screen: {err:?}"),
-        };
-        match self.output.render_frame(&mut self.renderer, &[element], [0.0, 0.0, 0.0, 1.0], FrameFlags::DEFAULT) {
+        let mut elements = Vec::with_capacity(2);
+        if let Some(ui) = ui {
+            match MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), ui, None, None, None, Kind::Unspecified) {
+                Ok(element) => elements.push(Element::Ui(element)),
+                Err(err) => return log::warn!("the station's screen: {err:?}"),
+            }
+        }
+        if let Some(video) = video {
+            match self.renderer.import_dmabuf(video, None) {
+                // A new id each picture: all of it is new.
+                Ok(texture) => elements.push(Element::Video(TextureRenderElement::from_static_texture(
+                    Id::new(),
+                    self.renderer.context_id(),
+                    (0.0, 0.0),
+                    texture,
+                    1,
+                    Transform::Normal,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Kind::Unspecified,
+                ))),
+                Err(err) => log::warn!("the video's picture: {err:?}"),
+            }
+        }
+        match self.output.render_frame(&mut self.renderer, &elements, [0.0, 0.0, 0.0, 1.0], FrameFlags::DEFAULT) {
             Ok(result) if !result.is_empty => match self.output.queue_frame(()) {
                 Ok(()) => {
                     self.waiting = true;

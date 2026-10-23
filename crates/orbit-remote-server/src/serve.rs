@@ -13,7 +13,8 @@
 //! A session: `webrtcbin` at the encoder's tail (`encode::Tail::WebRtc`),
 //! offering the video; a thread captures and pushes frames until the
 //! browser goes away. The browser's mouse and keys come back on the
-//! WebSocket (`input`).
+//! WebSocket (`input`). The capture stopping (the user left the session,
+//! its compositor gone) is told as `ended`, for the client not to come back.
 
 use std::{
     io::ErrorKind,
@@ -295,6 +296,8 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
             break Err(anyhow!("websocket: {err}"));
         }
         if pusher.is_finished() {
+            // The compositor went away under it: the user left the session.
+            let _ = ws.send(Message::text(json!({ "type": "ended" }).to_string()));
             break Err(anyhow!("the capture stopped"));
         }
         let message = match ws.read() {

@@ -13,23 +13,28 @@
 //! kept in the user's file. `output:` there picks the monitor (as
 //! `HDMI-A-1`), else the first connected one.
 //!
-//! F2 types another server; Ctrl+Alt+F1…F12 change the console;
-//! Ctrl+Alt+Backspace quits.
+//! While the session's video shows, the keys and the mouse are the
+//! server's, but for Ctrl+Alt+F1…F12, which change the console, and
+//! Ctrl+Alt+Backspace, which quits; leaving the session on the server
+//! quits too. Before it, F2 types another server.
 
 mod link;
 mod screen;
 mod ui;
+mod video;
 
-use std::{collections::HashSet, path::PathBuf, sync::mpsc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, time::Duration};
 
 use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use smithay::reexports::calloop::{EventLoop, channel};
 
 use crate::{
-    link::{Command, Event},
-    screen::{Key, Screen},
+    link::{Command, Commands, Event},
+    screen::{Key, Pointer, Screen},
     ui::Ui,
+    video::Frame,
 };
 
 /// orbit-remote-server's port.
@@ -100,7 +105,7 @@ pub struct Station {
     /// Ctrl+Alt+Backspace was pressed.
     quit: bool,
     /// To the link, once there is a server.
-    commands: Option<mpsc::Sender<Command>>,
+    commands: Option<Commands>,
     events: channel::Sender<Event>,
     server: Option<String>,
     typing: Typing,
@@ -108,6 +113,10 @@ pub struct Station {
     asked_code: bool,
     /// The keys held down, by their evdev code.
     held: HashSet<u32>,
+    /// The session's last picture, while it shows.
+    video: Option<Frame>,
+    /// Where the mouse is, in the screen's pixels.
+    at: (f64, f64),
 }
 
 // evdev's codes (linux/input-event-codes.h).
@@ -164,10 +173,71 @@ fn console(code: u32) -> Option<i32> {
     }
 }
 
+/// The browser's numbers for evdev's buttons, which the server takes.
+fn browser_button(code: u32) -> Option<u32> {
+    Some(match code {
+        0x110 => 0, // BTN_LEFT
+        0x112 => 1, // BTN_MIDDLE
+        0x111 => 2, // BTN_RIGHT
+        0x113 => 3, // BTN_SIDE
+        0x114 => 4, // BTN_EXTRA
+        _ => return None,
+    })
+}
+
 impl Station {
+    /// Mouse and keys for the server, while its video shows.
+    fn input(&self, message: serde_json::Value) {
+        if let Some(commands) = &self.commands {
+            commands.send(Command::Input(message));
+        }
+    }
+
+    /// The console left: what is held is let go on the server, which would
+    /// otherwise keep it down.
+    pub fn paused(&mut self) {
+        if self.video.is_some() {
+            for code in &self.held {
+                self.input(json!({ "type": "key", "evdev": code, "down": false }));
+            }
+        }
+        self.held.clear();
+    }
+
+    pub fn pointer(&mut self, pointer: Pointer) {
+        let Some(video) = &self.video else { return };
+        let (width, height) = (f64::from(self.screen.size.0), f64::from(self.screen.size.1));
+        let message = match pointer {
+            Pointer::By(dx, dy) => {
+                self.at = ((self.at.0 + dx).clamp(0.0, width - 1.0), (self.at.1 + dy).clamp(0.0, height - 1.0));
+                None
+            }
+            Pointer::To(x, y) => {
+                self.at = (x * width, y * height);
+                None
+            }
+            Pointer::Button { code, down } => browser_button(code).map(|button| json!({ "type": "button", "button": button, "down": down })),
+            Pointer::Wheel { dx, dy } => Some(json!({ "type": "wheel", "dx": dx, "dy": dy })),
+        };
+        match message {
+            Some(message) => self.input(message),
+            None => {
+                // The picture is fitted whole, centred: where in it the mouse is.
+                let (sw, sh) = (f64::from(video.source.0), f64::from(video.source.1));
+                let scale = (width / sw).min(height / sh);
+                let (left, top) = ((width - sw * scale) / 2.0, (height - sh * scale) / 2.0);
+                let x = ((self.at.0 - left) / (sw * scale)).clamp(0.0, 1.0);
+                let y = ((self.at.1 - top) / (sh * scale)).clamp(0.0, 1.0);
+                self.input(json!({ "type": "move", "x": x, "y": y }));
+            }
+        }
+    }
+
     pub fn key(&mut self, key: Key) {
         if !key.down {
-            self.held.remove(&key.code);
+            if self.held.remove(&key.code) && self.video.is_some() {
+                self.input(json!({ "type": "key", "evdev": key.code, "down": false }));
+            }
             return;
         }
         self.held.insert(key.code);
@@ -185,6 +255,9 @@ impl Station {
                 self.quit = true;
                 return;
             }
+        }
+        if self.video.is_some() {
+            return self.input(json!({ "type": "key", "evdev": key.code, "down": true }));
         }
         match &mut self.typing {
             Typing::Address { text, before } => match key.code {
@@ -246,7 +319,7 @@ impl Station {
                 face.set_asking(false);
                 face.set_code("".into());
                 if let Some(commands) = &self.commands {
-                    let _ = commands.send(Command::Code(code));
+                    commands.send(Command::Code(code));
                 }
             }
             Typing::Code(code) => {
@@ -281,14 +354,14 @@ impl Station {
         face.set_server(server.as_str().into());
         face.set_status("Connecting…".into());
         match &self.commands {
-            Some(commands) => {
-                let _ = commands.send(Command::Server(server.clone()));
-            }
-            None => {
-                let (commands, commands_in) = mpsc::channel();
-                link::start(server.clone(), self.events.clone(), commands_in);
-                self.commands = Some(commands);
-            }
+            Some(commands) => commands.send(Command::Server(server.clone())),
+            None => match link::start(server.clone(), self.screen.size, self.events.clone()) {
+                Ok(commands) => self.commands = Some(commands),
+                Err(err) => {
+                    log::error!("station: the link: {err:#}");
+                    self.ui.face.set_problem(format!("{err:#}").into());
+                }
+            },
         }
         self.server = Some(server);
     }
@@ -304,6 +377,19 @@ impl Station {
     }
 
     fn link(&mut self, event: Event) {
+        // Back to the greet, through Orbit-Login.
+        if let Event::Ended = event {
+            self.quit = true;
+            return;
+        }
+        if let Event::Frame(frame) = event {
+            if self.video.is_none() {
+                log::info!("station: the video shows, {}x{} from the server", frame.source.0, frame.source.1);
+                self.at = (f64::from(self.screen.size.0) / 2.0, f64::from(self.screen.size.1) / 2.0);
+            }
+            self.video = Some(frame);
+            return self.screen.changed();
+        }
         // The address being typed stays on the screen; the link's news wait.
         if let Typing::Address { .. } = self.typing {
             if let Event::Code { .. } = event {
@@ -325,13 +411,19 @@ impl Station {
                 face.set_problem("".into());
             }
             Event::Paired => {
-                face.set_status("Paired".into());
+                face.set_status("Paired, waiting for the video…".into());
                 face.set_problem("".into());
             }
             Event::Lost(why) => {
                 face.set_status("The session ended".into());
                 face.set_problem(why.into());
+                // What was held there is gone with it.
+                self.held.clear();
+                if self.video.take().is_some() {
+                    self.screen.changed();
+                }
             }
+            Event::Frame(_) | Event::Ended => {}
         }
     }
 }
@@ -384,15 +476,24 @@ fn run() -> anyhow::Result<()> {
         })
         .map_err(|e| anyhow!("the link in the event loop: {e}"))?;
 
-    let mut station =
-        Station { screen, ui, quit: false, commands: None, events, server: None, typing: Typing::Nothing, asked_code: false, held: HashSet::new() };
+    let mut station = Station {
+        screen,
+        ui,
+        quit: false,
+        commands: None,
+        events,
+        server: None,
+        typing: Typing::Nothing,
+        asked_code: false,
+        held: HashSet::new(),
+        video: None,
+        at: (0.0, 0.0),
+    };
     match server {
         Some(server) => {
             station.ui.face.set_server(server.as_str().into());
             station.ui.face.set_status("Connecting…".into());
-            let (commands, commands_in) = mpsc::channel();
-            link::start(server.clone(), station.events.clone(), commands_in);
-            station.commands = Some(commands);
+            station.commands = Some(link::start(server.clone(), station.screen.size, station.events.clone())?);
             station.server = Some(server);
         }
         None => station.edit_server(),
@@ -402,7 +503,9 @@ fn run() -> anyhow::Result<()> {
         if station.ui.update() {
             station.screen.changed();
         }
-        station.screen.draw(&station.ui.buffer);
+        // The station's own screens only when there is no video.
+        let ui = station.video.is_none().then_some(&station.ui.buffer);
+        station.screen.draw(ui, station.video.as_ref().map(|frame| &frame.dmabuf));
         // Asleep until an event, or until Slint has something to do.
         let wake = station.ui.next_wake();
         event_loop.dispatch(wake, &mut station)?;
