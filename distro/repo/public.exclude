@@ -1,0 +1,8 @@
+# public.exclude — Orbit packages left out of the public repository
+# (orbit-public, https://rationalazimuth.com/orbit): metapackages that depend
+# on the third-party packages only the local repository carries (VS Code,
+# Obsidian, Bitwarden, ArtCraft...), which apt could not install from it.
+orbit-apps
+orbit-dev
+orbit-media
+orbit-studio

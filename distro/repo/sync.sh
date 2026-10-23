@@ -17,6 +17,10 @@
 #       github.list (ArtCraft, third parties) and the newest packages of the
 #       vendors' repositories in vendors.list (VS Code, Firefox) — only the
 #       newest: those repositories keep every version ever made
+#   http://SERVER/orbit-public trixie main   Orbit's own packages only, but
+#       those in public.exclude (metapackages that need the third parties):
+#       what may go to the internet — push-public.sh copies it to
+#       https://rationalazimuth.com/orbit
 #
 # GitHub's API allows 60 requests an hour without a token: set GITHUB_TOKEN
 # (e.g. in /etc/orbit-repo.env, read below) for more.
@@ -232,15 +236,23 @@ aptly snapshot create "debian-updates-$STAMP" from mirror debian-updates
 aptly snapshot create "debian-security-$STAMP" from mirror debian-security
 aptly snapshot merge -latest "debian-all-$STAMP" "debian-$STAMP" "debian-updates-$STAMP" "debian-security-$STAMP"
 aptly snapshot create "orbit-local-$STAMP" from repo orbit-local
+public="Name (= __none__)"
+for deb in "$INCOMING"/orbit/*.deb; do
+    [[ -f "$deb" ]] || continue
+    name=$(dpkg-deb -f "$deb" Package)
+    names "$DIR/public.exclude" | grep -qx "$name" || public+=" | Name (= $name)"
+done
+aptly snapshot filter "orbit-local-$STAMP" "orbit-public-$STAMP" "$public"
 publish debian "debian-all-$STAMP"
 publish orbit "orbit-local-$STAMP"
+publish orbit-public "orbit-public-$STAMP"
 gpg --export "$KEY" > /srv/aptly/public/orbit-archive-keyring.gpg
 
 log "Old snapshots"
 # The last 7 of each kind stay (to switch back to); packages none of them
 # holds leave the pool. The merged ones first: aptly refuses to drop a
 # snapshot another one was made from. A refusal is said, not fatal.
-for kind in debian-all orbit-local debian debian-updates debian-security; do
+for kind in debian-all orbit-public orbit-local debian debian-updates debian-security; do
     aptly snapshot list -raw -sort=time | grep -E "^$kind-[0-9]{8}-[0-9]{6}$" | head -n -7 | while read -r old; do
         if aptly snapshot drop "$old" >/dev/null 2>&1; then echo "dropped $old"; else echo "kept $old (still used)"; fi
     done

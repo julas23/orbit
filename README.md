@@ -477,10 +477,28 @@ sets the font.
 ## Building and running
 
 **From packages.** Orbit is packaged as `.deb` (`distro/build-debs.sh`) and
-served, with the part of Debian 13 it needs, from the Orbit apt repository
-(see [Orbit Linux](#orbit-linux)). For now that repository is a pre-release
-on the author's network; once public, a Debian 13 system becomes Orbit with
-`apt install orbit-desktop`.
+served from its public apt repository, **https://rationalazimuth.com/orbit**,
+for Debian 13 (trixie) on amd64. Add its key and source, and a Debian 13
+system becomes Orbit:
+
+```sh
+curl -fsSL https://rationalazimuth.com/orbit/orbit-archive-keyring.gpg \
+  | sudo tee /usr/share/keyrings/orbit-archive-keyring.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/orbit-archive-keyring.gpg] https://rationalazimuth.com/orbit trixie main" \
+  | sudo tee /etc/apt/sources.list.d/orbit.list
+sudo apt update
+sudo apt install orbit-desktop     # the whole session: core, login, panel, dock and every application
+```
+
+Or only some programs, e.g. `sudo apt install orbit-panel orbit-dock` on
+another compositor, or `orbit-files`, `orbit-term`, `orbit-view`… one by
+one. Every Orbit package has the same version (`0.1.0+git<date>.<commit>`),
+so `sudo apt upgrade` keeps them in step. The rest comes from Debian's own
+repositories. The public repository carries only Orbit's packages: the
+metapackages that need third-party ones (`orbit-apps`, `orbit-media`,
+`orbit-studio`, `orbit-dev`) are only in the full repository of
+[Orbit Linux](#orbit-linux). The key is still a pre-release one ("Orbit Linux
+Archive (pre-release)") and may be replaced before 1.0.
 
 **From source.** Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
@@ -545,7 +563,11 @@ Debian's. The plan (in Portuguese) is in
   other projects' official `.deb` releases; the newest VS Code and Firefox.
   Signed, synced every night, and self-sufficient: a system debootstraps and
   installs every metapackage from it alone. Running on the author's network
-  for now.
+  for now; its Orbit part (`orbit-public`: Orbit's packages without the
+  metapackages in [`public.exclude`](distro/repo/public.exclude)) is copied
+  by `distro/repo/push-public.sh` to the public repository,
+  https://rationalazimuth.com/orbit (how to use it: [Building and
+  running](#building-and-running)).
 - **Installation.** A live ISO with one screen and an **INSTALL** button
   (orbit-install, in Rust and GTK like the rest), offline: disk, hostname,
   user and password, and which metapackages. Boot is EFISTUB with a unified
