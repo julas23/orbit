@@ -140,6 +140,16 @@ fn accept(state: &mut Orbit, stream: UnixStream) {
             let (kind, payload) = message;
             let reply = state.ipc_request(id, kind, &payload);
             state.ipc_send(id, kind, &reply);
+            // Orbit's own: the `lock` event, subscribed to, is sent once at
+            // once with the state now, so a client started behind the lock
+            // (orbit-aigent) knows it is there.
+            if kind == proto::SUBSCRIBE
+                && let Some(lock) = proto::event_type("lock")
+                && serde_json::from_slice::<Vec<String>>(&payload).is_ok_and(|names| names.iter().any(|n| n == "lock"))
+            {
+                let change = if state.locked() { "locked" } else { "unlocked" };
+                state.ipc_send(id, lock, &serde_json::json!({ "change": change }));
+            }
         }
         Ok(PostAction::Continue)
     });
