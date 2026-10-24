@@ -98,6 +98,38 @@ chmod -R u=rwX,go=rX "$dir"
 find "$dir" -exec touch -h -d @1755734400 {} +
 SOURCE_DATE_EPOCH=1755734400 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-fonts_${FONTS_VERSION}-1_all.deb" >/dev/null
 rm -rf "$dir"
+# orbit-ruffle: Ruffle's own build, as orbit-fonts is made.
+RUFFLE_NIGHTLY=2026-10-20
+RUFFLE_SHA256=4b9031f38d029dea0fdab69c5ad8886507a4bce753eb7d18fa1bdc4ba9a4bc2c
+ruffle="$ROOT/target/ruffle/ruffle-$RUFFLE_NIGHTLY.tar.gz"
+if ! echo "$RUFFLE_SHA256  $ruffle" | sha256sum -c --status 2>/dev/null; then
+    mkdir -p "$(dirname "$ruffle")"
+    curl -fsSL -o "$ruffle" "https://github.com/ruffle-rs/ruffle/releases/download/nightly-$RUFFLE_NIGHTLY/ruffle-nightly-${RUFFLE_NIGHTLY//-/_}-linux-x86_64.tar.gz"
+    echo "$RUFFLE_SHA256  $ruffle" | sha256sum -c --status || { echo "Ruffle's download is not the one expected" >&2; exit 1; }
+fi
+dir=$(mktemp -d)
+mkdir -p "$dir/DEBIAN" "$dir/usr/bin" "$dir/usr/share/applications" "$dir/usr/share/metainfo" \
+    "$dir/usr/share/icons/hicolor/scalable/apps" "$dir/usr/share/doc/orbit-ruffle"
+tar -xzOf "$ruffle" ruffle > "$dir/usr/bin/ruffle"
+tar -xzOf "$ruffle" extras/rs.ruffle.Ruffle.desktop > "$dir/usr/share/applications/rs.ruffle.Ruffle.desktop"
+tar -xzOf "$ruffle" extras/rs.ruffle.Ruffle.metainfo.xml > "$dir/usr/share/metainfo/rs.ruffle.Ruffle.metainfo.xml"
+tar -xzOf "$ruffle" extras/rs.ruffle.Ruffle.svg > "$dir/usr/share/icons/hicolor/scalable/apps/rs.ruffle.Ruffle.svg"
+tar -xzOf "$ruffle" LICENSE.md > "$dir/usr/share/doc/orbit-ruffle/copyright"
+{
+    echo "Package: orbit-ruffle"
+    echo "Version: 0.8.0~nightly${RUFFLE_NIGHTLY//-/}-1"
+    echo "Architecture: amd64"
+    echo "Maintainer: Juliano <julianoas@gmail.com>"
+    echo "Priority: optional"
+    echo "Homepage: https://ruffle.rs"
+    echo "Provides: ruffle"
+    cat "$ROOT/distro/ruffle/control"
+} > "$dir/DEBIAN/control"
+chmod -R u=rwX,go=rX "$dir"
+chmod 755 "$dir/usr/bin/ruffle"
+find "$dir" -exec touch -h -d @1760918400 {} +
+SOURCE_DATE_EPOCH=1760918400 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-ruffle_0.8.0~nightly${RUFFLE_NIGHTLY//-/}-1_amd64.deb" >/dev/null
+rm -rf "$dir"
 ls -1 "$OUT"
 
 if [ -n "$UPLOAD" ]; then

@@ -219,7 +219,8 @@ Amarradas às fases do PLANO-CORE.
   `distro/build-debs.sh` gerando os 15 `.deb` e os metapacotes
   (`orbit-desktop`, `orbit-studio`, `orbit-apps`, `orbit-media`, `orbit-dev`),
   e o repositório da seção 7. Falta: CI, e o hp/think usando os pacotes.
-- `orbit-defaults` (feito 2026-10-23), `orbit-ruffle`; `orbit-common-data` desnecessário.
+- `orbit-defaults`, `orbit-fonts`, `orbit-ruffle` (feitos 2026-10-23); `orbit-common-data` desnecessário.
+- CI (feito 2026-10-23): `.github/workflows/debs.yml` → `distro/ci/build.sh` num contêiner Debian 13; os .deb ficam como artefato. Publicar continua em casa.
 - Repositório apt na VPS + `orbit-archive-keyring`; CI publicando a cada tag.
 - **Pronto quando:** o hp troca o `install.sh` pelos pacotes sem diferença no
   uso; o **think** instala tudo com `apt install orbit-desktop` (fecha a

@@ -1,0 +1,26 @@
+# Orbit's packages, built on Debian 13 at each push to main and on demand;
+# the .debs are kept as the run's artifact. Publishing stays at home
+# (distro/build-debs.sh --upload, distro/repo/push-public.sh): the
+# repository server is on the LAN.
+name: debs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  debs:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: git, for the checkout to keep its history
+        run: apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null
+      - uses: actions/checkout@v4
+      - name: Build
+        run: SRC="$GITHUB_WORKSPACE" OUT="$GITHUB_WORKSPACE/out" distro/ci/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-debs
+          path: out/*.deb
+          retention-days: 14

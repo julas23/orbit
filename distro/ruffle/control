@@ -1,0 +1,5 @@
+Description: Ruffle, the Flash player Orbit-Play hands Flash movies to
+ Ruffle's own build, from its release (it has nightlies only); Debian has
+ no Ruffle. Under MIT or Apache-2.0.
+Section: video
+Depends: libc6, libgcc-s1, libfreetype6, libssl3t64, libasound2t64, libudev1, libwayland-client0, libxkbcommon0, libgl1 | libvulkan1
