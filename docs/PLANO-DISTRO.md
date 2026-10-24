@@ -51,8 +51,8 @@ copia os binários para `~/.local/bin` e os `.desktop` de `data/` para
 | `orbit-calc`, `orbit-clip`, `orbit-blink` | Binário + `.desktop` + ícone |
 | `orbit-view`, `orbit-read`, `orbit-play`, `orbit-edit`, `orbit-files` | Binário + `.desktop` com os tipos MIME + ícone |
 | `orbit-core`, `orbit-greet`, `orbit-login`, `orbitctl` | Existem desde 2026-10-22 (PLANO-CORE §7); `orbit-greet` traz `/etc/pam.d/orbit-greet`, `orbit-login` o serviço de sistema |
-| `orbit-common-data` | Paletas e CSS compartilhados (`palette-*.css`, `style.css`), traduções (`data/i18n`) |
-| `orbit-defaults` | Aplicativos padrão (`/usr/share/applications/orbit-mimeapps.list`), sessão em `/usr/share/wayland-sessions/`, tema de ícones e GTK, dock e painel iniciais |
+| ~~`orbit-common-data`~~ | Desnecessário (2026-10-23): paletas, CSS e traduções vão compilados nos binários (`include_str!` em `orbit-app`) |
+| `orbit-defaults` | Feito em 2026-10-23 (`distro/defaults/`): aplicativos padrão (`/usr/share/applications/orbit-mimeapps.list`, gerado dos tipos MIME dos apps; texto no Edit, a web fica com o navegador), o override do GSettings (tema escuro) e os exemplos em `/usr/share/doc/orbit/examples`. A sessão já vem no `orbit-core` |
 | `orbit-archive-keyring` | Chave e o arquivo `.sources` do repositório |
 
 **Ferramenta: `cargo-deb`**, não `dh-cargo`. O `dh-cargo` do Debian exige que
@@ -219,7 +219,7 @@ Amarradas às fases do PLANO-CORE.
   `distro/build-debs.sh` gerando os 15 `.deb` e os metapacotes
   (`orbit-desktop`, `orbit-studio`, `orbit-apps`, `orbit-media`, `orbit-dev`),
   e o repositório da seção 7. Falta: CI, e o hp/think usando os pacotes.
-- `orbit-common-data`, `orbit-defaults`, `orbit-ruffle`.
+- `orbit-defaults` (feito 2026-10-23), `orbit-ruffle`; `orbit-common-data` desnecessário.
 - Repositório apt na VPS + `orbit-archive-keyring`; CI publicando a cada tag.
 - **Pronto quando:** o hp troca o `install.sh` pelos pacotes sem diferença no
   uso; o **think** instala tudo com `apt install orbit-desktop` (fecha a

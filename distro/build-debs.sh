@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # build-debs.sh — builds Orbit's packages: one .deb per program (cargo-deb,
-# from each crate's [package.metadata.deb]) and the metapackages in
-# distro/meta/, into target/debian/. With --upload HOST, puts them in the
-# repository server's incoming folder (distro/repo/sync.sh publishes them).
+# from each crate's [package.metadata.deb]), the metapackages in
+# distro/meta/ and orbit-defaults (distro/defaults/), into target/debian/.
+# With --upload HOST, puts them in the repository server's incoming folder
+# (distro/repo/sync.sh publishes them).
 #
 #   distro/build-debs.sh [--upload root@10.0.0.111]
 #
@@ -50,6 +51,24 @@ for meta in "$ROOT"/distro/meta/*; do
     dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/${name}_${VERSION}_all.deb" >/dev/null
     rm -rf "$dir"
 done
+# orbit-defaults: files, not code (distro/defaults/).
+dir=$(mktemp -d)
+mkdir -p "$dir/DEBIAN" "$dir/usr/share/applications" "$dir/usr/share/glib-2.0/schemas" "$dir/usr/share/doc/orbit"
+{
+    echo "Package: orbit-defaults"
+    echo "Version: $VERSION"
+    echo "Architecture: all"
+    echo "Maintainer: Juliano <julianoas@gmail.com>"
+    echo "Priority: optional"
+    echo "Homepage: https://github.com/julas23/orbit"
+    cat "$ROOT/distro/defaults/control"
+} > "$dir/DEBIAN/control"
+"$ROOT/distro/defaults/mimeapps.sh" "$ROOT/data" > "$dir/usr/share/applications/orbit-mimeapps.list"
+cp "$ROOT/data/gsettings/90_orbit.gschema.override" "$dir/usr/share/glib-2.0/schemas/"
+cp -r "$ROOT/examples" "$dir/usr/share/doc/orbit/examples"
+chmod -R u=rwX,go=rX "$dir/usr"
+dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-defaults_${VERSION}_all.deb" >/dev/null
+rm -rf "$dir"
 ls -1 "$OUT"
 
 if [ -n "$UPLOAD" ]; then

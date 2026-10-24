@@ -1,0 +1,6 @@
+Description: Orbit's defaults: its applications for each file type, its look
+ Opens files with the Orbit applications in an Orbit session
+ (orbit-mimeapps.list), sets the dark look (a GSettings override), and
+ keeps example configurations in /usr/share/doc/orbit/examples.
+Section: x11
+Depends: libglib2.0-bin
