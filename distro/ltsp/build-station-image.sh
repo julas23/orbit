@@ -100,5 +100,11 @@ ltsp image "$NAME"
 ltsp ipxe
 ltsp nfs
 ltsp dnsmasq --proxy-dhcp=1 --real-dhcp=0
+# dnsmasq 2.91 loops for ever answering a UEFI client on port 4011 when
+# the proxy range carries a tag (rfc2131.c links the range's tag into the
+# packet's tags, then option_filter links those after it again: a
+# circle). The proxy range applies to PXE requests only anyway.
+sed -i 's/^\(dhcp-range=\)set:proxy,/\1/; s/^\(pxe-service=\)tag:proxy,/\1/' /etc/dnsmasq.d/ltsp-dnsmasq.conf
+systemctl restart dnsmasq
 ltsp initrd
 echo "station image $NAME ready, pointed at $SERVER"
