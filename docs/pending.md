@@ -78,7 +78,8 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 - [x] Packaging: `orbit-notify` says `Provides: notification-daemon` and `orbit-polkit` `Provides: polkit-1-auth-agent`, so dunst and the other polkit agents can go without taking blueman and network-manager-applet along (2026-10-23).
 - [x] The hp's `~/.local/bin/orbit-*` (its own builds, synced by Syncthing) came before the packages' `/usr/bin` on the think: off the hp, `~/.shell/10-path.sh` puts links to `/usr/bin/orbit-*` in `$XDG_RUNTIME_DIR/orbit-bin` ahead of the PATH (2026-10-23).
 - [x] Phase A: `orbit-defaults` (default applications by MIME type, the GSettings override, the examples), pulled by `orbit-desktop`; `orbit-common-data` not needed, its files are compiled in (2026-10-23).
-- [ ] Phase A: `orbit-ruffle`, `orbit-fonts` (Nerd Font).
+- [x] Phase A: `orbit-fonts`, CaskaydiaCove Nerd Font (the panel's) from the Nerd Fonts release, its own version (3.5.1-1), the same file every build; pulled by `orbit-desktop` (2026-10-23).
+- [ ] Phase A: `orbit-ruffle`.
 - [ ] Phase B: `orbit-studio` with ArtCraft mirrored; Orbit egui theme. Done when a fresh Debian 13 VM becomes this desktop with `apt install orbit-desktop orbit-studio`.
 - [ ] Phase C (after core Phase 2): `orbit-install` and the ISO — disk, hostname, user, password; "will format X / will keep Y" confirmation; existing `/home` reused with the owner's UID — a partition holding user data that is clearly the `/home` mount (partition, LVM, LUKS, btrfs `@home`) is kept as it is, never formatted; a single partition with `/` and `/home` together has everything but `/home` deleted and the install goes on in that same partition; "wipe everything and start from scratch" is always offered as an alternative; progress and log on screen; automated install test in a Proxmox VM.
 - [ ] Phase D: site, docs, stable/testing channels, security policy, arm64 image, check the "Orbit Linux" name.

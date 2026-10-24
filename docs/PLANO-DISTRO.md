@@ -253,7 +253,7 @@ Amarradas às fases do PLANO-CORE.
 | Item | Risco / decisão em aberto |
 |---|---|
 | Popsicle, Ghostty, AniCraft, craft-fonts | Sem `.deb` oficial: AppImage gerenciada pelo Orbit, ou pacote próprio |
-| Nerd Font | O painel usa glifos Nerd Font, que o Debian não tem: pacote `orbit-fonts` (MIT) |
+| Nerd Font | O painel usa glifos Nerd Font, que o Debian não tem: pacote `orbit-fonts` (feito 2026-10-23: CaskaydiaCove do lançamento oficial; Cascadia sob OFL 1.1, glifos MIT) |
 
 
 | Item | Risco / decisão em aberto |

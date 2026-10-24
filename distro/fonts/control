@@ -1,0 +1,6 @@
+Description: CaskaydiaCove Nerd Font, the font of Orbit's panel and dock
+ Cascadia Code with the Nerd Fonts glyphs (icons the panel draws as text),
+ from the Nerd Fonts release; Debian has no Nerd Font. Cascadia Code is
+ under the SIL Open Font License 1.1, the Nerd Fonts glyphs under MIT.
+Section: fonts
+Multi-Arch: foreign

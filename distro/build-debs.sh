@@ -69,6 +69,35 @@ cp -r "$ROOT/examples" "$dir/usr/share/doc/orbit/examples"
 chmod -R u=rwX,go=rX "$dir/usr"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-defaults_${VERSION}_all.deb" >/dev/null
 rm -rf "$dir"
+# orbit-fonts: the Nerd Font the panel and dock draw with, from its
+# release; its own version, the same file every build (fixed dates).
+FONTS_VERSION=3.5.1
+FONTS_SHA256=ae598e9401e2846aa3ee364513715de0490b844a4b54f0768991f45f23aa8369
+fonts="$ROOT/target/fonts/CascadiaCode-$FONTS_VERSION.tar.xz"
+if ! echo "$FONTS_SHA256  $fonts" | sha256sum -c --status 2>/dev/null; then
+    mkdir -p "$(dirname "$fonts")"
+    curl -fsSL -o "$fonts" "https://github.com/ryanoasis/nerd-fonts/releases/download/v$FONTS_VERSION/CascadiaCode.tar.xz"
+    echo "$FONTS_SHA256  $fonts" | sha256sum -c --status || { echo "the Nerd Font's download is not the one expected" >&2; exit 1; }
+fi
+dir=$(mktemp -d)
+mkdir -p "$dir/DEBIAN" "$dir/usr/share/fonts/truetype/orbit" "$dir/usr/share/doc/orbit-fonts"
+tar -xJf "$fonts" -C "$dir/usr/share/fonts/truetype/orbit" --wildcards 'CaskaydiaCoveNerdFont-*.ttf'
+tar -xJOf "$fonts" LICENSE > "$dir/usr/share/doc/orbit-fonts/copyright"
+# Its README lists each glyph set's licence.
+tar -xJOf "$fonts" README.md > "$dir/usr/share/doc/orbit-fonts/README.md"
+{
+    echo "Package: orbit-fonts"
+    echo "Version: $FONTS_VERSION-1"
+    echo "Architecture: all"
+    echo "Maintainer: Juliano <julianoas@gmail.com>"
+    echo "Priority: optional"
+    echo "Homepage: https://www.nerdfonts.com"
+    cat "$ROOT/distro/fonts/control"
+} > "$dir/DEBIAN/control"
+chmod -R u=rwX,go=rX "$dir"
+find "$dir" -exec touch -h -d @1755734400 {} +
+SOURCE_DATE_EPOCH=1755734400 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-fonts_${FONTS_VERSION}-1_all.deb" >/dev/null
+rm -rf "$dir"
 ls -1 "$OUT"
 
 if [ -n "$UPLOAD" ]; then
