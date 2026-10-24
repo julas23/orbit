@@ -1,8 +1,8 @@
 <!doctype html>
 <!-- Orbit-Remote: the browser client of orbit-remote-server (phase 1, the
      mirror). Served by the server itself; the pairing code shows on the
-     server's screen. The video comes over WebRTC, played with as little
-     buffering as the browser allows; the mouse and keys go back on the
+     server's screen. The video and the sound come over WebRTC, played with
+     as little buffering as the browser allows; the mouse and keys go back on the
      WebSocket. Full screen (the button, or F11) holds the keyboard too,
      so the browser's own shortcuts reach the remote session. -->
 <html lang="en">
@@ -45,6 +45,8 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 let ws, pc;
+// The video and the sound, as their tracks come, in one stream.
+const media = new MediaStream();
 
 $("form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -88,7 +90,18 @@ async function start() {
     // the standard: jitterBufferTarget).
     if ("playoutDelayHint" in e.receiver) e.receiver.playoutDelayHint = 0;
     if ("jitterBufferTarget" in e.receiver) e.receiver.jitterBufferTarget = 0;
-    $("video").srcObject = e.streams[0] || new MediaStream([e.track]);
+    media.addTrack(e.track);
+    if (e.track.kind !== "video") return;
+    const v = $("video");
+    v.srcObject = media;
+    // With its sound: the code typed was the click a browser wants for
+    // that; one that still refuses plays muted until the next click.
+    v.muted = false;
+    v.play().catch(() => {
+      v.muted = true;
+      v.play();
+      v.addEventListener("pointerdown", () => { v.muted = false; }, { once: true });
+    });
     $("pair").style.display = "none";
     $("video").style.display = "block";
     $("stats").style.display = "flex";

@@ -10,6 +10,7 @@
 //! orbit-local-station, and takes the remote keyboard and mouse back
 //! (`input`).
 
+mod audio;
 mod capture;
 mod encode;
 mod input;

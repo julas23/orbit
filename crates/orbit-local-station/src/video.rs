@@ -1,5 +1,6 @@
 //! The session's video: WebRTC from orbit-remote-server, decoded on the
-//! GPU and handed to the screen as dmabufs, with no copy on the way.
+//! GPU and handed to the screen as dmabufs, with no copy on the way. The
+//! sound comes in the same connection and goes to `audio`.
 //!
 //!   webrtcbin → rtph264depay → h264parse → vah264dec → vapostproc → appsink
 //!
@@ -74,6 +75,14 @@ impl Video {
                     return;
                 }
                 let Some(pipeline) = pipeline.upgrade() else { return };
+                // The sound comes on its own pad; losing it leaves the video.
+                let media = pad.current_caps().and_then(|caps| caps.structure(0).and_then(|s| s.get::<String>("media").ok()));
+                if media.as_deref() == Some("audio") {
+                    if let Err(err) = crate::audio::play(&pipeline, pad) {
+                        log::warn!("station: no sound: {err:#}");
+                    }
+                    return;
+                }
                 if let Err(err) = decode(&pipeline, pad, size, events.clone()) {
                     log::error!("station: the video: {err:#}");
                     let _ = events.send(Event::Lost(format!("the video: {err:#}")));

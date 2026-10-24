@@ -47,6 +47,8 @@ pub struct Encoder {
     pub pipeline: gst::Pipeline,
     source: gst_app::AppSrc,
     sink: Option<gst_app::AppSink>,
+    /// Behind the encoder: asked for key frames.
+    parse: gst::Element,
     allocator: gst_allocators::DmaBufAllocator,
     start: Instant,
 }
@@ -110,6 +112,10 @@ impl Encoder {
                 let filter = gst::ElementFactory::make("capsfilter").property("caps", &rtp).build()?;
                 pipeline.add_many([&pay, &filter, &webrtc])?;
                 gst::Element::link_many([&parse, &pay, &filter, &webrtc])?;
+                // The sound in the same connection; without it, the video alone.
+                if let Err(err) = crate::audio::attach(&pipeline, &webrtc) {
+                    log::warn!("remote: no sound: {err:#}");
+                }
                 None
             }
         };
@@ -118,6 +124,7 @@ impl Encoder {
             pipeline,
             source,
             sink,
+            parse,
             allocator: gst_allocators::DmaBufAllocator::new(),
             start: Instant::now(),
         })
@@ -148,6 +155,15 @@ impl Encoder {
         }
         self.source.push_buffer(buffer).map_err(|e| anyhow!("pushing a frame: {e:?}"))?;
         Ok(())
+    }
+
+    /// Makes the next frame a key frame, with its headers: one a client
+    /// can start from.
+    pub fn key_frame(&self) {
+        let event = gst_video::UpstreamForceKeyUnitEvent::builder().all_headers(true).build();
+        if !self.parse.send_event(event) {
+            log::debug!("remote: the encoder took no key frame request");
+        }
     }
 
     /// The next encoded frame (an H.264 access unit), within `wait`; with

@@ -337,14 +337,36 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
             None
         });
     }
+    // Connected: the picture can reach the client from now on.
+    let connected = Arc::new(AtomicBool::new(false));
+    {
+        let connected = connected.clone();
+        webrtc.connect_notify(Some("connection-state"), move |webrtc, _| {
+            let state = webrtc.property::<gst_webrtc::WebRTCPeerConnectionState>("connection-state");
+            connected.store(state == gst_webrtc::WebRTCPeerConnectionState::Connected, Ordering::SeqCst);
+        });
+    }
     let encoder = Encoder::new(&capture.planes, Tail::WebRtc(webrtc.clone()))?;
     let encoder = Arc::new(encoder);
 
-    // Frames, from their own thread, until told to stop.
+    // Frames, from their own thread, until told to stop. The first makes
+    // the offer (its caps), but goes out before anything can arrive: once
+    // connected it is sent again as a key frame, or a still screen would
+    // leave the client with nothing to show.
     let stop = Arc::new(AtomicBool::new(false));
     let pusher = {
         let (stop, encoder) = (stop.clone(), encoder.clone());
         std::thread::spawn(move || -> anyhow::Result<()> {
+            let first = capture.next()?;
+            encoder.push(&capture.planes, &first)?;
+            while !connected.load(Ordering::SeqCst) {
+                if stop.load(Ordering::SeqCst) {
+                    return Ok(());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            encoder.key_frame();
+            encoder.push(&capture.planes, &first)?;
             while !stop.load(Ordering::SeqCst) {
                 let frame = capture.next()?;
                 encoder.push(&capture.planes, &frame)?;

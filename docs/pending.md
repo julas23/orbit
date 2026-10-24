@@ -158,7 +158,8 @@ Pending:
 - [x] Pairing only while the session is unlocked: the server follows orbit-core's `lock` event; a code given while locked is answered `locked` (the page and the station say so), and the code is shown only once the session is unlocked. A remembered station still comes in, to the lock screen (2026-10-23, nested-tested).
 - [ ] The remote greeter: a station reaching a server with no session open (who logs in, from the station).
 - [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
-- [ ] Audio (Opus) to the client.
+- [x] Audio (Opus) to the client: the default output's monitor (`pulsesrc`, PipeWire's PulseAudio server), 10 ms frames, in the same WebRTC connection; the page plays it with the video (muted until a click if the browser insists), the station on its default output (`pulsesink`). Tested nested with a WebRTC test client: both tracks decoded (2026-10-23). Not tried yet: the station and the browser for real.
+- [ ] Sound with the server and the station on the same machine (the hp against itself) comes back through the monitor: an echo. And the server's own speakers keep playing while a client listens (with phase 2, mute them).
 - [x] Ctrl+Alt+Backspace and Ctrl+Alt+F1…F12 from a remote keyboard are held back by the core: they neither end the session nor switch the server's console (2026-10-23, nested-tested).
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
 - [ ] Several monitors, only when the station has two or more (the hp has two): the server gives the session as many screens (phase 2's virtual outputs, one stream each), the station shows each on its own monitor, the pointer crossing between them as locally. With one monitor everything stays as it is.

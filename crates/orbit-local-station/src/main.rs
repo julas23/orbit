@@ -18,6 +18,7 @@
 //! Ctrl+Alt+Backspace, which quits; leaving the session on the server
 //! quits too. Before it, F2 types another server.
 
+mod audio;
 mod link;
 mod screen;
 mod ui;
