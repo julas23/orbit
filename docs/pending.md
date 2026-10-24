@@ -26,7 +26,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [ ] Set up biometrics in Orbit: fingerprint (fprintd) and face, the same way.
 - [ ] Review the face recognition script that today runs only in the greeter.
 - [x] `orbit-remote-server` pairing allowed only while the session is unlocked (2026-10-23, §9).
-- [ ] Later: orbit-greet chooses between the full local desktop and the remote desktop (§9).
+- [x] orbit-greet chooses between the full local desktop and the remote desktop (§9; done 2026-10-23, fb6deb3).
 
 ## 4. Core
 
@@ -224,6 +224,7 @@ Pending:
 - [ ] Gemini CLI, OpenCode and Kimi Code (not installed on the hp yet): their headless modes and how each asks for permission.
 - [x] A short sound when woken: two rising notes through `pw-play` as its voice (the echo canceller takes them out), `chime: false` in `aigent.yaml` for none (2026-10-23). Not heard yet.
 - [x] A shortcut: Mod+A, `exec orbit-aigent toggle` (listen, or cancel), among the core's defaults (2026-10-23).
-- [ ] Packaging: the `vulkan` feature, Piper and its voices, the models (about 800 MB), the PipeWire file.
+- [x] Packaging: the PipeWire file, in `/usr/share/pipewire/pipewire.conf.d/`, and pw-play and the echo canceller recommended (2026-10-23).
+- [ ] Packaging: the `vulkan` feature, Piper and its voices, the models (about 800 MB).
 - [ ] Speaking the answer while it is still being written (stream-json), for a shorter wait.
 - [ ] The diagnostics left in the log (room level every 30 s, `ORBIT_AIGENT_DUMP`) once it has run a while.

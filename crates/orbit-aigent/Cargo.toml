@@ -14,8 +14,12 @@ section = "sound"
 priority = "optional"
 extended-description = "Orbit-Aigent: a voice layer for coding agents. It listens for its wake word, hears the request, hands it to the agent chosen (Claude Code, Gemini CLI, OpenCode or Kimi Code) and speaks the answer; the panel's aigent module shows it as a sphere. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
+# pw-play speaks; the echo canceller cleans the microphone.
+recommends = "pipewire-bin, libspa-0.2-modules"
 assets = [
     ["target/release/orbit-aigent", "usr/bin/", "755"],
+    # For every user; one of the same name in ~/.config/pipewire wins.
+    ["../../data/pipewire/60-orbit-aigent-aec.conf", "usr/share/pipewire/pipewire.conf.d/", "644"],
 ]
 
 [dependencies]
