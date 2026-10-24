@@ -21,6 +21,7 @@ CHROOT=/srv/ltsp/$NAME
 SERVER=${1:-$(hostname -I | awk '{print $1}')}
 IMAGE_URL=https://downloads.raspberrypi.com/raspios_lite_arm64_latest
 TFTP=/srv/tftp
+HERE=$(cd "$(dirname "$0")" && pwd)
 
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
 
@@ -139,4 +140,6 @@ dhcp-mac=set:rpi,2c:cf:67:*:*:*
 EOF
 systemctl restart dnsmasq
 ltsp nfs
+# The Pi's line in the PCs' iPXE menu.
+"$HERE/ipxe-menu.sh"
 echo "station image $NAME ready, pointed at $SERVER"

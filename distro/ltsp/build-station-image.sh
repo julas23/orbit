@@ -110,7 +110,7 @@ EOF
 # (the LAN keeps its own DHCP) and the initrd that carries ltsp.conf.
 install -D -m 0644 "$HERE/ltsp.conf" /etc/ltsp/ltsp.conf
 ltsp image "$NAME"
-ltsp ipxe
+"$HERE/ipxe-menu.sh"
 ltsp nfs
 ltsp dnsmasq --proxy-dhcp=1 --real-dhcp=0
 # dnsmasq 2.91 loops for ever answering a UEFI client on port 4011 when
