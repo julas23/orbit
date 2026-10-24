@@ -53,7 +53,8 @@ for meta in "$ROOT"/distro/meta/*; do
 done
 # orbit-defaults: files, not code (distro/defaults/).
 dir=$(mktemp -d)
-mkdir -p "$dir/DEBIAN" "$dir/usr/share/applications" "$dir/usr/share/glib-2.0/schemas" "$dir/usr/share/doc/orbit"
+mkdir -p "$dir/DEBIAN" "$dir/usr/share/applications" "$dir/usr/share/glib-2.0/schemas" "$dir/usr/share/doc/orbit" \
+    "$dir/usr/share/xdg-desktop-portal"
 {
     echo "Package: orbit-defaults"
     echo "Version: $VERSION"
@@ -65,6 +66,7 @@ mkdir -p "$dir/DEBIAN" "$dir/usr/share/applications" "$dir/usr/share/glib-2.0/sc
 } > "$dir/DEBIAN/control"
 "$ROOT/distro/defaults/mimeapps.sh" "$ROOT/data" > "$dir/usr/share/applications/orbit-mimeapps.list"
 cp "$ROOT/data/gsettings/90_orbit.gschema.override" "$dir/usr/share/glib-2.0/schemas/"
+cp "$ROOT/data/portals/orbit-portals.conf" "$dir/usr/share/xdg-desktop-portal/"
 cp -r "$ROOT/examples" "$dir/usr/share/doc/orbit/examples"
 chmod -R u=rwX,go=rX "$dir/usr"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-defaults_${VERSION}_all.deb" >/dev/null

@@ -4,7 +4,7 @@
 //! and dock (layer shell), speaks the clipboard protocols orbit-clip
 //! uses, and runs X programs through its own XWayland (`xwayland`).
 //!
-//!   orbit-core [-c CONFIG] [--nested | --drm] [--locked] [-- COMMAND…]
+//!   orbit-core [-c CONFIG] [--nested | --drm] [--locked] [--startup] [-- COMMAND…]
 //!
 //! Inside a Wayland or X session it runs nested, as a window; from a text
 //! console it takes the screen (DRM/KMS, libinput, libseat), and logs to
@@ -15,9 +15,12 @@
 //!
 //! `--locked` starts with the session hidden behind the lock (the login,
 //! PLANO-CORE §7), with the greet (`greet`) launched; the config's
-//! `login:` waits for the first unlock. COMMAND (and the config's `startup:`) run as clients of
-//! the core. The
-//! plan is `docs/PLANO-CORE.md`.
+//! `login:` waits for the first unlock. COMMAND (and the config's
+//! `startup:`) run as clients of the core. Nested, `startup:` and `login:`
+//! are left out unless `--startup` asks for them: they are the session's
+//! own (the default ones hand the display to systemd and D-Bus, and
+//! `orbit-session` takes the panel and dock of the session around it).
+//! The plan is `docs/PLANO-CORE.md`.
 //!
 //! Files that hold code from other projects say so at the top, with the
 //! project, file, commit and licence (PLANO-CORE §9).
@@ -68,6 +71,7 @@ fn main() -> anyhow::Result<()> {
     let mut config_path = Config::path();
     let mut command: Vec<String> = Vec::new();
     let mut locked = false;
+    let mut startup = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => config_path = args.next().map(Into::into).ok_or_else(|| anyhow::anyhow!("--config needs a file"))?,
@@ -75,8 +79,9 @@ fn main() -> anyhow::Result<()> {
             "--nested" => drm = false,
             "--drm" => drm = true,
             "--locked" => locked = true,
+            "--startup" => startup = Some(true),
             "-h" | "--help" => {
-                println!("Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [-- COMMAND…]  (default config: {})", Config::path().display());
+                println!("Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [--startup] [-- COMMAND…]  (default config: {})", Config::path().display());
                 return Ok(());
             }
             other => anyhow::bail!("unknown argument: {other}"),
@@ -115,7 +120,11 @@ fn main() -> anyhow::Result<()> {
         state.spawn(REFRESH_PORTALS);
     }
 
-    for line in state.config.startup.clone() {
+    state.startup = startup.unwrap_or(drm);
+    if !state.startup {
+        tracing::info!("nested: the config's startup and login left out (--startup runs them)");
+    }
+    for line in state.config.startup.clone().into_iter().filter(|_| state.startup) {
         state.spawn(&line);
     }
     if !state.locked() {

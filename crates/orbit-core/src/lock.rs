@@ -182,7 +182,7 @@ impl Orbit {
 
     /// Runs the config's `login:` commands, the first time only.
     pub fn log_in(&mut self) {
-        if std::mem::replace(&mut self.logged_in, true) {
+        if std::mem::replace(&mut self.logged_in, true) || !self.startup {
             return;
         }
         for line in self.config.login.clone() {

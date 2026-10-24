@@ -58,6 +58,10 @@ install -m 644 "$ROOT/data/io.github.julas23.Orbit.Term.desktop" "$APPS/"
 mkdir -p "$HOME/.config/pipewire/pipewire.conf.d"
 [ -e "$HOME/.config/pipewire/pipewire.conf.d/60-orbit-aigent-aec.conf" ] \
   || install -m 644 "$ROOT/data/pipewire/60-orbit-aigent-aec.conf" "$HOME/.config/pipewire/pipewire.conf.d/"
+# Which portal does what in an Orbit session: without it, no screencast.
+PORTALS=${PREFIX:-$HOME/.local}/share/xdg-desktop-portal
+mkdir -p "$PORTALS"
+install -m 644 "$ROOT/data/portals/orbit-portals.conf" "$PORTALS/"
 # The Ferdium recipes Pathfinder reads unread counts with (MIT, see
 # data/pathfinder/recipes/LICENSE.md); your own go in
 # ~/.local/share/orbit/pathfinder/recipes and win over these.

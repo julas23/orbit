@@ -119,6 +119,9 @@ pub struct Orbit {
     pub shaders: Option<Option<crate::rounded::Shaders>>,
     /// The virtual monitors (`virtual_output`).
     pub virtuals: Vec<crate::virtual_output::Virtual>,
+    /// Whether the config's `startup:` and `login:` run (not nested, by
+    /// default).
+    pub startup: bool,
     /// The window Mod+drag is moving (`grab`).
     pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
@@ -237,6 +240,7 @@ impl Orbit {
             dragging: None,
             shaders: None,
             virtuals: Vec::new(),
+            startup: true,
             layouts: (Vec::new(), 0),
             lock: crate::lock::Lock::default(),
             screencopy: Default::default(),
