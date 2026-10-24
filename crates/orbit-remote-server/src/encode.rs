@@ -1,8 +1,9 @@
 //! Encoding the captured frames: H.264 on the GPU, for low latency. The
 //! dmabuf the compositor drew into goes into GStreamer as it is
 //! (`memory:DMABuf`) and is turned into NV12 and encoded on the GPU:
-//! constant bitrate, no B-frames, a key frame every two seconds and
-//! whenever the other end asks (a lost frame).
+//! constant bitrate (by the picture's size: 20 Mbit/s for 1080p, 80 for
+//! 4K), no B-frames, a key frame every two seconds and whenever the other
+//! end asks (a lost frame).
 //!
 //!   VA-API (AMD, Intel)   vapostproc → vah264enc
 //!   NVENC (NVIDIA)        glupload → glcolorconvert → nvh264enc
@@ -29,8 +30,17 @@ use gst_allocators::prelude::*;
 
 use crate::capture::{Capture, Captured, Plane};
 
-/// Bits a second for the video.
-pub const BITRATE_KBPS: u32 = 20_000;
+/// Bits a second for a 1080p picture; others in proportion to their pixels.
+const BITRATE_1080P_KBPS: u32 = 20_000;
+/// Nor less nor more than this, whatever the size.
+const BITRATE_KBPS: std::ops::RangeInclusive<u32> = 8_000..=80_000;
+
+/// The bitrate for a picture of `width` × `height`.
+fn bitrate_kbps(width: u32, height: u32) -> u32 {
+    let pixels = u64::from(width) * u64::from(height);
+    let kbps = u64::from(BITRATE_1080P_KBPS) * pixels / (1920 * 1080);
+    (kbps as u32).clamp(*BITRATE_KBPS.start(), *BITRATE_KBPS.end())
+}
 /// A key frame at least this often, in frames.
 const KEY_INTERVAL: u32 = 120;
 
@@ -77,11 +87,12 @@ impl Encoder {
             .max_buffers(2)
             .leaky_type(gst_app::AppLeakyType::Downstream)
             .build();
+        let kbps = bitrate_kbps(first.width, first.height);
         let chain = match std::env::var("ORBIT_REMOTE_ENCODER").as_deref() {
-            Ok("nvenc") => nvenc()?,
-            Ok("va") => va()?,
-            _ if gst::ElementFactory::find("vah264enc").is_some() => va()?,
-            _ => nvenc().context("no H.264 encoder on the GPU: neither VA-API's nor NVENC")?,
+            Ok("nvenc") => nvenc(kbps)?,
+            Ok("va") => va(kbps)?,
+            _ if gst::ElementFactory::find("vah264enc").is_some() => va(kbps)?,
+            _ => nvenc(kbps).context("no H.264 encoder on the GPU: neither VA-API's nor NVENC")?,
         };
         let parse = gst::ElementFactory::make("h264parse").property("config-interval", -1i32).build()?;
         let pipeline = gst::Pipeline::new();
@@ -175,14 +186,14 @@ impl Encoder {
 }
 
 /// VA-API: NV12 by the GPU's video processor, then its encoder.
-fn va() -> anyhow::Result<Vec<gst::Element>> {
-    log::info!("remote: encoding with VA-API");
+fn va(kbps: u32) -> anyhow::Result<Vec<gst::Element>> {
+    log::info!("remote: encoding with VA-API, {kbps} kbit/s");
     let convert = gst::ElementFactory::make("vapostproc").build().context("no vapostproc (gstreamer1.0-plugins-bad)")?;
     let nv12 = gst::Caps::builder("video/x-raw").features(["memory:VAMemory"]).field("format", "NV12").build();
     let filter = gst::ElementFactory::make("capsfilter").property("caps", &nv12).build()?;
     let encoder = gst::ElementFactory::make("vah264enc")
         .property_from_str("rate-control", "cbr")
-        .property("bitrate", BITRATE_KBPS)
+        .property("bitrate", kbps)
         .property("b-frames", 0u32)
         .property("ref-frames", 1u32)
         .property("key-int-max", KEY_INTERVAL)
@@ -194,8 +205,8 @@ fn va() -> anyhow::Result<Vec<gst::Element>> {
 
 /// NVENC: the dmabuf into OpenGL, NV12 by a shader, then NVIDIA's encoder
 /// (which takes OpenGL memory), tuned for the least latency.
-fn nvenc() -> anyhow::Result<Vec<gst::Element>> {
-    log::info!("remote: encoding with NVENC");
+fn nvenc(kbps: u32) -> anyhow::Result<Vec<gst::Element>> {
+    log::info!("remote: encoding with NVENC, {kbps} kbit/s");
     let upload = gst::ElementFactory::make("glupload").build().context("no glupload (gstreamer1.0-gl)")?;
     let convert = gst::ElementFactory::make("glcolorconvert").build()?;
     let nv12 = gst::Caps::builder("video/x-raw").features(["memory:GLMemory"]).field("format", "NV12").build();
@@ -209,7 +220,7 @@ fn nvenc() -> anyhow::Result<Vec<gst::Element>> {
     };
     set("preset", "low-latency-hp");
     set("rc-mode", "cbr");
-    set("bitrate", &BITRATE_KBPS.to_string());
+    set("bitrate", &kbps.to_string());
     set("gop-size", &KEY_INTERVAL.to_string());
     set("bframes", "0");
     set("zerolatency", "true");
@@ -262,4 +273,19 @@ pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
         path.display()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bitrate_kbps;
+
+    #[test]
+    fn the_bitrate_follows_the_size() {
+        assert_eq!(bitrate_kbps(1920, 1080), 20_000);
+        assert_eq!(bitrate_kbps(3840, 2160), 80_000);
+        assert_eq!(bitrate_kbps(2560, 1440), 35_555);
+        assert_eq!(bitrate_kbps(1280, 720), 8_888);
+        assert_eq!(bitrate_kbps(640, 480), 8_000);
+        assert_eq!(bitrate_kbps(7680, 4320), 80_000);
+    }
 }
