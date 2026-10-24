@@ -150,3 +150,19 @@ The user booted the hp on the night's packages and tried them:
 - The layouts and their shortcuts: right.
 - Mod+A: listening and cancelling work, the chime heard.
 - A real screen share through the portal: works.
+
+## The hp on the packages — 2026-10-24
+
+Phase A's last part: the hp now runs Orbit from the local repository, as
+the think does. Installed orbit-desktop, orbit-remote-server,
+orbit-local-station, orbit-aigent and ArtCraft's 14 packages (one by one,
+not orbit-studio, which pulls LibreOffice back); LibreOffice purged. What
+`install.sh` had put is gone: `/usr/local/bin/orbit-*`, the
+`/etc/systemd/system/orbit-login.service` copy (the package's, in
+`/usr/lib`, is the one enabled now), `/usr/local/share/orbit-pathfinder`,
+and in the home `~/.local/bin/orbit-*`, the menu entries, the portal and
+echo canceller configs and the recipes. `/etc/pam.d/orbit-*` and
+`/etc/orbit/login.yaml` were the same as the packages'. The PATH trick in
+`~/.shell/10-path.sh` now holds on the hp too, so a later `install.sh`
+cannot shadow the packages. Not packaged yet: the keyring prompter's D-Bus
+service, left in `~/.local/share/dbus-1/services/`.
