@@ -47,6 +47,10 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 
 - [x] Uniform clicks for the old status modules (network, keyboard, battery, notifications): left the quick part, right the full one, the wheel a value (2026-10-22).
 
+## 5a. Dock
+
+- [ ] Adding a separator does nothing (reported 2026-10-23).
+
 ## 6. Apps
 
 | App | Effort | Status | Notes |
@@ -71,6 +75,8 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 **An existing `/home` is never formatted.**
 
 - [ ] Phase A: CI building and publishing the debs; the hp and the think running on the packages instead of `install.sh` (`apt install orbit-desktop`).
+- [ ] Packaging: `orbit-notify` to say `Provides: notification-daemon` and `orbit-polkit` `Provides: polkit-1-auth-agent`, so removing dunst or the other polkit agents does not take blueman and network-manager-applet along (on the think dunst and mate-polkit stayed for that, 2026-10-23).
+- [ ] The hp's `~/.local/bin/orbit-*` (its own builds, synced by Syncthing) come before the packages' `/usr/bin` on the think: a hostname-guarded PATH, or the hp moving to the packages too.
 - [ ] Phase A: `orbit-common-data`, `orbit-defaults`, `orbit-ruffle`, `orbit-fonts` (Nerd Font).
 - [ ] Phase B: `orbit-studio` with ArtCraft mirrored; Orbit egui theme. Done when a fresh Debian 13 VM becomes this desktop with `apt install orbit-desktop orbit-studio`.
 - [ ] Phase C (after core Phase 2): `orbit-install` and the ISO — disk, hostname, user, password; "will format X / will keep Y" confirmation; existing `/home` reused with the owner's UID — a partition holding user data that is clearly the `/home` mount (partition, LVM, LUKS, btrfs `@home`) is kept as it is, never formatted; a single partition with `/` and `/home` together has everything but `/home` deleted and the install goes on in that same partition; "wipe everything and start from scratch" is always offered as an alternative; progress and log on screen; automated install test in a Proxmox VM.
