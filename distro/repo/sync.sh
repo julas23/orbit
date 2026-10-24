@@ -42,12 +42,20 @@ COMPONENTS="main contrib non-free non-free-firmware"
 log() { printf '\n=== %s\n' "$*"; }
 names() { sed 's/#.*//' "$1" | tr -s ' \t' '\n' | sed '/^$/d'; }
 mirror_exists() { aptly mirror show "$1" >/dev/null 2>&1; }
-publish() { # prefix snapshot
-    if aptly publish show "$DIST" "$1" >/dev/null 2>&1; then
+publish() { # prefix snapshot [architectures]
+    local archs=${3:-amd64,all} have
+    # A publication keeps the architectures it was made with: other ones
+    # mean making it again.
+    have=$(aptly publish show "$DIST" "$1" 2>/dev/null | sed -n 's/^Architectures: //p' | tr ' ' '\n' | sort | paste -sd,)
+    if [[ -n "$have" && "$have" != "$(tr ',' '\n' <<< "$archs" | sort | paste -sd,)" ]]; then
+        aptly publish drop "$DIST" "$1" >/dev/null
+        have=""
+    fi
+    if [[ -n "$have" ]]; then
         aptly publish switch -batch -gpg-key="$KEY" "$DIST" "$1" "$2"
     else
         aptly publish snapshot -batch -gpg-key="$KEY" -distribution="$DIST" -component=main \
-            -architectures=amd64,all "$2" "$1"
+            -architectures="$archs" "$2" "$1"
     fi
 }
 
@@ -244,8 +252,10 @@ for deb in "$INCOMING"/orbit/*.deb; do
 done
 aptly snapshot filter "orbit-local-$STAMP" "orbit-public-$STAMP" "$public"
 publish debian "debian-all-$STAMP"
-publish orbit "orbit-local-$STAMP"
-publish orbit-public "orbit-public-$STAMP"
+# Orbit's own packages for the Raspberry Pi stations too (the Debian
+# subset stays amd64: a Pi takes Debian from its own sources).
+publish orbit "orbit-local-$STAMP" amd64,arm64,all
+publish orbit-public "orbit-public-$STAMP" amd64,arm64,all
 gpg --export "$KEY" > /srv/aptly/public/orbit-archive-keyring.gpg
 
 log "Old snapshots"

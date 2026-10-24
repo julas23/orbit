@@ -82,9 +82,9 @@ pub struct Screen {
     waiting: bool,
     /// Something changed since the last frame.
     dirty: bool,
-    /// The video's picture when it was decoded in software: one buffer, so
-    /// one texture, written over for each picture.
-    software: Option<MemoryRenderBuffer>,
+    /// The video's picture when it comes in memory: one buffer, so one
+    /// texture, written over for each picture.
+    memory: Option<(Fourcc, MemoryRenderBuffer)>,
 }
 
 /// A key pressed or let go, by its evdev code.
@@ -238,7 +238,7 @@ impl Screen {
             })
             .map_err(|e| anyhow!("DRM events in the event loop: {e}"))?;
 
-        Ok(Self { session, renderer, manager, output, size: (u32::from(w), u32::from(h)), waiting: false, dirty: true, software: None })
+        Ok(Self { session, renderer, manager, output, size: (u32::from(w), u32::from(h)), waiting: false, dirty: true, memory: None })
     }
 
     /// Something to show: drawn on the next `draw`.
@@ -259,8 +259,8 @@ impl Screen {
                 Err(err) => return log::warn!("the station's screen: {err:?}"),
             }
         }
-        if let Some(Frame { picture: Picture::Memory { size, stride }, .. }) = video {
-            match self.software_picture(video.expect("a frame"), *size, *stride) {
+        if let Some(Frame { picture: Picture::Memory { size, stride, fourcc }, .. }) = video {
+            match self.memory_picture(video.expect("a frame"), *size, *stride, *fourcc) {
                 Ok(element) => elements.push(Element::Memory(element)),
                 Err(err) => log::warn!("the video's picture: {err:#}"),
             }
@@ -299,13 +299,22 @@ impl Screen {
 }
 
 impl Screen {
-    /// A picture decoded in software, copied row by row into the buffer
+    /// A picture in memory, copied row by row into the buffer
     /// kept for it (the decoder's rows may be padded), and drawn fitted to
     /// the monitor, whole, the rest left black.
-    fn software_picture(&mut self, frame: &Frame, (width, height): (u32, u32), stride: usize) -> anyhow::Result<MemoryRenderBufferRenderElement<GlesRenderer>> {
+    fn memory_picture(
+        &mut self,
+        frame: &Frame,
+        (width, height): (u32, u32),
+        stride: usize,
+        fourcc: Fourcc,
+    ) -> anyhow::Result<MemoryRenderBufferRenderElement<GlesRenderer>> {
         let pixels = frame.pixels().context("the picture's memory")?;
         let size = (width as i32, height as i32);
-        let buffer = self.software.get_or_insert_with(|| MemoryRenderBuffer::new(Fourcc::Xrgb8888, size, 1, Transform::Normal, None));
+        if self.memory.as_ref().is_some_and(|(format, _)| *format != fourcc) {
+            self.memory = None;
+        }
+        let (_, buffer) = self.memory.get_or_insert_with(|| (fourcc, MemoryRenderBuffer::new(fourcc, size, 1, Transform::Normal, None)));
         {
             let mut context = buffer.render();
             context.resize(size);

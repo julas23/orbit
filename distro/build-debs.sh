@@ -2,10 +2,12 @@
 # build-debs.sh — builds Orbit's packages: one .deb per program (cargo-deb,
 # from each crate's [package.metadata.deb]), the metapackages in
 # distro/meta/ and orbit-defaults (distro/defaults/), into target/debian/.
-# With --upload HOST, puts them in the repository server's incoming folder
+# With --arm64, also the arm64 ones (distro/ci/build-arm64.sh, in Docker,
+# its toolchain and build kept in ~/.cache/orbit-arm64). With --upload
+# HOST, puts them in the repository server's incoming folder
 # (distro/repo/sync.sh publishes them).
 #
-#   distro/build-debs.sh [--upload root@10.0.0.111]
+#   distro/build-debs.sh [--arm64] [--upload root@10.0.0.111]
 #
 # Versions: the workspace's, then +git<commit date>.<commit>, so every build
 # of a newer commit is an upgrade (and a build with uncommitted changes says
@@ -15,7 +17,15 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 UPLOAD=""
-[ "${1:-}" = --upload ] && UPLOAD=${2:?--upload needs a host}
+ARM64=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --arm64) ARM64=1 ;;
+        --upload) UPLOAD=${2:?--upload needs a host}; shift ;;
+        *) echo "unknown option $1" >&2; exit 1 ;;
+    esac
+    shift
+done
 
 CRATES=(orbit-core orbit-login orbit-greet orbit-polkit orbit-prompter orbit-run orbitctl orbit-panel orbit-dock orbit-notify
         orbit-calc orbit-clip orbit-blink orbit-view orbit-read orbit-play orbit-edit orbit-files orbit-pathfinder orbit-term
@@ -132,6 +142,16 @@ chmod 755 "$dir/usr/bin/ruffle"
 find "$dir" -exec touch -h -d @1760918400 {} +
 SOURCE_DATE_EPOCH=1760918400 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-ruffle_0.8.0~nightly${RUFFLE_NIGHTLY//-/}-1_amd64.deb" >/dev/null
 rm -rf "$dir"
+
+# arm64: cross-compiled in a bare Debian 13, from this same tree (so with
+# the same version).
+if [ -n "$ARM64" ]; then
+    CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/orbit-arm64
+    mkdir -p "$CACHE"
+    docker run --rm -v "$ROOT:/src:ro" -v "$OUT:/out" -v "$CACHE:/cache" \
+        -e CARGO_HOME=/cache/cargo -e RUSTUP_HOME=/cache/rustup -e CARGO_TARGET_DIR=/cache/target \
+        debian:trixie /src/distro/ci/build-arm64.sh
+fi
 ls -1 "$OUT"
 
 if [ -n "$UPLOAD" ]; then

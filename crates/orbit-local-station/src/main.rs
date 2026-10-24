@@ -12,8 +12,8 @@
 //! `/etc/orbit/station.yaml`; without one it is asked on the screen and
 //! kept in the user's file. `output:` there picks the monitor (as
 //! `HDMI-A-1`), else the first connected one; `decoder:` the video's
-//! decoder, `vaapi` or `software` (`auto`, the default, takes VA-API when
-//! the machine has it).
+//! decoder, `vaapi`, `v4l2` (a Raspberry Pi's) or `software` (`auto`, the
+//! default, takes the first of them the machine has).
 //!
 //! While the session's video shows, the keys and the mouse are the
 //! server's, but for Ctrl+Alt+F1…F12, which change the console, and
