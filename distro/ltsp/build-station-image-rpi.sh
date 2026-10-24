@@ -65,13 +65,19 @@ mount --bind /dev "$CHROOT/dev"
 mount --bind /dev/pts "$CHROOT/dev/pts"
 trap 'umount -l "$CHROOT/dev/pts" "$CHROOT/dev" "$CHROOT/sys" "$CHROOT/proc"' EXIT
 
+# initramfs-tools cannot tell the root's device in a chroot and fails; the
+# Pi boots without one anyway (auto_initramfs below), but apt must finish.
+mkdir -p "$CHROOT/etc/initramfs-tools/conf.d"
+echo MODULES=most >"$CHROOT/etc/initramfs-tools/conf.d/orbit-station"
+
 # LTSP's init, orbit-local-station, the Pi's decoder and converter
 # (v4l2h264dec, v4l2convert: gstreamer1.0-plugins-good), the software one
 # as the fallback, PipeWire for the session's sound. Raspberry Pi OS's
-# first-boot questions (a user to make, the keyboard) are switched off:
-# the station's user is made here.
+# first-boot work (cloud-init, a user to make) is switched off: the
+# station's user is made here.
 chroot "$CHROOT" sh -ec '
     export DEBIAN_FRONTEND=noninteractive
+    dpkg --configure -a
     apt-get update -q
     apt-get install -y -q --no-install-recommends \
         ltsp orbit-local-station \
@@ -79,6 +85,8 @@ chroot "$CHROOT" sh -ec '
         pipewire pipewire-pulse wireplumber
     apt-get -y -q dist-upgrade
     apt-get clean
+    mkdir -p /etc/cloud
+    touch /etc/cloud/cloud-init.disabled
     systemctl disable userconfig.service 2>/dev/null || true
     systemctl mask userconfig.service rpi-resize.service resize2fs_once.service 2>/dev/null || true
     id station >/dev/null 2>&1 || useradd -m -s /bin/bash -G video,render,input,audio station
@@ -107,7 +115,9 @@ server: $SERVER
 EOF
 
 # The kernel's command line: the root over NFS, LTSP's init. The serial
-# console and the first-boot resize go.
+# console and the first-boot resize go. No initramfs: the Pi's kernel has
+# its network and NFS built in and mounts the root itself.
+sed -i 's/^auto_initramfs=.*/auto_initramfs=0/' "$CHROOT/boot/firmware/config.txt"
 cat >"$CHROOT/boot/firmware/cmdline.txt" <<EOF
 console=tty1 ip=dhcp root=/dev/nfs nfsroot=$SERVER:$CHROOT,vers=3,tcp,nolock ro rootwait init=/usr/share/ltsp/client/init/init
 EOF
