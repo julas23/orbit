@@ -441,7 +441,8 @@ impl Orbit {
         });
         let weights: Vec<f64> = tiled.iter().map(|w| info(w).borrow().weight).collect();
         let layout = self.workspaces.iter().find(|w| w.num == num).map_or(self.config.layout, |w| w.layout);
-        let rects = layout.rects(&weights, area, self.config.gaps, self.config.border);
+        let masters = tile::Master { ratio: self.config.master_ratio, count: self.config.master_count };
+        let rects = layout.rects(&weights, area, self.config.gaps, self.config.border, masters);
         let whole = tile::columns(1, area, self.config.gaps, self.config.border).first().copied().unwrap_or(area);
         tracing::debug!(num, ?area, ?rects, "arrange");
         // The space stacks in the order windows are mapped: the tiled,

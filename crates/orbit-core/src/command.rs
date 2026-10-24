@@ -235,6 +235,26 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             }
             Ok(())
         }
+        // sway's named scratchpad, `[app_id=…] scratchpad show`: a drawer.
+        // Hidden, it comes floating over the workspace in front; in front
+        // and focused, it goes back; elsewhere, it comes here.
+        ["scratchpad", "show"] if targets.is_some() => {
+            let found = windows();
+            if found.is_empty() {
+                return Err("No window matches".into());
+            }
+            for window in found {
+                let here = state.workspace_of(&window) == Some(state.current);
+                if here && state.focused_window().as_ref() == Some(&window) {
+                    state.move_to_scratchpad(&window);
+                } else {
+                    state.move_to_workspace(&window, state.current);
+                    state.set_floating(&window, true);
+                    state.focus_window(Some(window));
+                }
+            }
+            Ok(())
+        }
         ["scratchpad", "show"] => {
             let Some(window) = state.scratchpad.last().cloned() else { return Err("Scratchpad is empty".into()) };
             state.focus_anywhere(&window);

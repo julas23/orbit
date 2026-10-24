@@ -10,6 +10,8 @@
 //! run: orbit-run         # Mod+R: a command typed and run
 //! gaps: 6
 //! layout: columns        # a new workspace's: columns, master, monocle, bsp
+//! master_ratio: 0.55     # master: the masters' share of the width
+//! master_count: 1        # master: how many windows are masters
 //! border: 2
 //! corner_radius: 10
 //! startup: [orbit-session]   # at once, behind the lock if locked
@@ -54,6 +56,8 @@ pub struct Config {
     pub gaps: i32,
     /// How a new workspace lays its windows out (`layout` changes one).
     pub layout: crate::tile::Layout,
+    pub master_ratio: f64,
+    pub master_count: usize,
     /// Width of the border drawn around each window.
     pub border: i32,
     /// Radius of the windows' corners (0: square).
@@ -210,6 +214,8 @@ impl Default for Config {
             run: "orbit-run".into(),
             gaps: 6,
             layout: crate::tile::Layout::Columns,
+            master_ratio: crate::tile::Master::default().ratio,
+            master_count: crate::tile::Master::default().count,
             border: 2,
             corner_radius: 10,
             focused_color: "#4682b4".into(),

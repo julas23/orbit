@@ -16,8 +16,8 @@ pub enum Layout {
     /// Side by side, as wide as their weights.
     #[default]
     Columns,
-    /// The first window on the left (`MASTER_RATIO` of the width), the
-    /// others stacked on the right.
+    /// The first windows (`Master::count`) stacked on the left, in their
+    /// share of the width (`Master::ratio`), the others on the right.
     Master,
     /// Each one over the whole area, the focused one on top.
     Monocle,
@@ -50,18 +50,31 @@ impl Layout {
 
     /// The rectangles of tiled windows with these `weights` (columns only
     /// use them) in `area`.
-    pub fn rects(self, weights: &[f64], area: Rect, gaps: i32, border: i32) -> Vec<Rect> {
+    pub fn rects(self, weights: &[f64], area: Rect, gaps: i32, border: i32, masters: Master) -> Vec<Rect> {
         match self {
             Layout::Columns => weighted(weights, area, gaps, border),
-            Layout::Master => master(weights.len(), area, gaps, border),
+            Layout::Master => master(weights.len(), area, gaps, border, masters),
             Layout::Monocle => vec![inset(area, gaps, border); weights.len()],
             Layout::Bsp => bsp(weights.len(), area, gaps, border),
         }
     }
 }
 
-/// The master's share of the width, in `Layout::Master`.
-const MASTER_RATIO: f64 = 0.55;
+/// `Layout::Master`'s settings (`master_ratio`, `master_count` in
+/// core.yaml).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Master {
+    /// The masters' share of the width.
+    pub ratio: f64,
+    /// How many windows are masters.
+    pub count: usize,
+}
+
+impl Default for Master {
+    fn default() -> Self {
+        Self { ratio: 0.55, count: 1 }
+    }
+}
 
 /// `area` less the gaps around it and the border: one window's content.
 fn inset((x, y, w, h): Rect, gaps: i32, border: i32) -> Rect {
@@ -75,18 +88,20 @@ fn rows(count: usize, (x, y, w, h): Rect, gaps: i32, border: i32) -> Vec<Rect> {
     columns(count, (y, x, h, w), gaps, border).into_iter().map(|(ry, rx, rh, rw)| (rx, ry, rw, rh)).collect()
 }
 
-/// The first window on the left, the others stacked on the right.
-pub fn master(count: usize, area: Rect, gaps: i32, border: i32) -> Vec<Rect> {
-    if count <= 1 {
-        return columns(count, area, gaps, border);
+/// The first `masters.count` windows stacked on the left, the others on
+/// the right.
+pub fn master(count: usize, area: Rect, gaps: i32, border: i32, masters: Master) -> Vec<Rect> {
+    let firsts = masters.count.max(1);
+    if count <= firsts {
+        return rows(count, area, gaps, border);
     }
     let (x, y, w, h) = area;
     // The line between the two parts, half a gap each side of it.
-    let split = (f64::from(w) * MASTER_RATIO).round() as i32;
+    let split = (f64::from(w) * masters.ratio.clamp(0.1, 0.9)).round() as i32;
     let left = (x, y, split + gaps / 2, h);
     let right = (x + split - gaps / 2, y, w - split + gaps / 2, h);
-    let mut rects = columns(1, left, gaps, border);
-    rects.extend(rows(count - 1, right, gaps, border));
+    let mut rects = rows(firsts, left, gaps, border);
+    rects.extend(rows(count - firsts, right, gaps, border));
     rects
 }
 
@@ -163,7 +178,7 @@ mod tests {
     #[test]
     fn master_and_stack() {
         let area = (0, 0, 1000, 600);
-        let rects = master(3, area, 10, 0);
+        let rects = master(3, area, 10, 0, Master::default());
         // 55% for the master; one gap between it and the stack.
         assert_eq!(rects[0], (10, 10, 535, 580));
         assert_eq!(rects[1].0, 555);
@@ -171,7 +186,13 @@ mod tests {
         assert_eq!(rects[1].2, rects[2].2);
         assert!(rects[1].1 < rects[2].1);
         assert!(apart(&rects, area));
-        assert_eq!(master(1, area, 10, 0), columns(1, area, 10, 0));
+        assert_eq!(master(1, area, 10, 0, Master::default()), columns(1, area, 10, 0));
+        // Two masters, a third of the width.
+        let two = master(4, area, 10, 0, Master { ratio: 1.0 / 3.0, count: 2 });
+        assert_eq!(two[0].0, two[1].0);
+        assert!(two[0].1 < two[1].1);
+        assert!(two[0].2 < two[2].2);
+        assert!(apart(&two, area));
     }
 
     #[test]
@@ -191,7 +212,7 @@ mod tests {
         assert_eq!(Layout::parse("monocle"), Some(Layout::Monocle));
         assert_eq!(Layout::parse("tabbed"), None);
         assert_eq!(Layout::Bsp.next(), Layout::Columns);
-        let monocle = Layout::Monocle.rects(&[1.0, 1.0], (0, 0, 100, 100), 5, 1);
+        let monocle = Layout::Monocle.rects(&[1.0, 1.0], (0, 0, 100, 100), 5, 1, Master::default());
         assert_eq!(monocle, vec![(6, 6, 88, 88); 2]);
     }
 
