@@ -344,17 +344,14 @@ impl VirtualPointerHandler for Orbit {
 
 impl VirtualKeyboardHandler for Orbit {
     fn process_virtual_keyboard_event(&mut self, event: InputEvent<VirtualKeyboardBackend>) {
-        match event {
-            InputEvent::Keyboard { event } => {
-                let device = Event::device(&event);
-                if device.keymap().is_some() {
-                    tracing::debug!("a virtual keyboard's own keymap: its keys are read with the seat's");
-                }
-                self.touched();
-                self.key::<VirtualKeyboardBackend>(event, device.source(), true);
+        // Keys only: modifiers come as their keys; keymaps are the seat's.
+        if let InputEvent::Keyboard { event } = event {
+            let device = Event::device(&event);
+            if device.keymap().is_some() {
+                tracing::debug!("a virtual keyboard's own keymap: its keys are read with the seat's");
             }
-            // Modifiers come as their keys; keymaps are the seat's.
-            _ => {}
+            self.touched();
+            self.key::<VirtualKeyboardBackend>(event, device.source(), true);
         }
     }
 }
