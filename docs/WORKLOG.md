@@ -141,3 +141,12 @@ was left for the morning. The think and the Julas VM were switched off.
 The station for real (sound, the virtual monitor at its size), a browser
 with sound, a turned or scaled real monitor, a DRM mode change from
 wlr-randr, a real screen share (Meet, OBS), the chime heard.
+
+## The morning of 2026-10-24: the night's work on the real session
+
+The user booted the hp on the night's packages and tried them:
+
+- The boot: everything in place and working.
+- The layouts and their shortcuts: right.
+- Mod+A: listening and cancelling work, the chime heard.
+- A real screen share through the portal: works.
