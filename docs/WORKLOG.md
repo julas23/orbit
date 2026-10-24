@@ -181,3 +181,21 @@ service, left in `~/.local/share/dbus-1/services/`.
   `serve --virtual`. Off by default, since it offers the session on port
   7311. On the way: `pgrep -x` sees only 15 characters of a name, so
   `orbit-remote-server` is matched on its command instead.
+
+## The Julas VM and the think like the hp — 2026-10-24
+
+The same set as the hp on both, at 9cc7a2a: orbit-desktop,
+orbit-remote-server, orbit-local-station, orbit-aigent, orbit-defaults,
+orbit-fonts and ArtCraft's packages one by one.
+
+- think: only the upgrade and the two new packages.
+- Julas VM: orbit-studio, LibreOffice, mpv and vlc purged, ArtCraft, GIMP,
+  Inkscape and Blender marked manual first. The autoremove that followed
+  would have taken the NVIDIA driver's GLX alternatives (`glx-diversions`,
+  `glx-alternative-nvidia`, `update-glx`) and yt-dlp: marked manual, kept.
+  orbit-apps, orbit-dev and orbit-media stay. From the home: the menu
+  entries, the echo canceller's config (the hp's, naming the K66), the
+  prompter's D-Bus file (naming a `~/.local/bin/orbit-prompter` long gone)
+  and a test build of the server. The hp's `~/.shell/10-path.sh`. The
+  server's `startup:` line in core.yaml (backup `.antes-remote-yaml`) is
+  now `~/.config/orbit/remote.yaml` with `start: true`.
