@@ -135,6 +135,10 @@ impl WaylandDndGrabHandler for Orbit {
 
 impl OutputHandler for Orbit {}
 
+// Each surface's preferred scale is sent after its monitor's frames
+// (`udev::send_frames`).
+impl smithay::wayland::fractional_scale::FractionalScaleHandler for Orbit {}
+
 /// Client buffers in GPU memory, imported by the backend's renderer.
 impl DmabufHandler for Orbit {
     fn dmabuf_state(&mut self) -> &mut DmabufState {

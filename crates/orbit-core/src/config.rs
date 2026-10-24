@@ -26,6 +26,7 @@
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
 //!   DP-1: { mode: 1920x1080@60 }        # not its preferred mode (or 1920x1080:
 //!                                       # the fastest at that size)
+//!   eDP-1: { scale: 1.25 }              # drawn larger (fractions too)
 //!   DP-2: { transform: 90 }             # turned a quarter clockwise (sway's
 //!                                       # names: normal, 90, 180, 270, flipped,
 //!                                       # flipped-90, flipped-180, flipped-270)
@@ -121,6 +122,9 @@ pub struct OutputConfig {
     pub mode: Option<String>,
     /// How the monitor is turned (sway's `transform`).
     pub transform: Option<String>,
+    /// How much larger everything is drawn on it (sway's `scale`), from 0.5
+    /// to 4, fractions too.
+    pub scale: Option<f64>,
 }
 
 /// Smithay's `Transform` by sway's name for it.

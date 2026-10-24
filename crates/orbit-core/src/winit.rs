@@ -13,8 +13,6 @@
 //! (Debian 13) crashes on 6, which no longer sends `main_device`. Without
 //! a render node it falls back to version 3.
 
-use std::time::Duration;
-
 use smithay::{
     backend::{
         egl::EGLDevice,
@@ -136,16 +134,9 @@ fn render(state: &mut Orbit) {
     state.screencopy_after_frame(&output);
     state.confirm_lock();
 
-    // Locked, clients are not drawn, so they are not asked to draw; the
-    // greet is.
-    let time = state.start_time.elapsed();
-    for window in state.space.elements().filter(|_| state.session_shown()) {
-        window.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
-    }
-    for layer in layer_map_for_output(&output).layers().filter(|_| state.session_shown()) {
-        layer.send_frame(&output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
-    }
-    state.face_send_frame(&output, time);
+    // As on the screen: the preferred scales, then the frames (locked,
+    // only the greet's).
+    crate::udev::send_frames(state, &output);
     state.space.refresh();
     state.popups.cleanup();
     layer_map_for_output(&output).cleanup();

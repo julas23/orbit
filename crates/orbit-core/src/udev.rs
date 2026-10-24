@@ -494,10 +494,36 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
     state.confirm_lock();
 }
 
+/// Tells the windows and layers on `output` its scale, for them to draw at
+/// (fractional-scale, and the whole number above it for the others). A
+/// window on two monitors takes the one its middle is on.
+fn preferred_scale(state: &Orbit, output: &Output) {
+    let scale = output.current_scale().fractional_scale();
+    let whole = scale.ceil() as i32;
+    let tell = |surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, states: &smithay::wayland::compositor::SurfaceData| {
+        smithay::wayland::fractional_scale::with_fractional_scale(states, |fractional| fractional.set_preferred_scale(scale));
+        smithay::wayland::compositor::send_surface_state(surface, states, whole, Transform::Normal);
+    };
+    for window in state.space.elements_for_output(output) {
+        let home = state
+            .space
+            .element_geometry(window)
+            .map(|g| state.output_at(crate::output::center(g).to_f64()))
+            .is_none_or(|o| o.as_ref() == Some(output));
+        if home {
+            window.with_surfaces(tell);
+        }
+    }
+    for layer in layer_map_for_output(output).layers() {
+        layer.with_surfaces(tell);
+    }
+}
+
 /// Tells the clients on `output` they may draw their next frame — only
 /// the greet while locked: the others are not drawn.
 pub fn send_frames(state: &mut Orbit, output: &Output) {
     let time = state.start_time.elapsed();
+    preferred_scale(state, output);
     for window in state.space.elements_for_output(output).filter(|_| state.session_shown()) {
         window.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }

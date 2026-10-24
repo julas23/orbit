@@ -100,7 +100,7 @@ pub struct Orbit {
     pub seat: Seat<Self>,
     /// Globals with nothing to ask of the state: held so they stay
     /// advertised.
-    _globals: (XdgDecorationState, OutputManagerState, ViewporterState),
+    _globals: (XdgDecorationState, OutputManagerState, ViewporterState, smithay::wayland::fractional_scale::FractionalScaleManagerState),
 
     /// Where frames go: a window of the host session, or the screen.
     pub backend: Backend,
@@ -171,6 +171,8 @@ impl Orbit {
         // orbit-clip reads and sets the clipboard through it.
         let data_control_state = DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
         let viewporter_state = ViewporterState::new::<Self>(&dh);
+        // Monitors at 1.25, 1.5…: clients draw at the scale, not blurred up.
+        let fractional_scale_state = smithay::wayland::fractional_scale::FractionalScaleManagerState::new::<Self>(&dh);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
         let idle_inhibit_state = IdleInhibitManagerState::new::<Self>(&dh);
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(&dh);
@@ -225,7 +227,7 @@ impl Orbit {
             primary_selection_state,
             data_control_state,
             seat,
-            _globals: (xdg_decoration_state, output_manager_state, viewporter_state),
+            _globals: (xdg_decoration_state, output_manager_state, viewporter_state, fractional_scale_state),
             backend: Backend::None,
             cursor_status: smithay::input::pointer::CursorImageStatus::default_named(),
             cursor,
