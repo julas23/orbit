@@ -35,6 +35,8 @@
 //!   DP-2: { transform: 90 }             # turned a quarter clockwise (sway's
 //!                                       # names: normal, 90, 180, 270, flipped,
 //!                                       # flipped-90, flipped-180, flipped-270)
+//!   julas/HDMI-A-1: { mode: 3840x2160@60, scale: 2 }   # on the machine julas
+//!                                       # only, over a plain HDMI-A-1 there
 //! ```
 
 use std::{collections::HashMap, path::PathBuf};
@@ -81,7 +83,8 @@ pub struct Config {
     /// handed to clients as XCURSOR_THEME and XCURSOR_SIZE.
     pub cursor_theme: String,
     pub cursor_size: u32,
-    /// Monitors by connector name (`eDP-1`, `HDMI-A-1`).
+    /// Monitors by connector name (`eDP-1`, `HDMI-A-1`), or by host and
+    /// connector (`julas/HDMI-A-1`) for one machine only (`for_host`).
     pub outputs: HashMap<String, OutputConfig>,
     /// Workspace-number distance between the same area on two monitors
     /// (the panel's `stride`; see `workspace`).
@@ -293,11 +296,26 @@ impl Config {
     /// reported and the defaults are used: a bad file never stops the
     /// session from coming up (§1.5).
     pub fn load(path: &std::path::Path) -> Self {
-        let mut config = Self::read(path);
+        let mut config = Self::read(path).for_host(&hostname());
         for (name, at) in placed() {
             config.outputs.entry(name).or_default().position = Some(at);
         }
         config
+    }
+
+    /// The monitors of `host`: `host/CONNECTOR` entries become `CONNECTOR`,
+    /// over a plain one of that name; other hosts' go.
+    fn for_host(mut self, host: &str) -> Self {
+        let (mine, plain): (Vec<_>, Vec<_>) = std::mem::take(&mut self.outputs).into_iter().partition(|(name, _)| name.contains('/'));
+        self.outputs = plain.into_iter().collect();
+        for (name, output) in mine {
+            if let Some((for_host, connector)) = name.split_once('/')
+                && for_host == host
+            {
+                self.outputs.insert(connector.to_owned(), output);
+            }
+        }
+        self
     }
 
     fn read(path: &std::path::Path) -> Self {
@@ -373,6 +391,17 @@ mod tests {
         let config: Config = serde_yaml_ng::from_str("idle_lock: { think: 0 }").unwrap();
         assert_eq!(config.idle_lock.get("hp"), 0);
         assert_eq!(Config::default().idle_lock.get("hp"), 600);
+    }
+
+    #[test]
+    fn outputs_by_host() {
+        let text = "outputs: { HDMI-A-1: { scale: 1.5 }, julas/HDMI-A-1: { scale: 2 }, think/DP-1: { scale: 3 } }";
+        let julas = serde_yaml_ng::from_str::<Config>(text).unwrap().for_host("julas");
+        assert_eq!(julas.outputs.len(), 1);
+        assert_eq!(julas.outputs["HDMI-A-1"].scale, Some(2.0));
+        let hp = serde_yaml_ng::from_str::<Config>(text).unwrap().for_host("hp");
+        assert_eq!(hp.outputs.len(), 1);
+        assert_eq!(hp.outputs["HDMI-A-1"].scale, Some(1.5));
     }
 
     #[test]
