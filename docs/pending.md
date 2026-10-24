@@ -83,7 +83,7 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 
 - [x] Phase A: CI building the debs: `.github/workflows/debs.yml` runs `distro/ci/build.sh` in a Debian 13 container at each push to main, the .debs kept as the run's artifact; the same script tried at home in `docker run debian:trixie` (28 packages, 2026-10-23). Publishing stays at home (the repository server is on the LAN).
 - [x] Phase A: the hp on the packages instead of `install.sh` (the think is, since 2026-10-23): orbit-desktop, orbit-remote-server, orbit-local-station, orbit-aigent and ArtCraft's 14 from the local repository, LibreOffice purged, `/usr/local/bin/orbit-*` and `~/.local/bin/orbit-*` removed (2026-10-24). To verify after a reboot.
-- [ ] The keyring prompter's D-Bus service (`data/dbus/org.gnome.keyring.SystemPrompter.service`) is in no package: still copied by hand to `~/.local/share/dbus-1/services/`.
+- [x] The keyring prompter's D-Bus service in `orbit-prompter` (`/usr/share/dbus-1/services/`), gcr's file of the same name set aside by `dpkg-divert`; no copy by hand in the home any more (2026-10-24).
 - [x] Packaging: `orbit-notify` says `Provides: notification-daemon` and `orbit-polkit` `Provides: polkit-1-auth-agent`, so dunst and the other polkit agents can go without taking blueman and network-manager-applet along (2026-10-23).
 - [x] The hp's `~/.local/bin/orbit-*` (its own builds, synced by Syncthing) came before the packages' `/usr/bin` on the think: off the hp, `~/.shell/10-path.sh` puts links to `/usr/bin/orbit-*` in `$XDG_RUNTIME_DIR/orbit-bin` ahead of the PATH (2026-10-23).
 - [x] Phase A: `orbit-defaults` (default applications by MIME type, the GSettings override, the examples), pulled by `orbit-desktop`; `orbit-common-data` not needed, its files are compiled in (2026-10-23).
@@ -236,4 +236,4 @@ Pending:
 - [x] Packaging: the PipeWire file, in `/usr/share/pipewire/pipewire.conf.d/`, and pw-play and the echo canceller recommended (2026-10-23).
 - [ ] Packaging: the `vulkan` feature, Piper and its voices, the models (about 800 MB).
 - [ ] Speaking the answer while it is still being written (stream-json), for a shorter wait.
-- [ ] The diagnostics left in the log (room level every 30 s, `ORBIT_AIGENT_DUMP`) once it has run a while.
+- [x] The diagnostics taken out: the room level every 30 s and `ORBIT_AIGENT_DUMP` (2026-10-24).

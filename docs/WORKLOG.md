@@ -166,3 +166,12 @@ echo canceller configs and the recipes. `/etc/pam.d/orbit-*` and
 `~/.shell/10-path.sh` now holds on the hp too, so a later `install.sh`
 cannot shadow the packages. Not packaged yet: the keyring prompter's D-Bus
 service, left in `~/.local/share/dbus-1/services/`.
+
+## Two quick ones — 2026-10-24
+
+- `orbit-prompter` ships its D-Bus service. gcr installs a file of the same
+  name for gcr-prompter, so the package diverts it (`dpkg-divert --rename`
+  to `.gcr`, undone on removal). The copy in the home had gone stale with
+  the move to the packages (it named `~/.local/bin/orbit-prompter`).
+- `orbit-aigent` without its diagnostics: the room level now and then and
+  the WAV dumps of `ORBIT_AIGENT_DUMP`.

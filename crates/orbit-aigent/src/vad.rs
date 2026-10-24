@@ -69,11 +69,6 @@ impl Vad {
         None
     }
 
-    /// The noise floor, in dB.
-    pub fn floor(&self) -> Option<f32> {
-        self.floor
-    }
-
     /// Whether speech is under way.
     pub fn speaking(&self) -> bool {
         self.speaking

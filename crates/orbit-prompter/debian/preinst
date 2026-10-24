@@ -1,0 +1,10 @@
+#!/bin/sh
+# gcr ships gcr-prompter under the same D-Bus name and file: set its file
+# aside, so gnome-keyring asks through orbit-prompter in every session.
+set -e
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+    dpkg-divert --package orbit-prompter --add --rename \
+        --divert /usr/share/dbus-1/services/org.gnome.keyring.SystemPrompter.service.gcr \
+        /usr/share/dbus-1/services/org.gnome.keyring.SystemPrompter.service
+fi
+exit 0

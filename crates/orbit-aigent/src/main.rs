@@ -26,7 +26,6 @@ use std::{
     collections::VecDeque,
     io::{BufRead, BufReader, Write},
     os::unix::net::{UnixListener, UnixStream},
-    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -266,16 +265,7 @@ fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events:
     let mut wake = load(&config.wake_model);
     let mut request = if config.model == config.wake_model { None } else { load(&config.model) };
     let prompt = stt::prompt(&config.wake);
-    // Each bit heard, kept as a WAV file for a look at what the microphone
-    // gives: `ORBIT_AIGENT_DUMP=dir`.
-    let dump = std::env::var_os("ORBIT_AIGENT_DUMP").map(PathBuf::from);
     for (id, job, audio) in jobs {
-        if let Some(dir) = &dump {
-            let path = dir.join(format!("{id:04}-{job:?}.wav"));
-            if let Err(err) = write_wav(&path, &audio) {
-                log::warn!("aigent: {}: {err}", path.display());
-            }
-        }
         let stt = match job {
             Job::Wake if audio.len() > SHORT_WAKE || !config.wake_model.starts_with("base") => wake.as_mut(),
             Job::Reply => wake.as_mut().or(request.as_mut()),
@@ -453,10 +443,6 @@ struct Engine {
     /// says (or, after 2 s, has nothing to say).
     locked: Option<bool>,
     started: Instant,
-    /// Blocks heard, for a word in the log now and then, and the loudest
-    /// since the last.
-    blocks: u64,
-    loudest: f32,
 }
 
 /// How long the compositor has to say whether the session is locked.
@@ -525,8 +511,6 @@ impl Engine {
             allowed: Vec::new(),
             locked: None,
             started: Instant::now(),
-            blocks: 0,
-            loudest: f32::NEG_INFINITY,
         }
     }
 
@@ -678,19 +662,6 @@ impl Engine {
         let event = self.vad.push(block);
         if let Some(event) = event {
             log::debug!("aigent: speech {event:?} ({:?}, {:.0} dB)", self.state, vad::level(block));
-        }
-        self.blocks += 1;
-        self.loudest = self.loudest.max(vad::level(block));
-        if self.blocks.is_multiple_of(1000) {
-            log::debug!(
-                "aigent: {:?}, room at {:.0} dB, loudest {:.0} dB, speaking {}, Whisper busy {}",
-                self.state,
-                self.vad.floor().unwrap_or(0.0),
-                self.loudest,
-                self.vad.speaking(),
-                self.waiting_for.is_some()
-            );
-            self.loudest = f32::NEG_INFINITY;
         }
         if let Some(recording) = &mut self.recording {
             recording.extend_from_slice(block);
@@ -1054,10 +1025,6 @@ impl Engine {
                         let heard = self.recording.as_deref().unwrap_or_default();
                         let loudest = heard.chunks(mic::BLOCK).map(vad::level).fold(f32::NEG_INFINITY, f32::max);
                         log::info!("aigent: no answer (the loudest 30 ms at {loudest:.0} dB)");
-                        if let Some(dir) = std::env::var_os("ORBIT_AIGENT_DUMP") {
-                            let path = PathBuf::from(dir).join(format!("{:04}-NoAnswer.wav", self.job));
-                            let _ = write_wav(&path, heard);
-                        }
                         self.decide(false);
                     } else {
                         log::info!("aigent: nothing heard");
