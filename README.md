@@ -63,7 +63,7 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 
 | Component | What it is | Progress | Functional | Version |
 | --- | --- | :-: | :-: | :-: |
-| **orbit-core** | The compositor | ![40%](https://img.shields.io/badge/40%25-fdae61) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-core** | The compositor | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-greet** | Login and lock screen | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-login** | Sessions on the seat, user switch | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-polkit** | polkit agent | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
@@ -131,10 +131,10 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 
 | Component | What it is | Progress | Functional | Version |
 | --- | --- | :-: | :-: | :-: |
-| **Packages (.deb)** | `distro/build-debs.sh`, metapackages | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **Packages (.deb)** | `distro/build-debs.sh`, metapackages, defaults, fonts, Ruffle | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **apt repository** | aptly on the LXC, nightly sync | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| **CI** | Builds and publishes the debs | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
-| **orbit-studio** | ArtCraft metapackage | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **CI** | Builds the debs on Debian 13 (publishing stays at home) | ![60%](https://img.shields.io/badge/60%25-ffffbf) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-studio** | ArtCraft metapackage | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-install** | The installer | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
 | **ISO** | Offline live ISO, EFISTUB, Plymouth | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
 
@@ -142,8 +142,8 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 
 | Component | What it is | Progress | Functional | Version |
 | --- | --- | :-: | :-: | :-: |
-| **orbit-remote-server** | orbit-core's sharing layer: the session streamed (Rust + Slint) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
-| **orbit-local-station** | Slint client pulling the server's greeter and session | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-remote-server** | orbit-core's sharing layer: the session streamed (Rust + Slint) | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-local-station** | Slint client pulling the server's greeter and session | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
 ## Principles
 
@@ -165,7 +165,9 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 ## Orbit-Core
 
 The compositor and the session. Windows tile side by side in columns —
-Mod+right-drag moves the line between two — and dialogs float over their
+Mod+right-drag moves the line between two — or, workspace by workspace
+(`layout`, Mod+Ctrl+Space for the next), as master and stack, one at a time
+(monocle) or splitting each other's place (bsp); dialogs float over their
 parent. Workspaces are shared by every monitor, and laid out as a grid of
 areas walked with Ctrl+Alt+arrows. Shortcuts live in
 `~/.config/orbit/keys.yaml`, a combination to an IPC command (`none` removes
@@ -182,6 +184,12 @@ one); the defaults, Mod being the Super key:
 | Alt+Tab, Alt+Shift+Tab | windows of the workspace, of all | Mod+Tab | the window cards |
 | Mod+1…0 | workspace | Mod+Shift+1…0 | move to workspace |
 | Mod+drag | move a window | Mod+right-drag | resize it |
+| Mod+Ctrl+Space | next layout | Mod+A | Orbit-Aigent: listen, cancel |
+
+Each monitor can be placed, turned and scaled (fractions too) in
+`core.yaml`'s `outputs:`, or for the session by wlr-randr, kanshi and the
+like (wlr-output-management). Screens are shared through the portal
+(xdg-desktop-portal-wlr, `orbit-portals.conf`).
 
 ## Orbit-Panel
 
@@ -592,11 +600,16 @@ that works only together:
   is the real one, every application included, so an Orbit machine can sit
   at home or in the cloud and be used from anywhere. First it mirrors the
   screens; then the client gets a screen of its own resolution in the same
-  session, the local screens locked meanwhile.
+  session, the local screens locked meanwhile (`serve --virtual` makes that
+  screen today; the locking is to come).
 - **orbit-local-station:** no local interface of its own; it pulls the
-  greeter, and then the whole session, straight from the server. Later,
-  orbit-greet will also let a full Orbit machine choose between its local
-  desktop and a remote one.
+  greeter, and then the whole session, straight from the server; the greet
+  of a full Orbit machine chooses between its local desktop and a remote
+  one.
+- **Now:** pairing by a code shown on the server (only while its session is
+  unlocked), a token kept after; the video (VA-API or NVENC, H.264) and the
+  sound (Opus) over WebRTC; the client's keys and mouse back, the core
+  keeping Ctrl+Alt+Backspace and the console switches from them.
 - **Clients:** in Rust and [Slint](https://slint.dev) — a web page in any
   browser, the station (drawn straight on the screen, no compositor) and,
   much later, Android and iOS. The desktop applications stay GTK4.

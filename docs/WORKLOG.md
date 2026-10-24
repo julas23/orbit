@@ -93,3 +93,51 @@ along), the session open at boot for remote tests, the TV at 1920×1080@60
 
 The latency (the clock photo), the server started with the session, a
 client other than Chrome on the hp. Paused here to go back to orbit-core.
+
+## The night of 2026-10-23: the pending list, alone
+
+The user went to sleep and asked for the list to be worked through on the
+hp, nested, asking nothing; what needs the user, the hardware or a decision
+was left for the morning. The think and the Julas VM were switched off.
+
+- Remote: the core gives the virtual pointer and keyboard only to
+  orbit-remote-server (the program at the socket's other end) and keeps a
+  remote keyboard's Ctrl+Alt+Backspace and Ctrl+Alt+Fn; no pairing by code
+  while the session is locked, the code shown once it is unlocked; the
+  session's sound in Opus beside the video; the first frame sent again as a
+  key frame once WebRTC connects (a still screen showed nothing).
+- A regression found on the way: since NVENC's fix the capture passed GBM's
+  implicit modifier on, and VA-API refused it; on AMD and Intel the video
+  never negotiated. A buffer made linear by the flag says it is linear.
+- Phase 2: virtual monitors in the core (`output NAME create`), placed to
+  the right of the local ones; `serve --virtual` gives the client one of
+  its size. Monitors turned (`transform:`), scaled (`scale:`, fractional
+  scale), set by wlr-randr (wlr-output-management, from niri), shared by
+  the portal (`orbit-portals.conf`: the Orbit session had no ScreenCast).
+- Phase 3: layouts per workspace (columns, master, monocle, bsp), master's
+  ratio and count, sway's named scratchpads.
+- Aigent: a chime when woken, Mod+A, the echo canceller in its package.
+- Distro: orbit-defaults, orbit-fonts, orbit-ruffle; CI building the debs
+  in a Debian 13 container (tried the same way in docker); a clean Debian 13
+  resolves `orbit-desktop orbit-studio`.
+- The microphone from the station (branch `wip/station-mic`): the server's
+  half works (a PipeWire loopback whose source is the session's
+  microphone), the station's webrtcbin does not associate its sending
+  transceiver with the server's line.
+
+### Lessons
+
+- A nested core ran the default `startup:`: `dbus-update-activation-environment`
+  handed the nested display to the user's systemd (the user's portals then
+  failed) and `orbit-session` killed the user's panel and dock by name. A
+  nested core now runs neither unless `--startup` asks.
+- When the user's session locks, a nested window gets no frames and stops
+  drawing: screenshots of it are empty. Virtual monitors have their own
+  clock; tests draw there.
+- `pkill -f` with a pattern in the command itself kills the shell running it.
+
+### Not tried yet (for the morning)
+
+The station for real (sound, the virtual monitor at its size), a browser
+with sound, a turned or scaled real monitor, a DRM mode change from
+wlr-randr, a real screen share (Meet, OBS), the chime heard.
