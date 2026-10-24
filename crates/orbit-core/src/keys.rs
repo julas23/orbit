@@ -24,6 +24,8 @@ pub const DEFAULT: &[(&str, &str)] = &[
     ("Mod+Return", "exec $terminal"),
     ("Mod+Space", "exec $launcher"),
     ("Mod+R", "exec $run"),
+    // Orbit-Aigent: listen, or cancel what it is doing.
+    ("Mod+A", "exec orbit-aigent toggle"),
     ("Mod+Q", "kill"),
     ("Mod+Shift+Q", "kill --force"),
     ("Mod+Shift+E", "exit"),

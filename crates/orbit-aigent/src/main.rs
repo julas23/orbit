@@ -323,6 +323,37 @@ fn write_wav(path: &std::path::Path, audio: &[f32]) -> std::io::Result<()> {
     std::fs::write(path, out)
 }
 
+/// Two short rising notes, played as its voice is (the echo canceller
+/// takes them out of what it hears). Made once, in the runtime directory.
+fn chime() {
+    const NOTES: [(f32, f32); 2] = [(659.25, 0.07), (987.77, 0.09)];
+    let path = std::env::var_os("XDG_RUNTIME_DIR")
+        .map_or_else(std::env::temp_dir, std::path::PathBuf::from)
+        .join("orbit-aigent-chime.wav");
+    if !path.exists() {
+        let rate = mic::RATE as f32;
+        let mut audio = Vec::new();
+        for (pitch, length) in NOTES {
+            let n = (length * rate) as usize;
+            audio.extend((0..n).map(|i| {
+                let t = i as f32 / rate;
+                // In and out softly, no click at either end.
+                let fade = (t / 0.005).min(1.0) * ((length - t) / 0.03).clamp(0.0, 1.0);
+                0.18 * fade * (std::f32::consts::TAU * pitch * t).sin()
+            }));
+        }
+        if let Err(err) = write_wav(&path, &audio) {
+            return log::warn!("aigent: the chime: {err}");
+        }
+    }
+    match std::process::Command::new("pw-play").arg("--media-role=Assistant").arg(&path).spawn() {
+        Ok(mut child) => {
+            std::thread::spawn(move || child.wait());
+        }
+        Err(err) => log::warn!("aigent: pw-play: {err}"),
+    }
+}
+
 /// Speech after the name, while Whisper hears it.
 #[derive(Clone, Copy, PartialEq)]
 enum Said {
@@ -558,6 +589,10 @@ impl Engine {
     fn enter(&mut self, state: State) {
         if state != self.state {
             log::debug!("aigent: {:?} → {state:?}", self.state);
+        }
+        // Woken (by its name or a click): it listens now.
+        if state == State::Listening && self.state == State::Idle && self.config.chime {
+            chime();
         }
         self.state = state;
         self.since = Instant::now();

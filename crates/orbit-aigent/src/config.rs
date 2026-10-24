@@ -20,6 +20,7 @@
 //! voices:                  # Piper's, in ~/.local/share/orbit/aigent/voices
 //!   pt: pt_BR-faber-medium
 //!   en: en_US-ryan-medium
+//! chime: true              # two short notes when woken: it listens now
 //! ```
 //!
 //! A Bluetooth headset's microphone is a poor choice: it records as a phone
@@ -56,6 +57,8 @@ pub struct Config {
     pub hints: String,
     /// Piper's voice for each language, `voices/<name>.onnx`.
     pub voices: std::collections::HashMap<String, String>,
+    /// A short sound when woken.
+    pub chime: bool,
 }
 
 impl Default for Config {
@@ -68,6 +71,7 @@ impl Default for Config {
             model: if cfg!(feature = "vulkan") { "large-v3-turbo-q5_0" } else { "small-q5_1" }.into(),
             microphone: None,
             voices: Default::default(),
+            chime: true,
             hints: "Que horas são? Abra o terminal. Quanto espaço livre tem no disco? \
                     What time is it? Open the browser."
                 .into(),

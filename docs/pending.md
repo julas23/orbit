@@ -217,8 +217,8 @@ Pending:
 - [ ] Try with speakers: no self-interruption, "Jarvis, para" and confirmations through the echo canceller.
 - [ ] Try the lock after a login with the new core (log: "the session is locked: deaf").
 - [ ] Gemini CLI, OpenCode and Kimi Code (not installed on the hp yet): their headless modes and how each asks for permission.
-- [ ] A short sound when woken.
-- [ ] A shortcut in `keys.yaml` (listen/cancel).
+- [x] A short sound when woken: two rising notes through `pw-play` as its voice (the echo canceller takes them out), `chime: false` in `aigent.yaml` for none (2026-10-23). Not heard yet.
+- [x] A shortcut: Mod+A, `exec orbit-aigent toggle` (listen, or cancel), among the core's defaults (2026-10-23).
 - [ ] Packaging: the `vulkan` feature, Piper and its voices, the models (about 800 MB), the PipeWire file.
 - [ ] Speaking the answer while it is still being written (stream-json), for a shorter wait.
 - [ ] The diagnostics left in the log (room level every 30 s, `ORBIT_AIGENT_DUMP`) once it has run a while.
