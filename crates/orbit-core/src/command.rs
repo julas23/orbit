@@ -316,6 +316,15 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             }
             Ok(())
         }
+        // Orbit's layouts (`tile::Layout`), on the focused workspace.
+        ["layout", "next"] => {
+            state.set_layout(None);
+            Ok(())
+        }
+        ["layout", name] if crate::tile::Layout::parse(name).is_some() => {
+            state.set_layout(crate::tile::Layout::parse(name));
+            Ok(())
+        }
         ["split" | "splith" | "splitv", ..] | ["layout", ..] | ["resize", ..] | ["gaps", ..] | ["border", ..] | ["sticky", ..] | ["mark", ..] => {
             Err(format!("not in orbit-core yet: {}", w[0]))
         }

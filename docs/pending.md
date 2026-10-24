@@ -43,7 +43,8 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [x] A nested core leaves `startup:` and `login:` out unless `--startup` asks: the default ones handed its display to the outer session's systemd and D-Bus (the outer portals then failed) and `orbit-session` took the outer panel and dock (2026-10-23).
 - [x] Phase 2, `wlr-output-management` (ported from niri): wlr-randr, kanshi and nwg-displays see every monitor with its connector's modes, and set mode, place, turn and scale for the session (as `outputs:` would; the file is left alone); switching one off fails, not done yet. Nested with wlr-randr: a virtual monitor's mode and scale and the window's turn applied (2026-10-23). Not tried: a mode change on a real monitor (DRM `use_mode`).
 - [ ] Phase 2: hotplug, a monitor switched off, VRR/tearing. Done when the hp gets a full day without going back to sway.
-- [ ] Phase 3: layouts `bsp`, `master`, `monocle`, `scroll`, per-workspace layouts, named scratchpads. (Tags left out on 2026-10-22: maybe in a later major version.)
+- [x] Phase 3, layouts: each workspace has its own, `columns` (as before), `master` (55% for the first, the rest stacked), `monocle` (one at a time, the focused on top) and `bsp` (bspwm's spiral); `layout NAME` and `layout next` (Mod+Ctrl+Space), `layout:` in core.yaml for new workspaces, the name in get_workspaces (2026-10-23, nested-tested on a virtual monitor).
+- [ ] Phase 3: the `scroll` layout (niri's columns that scroll), master's ratio and count settable, named scratchpads. (Tags left out on 2026-10-22: maybe in a later major version.)
 - [ ] Phase 4: animations, shadows, blur, gestures, overview, effects off on battery.
 - [ ] Phase 5: `orbit-remote-server` (§9, phase 1 working 2026-10-23), Jarvis wallpaper, orbit-aigent integrated with the core, own monitor settings, `orbit-keys` (password app).
 

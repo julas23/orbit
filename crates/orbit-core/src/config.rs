@@ -9,6 +9,7 @@
 //! launcher: gapplication action io.github.julas23.Orbit.Panel menu
 //! run: orbit-run         # Mod+R: a command typed and run
 //! gaps: 6
+//! layout: columns        # a new workspace's: columns, master, monocle, bsp
 //! border: 2
 //! corner_radius: 10
 //! startup: [orbit-session]   # at once, behind the lock if locked
@@ -51,6 +52,8 @@ pub struct Config {
     pub run: String,
     /// Space between windows, and between them and the screen's edges.
     pub gaps: i32,
+    /// How a new workspace lays its windows out (`layout` changes one).
+    pub layout: crate::tile::Layout,
     /// Width of the border drawn around each window.
     pub border: i32,
     /// Radius of the windows' corners (0: square).
@@ -206,6 +209,7 @@ impl Default for Config {
             launcher: "gapplication action io.github.julas23.Orbit.Panel menu".into(),
             run: "orbit-run".into(),
             gaps: 6,
+            layout: crate::tile::Layout::Columns,
             border: 2,
             corner_radius: 10,
             focused_color: "#4682b4".into(),

@@ -351,7 +351,8 @@ impl Orbit {
             "focused": num == self.current && self.focused_window().is_none_or(|w| self.workspace_of(&w) == Some(num)),
             "visible": self.is_visible(num),
             "urgent": false,
-            "layout": "splith",
+            // Orbit's own names (columns, master, monocle, bsp).
+            "layout": self.workspaces.iter().find(|w| w.num == num).map_or("columns", |w| w.layout.name()),
             "orientation": "horizontal",
             "rect": rect(area),
             "nodes": windows,

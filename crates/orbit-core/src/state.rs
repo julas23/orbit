@@ -440,18 +440,21 @@ impl Orbit {
             crate::floating::floats(w) && !crate::fullscreen::is_fullscreen(w) && !crate::fullscreen::is_maximized(w)
         });
         let weights: Vec<f64> = tiled.iter().map(|w| info(w).borrow().weight).collect();
-        let rects = tile::weighted(&weights, area, self.config.gaps, self.config.border);
+        let layout = self.workspaces.iter().find(|w| w.num == num).map_or(self.config.layout, |w| w.layout);
+        let rects = layout.rects(&weights, area, self.config.gaps, self.config.border);
         let whole = tile::columns(1, area, self.config.gaps, self.config.border).first().copied().unwrap_or(area);
         tracing::debug!(num, ?area, ?rects, "arrange");
         // The space stacks in the order windows are mapped: the tiled,
         // then the maximized and fullscreen, then the floating.
         let mut placed: Vec<(Window, tile::Rect)> = tiled.into_iter().zip(rects).collect();
-        placed.sort_by_key(|(w, _)| crate::fullscreen::is_fullscreen(w) || crate::fullscreen::is_maximized(w));
+        // One at a time: the focused one over the others.
+        let top = (layout == tile::Layout::Monocle).then(|| self.workspaces.iter().find(|w| w.num == num).and_then(|w| w.last_focus.clone())).flatten();
+        placed.sort_by_key(|(w, _)| (crate::fullscreen::is_fullscreen(w) || crate::fullscreen::is_maximized(w), Some(w) == top.as_ref()));
         for (window, rect) in placed {
             let fullscreen = crate::fullscreen::is_fullscreen(&window);
             let maximized = crate::fullscreen::is_maximized(&window);
             let (x, y, w, h) = if fullscreen { full } else if maximized { whole } else { rect };
-            let above = fullscreen || maximized;
+            let above = fullscreen || maximized || Some(&window) == top.as_ref();
             info(&window).borrow_mut().rect = (x, y, w, h);
             if let Some(surface) = window.x11_surface() {
                 // X windows are placed in the root window's coordinates,
@@ -490,6 +493,17 @@ impl Orbit {
         }
     }
 
+    /// The focused workspace's layout: `layout`, or the next one.
+    pub fn set_layout(&mut self, layout: Option<tile::Layout>) {
+        let num = self.current;
+        let i = self.ensure_ws(num);
+        let ws = &mut self.workspaces[i];
+        ws.layout = layout.unwrap_or_else(|| ws.layout.next());
+        tracing::info!("workspace {num}: layout {}", ws.layout.name());
+        self.arrange();
+        self.workspace_event("layout", num, None);
+    }
+
     /// Gives `window` the keyboard (and the active look); `None` takes it
     /// from every window.
     pub fn focus_window(&mut self, window: Option<Window>) {
@@ -497,7 +511,9 @@ impl Orbit {
         let before = self.focused_window();
         if let Some(w) = &window {
             self.yield_fullscreen(w);
-            if crate::floating::floats(w) {
+            // Floating, or one of a monocle's: it comes over the others.
+            let monocle = self.workspace_of(w).and_then(|n| self.workspaces.iter().find(|ws| ws.num == n)).is_some_and(|ws| ws.layout == tile::Layout::Monocle);
+            if crate::floating::floats(w) || monocle {
                 self.space.raise_element(w, false);
             }
         }

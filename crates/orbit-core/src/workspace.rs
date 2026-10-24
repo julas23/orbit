@@ -26,11 +26,13 @@ pub struct Workspace {
     pub windows: Vec<Window>,
     /// The window to give the keyboard back to when the workspace is shown.
     pub last_focus: Option<Window>,
+    /// How its tiled windows share it (`tile::Layout`).
+    pub layout: crate::tile::Layout,
 }
 
 impl Workspace {
-    pub fn new(num: i32, output: String) -> Self {
-        Self { num, output, windows: Vec::new(), last_focus: None }
+    pub fn new(num: i32, output: String, layout: crate::tile::Layout) -> Self {
+        Self { num, output, windows: Vec::new(), last_focus: None, layout }
     }
 }
 
@@ -148,7 +150,7 @@ impl Orbit {
         }
         let output = self.monitors().get(self.area_of(num).1).cloned().unwrap_or_else(|| self.focused_output_name());
         let i = self.workspaces.iter().position(|w| w.num > num).unwrap_or(self.workspaces.len());
-        self.workspaces.insert(i, Workspace::new(num, output));
+        self.workspaces.insert(i, Workspace::new(num, output, self.config.layout));
         self.workspace_event("init", num, None);
         i
     }

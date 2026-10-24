@@ -32,6 +32,7 @@ pub const DEFAULT: &[(&str, &str)] = &[
     ("Mod+L", "lock"),
     ("Mod+F", "fullscreen toggle"),
     ("Mod+Shift+Space", "floating toggle"),
+    ("Mod+Ctrl+Space", "layout next"),
     ("Mod+Escape", "floating toggle"),
     ("Alt+Tab", "switch workspace"),
     ("Alt+Shift+Tab", "switch all"),
