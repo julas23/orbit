@@ -1,0 +1,8 @@
+# /etc/orbit/remote.yaml — Orbit-Remote-Server started with the session.
+# ~/.config/orbit/remote.yaml, if there, is read instead.
+#
+# Off by default: once on, the session is offered on port 7311 to whoever
+# pairs with the code shown on the screen.
+start: false
+# A virtual monitor at the client's size, instead of a mirror of the screens.
+virtual: false

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # orbit-session — starts (or restarts) Orbit-Panel and Orbit-Dock for a
 # Wayland session, in the right order, Orbit-Notify when no notification
-# server is running (sway's config used to start it), and Orbit-Aigent when
-# it is installed and not running yet.
+# server is running (sway's config used to start it), Orbit-Aigent when
+# it is installed and not running yet, and Orbit-Remote-Server likewise
+# when remote.yaml says `start: true`.
 #
 #   orbit-session [--fallback COMMAND]
 #
@@ -77,4 +78,20 @@ if [ -n "$AIGENT" ] && ! pgrep -x orbit-aigent >/dev/null; then
   STATE=${XDG_STATE_HOME:-$HOME/.local/state}/orbit
   mkdir -p "$STATE"
   RUST_LOG=${RUST_LOG:-info,whisper_rs=warn} setsid "$AIGENT" >"$STATE/aigent.log" 2>&1 < /dev/null &
+fi
+
+# The remote server, likewise left running on a restart (a client may be
+# connected), only when ~/.config/orbit/remote.yaml (else
+# /etc/orbit/remote.yaml) says `start: true`. Its log is
+# ~/.local/state/orbit/remote.log.
+REMOTE=$(bin orbit-remote-server)
+REMOTE_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/orbit/remote.yaml
+[ -f "$REMOTE_CONF" ] || REMOTE_CONF=/etc/orbit/remote.yaml
+remote() { grep -Eq "^$1:[[:space:]]*true([[:space:]]|#|$)" "$REMOTE_CONF" 2>/dev/null; }
+# (pgrep -x sees only 15 characters of a name: matched on the command.)
+if [ -n "$REMOTE" ] && remote start && ! pgrep -u "$(id -u)" -f '^[^ ]*orbit-remote-server serve' >/dev/null; then
+  STATE=${XDG_STATE_HOME:-$HOME/.local/state}/orbit
+  mkdir -p "$STATE"
+  if remote virtual; then set -- serve --virtual; else set -- serve; fi
+  setsid "$REMOTE" "$@" >"$STATE/remote.log" 2>&1 < /dev/null &
 fi

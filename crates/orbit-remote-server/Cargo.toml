@@ -17,7 +17,9 @@ depends = "$auto, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreame
 recommends = "mesa-va-drivers"
 assets = [
     ["target/release/orbit-remote-server", "usr/bin/", "755"],
+    ["../../data/remote.yaml", "etc/orbit/", "644"],
 ]
+conf-files = ["/etc/orbit/remote.yaml"]
 
 [dependencies]
 anyhow.workspace = true

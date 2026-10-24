@@ -175,3 +175,9 @@ service, left in `~/.local/share/dbus-1/services/`.
   the move to the packages (it named `~/.local/bin/orbit-prompter`).
 - `orbit-aigent` without its diagnostics: the room level now and then and
   the WAV dumps of `ORBIT_AIGENT_DUMP`.
+- `orbit-remote-server` started with the session, as the aigent is: by
+  `orbit-session`, when `remote.yaml` (the user's, else `/etc/orbit/`'s,
+  shipped with `start: false`) says `start: true`; `virtual: true` gives
+  `serve --virtual`. Off by default, since it offers the session on port
+  7311. On the way: `pgrep -x` sees only 15 characters of a name, so
+  `orbit-remote-server` is matched on its command instead.
