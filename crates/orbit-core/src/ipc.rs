@@ -318,7 +318,7 @@ impl Orbit {
             "primary": false,
             "scale": output.current_scale().fractional_scale(),
             "subpixel_hinting": "unknown",
-            "transform": "normal",
+            "transform": crate::config::transform_name(output.current_transform()),
             "current_workspace": self.visible.get(&name).map(|n| n.to_string()),
             "modes": [mode.clone()],
             "current_mode": mode,

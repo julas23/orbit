@@ -280,8 +280,9 @@ impl Orbit {
         name
     }
 
-    /// Reads the config again (`reload`): keyboard, gaps, borders and
-    /// colours apply at once; a bad file keeps the defaults (§1.5).
+    /// Reads the config again (`reload`): keyboard, gaps, borders,
+    /// colours and the monitors' places and turns apply at once; a bad
+    /// file keeps the defaults (§1.5).
     pub fn reload_config(&mut self) {
         self.config = Config::load(&self.config_path);
         self.keys = crate::keys::Keys::load(&self.config_path, &self.config);
@@ -293,7 +294,10 @@ impl Orbit {
             keyboard.change_repeat_info(kb.repeat_rate, kb.repeat_delay);
         }
         self.read_layouts();
+        self.place_outputs();
+        self.renumber();
         self.arrange();
+        self.output_event();
         self.arm_idle();
     }
 

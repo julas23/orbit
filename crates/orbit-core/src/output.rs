@@ -97,6 +97,15 @@ impl Orbit {
     /// changed).
     pub fn place_outputs(&mut self) {
         let outputs: Vec<Output> = self.space.outputs().cloned().collect();
+        // Turned first: a turned monitor's size is the other way round.
+        for output in &outputs {
+            let turned = self.config.outputs.get(&output.name()).and_then(|o| o.transform.as_deref());
+            if let Some(transform) = turned.and_then(crate::config::parse_transform)
+                && output.current_transform() != transform
+            {
+                output.change_current_state(None, Some(transform), None, None);
+            }
+        }
         let sizes: Vec<(String, (i32, i32))> = outputs
             .iter()
             .map(|o| {

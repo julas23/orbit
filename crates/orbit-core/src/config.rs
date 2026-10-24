@@ -26,6 +26,9 @@
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
 //!   DP-1: { mode: 1920x1080@60 }        # not its preferred mode (or 1920x1080:
 //!                                       # the fastest at that size)
+//!   DP-2: { transform: 90 }             # turned a quarter clockwise (sway's
+//!                                       # names: normal, 90, 180, 270, flipped,
+//!                                       # flipped-90, flipped-180, flipped-270)
 //! ```
 
 use std::{collections::HashMap, path::PathBuf};
@@ -116,6 +119,39 @@ pub struct OutputConfig {
     /// `WIDTHxHEIGHT` or `WIDTHxHEIGHT@HZ`, instead of the monitor's
     /// preferred mode (sway's `mode`).
     pub mode: Option<String>,
+    /// How the monitor is turned (sway's `transform`).
+    pub transform: Option<String>,
+}
+
+/// Smithay's `Transform` by sway's name for it.
+pub fn transform_name(transform: smithay::utils::Transform) -> &'static str {
+    use smithay::utils::Transform;
+    match transform {
+        Transform::Normal => "normal",
+        Transform::_90 => "90",
+        Transform::_180 => "180",
+        Transform::_270 => "270",
+        Transform::Flipped => "flipped",
+        Transform::Flipped90 => "flipped-90",
+        Transform::Flipped180 => "flipped-180",
+        Transform::Flipped270 => "flipped-270",
+    }
+}
+
+/// Sway's name of a monitor's turn as Smithay's `Transform`.
+pub fn parse_transform(text: &str) -> Option<smithay::utils::Transform> {
+    use smithay::utils::Transform;
+    Some(match text.trim() {
+        "normal" | "0" => Transform::Normal,
+        "90" => Transform::_90,
+        "180" => Transform::_180,
+        "270" => Transform::_270,
+        "flipped" => Transform::Flipped,
+        "flipped-90" => Transform::Flipped90,
+        "flipped-180" => Transform::Flipped180,
+        "flipped-270" => Transform::Flipped270,
+        _ => return None,
+    })
 }
 
 /// `1920x1080@60` as (1920, 1080, Some(60.0)); `1920x1080` without the rate.
@@ -310,6 +346,11 @@ mod tests {
         assert_eq!(parse_mode("1920x1080@59.94Hz"), Some((1920, 1080, Some(59.94))));
         assert_eq!(parse_mode("3840x2160"), Some((3840, 2160, None)));
         assert_eq!(parse_mode("big"), None);
+        let config: Config = serde_yaml_ng::from_str("outputs: { DP-2: { transform: 90 } }").unwrap();
+        assert_eq!(config.outputs["DP-2"].transform.as_deref().and_then(parse_transform), Some(smithay::utils::Transform::_90));
+        assert_eq!(parse_transform("flipped-270"), Some(smithay::utils::Transform::Flipped270));
+        assert_eq!(parse_transform("sideways"), None);
+        assert_eq!(parse_transform(transform_name(smithay::utils::Transform::Flipped90)), Some(smithay::utils::Transform::Flipped90));
     }
 
     #[test]

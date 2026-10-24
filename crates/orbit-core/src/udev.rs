@@ -47,7 +47,7 @@ use smithay::{
         rustix::fs::OFlags,
         wayland_server::backend::GlobalId,
     },
-    utils::DeviceFd,
+    utils::{DeviceFd, Transform},
     wayland::{
         compositor::{SurfaceAttributes, TraversalAction, with_surface_tree_downward},
         dmabuf::{DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
@@ -331,6 +331,15 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
     let name = format!("{}-{}", connector.interface().as_str(), connector.interface_id());
     let Backend::Drm(drm) = &mut state.backend else { return };
     let wanted = state.config.outputs.get(&name).and_then(|o| o.mode.clone());
+    let turned = state.config.outputs.get(&name).and_then(|o| o.transform.clone());
+    let transform = match turned.as_deref().map(|t| (t, crate::config::parse_transform(t))) {
+        Some((_, Some(transform))) => transform,
+        Some((text, None)) => {
+            tracing::warn!("{name}: no transform {text:?}; not turned");
+            Transform::Normal
+        }
+        None => Transform::Normal,
+    };
     let Some(mode) = choose_mode(&name, connector.modes(), wanted.as_deref()) else {
         tracing::warn!("{name}: no modes");
         return;
@@ -351,7 +360,7 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
     let wl_mode = WlMode::from(mode);
     output.set_preferred(wl_mode);
     // Its place comes with the others' (`output::place`).
-    output.change_current_state(Some(wl_mode), None, None, Some((0, 0).into()));
+    output.change_current_state(Some(wl_mode), Some(transform), None, Some((0, 0).into()));
     let Backend::Drm(drm) = &mut state.backend else { return };
     let drm_output = match drm.manager.lock().initialize_output::<_, Element>(
         crtc,
