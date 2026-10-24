@@ -48,13 +48,23 @@ pub struct Plane {
 }
 
 /// A buffer the compositor can draw into: linear by the flag, by the
-/// modifier, or as the driver likes.
-fn allocate(device: &gbm::Device<std::fs::File>, width: u32, height: u32) -> std::io::Result<gbm::BufferObject<()>> {
+/// modifier, or as the driver likes; with its modifier. One made by the
+/// flag says none (it is implicit), but it is linear: said so, as VA-API
+/// will not take an implicit one.
+fn allocate(device: &gbm::Device<std::fs::File>, width: u32, height: u32) -> std::io::Result<(gbm::BufferObject<()>, u64)> {
     use gbm::{BufferObjectFlags as Flags, Format, Modifier};
-    device
-        .create_buffer_object::<()>(width, height, Format::Xrgb8888, Flags::RENDERING | Flags::LINEAR)
-        .or_else(|_| device.create_buffer_object_with_modifiers2(width, height, Format::Xrgb8888, [Modifier::Linear].into_iter(), Flags::RENDERING))
-        .or_else(|_| device.create_buffer_object(width, height, Format::Xrgb8888, Flags::RENDERING))
+    if let Ok(object) = device.create_buffer_object::<()>(width, height, Format::Xrgb8888, Flags::RENDERING | Flags::LINEAR) {
+        let modifier = match object.modifier() {
+            Modifier::Invalid => Modifier::Linear,
+            modifier => modifier,
+        };
+        return Ok((object, modifier.into()));
+    }
+    let object = device
+        .create_buffer_object_with_modifiers2(width, height, Format::Xrgb8888, [Modifier::Linear].into_iter(), Flags::RENDERING)
+        .or_else(|_| device.create_buffer_object(width, height, Format::Xrgb8888, Flags::RENDERING))?;
+    let modifier = object.modifier().into();
+    Ok((object, modifier))
 }
 
 /// A frame captured into buffer `index`.
@@ -134,8 +144,7 @@ impl Capture {
         )?;
         let (mut planes, mut buffers, mut objects) = (Vec::new(), Vec::new(), Vec::new());
         for _ in 0..BUFFERS {
-            let object = allocate(&device, width, height).context("making a dmabuf")?;
-            let modifier: u64 = object.modifier().into();
+            let (object, modifier) = allocate(&device, width, height).context("making a dmabuf")?;
             let plane = Plane {
                 fd: object.fd_for_plane(0).context("its file")?,
                 width,
