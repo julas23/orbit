@@ -27,10 +27,11 @@ fn main() {
         ["capture", output] => capture::measure(Some(output)),
         ["encode"] => encode::measure(None),
         ["encode", output] => encode::measure(Some(output)),
-        [] | ["serve"] => serve::serve(PORT, None),
-        ["serve", output] => serve::serve(PORT, Some(output.to_string())),
+        [] | ["serve"] => serve::serve(PORT, serve::Screen::Mirror(None)),
+        ["serve", "--virtual"] => serve::serve(PORT, serve::Screen::Virtual),
+        ["serve", output] => serve::serve(PORT, serve::Screen::Mirror(Some(output.to_string()))),
         _ => {
-            eprintln!("usage: orbit-remote-server [serve|capture|encode] [OUTPUT]");
+            eprintln!("usage: orbit-remote-server [serve [--virtual]|capture|encode] [OUTPUT]");
             std::process::exit(2);
         }
     };

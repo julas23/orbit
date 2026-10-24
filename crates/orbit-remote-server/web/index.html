@@ -56,7 +56,10 @@ $("form").addEventListener("submit", (e) => {
 
 function connect(code) {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => ws.send(JSON.stringify({ type: "pair", code }));
+  // The screen in device pixels: a server serving virtual monitors makes
+  // one of this size.
+  const screen_ = { width: Math.round(screen.width * devicePixelRatio), height: Math.round(screen.height * devicePixelRatio), rate: 60 };
+  ws.onopen = () => ws.send(JSON.stringify({ type: "pair", code, screen: screen_ }));
   ws.onclose = () => { if (!pc) $("error").textContent = "The connection closed."; };
   ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);

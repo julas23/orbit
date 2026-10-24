@@ -496,7 +496,7 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
 
 /// Tells the clients on `output` they may draw their next frame — only
 /// the greet while locked: the others are not drawn.
-fn send_frames(state: &mut Orbit, output: &Output) {
+pub fn send_frames(state: &mut Orbit, output: &Output) {
     let time = state.start_time.elapsed();
     for window in state.space.elements_for_output(output).filter(|_| state.session_shown()) {
         window.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));

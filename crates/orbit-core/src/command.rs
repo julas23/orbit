@@ -180,6 +180,12 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.move_output(name, (x, y));
             Ok(())
         }
+        // Orbit's own: a virtual monitor (orbit-remote-server's client).
+        ["output", name, "create", mode] => {
+            let Some((w, h, rate)) = crate::config::parse_mode(mode) else { return Err(format!("output {name}: not a mode: {mode}")) };
+            state.create_virtual(name, (w, h), rate.unwrap_or(60.0))
+        }
+        ["output", name, "remove" | "unplug"] => state.remove_virtual(name),
         // Orbit's own: the area beside, in the grid (Ctrl+Alt+arrows).
         ["workspace", dir] if Dir::parse(dir).is_some() => {
             state.workspace_toward(Dir::parse(dir).expect("just parsed"));

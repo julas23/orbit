@@ -51,6 +51,7 @@ mod state;
 mod switcher;
 mod tile;
 mod udev;
+mod virtual_output;
 mod watchdog;
 mod winit;
 mod workspace;

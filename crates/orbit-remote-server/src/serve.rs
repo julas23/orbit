@@ -10,6 +10,10 @@
 //! only the tokens' SHA-256, in `~/.local/state/orbit/remote-tokens`.
 //! One client at a time.
 //!
+//! What the client sees: a mirror of a local monitor, or (`serve
+//! --virtual`) a monitor of its own, made in orbit-core at the size the
+//! client gives when it pairs (`screen`) and taken away when it leaves.
+//!
 //! While the session is locked (orbit-core's `lock` event) no new client
 //! pairs: a code is answered `locked`, and the code is shown only once
 //! the session is unlocked. A remembered client still comes in, to the
@@ -49,8 +53,20 @@ const PAGE: &str = include_str!("../web/index.html");
 /// Wrong codes before a new one is made.
 const TRIES: u32 = 5;
 
+/// What a client is shown.
+pub enum Screen {
+    /// A local monitor (the first when not named).
+    Mirror(Option<String>),
+    /// A virtual monitor of the client's size (the mirror for a client
+    /// that gives none).
+    Virtual,
+}
+
+/// The virtual monitor's name in orbit-core.
+const VIRTUAL: &str = "REMOTE-1";
+
 struct Shared {
-    output: Option<String>,
+    screen: Screen,
     code: Mutex<String>,
     wrong: Mutex<u32>,
     busy: AtomicBool,
@@ -60,11 +76,11 @@ struct Shared {
     unshown: AtomicBool,
 }
 
-pub fn serve(port: u16, output: Option<String>) -> anyhow::Result<()> {
+pub fn serve(port: u16, screen: Screen) -> anyhow::Result<()> {
     gst::init()?;
     let listener = TcpListener::bind(("0.0.0.0", port)).with_context(|| format!("listening on port {port}"))?;
     let shared = Arc::new(Shared {
-        output,
+        screen,
         code: Mutex::new(new_code()),
         wrong: Mutex::new(0),
         busy: AtomicBool::new(false),
@@ -231,7 +247,7 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
             ws.send(Message::text(json!({ "type": "forgotten" }).to_string()))?;
             return Ok(());
         }
-        return paired(ws, shared, None);
+        return paired(ws, shared, None, size(&first));
     }
     if shared.locked.load(Ordering::SeqCst) {
         log::warn!("remote: {peer} wants to pair, but the session is locked");
@@ -252,12 +268,49 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
     }
     *shared.wrong.lock().unwrap() = 0;
     let token = if first["remember"] == true { Some(remember()?) } else { None };
-    paired(ws, shared, token)
+    paired(ws, shared, token, size(&first))
+}
+
+/// The client's screen, `{"screen": {"width", "height", "rate"}}`, if it
+/// gave one.
+fn size(first: &Value) -> Option<(u32, u32, u32)> {
+    let screen = &first["screen"];
+    let side = |name: &str| screen[name].as_u64().and_then(|v| u32::try_from(v).ok()).filter(|v| (64..=7680).contains(v));
+    Some((side("width")?, side("height")?, screen["rate"].as_f64().map_or(60, |r| r.round().clamp(24.0, 240.0) as u32)))
+}
+
+/// A virtual monitor of `size` in orbit-core, removed when dropped.
+struct Monitor;
+
+impl Monitor {
+    fn create((width, height, rate): (u32, u32, u32)) -> anyhow::Result<Self> {
+        let reply = core_command(&format!("output {VIRTUAL} create {width}x{height}@{rate}"))?;
+        if reply[0]["success"] != true {
+            anyhow::bail!("orbit-core made no virtual monitor: {}", reply[0]["error"].as_str().unwrap_or("no answer"));
+        }
+        log::info!("remote: a virtual monitor of {width}x{height}@{rate} for the client");
+        Ok(Self)
+    }
+}
+
+impl Drop for Monitor {
+    fn drop(&mut self) {
+        if let Err(err) = core_command(&format!("output {VIRTUAL} remove")) {
+            log::warn!("remote: removing the virtual monitor: {err:#}");
+        }
+    }
+}
+
+/// A command to orbit-core, its reply.
+fn core_command(command: &str) -> anyhow::Result<Value> {
+    let mut ipc = orbit_ipc::Connection::open().context("orbit-core's socket")?;
+    let reply = ipc.request(orbit_ipc::RUN_COMMAND, command)?;
+    Ok(serde_json::from_slice(&reply)?)
 }
 
 /// A client that gave the right code or a known token: told so (with its
 /// new token, if it asked for one), then streamed to.
-fn paired(mut ws: WebSocket<TcpStream>, shared: &Shared, token: Option<String>) -> anyhow::Result<()> {
+fn paired(mut ws: WebSocket<TcpStream>, shared: &Shared, token: Option<String>, screen: Option<(u32, u32, u32)>) -> anyhow::Result<()> {
     let peer = ws.get_ref().peer_addr()?;
     if shared.busy.swap(true, Ordering::SeqCst) {
         ws.send(Message::text(json!({ "type": "busy" }).to_string()))?;
@@ -272,7 +325,7 @@ fn paired(mut ws: WebSocket<TcpStream>, shared: &Shared, token: Option<String>) 
         return Err(anyhow!("websocket: {err}"));
     }
     log::info!("remote: {peer} paired");
-    let result = stream(&mut ws, shared);
+    let result = stream(&mut ws, shared, screen);
     shared.busy.store(false, Ordering::SeqCst);
     log::info!("remote: {peer} left");
     result
@@ -291,8 +344,24 @@ fn read_json(ws: &mut WebSocket<TcpStream>) -> anyhow::Result<Value> {
 }
 
 /// Streams to the paired browser on `ws` until it closes.
-fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> {
-    let mut capture = Capture::open(shared.output.as_deref(), true)?;
+fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u32, u32)>) -> anyhow::Result<()> {
+    // Its own monitor, when served so and it said its size; kept until it leaves.
+    let monitor = match (&shared.screen, screen) {
+        (Screen::Virtual, Some(size)) => match Monitor::create(size) {
+            Ok(monitor) => Some(monitor),
+            Err(err) => {
+                log::warn!("remote: {err:#}; a mirror instead");
+                None
+            }
+        },
+        _ => None,
+    };
+    let output = match (&shared.screen, &monitor) {
+        (_, Some(_)) => Some(VIRTUAL),
+        (Screen::Mirror(name), None) => name.as_deref(),
+        (Screen::Virtual, None) => None,
+    };
+    let mut capture = Capture::open(output, true)?;
     // A compositor without virtual input (an older orbit-core) still
     // shows the session: the client only watches.
     let mut input = match Input::open(&capture.name) {

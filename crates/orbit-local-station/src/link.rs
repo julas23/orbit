@@ -207,8 +207,11 @@ impl Link {
         let mut wrong = false;
         loop {
             // Who the station is: its token, or a code typed now.
+            // Its screen too: a server serving virtual monitors makes one
+            // of this size.
+            let screen = json!({ "width": self.size.0, "height": self.size.1, "rate": 60 });
             let pair = match load_token(&self.server) {
-                Some(token) => json!({ "type": "pair", "token": token }),
+                Some(token) => json!({ "type": "pair", "token": token, "screen": screen }),
                 None => {
                     self.tell(Event::Code { wrong });
                     // Codes typed while the server was down are stale.
@@ -222,7 +225,7 @@ impl Link {
                             Err(_) => return Err(Woken::Quit),
                         }
                     };
-                    json!({ "type": "pair", "code": code, "remember": true })
+                    json!({ "type": "pair", "code": code, "remember": true, "screen": screen })
                 }
             };
             self.tell(Event::Connecting);

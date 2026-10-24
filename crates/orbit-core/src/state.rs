@@ -117,6 +117,8 @@ pub struct Orbit {
     /// The programs that round the corners (`rounded`): compiled at the
     /// first frame; `Some(None)` when they failed to.
     pub shaders: Option<Option<crate::rounded::Shaders>>,
+    /// The virtual monitors (`virtual_output`).
+    pub virtuals: Vec<crate::virtual_output::Virtual>,
     /// The window Mod+drag is moving (`grab`).
     pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
@@ -232,6 +234,7 @@ impl Orbit {
             suppressed: Vec::new(),
             dragging: None,
             shaders: None,
+            virtuals: Vec::new(),
             layouts: (Vec::new(), 0),
             lock: crate::lock::Lock::default(),
             screencopy: Default::default(),
