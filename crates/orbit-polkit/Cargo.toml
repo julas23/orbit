@@ -14,6 +14,8 @@ section = "x11"
 priority = "optional"
 extended-description = "Orbit-Polkit: asks for the password when a program needs an administrator's rights (polkit, pkexec), with the look of Orbit-Greet. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto, polkitd"
+# A polkit agent, for network-manager-applet and the like.
+provides = "polkit-1-auth-agent"
 assets = [
     ["target/release/orbit-polkit", "usr/bin/", "755"],
 ]

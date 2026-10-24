@@ -75,7 +75,7 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 **An existing `/home` is never formatted.**
 
 - [ ] Phase A: CI building and publishing the debs; the hp and the think running on the packages instead of `install.sh` (`apt install orbit-desktop`).
-- [ ] Packaging: `orbit-notify` to say `Provides: notification-daemon` and `orbit-polkit` `Provides: polkit-1-auth-agent`, so removing dunst or the other polkit agents does not take blueman and network-manager-applet along (on the think dunst and mate-polkit stayed for that, 2026-10-23).
+- [x] Packaging: `orbit-notify` says `Provides: notification-daemon` and `orbit-polkit` `Provides: polkit-1-auth-agent`, so dunst and the other polkit agents can go without taking blueman and network-manager-applet along (2026-10-23).
 - [x] The hp's `~/.local/bin/orbit-*` (its own builds, synced by Syncthing) came before the packages' `/usr/bin` on the think: off the hp, `~/.shell/10-path.sh` puts links to `/usr/bin/orbit-*` in `$XDG_RUNTIME_DIR/orbit-bin` ahead of the PATH (2026-10-23).
 - [ ] Phase A: `orbit-common-data`, `orbit-defaults`, `orbit-ruffle`, `orbit-fonts` (Nerd Font).
 - [ ] Phase B: `orbit-studio` with ArtCraft mirrored; Orbit egui theme. Done when a fresh Debian 13 VM becomes this desktop with `apt install orbit-desktop orbit-studio`.

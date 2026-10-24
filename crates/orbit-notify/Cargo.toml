@@ -14,6 +14,8 @@ section = "x11"
 priority = "optional"
 extended-description = "Orbit-Notify: the Orbit notification server. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
+# Any desktop notification daemon will do for blueman and the like.
+provides = "notification-daemon"
 assets = [
     ["target/release/orbit-notify", "usr/bin/", "755"],
 ]
