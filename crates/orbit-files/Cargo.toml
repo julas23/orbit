@@ -14,7 +14,7 @@ section = "utils"
 priority = "optional"
 extended-description = "Orbit-Files: file manager. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
-recommends = "gvfs-backends, udisks2, p7zip-full, unzip, zip"
+recommends = "gvfs-backends, gvfs-fuse, ffmpegthumbnailer, udisks2, p7zip-full, unzip, zip"
 assets = [
     ["target/release/orbit-files", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Files.desktop", "usr/share/applications/", "644"],
