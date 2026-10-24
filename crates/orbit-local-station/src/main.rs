@@ -410,6 +410,10 @@ impl Station {
                 face.set_status("The server is in use by another client".into());
                 face.set_problem("".into());
             }
+            Event::Locked => {
+                face.set_status("The server's session is locked".into());
+                face.set_problem("Unlock it at the server, then type the code it shows".into());
+            }
             Event::Paired => {
                 face.set_status("Paired, waiting for the video…".into());
                 face.set_problem("".into());

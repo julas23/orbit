@@ -10,6 +10,11 @@
 //! only the tokens' SHA-256, in `~/.local/state/orbit/remote-tokens`.
 //! One client at a time.
 //!
+//! While the session is locked (orbit-core's `lock` event) no new client
+//! pairs: a code is answered `locked`, and the code is shown only once
+//! the session is unlocked. A remembered client still comes in, to the
+//! lock screen, where the password is asked as at the computer.
+//!
 //! A session: `webrtcbin` at the encoder's tail (`encode::Tail::WebRtc`),
 //! offering the video; a thread captures and pushes frames until the
 //! browser goes away. The browser's mouse and keys come back on the
@@ -49,6 +54,10 @@ struct Shared {
     code: Mutex<String>,
     wrong: Mutex<u32>,
     busy: AtomicBool,
+    /// The session is locked: no pairing by code.
+    locked: AtomicBool,
+    /// The code still to be shown, held back by the lock.
+    unshown: AtomicBool,
 }
 
 pub fn serve(port: u16, output: Option<String>) -> anyhow::Result<()> {
@@ -59,8 +68,18 @@ pub fn serve(port: u16, output: Option<String>) -> anyhow::Result<()> {
         code: Mutex::new(new_code()),
         wrong: Mutex::new(0),
         busy: AtomicBool::new(false),
+        // Behind the lock until orbit-core says otherwise (at once, on
+        // subscribing); without it (sway), never.
+        locked: AtomicBool::new(orbit_ipc::available()),
+        unshown: AtomicBool::new(true),
     });
-    show_code(&shared.code.lock().unwrap());
+    {
+        let shared = shared.clone();
+        std::thread::spawn(move || follow_lock(&shared));
+    }
+    if !orbit_ipc::available() {
+        shared.reveal();
+    }
     log::info!("remote: open http://<this computer>:{port}/ in a browser on the LAN");
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
@@ -72,6 +91,48 @@ pub fn serve(port: u16, output: Option<String>) -> anyhow::Result<()> {
         });
     }
     Ok(())
+}
+
+impl Shared {
+    /// Shows the code, if it has not been since it was made.
+    fn reveal(&self) {
+        if self.unshown.swap(false, Ordering::SeqCst) {
+            show_code(&self.code.lock().unwrap());
+        }
+    }
+
+    /// A new code, shown now or once the session is unlocked.
+    fn renew(&self) {
+        *self.code.lock().unwrap() = new_code();
+        self.unshown.store(true, Ordering::SeqCst);
+        if !self.locked.load(Ordering::SeqCst) {
+            self.reveal();
+        }
+    }
+}
+
+/// Follows orbit-core's `lock` event. Losing the core's socket (the
+/// session gone) leaves the server locked: nothing pairs anew.
+fn follow_lock(shared: &Shared) {
+    let Ok(mut ipc) = orbit_ipc::Connection::open() else { return };
+    let Some(lock) = orbit_ipc::event_type("lock") else { return };
+    if ipc.request(orbit_ipc::SUBSCRIBE, r#"["lock"]"#).is_err() {
+        return;
+    }
+    while let Ok((kind, body)) = ipc.receive() {
+        if kind != lock {
+            continue;
+        }
+        let change: Value = serde_json::from_slice(&body).unwrap_or_default();
+        let locked = change["change"] == "locked";
+        if shared.locked.swap(locked, Ordering::SeqCst) != locked {
+            log::info!("remote: the session is {}", if locked { "locked: no pairing" } else { "unlocked" });
+        }
+        if !locked {
+            shared.reveal();
+        }
+    }
+    shared.locked.store(true, Ordering::SeqCst);
 }
 
 /// Where the remembered clients' tokens are kept, one SHA-256 a line.
@@ -172,6 +233,11 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
         }
         return paired(ws, shared, None);
     }
+    if shared.locked.load(Ordering::SeqCst) {
+        log::warn!("remote: {peer} wants to pair, but the session is locked");
+        ws.send(Message::text(json!({ "type": "locked" }).to_string()))?;
+        return Ok(());
+    }
     let given = first["code"].as_str().unwrap_or_default();
     if given != *shared.code.lock().unwrap() {
         let mut wrong = shared.wrong.lock().unwrap();
@@ -179,9 +245,7 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
         log::warn!("remote: {peer} gave a wrong code ({} of {TRIES})", *wrong);
         if *wrong >= TRIES {
             *wrong = 0;
-            let code = new_code();
-            show_code(&code);
-            *shared.code.lock().unwrap() = code;
+            shared.renew();
         }
         ws.send(Message::text(json!({ "type": "refused" }).to_string()))?;
         return Ok(());

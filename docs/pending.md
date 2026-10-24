@@ -25,7 +25,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 
 - [ ] Set up biometrics in Orbit: fingerprint (fprintd) and face, the same way.
 - [ ] Review the face recognition script that today runs only in the greeter.
-- [ ] `orbit-remote-server` pairing allowed only while the session is unlocked.
+- [x] `orbit-remote-server` pairing allowed only while the session is unlocked (2026-10-23, §9).
 - [ ] Later: orbit-greet chooses between the full local desktop and the remote desktop (§9).
 
 ## 4. Core
@@ -155,7 +155,8 @@ Pending:
 - [ ] Phase 1 **done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps (for the native client; the browser's noted). Note the page's stats too.
 - [x] The server started with the session: on the Julas VM a `startup:` line in `~/.config/orbit/core.yaml` (hostname-guarded, behind the lock, log `~/.local/state/orbit/remote.log`). Machine-local for now; a packaged default (user service or core option) still to decide.
 - [x] The virtual pointer and keyboard only for orbit-remote-server: the core gives the two globals to a client whose program (`/proc/PID/exe`) is it, other clients do not see them (2026-10-23, nested-tested).
-- [ ] Pairing only while the session is unlocked; the remote greeter.
+- [x] Pairing only while the session is unlocked: the server follows orbit-core's `lock` event; a code given while locked is answered `locked` (the page and the station say so), and the code is shown only once the session is unlocked. A remembered station still comes in, to the lock screen (2026-10-23, nested-tested).
+- [ ] The remote greeter: a station reaching a server with no session open (who logs in, from the station).
 - [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
 - [ ] Audio (Opus) to the client.
 - [x] Ctrl+Alt+Backspace and Ctrl+Alt+F1…F12 from a remote keyboard are held back by the core: they neither end the session nor switch the server's console (2026-10-23, nested-tested).

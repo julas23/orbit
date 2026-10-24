@@ -60,6 +60,10 @@ function connect(code) {
     const msg = JSON.parse(event.data);
     if (msg.type === "refused") {
       $("error").textContent = "Wrong code.";
+    } else if (msg.type === "locked") {
+      $("error").textContent = "The session is locked: unlock it at the computer, then type the code it shows.";
+    } else if (msg.type === "busy") {
+      $("error").textContent = "Another client is using the session.";
     } else if (msg.type === "offer") {
       await start();
       await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });

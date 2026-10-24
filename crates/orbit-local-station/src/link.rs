@@ -49,6 +49,8 @@ pub enum Event {
     Code { wrong: bool },
     /// Another client is using the server.
     Busy,
+    /// The server's session is locked: no pairing until it is unlocked.
+    Locked,
     /// Paired: the video comes next.
     Paired,
     /// A picture of the session.
@@ -261,6 +263,10 @@ impl Link {
                 }
                 Some("busy") => {
                     self.tell(Event::Busy);
+                    self.sleep(RETRY)?;
+                }
+                Some("locked") => {
+                    self.tell(Event::Locked);
                     self.sleep(RETRY)?;
                 }
                 // A server from before the tokens streams straight away.
