@@ -22,6 +22,8 @@
 //! areas: 4               # the grid of areas Alt/Mod+Ctrl+arrows walk:
 //! area_columns: 2        # 1 2 / 3 4, as the panel shows them
 //! blur_layers: [orbit-confirm]   # overlay surfaces with the screen blurred under
+//! effects: auto          # the lock's eyes and the blur: on, off, or auto
+//!                        # (off on battery)
 //! idle_lock: 600         # seconds without input before locking; 0: never
 //! # or by machine (the file synced between several):
 //! # idle_lock: { default: 600, think: 0, julas: 0 }
@@ -91,6 +93,7 @@ pub struct Config {
     /// Overlay surfaces (by layer-shell namespace) the session is blurred
     /// under: the panel's confirmation dialog.
     pub blur_layers: Vec<String>,
+    pub effects: Effects,
     /// Seconds without input before the core locks (0: never), for every
     /// machine or by host name (`idle`).
     pub idle_lock: PerHost<u64>,
@@ -112,6 +115,31 @@ impl<T: Copy + Default> PerHost<T> {
             Self::ByHost(map) => map.get(host).or_else(|| map.get("default")).copied().unwrap_or_default(),
         }
     }
+}
+
+/// The lock's eyes and the blur behind confirmations: always, never, or
+/// only on mains power.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effects {
+    On,
+    Off,
+    #[default]
+    Auto,
+}
+
+/// Whether the machine runs on mains power: a mains supply online, or none
+/// at all (a desktop). Read from `power`, `/sys/class/power_supply`.
+pub fn on_mains(power: &std::path::Path) -> bool {
+    let Ok(supplies) = std::fs::read_dir(power) else { return true };
+    let read = |dir: &std::path::Path, name: &str| std::fs::read_to_string(dir.join(name)).map(|s| s.trim().to_owned()).unwrap_or_default();
+    let mains: Vec<bool> = supplies
+        .flatten()
+        .map(|e| e.path())
+        .filter(|dir| read(dir, "type") == "Mains")
+        .map(|dir| read(&dir, "online") == "1")
+        .collect();
+    mains.is_empty() || mains.contains(&true)
 }
 
 /// This machine's name.
@@ -231,6 +259,7 @@ impl Default for Config {
             areas: 4,
             area_columns: 2,
             blur_layers: vec!["orbit-confirm".into()],
+            effects: Effects::Auto,
             idle_lock: PerHost::All(600),
         }
     }
@@ -344,6 +373,25 @@ mod tests {
         let config: Config = serde_yaml_ng::from_str("idle_lock: { think: 0 }").unwrap();
         assert_eq!(config.idle_lock.get("hp"), 0);
         assert_eq!(Config::default().idle_lock.get("hp"), 600);
+    }
+
+    #[test]
+    fn mains_or_battery() {
+        let dir = std::env::temp_dir().join(format!("orbit-power-{}", std::process::id()));
+        let supply = |name: &str, kind: &str, online: &str| {
+            let d = dir.join(name);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("type"), kind).unwrap();
+            std::fs::write(d.join("online"), online).unwrap();
+        };
+        // A desktop: no supply at all.
+        assert!(on_mains(&dir.join("none")));
+        supply("BAT0", "Battery\n", "1\n");
+        supply("ACAD", "Mains\n", "1\n");
+        assert!(on_mains(&dir));
+        supply("ACAD", "Mains\n", "0\n");
+        assert!(!on_mains(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

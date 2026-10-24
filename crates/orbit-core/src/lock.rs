@@ -6,8 +6,9 @@
 //! Locking closes the eyes and unlocking opens them (`eyes`): for
 //! `eyes::DURATION` the session blurs and fades to black, or the other way.
 //! Input leaves the clients on the first frame of closing and comes back
-//! after the last of opening. Before the first frame (`--locked`), or when
-//! the shaders failed, and before sleeping, it is at once.
+//! after the last of opening. Before the first frame (`--locked`), when
+//! the shaders failed, with the effects off (on battery, `effects`) and
+//! before sleeping, it is at once.
 //!
 //! `orbit-core --locked` starts that way, before any client connects;
 //! `lock` (IPC) locks a running session. Unlocking is the greet's alone
@@ -85,7 +86,25 @@ impl Orbit {
 
     /// Whether locking and unlocking are drawn: the shaders are there.
     fn can_animate(&self) -> bool {
-        matches!(self.shaders, Some(Some(_)))
+        matches!(self.shaders, Some(Some(_))) && self.effects()
+    }
+
+    /// Whether the effects are on: `effects:`, and on `auto` mains power
+    /// (looked at every 10 s at most).
+    pub fn effects(&self) -> bool {
+        match self.config.effects {
+            crate::config::Effects::On => true,
+            crate::config::Effects::Off => false,
+            crate::config::Effects::Auto => {
+                let (when, mains) = self.mains.get();
+                if when.is_some_and(|w| w.elapsed() < std::time::Duration::from_secs(10)) {
+                    return mains;
+                }
+                let mains = crate::config::on_mains(std::path::Path::new("/sys/class/power_supply"));
+                self.mains.set((Some(Instant::now()), mains));
+                mains
+            }
+        }
     }
 
     /// Hides the session, closing the eyes: the keyboard and the pointer

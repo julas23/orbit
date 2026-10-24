@@ -46,7 +46,8 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [x] Phase 3, layouts: each workspace has its own, `columns` (as before), `master` (55% for the first, the rest stacked), `monocle` (one at a time, the focused on top) and `bsp` (bspwm's spiral); `layout NAME` and `layout next` (Mod+Ctrl+Space), `layout:` in core.yaml for new workspaces, the name in get_workspaces (2026-10-23, nested-tested on a virtual monitor).
 - [x] Phase 3: `master_ratio` and `master_count` in core.yaml; named scratchpads as sway's, `[app_id=…] scratchpad show`: hidden, the window comes floating over the workspace in front; in front and focused, it goes back (2026-10-23, nested-tested).
 - [ ] Phase 3: the `scroll` layout (niri's columns that scroll). (Tags left out on 2026-10-22: maybe in a later major version.)
-- [ ] Phase 4: animations, shadows, blur, gestures, overview, effects off on battery.
+- [x] Phase 4, effects off on battery: `effects: auto` (the default) leaves out the lock's eyes and the blur behind confirmations while on battery (mains looked at every 10 s); `on` and `off` force it (2026-10-23). Not seen yet on battery.
+- [ ] Phase 4: animations, shadows, blur, gestures, overview.
 - [ ] Phase 5: `orbit-remote-server` (§9, phase 1 working 2026-10-23), Jarvis wallpaper, orbit-aigent integrated with the core, own monitor settings, `orbit-keys` (password app).
 
 ## 5. Panel

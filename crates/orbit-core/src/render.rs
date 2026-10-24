@@ -149,6 +149,7 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
     // under it.
     if let Some(shaders) = shaders.as_ref()
         && blurs_behind(state, output)
+        && state.effects()
         && let Some(geo) = state.space.output_geometry(output)
     {
         layer_elements(output, renderer, scale, &[WlrLayer::Overlay], &mut elements);

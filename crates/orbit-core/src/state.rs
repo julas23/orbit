@@ -124,6 +124,8 @@ pub struct Orbit {
     pub startup: bool,
     /// wlr-output-management's clients (`output_management`).
     pub output_management: crate::output_management::OutputManagement,
+    /// On mains power, and when that was looked at (`effects`).
+    pub mains: std::cell::Cell<(Option<Instant>, bool)>,
     /// The window Mod+drag is moving (`grab`).
     pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
@@ -246,6 +248,7 @@ impl Orbit {
             virtuals: Vec::new(),
             startup: true,
             output_management,
+            mains: std::cell::Cell::new((None, true)),
             layouts: (Vec::new(), 0),
             lock: crate::lock::Lock::default(),
             screencopy: Default::default(),
