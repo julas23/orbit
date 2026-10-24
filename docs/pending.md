@@ -49,7 +49,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 
 ## 5a. Dock
 
-- [ ] Adding a separator does nothing (reported 2026-10-23).
+- [x] Adding a separator did nothing when the right click was on a gap or a separator: it went to the end of the list, where a separator does not show. Now it goes where the pointer is (launchers and AppImages too); tested nested (2026-10-23).
 
 ## 6. Apps
 

@@ -5,10 +5,10 @@
 //! takes every click from the launchers: a launcher or a separator dragged
 //! along the dock goes where it is dropped, and dropped off the dock it is
 //! removed; a right click adds a launcher (from the installed applications
-//! or an AppImage file) or a separator after the one under the pointer. An
-//! AppImage dropped on the dock is added where it is dropped (see
-//! `appimage`). Every change is shown at once and written to `dock.yaml`
-//! (`ConfigDir::save_dock_apps`).
+//! or an AppImage file) or a separator after the launcher under the pointer
+//! (in a gap, where the pointer is). An AppImage dropped on the dock is
+//! added where it is dropped (see `appimage`). Every change is shown at
+//! once and written to `dock.yaml` (`ConfigDir::save_dock_apps`).
 //!
 //! `dock.yaml` keeps separators as groups: neighbouring launchers of
 //! different groups have one between them. Saving names each run of
@@ -238,13 +238,7 @@ impl Editor {
         if x < 0.0 || y < 0.0 || x > w || y > h {
             return (Drop::Off, Some((id, "drop-off")));
         }
-        let along = |r: &gtk::graphene::Rect| {
-            if self.vertical {
-                f64::from(r.y() + r.height() / 2.0)
-            } else {
-                f64::from(r.x() + r.width() / 2.0)
-            }
-        };
+        let along = |r: &gtk::graphene::Rect| self.middle(r);
         let pointer = if self.vertical { y } else { x };
         let shown: Vec<_> = self.shown().into_iter().filter(|(other, _)| *other != id).collect();
         let (before, after) = if self.vertical {
@@ -299,11 +293,29 @@ impl Editor {
         self.changed();
     }
 
-    /// The list place after the item under (`x`, `y`), or the end.
+    /// The middle of `rect` along the dock.
+    fn middle(&self, rect: &gtk::graphene::Rect) -> f64 {
+        if self.vertical {
+            f64::from(rect.y() + rect.height() / 2.0)
+        } else {
+            f64::from(rect.x() + rect.width() / 2.0)
+        }
+    }
+
+    /// The list place after the launcher under (`x`, `y`); elsewhere (a gap,
+    /// a separator) the place between the items the pointer is between, or
+    /// the end. Not always the end: a separator there would not show.
     fn place_after(&self, x: f64, y: f64) -> usize {
-        self.at(x, y)
-            .and_then(|id| self.index(id))
-            .map_or(self.items.borrow().len(), |i| i + 1)
+        let over = self.at(x, y).and_then(|id| self.index(id));
+        if let Some(i) = over.filter(|&i| matches!(self.items.borrow()[i].kind, Kind::App(_))) {
+            return i + 1;
+        }
+        let pointer = if self.vertical { y } else { x };
+        self.shown()
+            .into_iter()
+            .find(|(_, rect)| pointer < self.middle(rect))
+            .and_then(|(id, _)| self.index(id))
+            .unwrap_or_else(|| self.items.borrow().len())
     }
 
     fn insert(&self, at: usize, kind: Kind) {
