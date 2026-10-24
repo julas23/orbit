@@ -176,8 +176,10 @@ impl Orbit {
         // Orbit-Blink, grim: screenshots (`screencopy`).
         crate::screencopy::init(&dh);
         // orbit-remote-server: the remote mouse and keys (`input`).
-        VirtualPointerManagerState::new::<Self, _>(&dh, |_| true);
-        VirtualKeyboardManagerState::new::<Self, _>(&dh, |_| true);
+        let handle = dh.clone();
+        VirtualPointerManagerState::new::<Self, _>(&dh, move |client| crate::input::remote_server(&handle, client));
+        let handle = dh.clone();
+        VirtualKeyboardManagerState::new::<Self, _>(&dh, move |client| crate::input::remote_server(&handle, client));
         let session_lock_state = crate::session_lock::init(&dh);
 
         let mut seat_state = SeatState::new();

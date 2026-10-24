@@ -154,11 +154,11 @@ Pending:
 
 - [ ] Phase 1 **done when** the latency, a clock on the server's screen photographed beside the client's, is **≤ 20 ms on the LAN** at 60 fps (for the native client; the browser's noted). Note the page's stats too.
 - [x] The server started with the session: on the Julas VM a `startup:` line in `~/.config/orbit/core.yaml` (hostname-guarded, behind the lock, log `~/.local/state/orbit/remote.log`). Machine-local for now; a packaged default (user service or core option) still to decide.
-- [ ] The virtual pointer and keyboard are open to every client of the session: only orbit-remote-server's (the private protocol, or a client check).
+- [x] The virtual pointer and keyboard only for orbit-remote-server: the core gives the two globals to a client whose program (`/proc/PID/exe`) is it, other clients do not see them (2026-10-23, nested-tested).
 - [ ] Pairing only while the session is unlocked; the remote greeter.
 - [ ] Input over a WebRTC data channel instead of the WebSocket, if the latency asks for it.
 - [ ] Audio (Opus) to the client.
-- [ ] Ctrl+Alt+Backspace from the client ends the server's session: hold it back from remote keyboards.
+- [x] Ctrl+Alt+Backspace and Ctrl+Alt+F1…F12 from a remote keyboard are held back by the core: they neither end the session nor switch the server's console (2026-10-23, nested-tested).
 - [ ] Phase 2: the virtual output at the client's resolution, local screens locked while in use.
 - [ ] Several monitors, only when the station has two or more (the hp has two): the server gives the session as many screens (phase 2's virtual outputs, one stream each), the station shows each on its own monitor, the pointer crossing between them as locally. With one monitor everything stays as it is.
 - [ ] Phase 3: gamepads, microphone and webcam.

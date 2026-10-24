@@ -5,7 +5,10 @@
 //!
 //! The virtual pointer and keyboard (wlr-virtual-pointer,
 //! virtual-keyboard: orbit-remote-server's remote mouse and keys) come in
-//! as the real ones do; their keys are read with the seat's keymap.
+//! as the real ones do; their keys are read with the seat's keymap. Only
+//! orbit-remote-server gets them (`remote_server`), and its keyboard does
+//! not reach Ctrl+Alt+Backspace or Ctrl+Alt+F1…F12: a remote user should
+//! not end the session, or switch the server's console under its owner.
 //!
 //! Ported from Smithay's smallvil `src/input.rs` @ 24647fc (MIT, Copyright
 //! (c) 2017 Victor Berger and Victoria Brekenfeld); shortcuts held back from
@@ -55,7 +58,7 @@ impl Orbit {
             self.touched();
         }
         match event {
-            InputEvent::Keyboard { event, .. } => self.key::<I>(event, KeyboardSource::MAIN),
+            InputEvent::Keyboard { event, .. } => self.key::<I>(event, KeyboardSource::MAIN, false),
             // A mouse or touchpad: it moves the pointer by so much.
             InputEvent::PointerMotion { event, .. } => {
                 let Some(pointer) = self.seat.get_pointer() else { return };
@@ -106,7 +109,8 @@ impl Orbit {
         }
     }
 
-    fn key<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent, source: KeyboardSource) {
+    /// A key; `remote` when it comes from a virtual keyboard.
+    fn key<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent, source: KeyboardSource, remote: bool) {
         let Some(keyboard) = self.seat.get_keyboard() else { return };
         let serial = SERIAL_COUNTER.next_serial();
         let code = event.key_code();
@@ -126,15 +130,24 @@ impl Orbit {
                 }
                 return FilterResult::Forward;
             }
-            if mods.ctrl && mods.alt && handle.modified_sym() == Keysym::BackSpace {
+            // Ctrl+Alt+Fn: the keymap gives XF86Switch_VT_n.
+            let vt = handle.modified_sym().raw();
+            let vt = (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw())
+                .contains(&vt)
+                .then(|| (vt - Keysym::XF86_Switch_VT_1.raw() + 1) as i32);
+            let emergency = mods.ctrl && mods.alt && handle.modified_sym() == Keysym::BackSpace;
+            if (emergency || vt.is_some()) && remote {
+                tracing::info!("a remote keyboard's Ctrl+Alt+{}: held back", if emergency { "Backspace".into() } else { format!("F{}", vt.unwrap_or(0)) });
+                state.suppressed.push(code);
+                return FilterResult::Intercept(None);
+            }
+            if emergency {
                 state.suppressed.push(code);
                 return FilterResult::Intercept(Some(Action::Emergency));
             }
-            // Ctrl+Alt+Fn: the keymap gives XF86Switch_VT_n.
-            let vt = handle.modified_sym().raw();
-            if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw()).contains(&vt) {
+            if let Some(vt) = vt {
                 state.suppressed.push(code);
-                return FilterResult::Intercept(Some(Action::Vt((vt - Keysym::XF86_Switch_VT_1.raw() + 1) as i32)));
+                return FilterResult::Intercept(Some(Action::Vt(vt)));
             }
             // Locked, no shortcut but the two above, and no client but
             // the greet.
@@ -338,10 +351,25 @@ impl VirtualKeyboardHandler for Orbit {
                     tracing::debug!("a virtual keyboard's own keymap: its keys are read with the seat's");
                 }
                 self.touched();
-                self.key::<VirtualKeyboardBackend>(event, device.source());
+                self.key::<VirtualKeyboardBackend>(event, device.source(), true);
             }
             // Modifiers come as their keys; keymaps are the seat's.
             _ => {}
         }
     }
+}
+
+/// Whether `client` is orbit-remote-server, the only one given the virtual
+/// pointer and keyboard: its program, by the process on the other end of
+/// the socket (" (deleted)" after an upgrade replaced the file).
+pub fn remote_server(dh: &smithay::reexports::wayland_server::DisplayHandle, client: &smithay::reexports::wayland_server::Client) -> bool {
+    let Ok(credentials) = client.get_credentials(dh) else { return false };
+    let allowed = std::fs::read_link(format!("/proc/{}/exe", credentials.pid))
+        .ok()
+        .and_then(|exe| exe.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .is_some_and(|name| name == "orbit-remote-server" || name == "orbit-remote-server (deleted)");
+    if !allowed {
+        tracing::debug!("pid {}: no virtual pointer or keyboard (only orbit-remote-server's)", credentials.pid);
+    }
+    allowed
 }
