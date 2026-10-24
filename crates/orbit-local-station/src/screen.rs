@@ -155,6 +155,9 @@ impl Screen {
         let mut renderer = unsafe { GlesRenderer::new(context)? };
         let render_formats = renderer.egl_context().dmabuf_render_formats().clone();
         let render_node = node.node_with_type(NodeType::Render).and_then(Result::ok).unwrap_or(node);
+        if let Some(name) = render_node.dev_path().and_then(|path| path.file_name().map(|n| n.to_string_lossy().into_owned())) {
+            crate::video::set_render_node(name);
+        }
 
         let (connector, crtc, mode) = monitor(&drm, wanted)?;
         let mut manager = DrmOutputManager::new(

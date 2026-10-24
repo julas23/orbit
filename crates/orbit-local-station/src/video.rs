@@ -55,10 +55,30 @@ pub enum Decoder {
 }
 
 static DECODER: OnceLock<Decoder> = OnceLock::new();
+static RENDER_NODE: OnceLock<String> = OnceLock::new();
 
 /// The decoder asked for, before the first video.
 pub fn set_decoder(decoder: Decoder) {
     let _ = DECODER.set(decoder);
+}
+
+/// The render node of the GPU that drives the monitor (as `renderD129`):
+/// VA-API decodes there.
+pub fn set_render_node(node: String) {
+    let _ = RENDER_NODE.set(node);
+}
+
+/// A VA element (`h264dec`, `postproc`) of the monitor's GPU. GStreamer
+/// names those of its first VA device `vah264dec`, `vapostproc`, the
+/// others' after their node (`varenderD129h264dec`); with two GPUs, the
+/// first one's could not hand its pictures to the other's screen (the
+/// think: an Intel first, the monitor on an AMD).
+fn va_element(kind: &str) -> String {
+    RENDER_NODE
+        .get()
+        .map(|node| format!("va{node}{kind}"))
+        .filter(|name| gst::ElementFactory::find(name).is_some())
+        .unwrap_or_else(|| format!("va{kind}"))
 }
 
 /// The decoder to use. GStreamer's VA and V4L2 plugins register
@@ -220,8 +240,10 @@ fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32),
         let caps = gst::Caps::builder("video/x-raw").field("format", gst::List::new(["BGRx", "RGBx"])).build();
         (decoder, post, caps)
     } else {
-        let decoder = gst::ElementFactory::make("vah264dec").build().context("no VA-API H.264 decoder (gstreamer1.0-plugins-bad, mesa-va-drivers)")?;
-        let post = gst::ElementFactory::make("vapostproc").property("add-borders", true).build()?;
+        let decoder = gst::ElementFactory::make(&va_element("h264dec"))
+            .build()
+            .context("no VA-API H.264 decoder (gstreamer1.0-plugins-bad, mesa-va-drivers)")?;
+        let post = gst::ElementFactory::make(&va_element("postproc")).property("add-borders", true).build()?;
         let caps = gst::Caps::builder("video/x-raw")
             .features([gst_allocators::CAPS_FEATURE_MEMORY_DMABUF])
             .field("format", "DMA_DRM")

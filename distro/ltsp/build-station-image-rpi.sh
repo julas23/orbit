@@ -101,8 +101,10 @@ EOF
 cat >"$CHROOT/home/station/.profile" <<'EOF'
 # The network-booted station: tty1 is the station, other consoles a shell.
 if [ "$(tty)" = /dev/tty1 ]; then
-    orbit-local-station >>"$HOME/station.log" 2>&1
-    # Back to the station after a quit (Ctrl+Alt+Backspace) or a crash.
+    orbit-local-station 2>&1 | tee -a "$HOME/station.log"
+    # A crash stays on the screen a while; then back to the station (as
+    # after a quit, Ctrl+Alt+Backspace).
+    [ "${PIPESTATUS[0]}" = 0 ] || sleep 30
     exit
 fi
 EOF

@@ -12,6 +12,8 @@
 #
 # SERVER_ADDRESS defaults to this machine's first IPv4 address. Run it
 # again to rebuild the image (the chroot is upgraded, not made anew).
+# STATION_SSH_KEY=FILE.pub adds an SSH server to the image, logging in as
+# `station` with that key only (to look into a station; none otherwise).
 set -euo pipefail
 
 NAME=orbit-station
@@ -48,9 +50,10 @@ trap 'umount -l "$CHROOT/dev/pts" "$CHROOT/dev" "$CHROOT/sys" "$CHROOT/proc"' EX
 
 # The kernel and its initramfs; the firmware and VA-API drivers of the GPUs
 # a station may have, and the software decoder for one without VA-API;
-# logind, which libseat goes through; PipeWire for the session's sound.
-# LTSP's own code comes with its initrd (ltsp.img), the image needs no ltsp
-# package.
+# logind, which libseat goes through; PipeWire for the session's sound;
+# ltsp, whose initramfs hook puts LTSP's boot code (from ltsp.img) in
+# initramfs-tools' way: without it the root stays the bare read-only NFS
+# mount, with no tmpfs over it, and logind cannot start.
 chroot "$CHROOT" sh -ec '
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -q
@@ -60,7 +63,7 @@ chroot "$CHROOT" sh -ec '
         firmware-amd-graphics firmware-intel-graphics firmware-misc-nonfree firmware-realtek \
         mesa-va-drivers intel-media-va-driver-non-free vainfo gstreamer1.0-libav \
         pipewire pipewire-pulse wireplumber \
-        orbit-local-station
+        ltsp orbit-local-station
     apt-get -y -q dist-upgrade
     apt-get clean
 '
@@ -80,12 +83,22 @@ EOF
 cat >"$CHROOT/home/station/.profile" <<'EOF'
 # The network-booted station: tty1 is the station, other consoles a shell.
 if [ "$(tty)" = /dev/tty1 ]; then
-    orbit-local-station >>"$HOME/station.log" 2>&1
-    # Back to the station after a quit (Ctrl+Alt+Backspace) or a crash.
+    orbit-local-station 2>&1 | tee -a "$HOME/station.log"
+    # A crash stays on the screen a while; then back to the station (as
+    # after a quit, Ctrl+Alt+Backspace).
+    [ "${PIPESTATUS[0]}" = 0 ] || sleep 30
     exit
 fi
 EOF
 chroot "$CHROOT" chown station:station /home/station/.profile
+
+if [ -n "${STATION_SSH_KEY:-}" ]; then
+    chroot "$CHROOT" sh -ec 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends openssh-server; apt-get clean'
+    install -d -m 0700 "$CHROOT/home/station/.ssh"
+    install -m 0600 "$STATION_SSH_KEY" "$CHROOT/home/station/.ssh/authorized_keys"
+    chroot "$CHROOT" chown -R station:station /home/station/.ssh
+    printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\n' >"$CHROOT/etc/ssh/sshd_config.d/orbit-station.conf"
+fi
 
 mkdir -p "$CHROOT/etc/orbit"
 cat >"$CHROOT/etc/orbit/station.yaml" <<EOF
