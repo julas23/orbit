@@ -224,6 +224,8 @@ impl Orbit {
     /// An `output` event: a monitor came, went or moved. sway says no more.
     pub fn output_event(&mut self) {
         self.emit("output", |_| json!({ "change": "unspecified" }));
+        // And to wlr-output-management's clients.
+        self.output_management_changed();
     }
 
     /// A `lock` event: "locked" or "unlocked".

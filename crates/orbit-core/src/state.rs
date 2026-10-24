@@ -122,6 +122,8 @@ pub struct Orbit {
     /// Whether the config's `startup:` and `login:` run (not nested, by
     /// default).
     pub startup: bool,
+    /// wlr-output-management's clients (`output_management`).
+    pub output_management: crate::output_management::OutputManagement,
     /// The window Mod+drag is moving (`grab`).
     pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
@@ -176,6 +178,8 @@ impl Orbit {
         let viewporter_state = ViewporterState::new::<Self>(&dh);
         // Monitors at 1.25, 1.5…: clients draw at the scale, not blurred up.
         let fractional_scale_state = smithay::wayland::fractional_scale::FractionalScaleManagerState::new::<Self>(&dh);
+        // wlr-randr, kanshi and the like (`output_management`).
+        let output_management = crate::output_management::OutputManagement::new(&dh);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
         let idle_inhibit_state = IdleInhibitManagerState::new::<Self>(&dh);
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(&dh);
@@ -241,6 +245,7 @@ impl Orbit {
             shaders: None,
             virtuals: Vec::new(),
             startup: true,
+            output_management,
             layouts: (Vec::new(), 0),
             lock: crate::lock::Lock::default(),
             screencopy: Default::default(),

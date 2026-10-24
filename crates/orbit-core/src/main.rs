@@ -44,6 +44,7 @@ mod ipc;
 mod keys;
 mod lock;
 mod output;
+mod output_management;
 mod render;
 mod resize;
 mod rounded;

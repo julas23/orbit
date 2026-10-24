@@ -109,6 +109,8 @@ pub struct DrmData {
 
 struct Surface {
     output: Output,
+    /// The connector's modes, for `set_mode`.
+    modes: Vec<smithay::reexports::drm::control::Mode>,
     drm_output: DrmOutput<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>,
     global: GlobalId,
     /// A frame is queued and its vblank has not come.
@@ -358,6 +360,10 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
     );
     let global = output.create_global::<Orbit>(&state.display_handle);
     let wl_mode = WlMode::from(mode);
+    // All of them, for wlr-output-management to offer.
+    for other in connector.modes() {
+        output.add_mode(WlMode::from(*other));
+    }
     output.set_preferred(wl_mode);
     // Its place comes with the others' (`output::place`).
     output.change_current_state(Some(wl_mode), Some(transform), None, Some((0, 0).into()));
@@ -379,9 +385,36 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
         }
     };
     tracing::info!("{name}: {}x{}@{}", wl_mode.size.w, wl_mode.size.h, wl_mode.refresh);
-    drm.surfaces.insert(crtc, Surface { output: output.clone(), drm_output, global, waiting: false, scheduled: false, dirty: true, failures: 0 });
+    let modes = connector.modes().to_vec();
+    drm.surfaces.insert(crtc, Surface { output: output.clone(), modes, drm_output, global, waiting: false, scheduled: false, dirty: true, failures: 0 });
     state.add_output(&output);
     state.request_render();
+}
+
+/// Switches `output` to its mode of `size` at `refresh` mHz (0: the
+/// fastest at that size): true once set. A virtual monitor takes any; the
+/// nested window none.
+pub fn set_mode(state: &mut Orbit, output: &Output, size: (i32, i32), refresh: i32) -> bool {
+    let wanted = |m: &WlMode| m.size == size.into() && (refresh == 0 || (m.refresh - refresh).abs() < 500);
+    if state.virtual_names().contains(&output.name()) {
+        let mode = WlMode { size: size.into(), refresh: if refresh == 0 { 60_000 } else { refresh } };
+        output.change_current_state(Some(mode), None, None, None);
+        return true;
+    }
+    let Backend::Drm(drm) = &mut state.backend else { return false };
+    let Some(surface) = drm.surfaces.values_mut().find(|s| s.output == *output) else { return false };
+    let Some(mode) = surface.modes.iter().filter(|m| wanted(&WlMode::from(**m))).max_by_key(|m| WlMode::from(**m).refresh).copied() else {
+        tracing::warn!("{}: no mode {}x{}@{}", output.name(), size.0, size.1, refresh);
+        return false;
+    };
+    if let Err(err) = surface.drm_output.use_mode(mode, &mut drm.renderer, &DrmOutputRenderElements::<_, Element>::default()) {
+        tracing::warn!("{}: setting {}x{}: {err}", output.name(), size.0, size.1);
+        return false;
+    }
+    output.change_current_state(Some(WlMode::from(mode)), None, None, None);
+    tracing::info!("{}: now {}x{}@{}", output.name(), mode.size().0, mode.size().1, mode.vrefresh());
+    state.request_render();
+    true
 }
 
 fn disconnected(state: &mut Orbit, crtc: crtc::Handle) {
