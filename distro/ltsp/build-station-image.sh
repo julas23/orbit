@@ -47,9 +47,10 @@ mount --bind /dev/pts "$CHROOT/dev/pts"
 trap 'umount -l "$CHROOT/dev/pts" "$CHROOT/dev" "$CHROOT/sys" "$CHROOT/proc"' EXIT
 
 # The kernel and its initramfs; the firmware and VA-API drivers of the GPUs
-# a station may have (the station decodes with VA-API only); logind, which
-# libseat goes through; PipeWire for the session's sound. LTSP's own code
-# comes with its initrd (ltsp.img), the image needs no ltsp package.
+# a station may have, and the software decoder for one without VA-API;
+# logind, which libseat goes through; PipeWire for the session's sound.
+# LTSP's own code comes with its initrd (ltsp.img), the image needs no ltsp
+# package.
 chroot "$CHROOT" sh -ec '
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -q
@@ -57,7 +58,7 @@ chroot "$CHROOT" sh -ec '
         linux-image-amd64 initramfs-tools zstd \
         systemd-sysv systemd-timesyncd udev dbus libpam-systemd kbd locales ca-certificates \
         firmware-amd-graphics firmware-intel-graphics firmware-misc-nonfree firmware-realtek \
-        mesa-va-drivers intel-media-va-driver-non-free vainfo \
+        mesa-va-drivers intel-media-va-driver-non-free vainfo gstreamer1.0-libav \
         pipewire pipewire-pulse wireplumber \
         orbit-local-station
     apt-get -y -q dist-upgrade

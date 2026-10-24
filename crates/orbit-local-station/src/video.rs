@@ -1,23 +1,29 @@
 //! The session's video: WebRTC from orbit-remote-server, decoded on the
-//! GPU and handed to the screen as dmabufs, with no copy on the way. The
-//! sound comes in the same connection and goes to `audio`.
+//! GPU and handed to the screen as dmabufs, with no copy on the way; on a
+//! machine with no VA-API decoder, by the CPU into memory the screen
+//! uploads. The sound comes in the same connection and goes to `audio`.
 //!
 //!   webrtcbin → rtph264depay → h264parse → vah264dec → vapostproc → appsink
+//!   webrtcbin → rtph264depay → h264parse → avdec_h264 → videoconvert → appsink
 //!
 //! The server offers; `webrtcbin` here answers, and the ICE candidates go
 //! both ways, all on the link's WebSocket (`Video::offer`, `Video::ice`;
 //! what goes back comes out of `out`). `vapostproc` turns the decoded NV12
 //! into XRGB at the monitor's size, the picture kept whole with borders
-//! around it, so the screen only has to show it. A frame drawn late is
-//! dropped for the next one: the newest is what counts.
+//! around it, so the screen only has to show it. In software,
+//! `videoconvert` makes XRGB at the server's size and the screen scales
+//! it as it draws: the GPU does that for nothing, the CPU would take
+//! longer than the decoding. A frame drawn late is dropped for the next
+//! one: the newest is what counts.
 
 use std::{
     os::fd::BorrowedFd,
-    sync::mpsc,
+    sync::{OnceLock, mpsc},
 };
 
 use anyhow::{Context, anyhow};
 use gst::prelude::*;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use smithay::{
     backend::allocator::{
@@ -33,13 +39,56 @@ use crate::link::{Event, Wake};
 /// where packets come in order and on time.
 const LATENCY_MS: u32 = 0;
 
+/// How the video is decoded: `decoder:` in station.yaml.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Decoder {
+    /// VA-API when the machine has a decoder for H.264, else software.
+    #[default]
+    Auto,
+    Vaapi,
+    Software,
+}
+
+static DECODER: OnceLock<Decoder> = OnceLock::new();
+
+/// The decoder asked for, before the first video.
+pub fn set_decoder(decoder: Decoder) {
+    let _ = DECODER.set(decoder);
+}
+
+/// The decoder to use. GStreamer's VA plugin registers `vah264dec` only
+/// when a VA device can decode H.264, so finding it is the test.
+fn decoder() -> Decoder {
+    match DECODER.get().copied().unwrap_or_default() {
+        Decoder::Auto if gst::ElementFactory::find("vah264dec").is_some() => Decoder::Vaapi,
+        Decoder::Auto => Decoder::Software,
+        decoder => decoder,
+    }
+}
+
 /// A decoded picture, ready for the screen.
 pub struct Frame {
-    pub dmabuf: Dmabuf,
+    pub picture: Picture,
     /// The server's picture size, before it was fitted to the monitor.
     pub source: (u32, u32),
     /// Its memory stays the decoder's until the frame is dropped.
-    _sample: gst::Sample,
+    sample: gst::Sample,
+}
+
+/// Where a decoded picture is.
+pub enum Picture {
+    /// On the GPU, as the VA-API decoder left it.
+    Dmabuf(Dmabuf),
+    /// In memory, XRGB rows of `stride` bytes (`Frame::pixels`).
+    Memory { size: (u32, u32), stride: usize },
+}
+
+impl Frame {
+    /// A `Picture::Memory`'s bytes.
+    pub fn pixels(&self) -> Option<gst::BufferMap<'_, gst::buffer::Readable>> {
+        self.sample.buffer()?.map_readable().ok()
+    }
 }
 
 pub struct Video {
@@ -144,16 +193,29 @@ impl Drop for Video {
 fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32), events: channel::Sender<Event>) -> anyhow::Result<()> {
     let depay = gst::ElementFactory::make("rtph264depay").build()?;
     let parse = gst::ElementFactory::make("h264parse").build()?;
-    let decoder = gst::ElementFactory::make("vah264dec").build().context("no VA-API H.264 decoder (gstreamer1.0-plugins-bad, mesa-va-drivers)")?;
-    let post = gst::ElementFactory::make("vapostproc").property("add-borders", true).build()?;
-    let caps = gst::Caps::builder("video/x-raw")
-        .features([gst_allocators::CAPS_FEATURE_MEMORY_DMABUF])
-        .field("format", "DMA_DRM")
-        .field("drm-format", "XR24")
-        .field("width", width as i32)
-        .field("height", height as i32)
-        .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
-        .build();
+    let software = decoder() == Decoder::Software;
+    let (decoder, post, caps) = if software {
+        // Slices, not frames, in threads: frame threads hold pictures back.
+        let decoder = gst::ElementFactory::make("avdec_h264")
+            .property_from_str("thread-type", "slice")
+            .build()
+            .context("no software H.264 decoder (gstreamer1.0-libav)")?;
+        let post = gst::ElementFactory::make("videoconvert").property("n-threads", 0u32).build()?;
+        let caps = gst::Caps::builder("video/x-raw").field("format", "BGRx").build();
+        (decoder, post, caps)
+    } else {
+        let decoder = gst::ElementFactory::make("vah264dec").build().context("no VA-API H.264 decoder (gstreamer1.0-plugins-bad, mesa-va-drivers)")?;
+        let post = gst::ElementFactory::make("vapostproc").property("add-borders", true).build()?;
+        let caps = gst::Caps::builder("video/x-raw")
+            .features([gst_allocators::CAPS_FEATURE_MEMORY_DMABUF])
+            .field("format", "DMA_DRM")
+            .field("drm-format", "XR24")
+            .field("width", width as i32)
+            .field("height", height as i32)
+            .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
+            .build();
+        (decoder, post, caps)
+    };
     let sink = gst_app::AppSink::builder().caps(&caps).sync(false).max_buffers(1).drop(true).build();
     // A dmabuf's planes are only known from its VideoMeta: said so to
     // `vapostproc`, which will not hand dmabufs out otherwise.
@@ -168,7 +230,8 @@ fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32),
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
                 let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                match frame(sample, &decoded) {
+                let frame = if software { in_memory(sample, &decoded) } else { frame(sample, &decoded) };
+                match frame {
                     Ok(frame) => {
                         let _ = events.send(Event::Frame(frame));
                     }
@@ -185,7 +248,9 @@ fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32),
         element.sync_state_with_parent()?;
     }
     pad.link(&depay.static_pad("sink").context("the depayloader's pad")?)?;
-    log::info!("station: the video is coming, fitted to {width}x{height}");
+    let how = if software { "decoded in software" } else { "decoded by VA-API" };
+    // Fitted by `vapostproc`, or by the screen in software.
+    log::info!("station: the video is coming, {how}, fitted to {width}x{height}");
     Ok(())
 }
 
@@ -208,9 +273,25 @@ fn frame(sample: gst::Sample, decoded: &gst::Pad) -> anyhow::Result<Frame> {
         builder.add_plane(fd, offset as u32, meta.stride()[plane] as u32);
     }
     let dmabuf = builder.build().context("an empty dmabuf")?;
-    let source = decoded
-        .current_caps()
-        .and_then(|caps| gst_video::VideoInfo::from_caps(&caps).ok())
-        .map_or((meta.width(), meta.height()), |info| (info.width(), info.height()));
-    Ok(Frame { dmabuf, source, _sample: sample })
+    let source = source(decoded, (meta.width(), meta.height()));
+    Ok(Frame { picture: Picture::Dmabuf(dmabuf), source, sample })
+}
+
+/// A sample decoded in software, its rows as they are in its buffer.
+fn in_memory(sample: gst::Sample, decoded: &gst::Pad) -> anyhow::Result<Frame> {
+    let caps = sample.caps().context("no caps")?;
+    let info = gst_video::VideoInfo::from_caps(caps).map_err(|e| anyhow!("{e}"))?;
+    let buffer = sample.buffer().context("no buffer")?;
+    let (size, stride) = match buffer.meta::<gst_video::VideoMeta>() {
+        Some(meta) => ((meta.width(), meta.height()), meta.stride()[0] as usize),
+        None => ((info.width(), info.height()), info.stride()[0] as usize),
+    };
+    let source = source(decoded, size);
+    Ok(Frame { picture: Picture::Memory { size, stride }, source, sample })
+}
+
+/// The server's picture size, from the decoder's caps (`fallback` until
+/// they are known).
+fn source(decoded: &gst::Pad, fallback: (u32, u32)) -> (u32, u32) {
+    decoded.current_caps().and_then(|caps| gst_video::VideoInfo::from_caps(&caps).ok()).map_or(fallback, |info| (info.width(), info.height()))
 }

@@ -11,7 +11,9 @@
 //! else `server:` in `~/.config/orbit/station.yaml`, else in
 //! `/etc/orbit/station.yaml`; without one it is asked on the screen and
 //! kept in the user's file. `output:` there picks the monitor (as
-//! `HDMI-A-1`), else the first connected one.
+//! `HDMI-A-1`), else the first connected one; `decoder:` the video's
+//! decoder, `vaapi` or `software` (`auto`, the default, takes VA-API when
+//! the machine has it).
 //!
 //! While the session's video shows, the keys and the mouse are the
 //! server's, but for Ctrl+Alt+F1…F12, which change the console, and
@@ -35,7 +37,7 @@ use crate::{
     link::{Command, Commands, Event},
     screen::{Key, Pointer, Screen},
     ui::Ui,
-    video::Frame,
+    video::{Decoder, Frame},
 };
 
 /// orbit-remote-server's port.
@@ -51,6 +53,8 @@ struct Config {
     server: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    decoder: Option<Decoder>,
 }
 
 fn user_config() -> PathBuf {
@@ -72,7 +76,7 @@ fn read_config(path: &std::path::Path) -> anyhow::Result<Config> {
 fn config() -> anyhow::Result<Config> {
     let system = read_config(std::path::Path::new(SYSTEM_CONFIG))?;
     let user = read_config(&user_config())?;
-    Ok(Config { server: user.server.or(system.server), output: user.output.or(system.output) })
+    Ok(Config { server: user.server.or(system.server), output: user.output.or(system.output), decoder: user.decoder.or(system.decoder) })
 }
 
 /// Keeps `server` in the user's file, with what else is there.
@@ -465,6 +469,7 @@ fn run() -> anyhow::Result<()> {
     let config = config()?;
     let server = std::env::args().nth(1).or_else(|| std::env::var("ORBIT_STATION_SERVER").ok()).or(config.server).map(|s| with_port(&s));
 
+    video::set_decoder(config.decoder.unwrap_or_default());
     wait_until_shown();
     let mut event_loop: EventLoop<'static, Station> = EventLoop::try_new()?;
     let screen = Screen::open(&mut event_loop, config.output.as_deref())?;
@@ -510,7 +515,7 @@ fn run() -> anyhow::Result<()> {
         }
         // The station's own screens only when there is no video.
         let ui = station.video.is_none().then_some(&station.ui.buffer);
-        station.screen.draw(ui, station.video.as_ref().map(|frame| &frame.dmabuf));
+        station.screen.draw(ui, station.video.as_ref());
         // Asleep until an event, or until Slint has something to do.
         let wake = station.ui.next_wake();
         event_loop.dispatch(wake, &mut station)?;

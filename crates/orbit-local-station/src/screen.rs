@@ -26,7 +26,6 @@ use smithay::{
             output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
         },
         egl::{EGLContext, EGLDisplay},
-        allocator::dmabuf::Dmabuf,
         input::{
             AbsolutePositionEvent, Axis, AxisSource, ButtonState, InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
             PointerMotionEvent,
@@ -52,10 +51,13 @@ use smithay::{
         rustix::fs::OFlags,
     },
     render_elements,
-    utils::{DeviceFd, Transform},
+    utils::{DeviceFd, Rectangle, Transform},
 };
 
-use crate::Station;
+use crate::{
+    Station,
+    video::{Frame, Picture},
+};
 
 /// 8-bit colour: what every monitor takes.
 const FORMATS: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
@@ -64,7 +66,8 @@ type Output = DrmOutput<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDev
 
 render_elements! {
     Element<=GlesRenderer>;
-    Ui=MemoryRenderBufferRenderElement<GlesRenderer>,
+    /// The station's screens, and the video decoded in software.
+    Memory=MemoryRenderBufferRenderElement<GlesRenderer>,
     Video=TextureRenderElement<GlesTexture>,
 }
 
@@ -79,6 +82,9 @@ pub struct Screen {
     waiting: bool,
     /// Something changed since the last frame.
     dirty: bool,
+    /// The video's picture when it was decoded in software: one buffer, so
+    /// one texture, written over for each picture.
+    software: Option<MemoryRenderBuffer>,
 }
 
 /// A key pressed or let go, by its evdev code.
@@ -232,7 +238,7 @@ impl Screen {
             })
             .map_err(|e| anyhow!("DRM events in the event loop: {e}"))?;
 
-        Ok(Self { session, renderer, manager, output, size: (u32::from(w), u32::from(h)), waiting: false, dirty: true })
+        Ok(Self { session, renderer, manager, output, size: (u32::from(w), u32::from(h)), waiting: false, dirty: true, software: None })
     }
 
     /// Something to show: drawn on the next `draw`.
@@ -242,18 +248,24 @@ impl Screen {
 
     /// Draws the `video`, with `ui` over it if given, if something changed
     /// and the screen can take a frame.
-    pub fn draw(&mut self, ui: Option<&MemoryRenderBuffer>, video: Option<&Dmabuf>) {
+    pub fn draw(&mut self, ui: Option<&MemoryRenderBuffer>, video: Option<&Frame>) {
         if !self.dirty || self.waiting || !self.session.is_active() {
             return;
         }
         let mut elements = Vec::with_capacity(2);
         if let Some(ui) = ui {
             match MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), ui, None, None, None, Kind::Unspecified) {
-                Ok(element) => elements.push(Element::Ui(element)),
+                Ok(element) => elements.push(Element::Memory(element)),
                 Err(err) => return log::warn!("the station's screen: {err:?}"),
             }
         }
-        if let Some(video) = video {
+        if let Some(Frame { picture: Picture::Memory { size, stride }, .. }) = video {
+            match self.software_picture(video.expect("a frame"), *size, *stride) {
+                Ok(element) => elements.push(Element::Memory(element)),
+                Err(err) => log::warn!("the video's picture: {err:#}"),
+            }
+        }
+        if let Some(Frame { picture: Picture::Dmabuf(video), .. }) = video {
             match self.renderer.import_dmabuf(video, None) {
                 // A new id each picture: all of it is new.
                 Ok(texture) => elements.push(Element::Video(TextureRenderElement::from_static_texture(
@@ -284,6 +296,42 @@ impl Screen {
             Err(err) => log::warn!("render: {err:?}"),
         }
     }
+}
+
+impl Screen {
+    /// A picture decoded in software, copied row by row into the buffer
+    /// kept for it (the decoder's rows may be padded), and drawn fitted to
+    /// the monitor, whole, the rest left black.
+    fn software_picture(&mut self, frame: &Frame, (width, height): (u32, u32), stride: usize) -> anyhow::Result<MemoryRenderBufferRenderElement<GlesRenderer>> {
+        let pixels = frame.pixels().context("the picture's memory")?;
+        let size = (width as i32, height as i32);
+        let buffer = self.software.get_or_insert_with(|| MemoryRenderBuffer::new(Fourcc::Xrgb8888, size, 1, Transform::Normal, None));
+        {
+            let mut context = buffer.render();
+            context.resize(size);
+            let row = width as usize * 4;
+            context.draw(|memory| {
+                if pixels.len() < stride * (height as usize - 1) + row {
+                    return Err(anyhow!("a picture shorter than its size"));
+                }
+                for (y, out) in memory.chunks_exact_mut(row).take(height as usize).enumerate() {
+                    out.copy_from_slice(&pixels[y * stride..y * stride + row]);
+                }
+                Ok(vec![Rectangle::from_size(size.into())])
+            })?;
+        }
+        let (at, fitted) = fit((width, height), self.size);
+        MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, at, buffer, None, None, Some(fitted.into()), Kind::Unspecified)
+            .map_err(|e| anyhow!("{e:?}"))
+    }
+}
+
+/// Where a picture of `size` goes on a monitor of `monitor`, and at what
+/// size: as large as fits, its proportions kept, centred.
+fn fit((width, height): (u32, u32), (monitor_w, monitor_h): (u32, u32)) -> ((f64, f64), (i32, i32)) {
+    let scale = (f64::from(monitor_w) / f64::from(width)).min(f64::from(monitor_h) / f64::from(height));
+    let (w, h) = ((f64::from(width) * scale).round(), (f64::from(height) * scale).round());
+    (((f64::from(monitor_w) - w) / 2.0, (f64::from(monitor_h) - h) / 2.0), (w as i32, h as i32))
 }
 
 /// The monitor to use, its crtc and mode: `wanted` (a connector's name) or
@@ -317,4 +365,16 @@ fn monitor(drm: &DrmDevice, wanted: Option<&str>) -> anyhow::Result<(connector::
     let (w, h) = mode.size();
     log::info!("{name}: {w}x{h}@{}", mode.vrefresh());
     Ok((info.handle(), crtc, mode))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fit;
+
+    #[test]
+    fn pictures_fit_whole() {
+        assert_eq!(fit((1920, 1080), (2560, 1440)), ((0.0, 0.0), (2560, 1440)));
+        assert_eq!(fit((1920, 1080), (1280, 1024)), ((0.0, 152.0), (1280, 720)));
+        assert_eq!(fit((1080, 1920), (1920, 1080)), ((656.0, 0.0), (608, 1080)));
+    }
 }
