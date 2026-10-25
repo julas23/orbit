@@ -199,3 +199,26 @@ orbit-fonts and ArtCraft's packages one by one.
   and a test build of the server. The hp's `~/.shell/10-path.sh`. The
   server's `startup:` line in core.yaml (backup `.antes-remote-yaml`) is
   now `~/.config/orbit/remote.yaml` with `start: true`.
+
+## orbit-safe — 2026-10-24
+
+orbit-safe and orbit-keys are one app now, `orbit-safe`. It talks to the
+keyring over the Secret Service API with gio (a "plain" session, as
+pathfinder's import does), so it shows every app's items, not only its own;
+codes are items of its own schema (`io.github.julas23.Orbit.Safe.Totp`),
+the base32 key as the secret, digits/period/algorithm as attributes.
+
+Opening goes through PAM (`/etc/pam.d/orbit-safe`) on a thread, with each
+module's question passed to the card and the answer passed back: so the
+password, a code from the phone (pam_google_authenticator) and the
+biometric modules (pam_fprintd, howdy) need no code of their own, only a
+line in that file. A TOTP gate kept by the safe itself would be weak: its
+key would sit in the same unlocked keyring.
+
+Pitfall: a Secret struct `(oayays)` put in a Rust tuple goes out as `v`
+(`(a{sv}vb)` refused by CreateItem); the tuples that hold it are built
+with `Variant::tuple_from_iter`.
+
+Also seen: the first GTK app after the home moved to NFS took ~40 s to show
+its window, fontconfig rebuilding `~/.cache/fontconfig` (the cache was left
+out of the copy from the old home).

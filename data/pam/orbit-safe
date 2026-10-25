@@ -1,0 +1,12 @@
+# orbit-safe: what opens the safe. It runs as the session's own user, so
+# pam_unix checks that user's password through unix_chkpwd.
+#
+# More factors go above or below the password, and the safe shows each
+# module's question as it asks:
+#   a fingerprint first:   auth sufficient pam_fprintd.so
+#   the face (howdy):      auth sufficient pam_howdy.so
+#   a code from the phone, after the password (libpam-google-authenticator,
+#   set up with google-authenticator):
+#                          auth required pam_google_authenticator.so
+@include common-auth
+@include common-account

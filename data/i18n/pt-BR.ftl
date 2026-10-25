@@ -749,3 +749,41 @@ aigent-no = Não
 
 # Moving the panel or the dock (orbit-app mover.rs).
 mover-hint = Clique na borda onde ele fica, ou arraste até ela · Esc ou clique direito: cancela
+
+## Orbit-Safe: senhas e códigos de uso único
+
+safe-title = Cofre
+safe-waiting = Abrindo…
+safe-password = Senha
+safe-refused = Não abriu. Tente de novo.
+safe-passwords = Senhas
+safe-codes = Códigos
+safe-search = Buscar
+safe-new = Novo
+safe-lock = Fechar o cofre
+safe-no-match = Nada encontrado
+safe-no-passwords = Nenhuma senha no chaveiro
+safe-no-codes = Nenhum código ainda: adicione com +
+safe-in-collection = Em { $collection }
+safe-field-title = Título
+safe-field-username = Usuário
+safe-field-url = Endereço
+safe-field-password = Senha
+safe-field-issuer = Emissor
+safe-field-account = Conta
+safe-field-key = Chave
+safe-key-hint = Chave base32 ou link otpauth://
+safe-copy-password = Copiar senha
+safe-copy-code = Copiar código
+safe-copy-username = Copiar usuário
+safe-generate = Gerar
+safe-save = Salvar
+safe-saved = Salvo
+safe-delete = Apagar
+safe-delete-confirm = Apagar de vez
+safe-deleted = Apagado
+safe-bad-key = Isso não é uma chave base32 nem um link otpauth://totp
+safe-needs-title = Dê um título
+safe-copied = Copiado
+safe-copied-for = Copiado · apagado em { $seconds } s
+safe-clipboard-cleared = A área de transferência foi limpa

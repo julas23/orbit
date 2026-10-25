@@ -1,0 +1,56 @@
+/* Orbit-Safe built-in stylesheet. Colours come from the palette
+ * (palette-dark.css / palette-light.css); ~/.config/orbit/style.css goes on
+ * top and can override any of this. Sizes on the 5 px grid. */
+
+window.orbit-safe {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+
+/* Closed: the card, in orbit-polkit's manner. */
+window.orbit-safe .card {
+  min-width: 300px;
+  padding: 30px;
+  border-radius: 20px;
+  border: 1px solid @orbit_border;
+}
+window.orbit-safe .card .icon  { color: @orbit_accent; }
+window.orbit-safe .card .title { font-size: 20px; }
+window.orbit-safe .card .ask   { color: @orbit_muted; }
+window.orbit-safe .card .answer {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 20px;
+  background-color: @orbit_button;
+  border: 1px solid @orbit_border;
+}
+window.orbit-safe .said        { color: @orbit_muted; }
+window.orbit-safe .error       { color: @orbit_alert; }
+
+/* Open. */
+window.orbit-safe .page        { padding: 10px; }
+window.orbit-safe .items       { background: none; }
+window.orbit-safe .items row {
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+window.orbit-safe .items row:hover    { background-color: @orbit_hover; }
+window.orbit-safe .items row:selected { background-color: alpha(@orbit_accent, 0.35); }
+window.orbit-safe .meta        { color: @orbit_muted; font-size: 11px; }
+window.orbit-safe .placeholder { color: @orbit_muted; padding: 20px; }
+window.orbit-safe .status      { color: @orbit_muted; font-size: 12px; }
+window.orbit-safe .code {
+  font-family: "CaskaydiaCove Nerd Font", monospace;
+  font-size: 18px;
+  color: @orbit_accent;
+}
+window.orbit-safe .ending      { color: @orbit_alert; }
+window.orbit-safe .details {
+  padding: 10px;
+  border-radius: 10px;
+  background-color: @orbit_faint;
+}
+window.orbit-safe .field       { color: @orbit_muted; }
+window.orbit-safe .attributes  { font-size: 11px; }
+window.orbit-safe button.suggested { background-color: alpha(@orbit_accent, 0.6); }
+window.orbit-safe button.destructive.confirm { background-color: @orbit_alert; }

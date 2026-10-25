@@ -1,0 +1,38 @@
+[package]
+name = "orbit-safe"
+description = "Orbit-Safe: the keyring's passwords and one-time codes, behind authentication"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "utils"
+priority = "optional"
+extended-description = "Orbit-Safe: the passwords kept in the keyring (Secret Service: gnome-keyring) and one-time codes (TOTP), opened with the password, or a fingerprint, the face or a code when /etc/pam.d/orbit-safe asks for them. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, gnome-keyring"
+assets = [
+    ["target/release/orbit-safe", "usr/bin/", "755"],
+    ["../../data/io.github.julas23.Orbit.Safe.desktop", "usr/share/applications/", "644"],
+    ["../../data/pam/orbit-safe", "etc/pam.d/", "644"],
+]
+conf-files = ["/etc/pam.d/orbit-safe"]
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+orbit-ipc.workspace = true
+gtk.workspace = true
+log.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true
+getrandom.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+hmac = "0.12"
+zeroize = "1"

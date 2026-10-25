@@ -43,6 +43,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | **orbit-edit** | Text and code editor: several cursors, column selection, indent guides and folding, folder sidebar, session | **working** |
 | **orbit-term** | Terminal with the prompt fixed on top (date, exit code, git status, directory) and Tab completion; each output fills a box that never wraps, the last 50 that worked kept in a list; interactive programs run in a real terminal (VTE) | **working** |
+| **orbit-safe** | The keyring's passwords (Secret Service, in place of Seahorse) and one-time codes (TOTP), opened with what `/etc/pam.d/orbit-safe` asks: the password, a fingerprint, the face, a code | **working** |
 | orbit-install | The Orbit Linux installer | planned |
 | orbit-remote-server, orbit-local-station | The remote edition (see [below](#orbit-remote-server-and-orbit-local-station)) | planned |
 
@@ -125,7 +126,7 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | **orbit-term** | Terminal | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-pathfinder** | Web browser | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-aigent** | Voice layer for coding agents | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
-| **orbit-safe** | Passwords and TOTP (with orbit-keys) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-safe** | Passwords and TOTP codes | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
 ### Orbit Linux
 

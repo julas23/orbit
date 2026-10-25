@@ -593,7 +593,7 @@ a dia, portando do cosmic-comp o que falta:
 - orbit-aigent integrado: atalho do core ativa, comandos viram IPC.
 - Configurações de monitor próprias; backend de portal próprio; digital no
   greet (passo 10 da seção 7.3).
-- `orbit-keys`: o app de senhas do Orbit, no lugar do Seahorse — ver, buscar,
+- `orbit-safe` (was `orbit-keys`; done 2026-10-24, pending.md §8): o app de senhas do Orbit, no lugar do Seahorse — ver, buscar,
   copiar e editar o que está no chaveiro, pelo Secret Service (funciona com o
   gnome-keyring hoje e com o oo7 se ele vier).
 - **Pronto quando:** abrir a sessão do hp no navegador do celular fora de casa,

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Safe
+GenericName=Passwords and codes
+GenericName[pt_BR]=Senhas e códigos
+Comment=The keyring's passwords and one-time codes, opened after authenticating
+Comment[pt_BR]=As senhas do chaveiro e os códigos de uso único, abertos depois de autenticar
+Exec=orbit-safe
+Icon=security-high
+Terminal=false
+Categories=Utility;Security;
+Keywords=password;keyring;secret;totp;2fa;mfa;authenticator;
+Keywords[pt_BR]=senha;chaveiro;segredo;totp;2fa;mfa;autenticador;

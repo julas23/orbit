@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
 done
 
 CRATES=(orbit-core orbit-login orbit-greet orbit-polkit orbit-prompter orbit-run orbitctl orbit-panel orbit-dock orbit-notify
-        orbit-calc orbit-clip orbit-blink orbit-view orbit-read orbit-play orbit-edit orbit-files orbit-pathfinder orbit-term
+        orbit-calc orbit-clip orbit-blink orbit-view orbit-read orbit-play orbit-edit orbit-files orbit-pathfinder orbit-term orbit-safe
         orbit-remote-server orbit-local-station orbit-aigent)
 BASE=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 VERSION="$BASE+git$(git log -1 --format=%cd --date=format:%Y%m%d%H%M).$(git rev-parse --short HEAD)"

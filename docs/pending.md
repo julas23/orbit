@@ -100,9 +100,12 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 A place to keep passwords safely, reachable after authenticating. It is the
 `orbit-keys` app of core Phase 5 (Secret Service, over gnome-keyring today).
 
-- [ ] Fold `orbit-safe` and `orbit-keys` into one app and one name.
-- [ ] MFA: TOTP codes (Google Authenticator style) stored and shown by the app, and/or required to open it.
-- [ ] Biometrics to open it: fingerprint (fprintd) and face recognition, the same as the login (§3).
+- [x] Fold `orbit-safe` and `orbit-keys` into one app and one name: `orbit-safe` (2026-10-24). The keyring's items (all collections but the session's), search, copy (marked as a secret, wiped after 30 s), edit, new, delete, a password generator.
+- [x] MFA, stored and shown: TOTP codes (RFC 6238, checked against its vectors), from a base32 key or an `otpauth://` link, items of the safe's own schema in the keyring.
+- [x] Opening by PAM (`/etc/pam.d/orbit-safe`), each module's question shown on the card: the password today; a code from the phone (`pam_google_authenticator`) is a line in that file. Closes after 5 min unused, with the session's lock and with Esc.
+- [ ] Biometrics to open it: the card already shows what pam_fprintd and howdy say; to be tried once fprintd/the face are set up (§3).
+- [ ] Test the open window on screen (list, codes, edit, new, delete): the keyring calls are tested (`cargo test -p orbit-safe -- --ignored`), the window only up to the password card.
+- [ ] Reading a QR code from the screen or a picture (today the `otpauth://` link is pasted).
 
 ## 9. Remote edition: `orbit-local-station` + `orbit-remote-server` (`orbit-station.txt`)
 

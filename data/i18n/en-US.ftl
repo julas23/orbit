@@ -757,3 +757,41 @@ aigent-no = No
 
 # Moving the panel or the dock (orbit-app mover.rs).
 mover-hint = Click the edge it goes to, or drag it there · Esc or right click: cancel
+
+## Orbit-Safe: passwords and one-time codes
+
+safe-title = Safe
+safe-waiting = Opening…
+safe-password = Password
+safe-refused = Not opened. Try again.
+safe-passwords = Passwords
+safe-codes = Codes
+safe-search = Search
+safe-new = New
+safe-lock = Close the safe
+safe-no-match = Nothing found
+safe-no-passwords = No passwords in the keyring
+safe-no-codes = No codes yet: add one with +
+safe-in-collection = In { $collection }
+safe-field-title = Title
+safe-field-username = User name
+safe-field-url = Address
+safe-field-password = Password
+safe-field-issuer = Issuer
+safe-field-account = Account
+safe-field-key = Key
+safe-key-hint = Base32 key or otpauth:// link
+safe-copy-password = Copy password
+safe-copy-code = Copy code
+safe-copy-username = Copy user name
+safe-generate = Generate
+safe-save = Save
+safe-saved = Saved
+safe-delete = Delete
+safe-delete-confirm = Delete for good
+safe-deleted = Deleted
+safe-bad-key = That is not a base32 key or an otpauth://totp link
+safe-needs-title = Give it a title
+safe-copied = Copied
+safe-copied-for = Copied · cleared in { $seconds } s
+safe-clipboard-cleared = The clipboard was cleared
