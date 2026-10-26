@@ -14,6 +14,8 @@
 #
 # The Pi's bootloader must try the network (rpi-eeprom-config, as
 # BOOT_ORDER=0xf21: SD card, then network); the boot needs a cable.
+# STATION_SSH_KEY=FILE.pub turns on the image's SSH server, logging in as
+# `station` with that key only (to look into a station; off otherwise).
 set -euo pipefail
 
 NAME=orbit-station-rpi
@@ -73,7 +75,10 @@ echo MODULES=most >"$CHROOT/etc/initramfs-tools/conf.d/orbit-station"
 
 # LTSP's init, orbit-local-station, the Pi's decoder and converter
 # (v4l2h264dec, v4l2convert: gstreamer1.0-plugins-good), the software one
-# as the fallback, PipeWire for the session's sound. Raspberry Pi OS's
+# as the fallback, PipeWire for the session's sound, and mount.nfs
+# (nfs-common, only recommended by ltsp): without an initramfs, LTSP's
+# init mounts the TFTP folder over NFS itself to fetch ltsp.img, and
+# aborts the boot on "mount failed" without it. Raspberry Pi OS's
 # first-boot work (cloud-init, a user to make) is switched off: the
 # station's user is made here.
 chroot "$CHROOT" sh -ec '
@@ -81,7 +86,7 @@ chroot "$CHROOT" sh -ec '
     dpkg --configure -a
     apt-get update -q
     apt-get install -y -q --no-install-recommends \
-        ltsp orbit-local-station \
+        ltsp nfs-common orbit-local-station \
         gstreamer1.0-plugins-good gstreamer1.0-libav \
         pipewire pipewire-pulse wireplumber
     apt-get -y -q dist-upgrade
@@ -110,6 +115,15 @@ if [ "$(tty)" = /dev/tty1 ]; then
 fi
 EOF
 chroot "$CHROOT" chown station:station /home/station/.profile
+
+# Raspberry Pi OS has the SSH server, switched off.
+if [ -n "${STATION_SSH_KEY:-}" ]; then
+    install -d -m 0700 "$CHROOT/home/station/.ssh"
+    install -m 0600 "$STATION_SSH_KEY" "$CHROOT/home/station/.ssh/authorized_keys"
+    chroot "$CHROOT" chown -R station:station /home/station/.ssh
+    printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\n' >"$CHROOT/etc/ssh/sshd_config.d/orbit-station.conf"
+    chroot "$CHROOT" systemctl enable ssh.service
+fi
 
 mkdir -p "$CHROOT/etc/orbit"
 cat >"$CHROOT/etc/orbit/station.yaml" <<EOF
