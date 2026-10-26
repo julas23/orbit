@@ -51,6 +51,9 @@ pub struct Frame {
     pub bands: Vec<f32>,
     /// The last thing heard or said, for the tooltip.
     pub text: String,
+    /// Turned off: the microphone closed, nothing heard or done until it
+    /// is turned on again.
+    pub off: bool,
 }
 
 /// A client to the daemon.
@@ -70,6 +73,10 @@ pub enum Command {
     Agent { name: String },
     /// Listen, think and speak with made-up sound, to see the sphere.
     Demo,
+    /// Turn it off (the microphone closed) or on again; kept across
+    /// restarts.
+    Off,
+    On,
     /// The agent wants to use `tool` with `input`: may it? Sent by
     /// `orbit-aigent approve`, which gets `{"approved": true|false}` back
     /// on the same connection once the user has answered.
@@ -99,6 +106,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&Command::Toggle).unwrap(), r#"{"cmd":"toggle"}"#);
         let agent: Command = serde_json::from_str(r#"{"cmd":"agent","name":"gemini"}"#).unwrap();
         assert_eq!(agent, Command::Agent { name: "gemini".into() });
+        assert_eq!(serde_json::to_string(&Command::Off).unwrap(), r#"{"cmd":"off"}"#);
     }
 
     #[test]
@@ -106,5 +114,6 @@ mod tests {
         let frame: Frame = serde_json::from_str(r#"{"state":"speaking"}"#).unwrap();
         assert_eq!(frame.state, State::Speaking);
         assert!(frame.bands.is_empty());
+        assert!(!frame.off);
     }
 }

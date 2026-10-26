@@ -234,6 +234,7 @@ Done:
 - [x] Its own voice through speakers taken out: PipeWire's echo canceller as `orbit-aigent-mic` (`data/pipewire/60-orbit-aigent-aec.conf`), and speech that is mostly its own words ignored (2026-10-23).
 - [x] Core, for it: `move … to output`, and the lock state sent on subscribing (2026-10-23).
 - [x] Mod+A to start listening and to cancel, with the chime (verified on the hp 2026-10-24).
+- [x] Turned off and on from the sphere's right-click menu (last item) or `orbit-aigent off|on`: the microphone closed, the sphere dim, kept across restarts in `~/.local/state/orbit/aigent-off` (2026-10-26).
 
 Pending:
 

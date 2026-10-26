@@ -94,6 +94,8 @@ fn client(args: &[String]) -> i32 {
             "yes" => Command::Yes,
             "no" => Command::No,
             "demo" => Command::Demo,
+            "off" => Command::Off,
+            "on" => Command::On,
             _ => return usage(),
         },
         [agent, name] if agent == "agent" => Command::Agent { name: name.clone() },
@@ -109,7 +111,7 @@ fn client(args: &[String]) -> i32 {
 }
 
 fn usage() -> i32 {
-    eprintln!("usage: orbit-aigent [toggle|listen|cancel|yes|no|demo|agent <name>|approve]");
+    eprintln!("usage: orbit-aigent [toggle|listen|cancel|yes|no|demo|off|on|agent <name>|approve]");
     2
 }
 
@@ -125,19 +127,34 @@ fn daemon() -> anyhow::Result<()> {
 
     let config = Config::load();
     let (events, inbox) = mpsc::channel();
-    {
+    let off = Arc::new(AtomicBool::new(off_path().exists()));
+    if off.load(Ordering::SeqCst) {
+        log::info!("aigent: turned off ({})", off_path().display());
+    }
+    // Turned off, the microphone is closed, and the thread waits to be
+    // woken (unparked) when it is turned on.
+    let mic = {
         let events = events.clone();
         let microphone = config.microphone.clone();
-        std::thread::Builder::new()
-            .name("mic".into())
-            .spawn(move || {
-                let send = |block: &[f32]| events.send(Event::Block(block.to_vec())).is_ok();
+        let off = off.clone();
+        std::thread::Builder::new().name("mic".into()).spawn(move || {
+            loop {
+                while off.load(Ordering::SeqCst) {
+                    std::thread::park();
+                }
+                let send =
+                    |block: &[f32]| !off.load(Ordering::SeqCst) && events.send(Event::Block(block.to_vec())).is_ok();
                 match std::env::var_os("ORBIT_AIGENT_INPUT") {
                     Some(files) => mic::play_files(&files, send),
                     None => mic::record(microphone.as_deref(), send),
                 }
-            })?;
-    }
+                // Not turned off: the engine is gone.
+                if !off.load(Ordering::SeqCst) {
+                    return;
+                }
+            }
+        })?
+    };
     let (jobs, queue) = mpsc::channel();
     {
         let events = events.clone();
@@ -163,12 +180,23 @@ fn daemon() -> anyhow::Result<()> {
         let events = events.clone();
         std::thread::Builder::new().name("lock".into()).spawn(move || follow_lock(&events))?;
     }
-    let engine = Engine::new(&config, jobs, events.clone(), Speaker { say, now, hush });
+    let mut engine = Engine::new(&config, jobs, events.clone(), Speaker { say, now, hush });
+    engine.off = off;
+    engine.mic = Some(mic.thread().clone());
     std::thread::Builder::new()
         .name("socket".into())
         .spawn(move || serve(&listener, &events))?;
     engine.run(&inbox);
     Ok(())
+}
+
+/// There while turned off: `$XDG_STATE_HOME/orbit/aigent-off`.
+fn off_path() -> std::path::PathBuf {
+    let state = std::env::var_os("XDG_STATE_HOME").map(std::path::PathBuf::from).unwrap_or_else(|| {
+        let home = std::env::var_os("HOME").unwrap_or_default();
+        std::path::Path::new(&home).join(".local/state")
+    });
+    state.join("orbit/aigent-off")
 }
 
 /// Tells the engine when the session locks and unlocks (orbit-core's
@@ -443,6 +471,10 @@ struct Engine {
     /// says (or, after 2 s, has nothing to say).
     locked: Option<bool>,
     started: Instant,
+    /// Turned off (shared with the microphone's thread, woken when it is
+    /// turned on).
+    off: Arc<AtomicBool>,
+    mic: Option<std::thread::Thread>,
 }
 
 /// How long the compositor has to say whether the session is locked.
@@ -511,6 +543,8 @@ impl Engine {
             allowed: Vec::new(),
             locked: None,
             started: Instant::now(),
+            off: Arc::default(),
+            mic: None,
         }
     }
 
@@ -619,6 +653,15 @@ impl Engine {
     }
 
     fn command(&mut self, command: Command) {
+        if matches!(command, Command::Off | Command::On) {
+            self.turn_off(command == Command::Off);
+            return;
+        }
+        // Off, only the agent chosen.
+        if self.off.load(Ordering::SeqCst) && !matches!(command, Command::Agent { .. }) {
+            log::info!("aigent: off, {command:?} ignored");
+            return;
+        }
         // Locked, only what stops it.
         if self.locked != Some(false) && !matches!(command, Command::Cancel | Command::No | Command::Agent { .. }) {
             log::info!("aigent: locked, {command:?} ignored");
@@ -645,13 +688,46 @@ impl Engine {
                 self.demo = Demo::On;
                 self.enter(State::Listening);
             }
+            Command::Off | Command::On => {}
         }
+    }
+
+    /// Turns it off (whatever it was doing stopped, the microphone closed)
+    /// or on again, and remembers which for the next start.
+    fn turn_off(&mut self, off: bool) {
+        if self.off.swap(off, Ordering::SeqCst) == off {
+            return;
+        }
+        log::info!("aigent: turned {}", if off { "off" } else { "on" });
+        let path = off_path();
+        let kept = if off {
+            path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, ""))
+        } else {
+            std::fs::remove_file(&path).or_else(|err| if err.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(err) })
+        };
+        if let Err(err) = kept {
+            log::warn!("aigent: {}: {err}", path.display());
+        }
+        if off {
+            self.cancel();
+        } else {
+            // A speech cut off when it was turned off is forgotten.
+            self.vad.reset();
+            self.before.clear();
+            if let Some(mic) = &self.mic {
+                mic.unpark();
+            }
+        }
+        self.dirty = true;
     }
 
     /// A block from the microphone. The voice detector hears them all, to
     /// know the room; while waiting, speech is recorded for the wake word,
     /// and while listening, for the request.
     fn block(&mut self, block: &[f32]) {
+        if self.off.load(Ordering::SeqCst) {
+            return;
+        }
         if self.locked != Some(false) {
             if self.locked.is_none() && self.started.elapsed() > LOCK_UNSAID {
                 log::info!("aigent: the compositor says nothing of a lock: taken as unlocked");
@@ -1065,6 +1141,7 @@ impl Engine {
             agents: self.agents.clone(),
             bands: self.bands.clone(),
             text: self.text.clone(),
+            off: self.off.load(Ordering::SeqCst),
         };
         let mut line = serde_json::to_vec(&frame).expect("a frame serialises");
         line.push(b'\n');

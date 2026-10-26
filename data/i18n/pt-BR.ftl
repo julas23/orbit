@@ -746,6 +746,9 @@ aigent-agents = Agentes
 aigent-cancel = Cancelar
 aigent-yes = Sim
 aigent-no = Não
+aigent-turn-off = Desativar IA
+aigent-turn-on = Ativar IA
+aigent-is-off = desativada
 
 # Moving the panel or the dock (orbit-app mover.rs).
 mover-hint = Clique na borda onde ele fica, ou arraste até ela · Esc ou clique direito: cancela

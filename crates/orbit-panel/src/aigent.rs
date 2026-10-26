@@ -7,7 +7,7 @@
 //! The sphere's edge moves with the sound, as a spectrum around a circle,
 //! and the spectrum runs across it too. White while the daemon waits (and
 //! thinks, with a sweep around the edge), red while it listens, yellow
-//! while it speaks. A new colour reaches the edge first and the centre a
+//! while it speaks; dim, as without the daemon, while turned off. A new colour reaches the edge first and the centre a
 //! moment later, so a change sweeps inwards as a gradient, in about a
 //! quarter of a second.
 //!
@@ -17,7 +17,7 @@
 //!
 //! Left click: listen (or stop); while it asks for a confirmation, yes.
 //! Right click: the agents to choose from, and cancel; while it asks, yes
-//! and no.
+//! and no; last, turn it off (or on).
 
 use std::{
     cell::{Cell, RefCell},
@@ -114,7 +114,7 @@ impl Look {
         let target = self.target();
         self.edge = self.edge.towards(target, 1.0 - (-dt / EDGE_TAU).exp());
         self.core = self.core.towards(target, 1.0 - (-dt / CORE_TAU).exp());
-        let alpha = if self.online { 1.0 } else { OFFLINE_ALPHA };
+        let alpha = if self.online && !self.frame.off { 1.0 } else { OFFLINE_ALPHA };
         self.alpha += (alpha - self.alpha) * (1.0 - (-dt / CORE_TAU).exp());
         let mut resting = true;
         for (k, shown) in self.bands.iter_mut().enumerate() {
@@ -223,7 +223,9 @@ pub fn new(_config: &AigentConfig, form: Form) -> gtk::Widget {
                     Message::Frame(frame) => {
                         look.online = true;
                         agent.set_label(&frame.agent);
-                        let tip = if frame.text.is_empty() {
+                        let tip = if frame.off {
+                            format!("{} · {}", tr("panel-module-aigent"), tr("aigent-is-off"))
+                        } else if frame.text.is_empty() {
                             format!("{} · {}", tr("panel-module-aigent"), frame.agent)
                         } else {
                             format!("{} · {}\n{}", tr("panel-module-aigent"), frame.agent, frame.text)
@@ -255,6 +257,7 @@ pub fn new(_config: &AigentConfig, form: Form) -> gtk::Widget {
                 return;
             }
             match gesture.current_button() {
+                1 if look.frame.off => {}
                 1 if look.frame.state == State::Confirm => send(&Command::Yes),
                 1 => send(&Command::Toggle),
                 3 => menu(&root, &look.frame, (x, y)),
@@ -314,7 +317,7 @@ fn send(command: &Command) {
     }
 }
 
-/// The right-click menu: the agents, and cancel while busy.
+/// The right-click menu: the agents, cancel while busy, and off (or on).
 fn menu(root: &gtk::Widget, frame: &Frame, at: (f64, f64)) {
     let model = gio::Menu::new();
     let group = gio::SimpleActionGroup::new();
@@ -348,6 +351,17 @@ fn menu(root: &gtk::Widget, frame: &Frame, at: (f64, f64)) {
         group.add_action(&cancel);
         model.append(Some(&tr("aigent-cancel")), Some("aigent.cancel"));
     }
+    let (name, command, label) = if frame.off {
+        ("on", Command::On, "aigent-turn-on")
+    } else {
+        ("off", Command::Off, "aigent-turn-off")
+    };
+    let turn = gio::SimpleAction::new(name, None);
+    turn.connect_activate(move |_, _| send(&command));
+    group.add_action(&turn);
+    let power = gio::Menu::new();
+    power.append(Some(&tr(label)), Some(&format!("aigent.{name}")));
+    model.append_section(None, &power);
     let popover = gtk::PopoverMenu::from_model(Some(&model));
     popover.insert_action_group("aigent", Some(&group));
     orbit_app::popup::open(&popover, root, Some(at));
