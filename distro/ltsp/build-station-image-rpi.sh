@@ -116,8 +116,11 @@ fi
 EOF
 chroot "$CHROOT" chown station:station /home/station/.profile
 
-# Raspberry Pi OS has the SSH server, switched off.
+# Raspberry Pi OS has the SSH server, switched off, and makes its host
+# keys at the first boot, which a read-only root never keeps: they are
+# made here.
 if [ -n "${STATION_SSH_KEY:-}" ]; then
+    chroot "$CHROOT" ssh-keygen -A
     install -d -m 0700 "$CHROOT/home/station/.ssh"
     install -m 0600 "$STATION_SSH_KEY" "$CHROOT/home/station/.ssh/authorized_keys"
     chroot "$CHROOT" chown -R station:station /home/station/.ssh
