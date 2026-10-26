@@ -520,6 +520,11 @@ impl Orbit {
             if crate::floating::floats(w) || monocle {
                 self.space.raise_element(w, false);
             }
+            // Its dialogs over it: a bigger parent focused (a click, the
+            // pointer) never hides them.
+            for dialog in self.dialogs_of(w) {
+                self.space.raise_element(&dialog, false);
+            }
         }
         if let Some(w) = &window
             && let Some(num) = self.workspace_of(w)
@@ -540,11 +545,15 @@ impl Orbit {
                 t.send_pending_configure();
             }
         }
-        // An X window goes on top of the other X windows, for the X server.
-        if let (Some(xwm), Some(x)) = (self.xwm.as_mut(), window.as_ref().and_then(|w| w.x11_surface()))
-            && let Err(err) = xwm.raise_window(x)
-        {
-            tracing::warn!("raising X window {}: {err}", x.window_id());
+        // An X window goes on top of the other X windows, for the X server,
+        // and its dialogs over it.
+        let dialogs = window.as_ref().map(|w| self.dialogs_of(w)).unwrap_or_default();
+        if let Some(xwm) = self.xwm.as_mut() {
+            for x in window.iter().chain(&dialogs).filter_map(|w| w.x11_surface()) {
+                if let Err(err) = xwm.raise_window(x) {
+                    tracing::warn!("raising X window {}: {err}", x.window_id());
+                }
+            }
         }
         let target = window.as_ref().and_then(Self::keyboard_target);
         if let Some(keyboard) = self.seat.get_keyboard() {

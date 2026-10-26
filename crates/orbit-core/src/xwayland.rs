@@ -151,9 +151,12 @@ impl XwmHandler for Orbit {
         }
     }
 
-    /// A menu or tooltip: where it asks, above everything.
+    /// A menu or tooltip: where it asks, above everything. Its place is
+    /// the last one X told (`geometry()` starts at 0,0: the menu went to
+    /// the corner of the first monitor); it was told before the map, so
+    /// `configure_notify` did not see it on screen.
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        let location = surface.geometry().loc;
+        let location = surface.last_configure().loc;
         self.space.map_element(Window::new_x11_window(surface), location, true);
         self.request_render();
     }

@@ -127,7 +127,11 @@ impl Orbit {
         if let Some(full) = self.windows_of(num).into_iter().find(|w| w != window && is_fullscreen(w)) {
             self.set_fullscreen(&full, false);
         }
-        if let Some(max) = self.windows_of(num).into_iter().find(|w| w != window && is_maximized(w)) {
+        // A floating window (a dialog) is drawn over a maximized one: it
+        // stays maximized.
+        if !crate::floating::floats(window)
+            && let Some(max) = self.windows_of(num).into_iter().find(|w| w != window && is_maximized(w))
+        {
             self.set_maximized(&max, false);
         }
     }

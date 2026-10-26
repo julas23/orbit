@@ -86,6 +86,12 @@ impl Orbit {
         self.window_for(&parent)
     }
 
+    /// The floating windows that belong to `window`: its dialogs, which
+    /// stay over it.
+    pub fn dialogs_of(&self, window: &Window) -> Vec<Window> {
+        self.all_windows().filter(|w| floats(w) && self.parent_of(w).as_ref() == Some(window)).cloned().collect()
+    }
+
     /// A Wayland window that turned out a dialog (at its first commit, or
     /// when it was given a parent) floats, on its parent's workspace.
     pub fn float_if_dialog(&mut self, window: &Window) {

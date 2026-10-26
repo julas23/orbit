@@ -248,7 +248,11 @@ impl Orbit {
         if !self.locked() && self.config.focus_follows_mouse && !pointer.is_grabbed() && self.exclusive_layer().is_none() {
             let window = self.window_under(pos);
             let over_layer = self.layer_at(pos, &[WlrLayer::Overlay, WlrLayer::Top]);
-            if !over_layer && window.is_some() && window != self.focused_window() {
+            // A dialog keeps the keyboard when the pointer leaves it for its
+            // parent, which is bigger and all around it; a click moves it.
+            let focused = self.focused_window();
+            let to_parent = focused.as_ref().is_some_and(|f| crate::floating::floats(f) && self.parent_of(f) == window);
+            if !over_layer && window.is_some() && window != focused && !to_parent {
                 self.focus_window(window);
             }
         }

@@ -222,3 +222,25 @@ with `Variant::tuple_from_iter`.
 Also seen: the first GTK app after the home moved to NFS took ~40 s to show
 its window, fontconfig rebuilding `~/.cache/fontconfig` (the cache was left
 out of the copy from the old home).
+
+## X menus and dialogs — 2026-10-26
+
+Bambu Studio's and OpenSCAD's menus (X, override-redirect) opened in the
+top-left corner of the eDP-1, not at the pointer. `xev -root -event
+substructure` showed they ask for the right place (ConfigureNotify to
+417,1170 on the HDMI) before they are mapped; the core placed them at
+`X11Surface::geometry().loc`, which in this Smithay is the bounding box
+minus the frame extents, starting at 0,0. The place is `last_configure()`,
+which Smithay keeps for override-redirect windows.
+
+Their dialogs went behind the main window: focusing a floating (or
+monocle) window raised it over its own dialogs, and with focus following
+the mouse, leaving the dialog for the bigger parent around it was enough.
+A focused window now raises its dialogs over it (in the space and in X),
+the pointer leaving a dialog for its parent keeps the keyboard on the
+dialog (a click moves it), and a dialog no longer takes its parent out of
+maximized.
+
+Reproduced and checked nested with a python-xlib client (`DISPLAY` of the
+nested XWayland): a main window, a transient dialog and a menu created at
+0,0 and moved to 300,200 before its map, found by colour in a `grim` shot.
