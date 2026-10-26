@@ -109,27 +109,40 @@ pub enum Pointer {
 /// browser's pixels, which the server takes.
 const SCROLL_TO_WHEEL: f64 = 100.0 / 15.0;
 
-/// The GPU to draw with: `$ORBIT_DRM_DEVICE` when set, otherwise the one the
-/// firmware booted with when it can render, otherwise the first that can
-/// (as orbit-core's `udev::gpu`).
+/// The GPU to draw with: `$ORBIT_DRM_DEVICE` when set, otherwise, of the
+/// one the firmware booted with and then the others, the first with a
+/// monitor plugged in that can render, then the first with a monitor, then
+/// the first that can render. A monitor first: on the Raspberry Pi 4 the
+/// HDMI is vc4's, which has no render node (Mesa renders on v3d through
+/// it), and v3d, which has one, has no connector at all.
 fn gpu(seat: &str) -> anyhow::Result<PathBuf> {
     if let Some(path) = std::env::var_os("ORBIT_DRM_DEVICE") {
         return Ok(path.into());
     }
+    let card = |path: &std::path::Path| path.file_name().map(|c| c.to_string_lossy().into_owned()).unwrap_or_default();
     let renders = |path: &std::path::Path| {
-        let Some(card) = path.file_name() else { return false };
-        let dir = std::path::Path::new("/sys/class/drm").join(card).join("device/drm");
+        let dir = std::path::Path::new("/sys/class/drm").join(card(path)).join("device/drm");
         std::fs::read_dir(dir).is_ok_and(|entries| entries.flatten().any(|e| e.file_name().to_string_lossy().starts_with("renderD")))
+    };
+    // Its connectors are /sys/class/drm/card1-HDMI-A-1 and the like.
+    let shows = |path: &std::path::Path| {
+        let prefix = format!("{}-", card(path));
+        std::fs::read_dir("/sys/class/drm").is_ok_and(|entries| {
+            entries.flatten().any(|e| {
+                e.file_name().to_string_lossy().starts_with(&prefix)
+                    && std::fs::read_to_string(e.path().join("status")).is_ok_and(|s| s.trim() == "connected")
+            })
+        })
     };
     let primary = primary_gpu(seat)?;
     let all = all_gpus(seat).unwrap_or_default();
-    primary
-        .iter()
-        .chain(&all)
-        .find(|path| renders(path))
-        .or(primary.as_ref())
-        .or(all.first())
-        .cloned()
+    let gpus: Vec<&PathBuf> = primary.iter().chain(&all).collect();
+    gpus.iter()
+        .find(|path| shows(path) && renders(path))
+        .or_else(|| gpus.iter().find(|path| shows(path)))
+        .or_else(|| gpus.iter().find(|path| renders(path)))
+        .or(gpus.first())
+        .map(|path| (*path).clone())
         .ok_or_else(|| anyhow!("no GPU"))
 }
 
