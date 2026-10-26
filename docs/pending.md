@@ -240,7 +240,7 @@ Pending:
 
 - [ ] Try with speakers: no self-interruption, "Jarvis, para" and confirmations through the echo canceller.
 - [ ] Try the lock after a login with the new core (log: "the session is locked: deaf").
-- [ ] Gemini CLI, OpenCode and Kimi Code (not installed on the hp yet): their headless modes and how each asks for permission.
+- [ ] Gemini CLI, OpenCode and Kimi Code: their headless modes and how each asks for permission. Kimi Code is on the hp (`~/.kimi-code/bin`, found there since the installer only adds it to `~/.bashrc`); OpenCode not yet.
 - [x] A short sound when woken: two rising notes through `pw-play` as its voice (the echo canceller takes them out), `chime: false` in `aigent.yaml` for none (2026-10-23). Not heard yet.
 - [x] A shortcut: Mod+A, `exec orbit-aigent toggle` (listen, or cancel), among the core's defaults (2026-10-23).
 - [x] Packaging: the PipeWire file, in `/usr/share/pipewire/pipewire.conf.d/`, and pw-play and the echo canceller recommended (2026-10-23).

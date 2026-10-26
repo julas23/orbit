@@ -37,6 +37,9 @@
 //!
 //! Without the file, the four kinds are offered under their own names and
 //! those whose program is not installed are left out of the panel's list.
+//! A program is looked for on the `PATH`, then where its installer puts it
+//! (`~/.kimi-code/bin`, `~/.opencode/bin`, …), which is often only on the
+//! `PATH` of a shell.
 
 use std::{
     collections::BTreeMap,
@@ -98,6 +101,17 @@ impl Kind {
             Kind::Gemini => "gemini",
             Kind::Opencode => "opencode",
             Kind::Kimi => "kimi",
+        }
+    }
+
+    /// Where the kind's own installer puts it, under the home, when that is
+    /// not on the session's `PATH` (it only adds it in `~/.bashrc`).
+    fn home_dirs(self) -> &'static [&'static str] {
+        match self {
+            Kind::Claude => &[".claude/local"],
+            Kind::Gemini => &[".npm-global/bin"],
+            Kind::Opencode => &[".opencode/bin"],
+            Kind::Kimi => &[".kimi-code/bin"],
         }
     }
 
@@ -164,13 +178,15 @@ impl Agent {
     }
 
     /// The program to run: `program`, or the kind's name looked up on the
-    /// `PATH`.
+    /// `PATH` and then where its installer puts it.
     pub fn find_program(&self, kind: Kind) -> Option<PathBuf> {
         if let Some(program) = &self.program {
             return is_executable(program).then(|| program.clone());
         }
-        let path = std::env::var_os("PATH")?;
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let home = std::env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute());
         std::env::split_paths(&path)
+            .chain(home.iter().flat_map(|home| kind.home_dirs().iter().map(move |dir| home.join(dir))))
             .map(|dir| dir.join(kind.name()))
             .find(|candidate| is_executable(candidate))
     }
