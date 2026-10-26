@@ -98,6 +98,10 @@ chroot "$CHROOT" sh -ec '
     id station >/dev/null 2>&1 || useradd -m -s /bin/bash -G video,render,input,audio station
     passwd -d station >/dev/null
 '
+# Raspberry Pi OS's first-boot wizard (userconfig, masked above) is what
+# turns tty1's getty on: without it nothing logs in and the station never
+# starts.
+chroot "$CHROOT" systemctl enable getty@tty1.service
 mkdir -p "$CHROOT/etc/systemd/system/getty@tty1.service.d"
 cat >"$CHROOT/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'EOF'
 [Service]
