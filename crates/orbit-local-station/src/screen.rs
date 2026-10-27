@@ -150,7 +150,12 @@ impl Screen {
     /// Takes the seat, the GPU and one monitor (`wanted`, as `HDMI-A-1`, or
     /// the first connected), and puts libinput's keys into `event_loop`.
     pub fn open(event_loop: &mut EventLoop<'static, Station>, wanted: Option<&str>) -> anyhow::Result<Self> {
+        // The seat first, as orbit-core does: taking control holds the
+        // console (graphics mode, keyboard off), so logind starts no getty
+        // on it when it is shown. A getty's reset turns the console's
+        // keyboard back on, and Super+Left (Alt+Left there) changes the VT.
         let (mut session, notifier) = LibSeatSession::new().map_err(|e| anyhow!("no seat session (run it from a text console): {e}"))?;
+        crate::wait_until_shown();
         let seat = session.seat();
 
         let path = gpu(&seat)?;

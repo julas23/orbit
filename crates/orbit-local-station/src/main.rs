@@ -438,8 +438,9 @@ impl Station {
 }
 
 /// A session opened behind another (Orbit-Login's, from the greet) has no
-/// screen until logind shows it: waited for, as orbit-core does.
-fn wait_until_shown() {
+/// screen until logind shows it: waited for, as orbit-core does, once
+/// the seat is taken (`Screen::open`).
+pub fn wait_until_shown() {
     let active = || -> zbus::Result<bool> {
         let connection = zbus::blocking::Connection::system()?;
         let session = zbus::blocking::Proxy::new(&connection, "org.freedesktop.login1", "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session")?;
@@ -470,7 +471,6 @@ fn run() -> anyhow::Result<()> {
     let server = std::env::args().nth(1).or_else(|| std::env::var("ORBIT_STATION_SERVER").ok()).or(config.server).map(|s| with_port(&s));
 
     video::set_decoder(config.decoder.unwrap_or_default());
-    wait_until_shown();
     let mut event_loop: EventLoop<'static, Station> = EventLoop::try_new()?;
     let screen = Screen::open(&mut event_loop, config.output.as_deref())?;
     let ui = Ui::new(screen.size)?;
