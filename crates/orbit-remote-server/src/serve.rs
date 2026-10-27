@@ -415,7 +415,7 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
             connected.store(state == gst_webrtc::WebRTCPeerConnectionState::Connected, Ordering::SeqCst);
         });
     }
-    let encoder = Encoder::new(&capture.planes, Tail::WebRtc(webrtc.clone()))?;
+    let encoder = Encoder::new(&capture.planes, Tail::WebRtc(webrtc.clone()), screen.map(|(w, h, _)| (w, h)))?;
     let encoder = Arc::new(encoder);
 
     // Frames, from their own thread, until told to stop. The first makes

@@ -6,7 +6,12 @@
 //! end asks (a lost frame).
 //!
 //!   VA-API (AMD, Intel)   vapostproc → vah264enc
-//!   NVENC (NVIDIA)        glupload → glcolorconvert → nvh264enc
+//!   NVENC (NVIDIA)        glupload → glcolorscale → glcolorconvert → nvh264enc
+//!
+//! A picture larger than the client's screen is made smaller on the GPU
+//! to fit it, its proportions kept (`fitted`): a 4K session on an 800×600
+//! monitor sends no more than it shows, and the Raspberry Pi 4's decoder
+//! takes no H.264 above 1080p.
 //!
 //! VA-API when its encoder is there (GStreamer's `va` plugin makes it only
 //! for a GPU that encodes), NVENC otherwise; `$ORBIT_REMOTE_ENCODER`
@@ -41,6 +46,16 @@ fn bitrate_kbps(width: u32, height: u32) -> u32 {
     let kbps = u64::from(BITRATE_1080P_KBPS) * pixels / (1920 * 1080);
     (kbps as u32).clamp(*BITRATE_KBPS.start(), *BITRATE_KBPS.end())
 }
+/// The size to encode a `width` × `height` picture at for a client whose
+/// screen is `screen`: as large as fits, never larger than it is, its
+/// proportions kept, even (as NV12 wants).
+pub fn fitted((width, height): (u32, u32), screen: Option<(u32, u32)>) -> (u32, u32) {
+    let Some((screen_w, screen_h)) = screen else { return (width, height) };
+    let scale = (f64::from(screen_w) / f64::from(width)).min(f64::from(screen_h) / f64::from(height)).min(1.0);
+    let even = |side: u32| ((f64::from(side) * scale) as u32 & !1).max(2);
+    (even(width), even(height))
+}
+
 /// A key frame at least this often, in frames.
 const KEY_INTERVAL: u32 = 120;
 
@@ -65,8 +80,8 @@ pub struct Encoder {
 
 impl Encoder {
     /// A pipeline for `planes` (the capture's buffers, all the same size)
-    /// into `tail`, playing.
-    pub fn new(planes: &[Plane], tail: Tail) -> anyhow::Result<Self> {
+    /// into `tail`, playing, the picture fitted to `screen` (the client's).
+    pub fn new(planes: &[Plane], tail: Tail, screen: Option<(u32, u32)>) -> anyhow::Result<Self> {
         gst::init()?;
         let first = planes.first().context("no buffers")?;
         let caps = gst::Caps::builder("video/x-raw")
@@ -87,12 +102,16 @@ impl Encoder {
             .max_buffers(2)
             .leaky_type(gst_app::AppLeakyType::Downstream)
             .build();
-        let kbps = bitrate_kbps(first.width, first.height);
+        let size = fitted((first.width, first.height), screen);
+        if size != (first.width, first.height) {
+            log::info!("remote: {}×{} sent as {}×{}, the client's screen", first.width, first.height, size.0, size.1);
+        }
+        let kbps = bitrate_kbps(size.0, size.1);
         let chain = match std::env::var("ORBIT_REMOTE_ENCODER").as_deref() {
-            Ok("nvenc") => nvenc(kbps)?,
-            Ok("va") => va(kbps)?,
-            _ if gst::ElementFactory::find("vah264enc").is_some() => va(kbps)?,
-            _ => nvenc(kbps).context("no H.264 encoder on the GPU: neither VA-API's nor NVENC")?,
+            Ok("nvenc") => nvenc(kbps, size)?,
+            Ok("va") => va(kbps, size)?,
+            _ if gst::ElementFactory::find("vah264enc").is_some() => va(kbps, size)?,
+            _ => nvenc(kbps, size).context("no H.264 encoder on the GPU: neither VA-API's nor NVENC")?,
         };
         let parse = gst::ElementFactory::make("h264parse").property("config-interval", -1i32).build()?;
         let pipeline = gst::Pipeline::new();
@@ -185,11 +204,17 @@ impl Encoder {
 
 }
 
-/// VA-API: NV12 by the GPU's video processor, then its encoder.
-fn va(kbps: u32) -> anyhow::Result<Vec<gst::Element>> {
+/// VA-API: NV12 at `(width, height)` by the GPU's video processor, then
+/// its encoder.
+fn va(kbps: u32, (width, height): (u32, u32)) -> anyhow::Result<Vec<gst::Element>> {
     log::info!("remote: encoding with VA-API, {kbps} kbit/s");
     let convert = gst::ElementFactory::make("vapostproc").build().context("no vapostproc (gstreamer1.0-plugins-bad)")?;
-    let nv12 = gst::Caps::builder("video/x-raw").features(["memory:VAMemory"]).field("format", "NV12").build();
+    let nv12 = gst::Caps::builder("video/x-raw")
+        .features(["memory:VAMemory"])
+        .field("format", "NV12")
+        .field("width", width as i32)
+        .field("height", height as i32)
+        .build();
     let filter = gst::ElementFactory::make("capsfilter").property("caps", &nv12).build()?;
     let encoder = gst::ElementFactory::make("vah264enc")
         .property_from_str("rate-control", "cbr")
@@ -203,13 +228,20 @@ fn va(kbps: u32) -> anyhow::Result<Vec<gst::Element>> {
     Ok(vec![convert, filter, encoder])
 }
 
-/// NVENC: the dmabuf into OpenGL, NV12 by a shader, then NVIDIA's encoder
-/// (which takes OpenGL memory), tuned for the least latency.
-fn nvenc(kbps: u32) -> anyhow::Result<Vec<gst::Element>> {
+/// NVENC: the dmabuf into OpenGL, scaled to `(width, height)` and turned
+/// NV12 by shaders, then NVIDIA's encoder (which takes OpenGL memory),
+/// tuned for the least latency.
+fn nvenc(kbps: u32, (width, height): (u32, u32)) -> anyhow::Result<Vec<gst::Element>> {
     log::info!("remote: encoding with NVENC, {kbps} kbit/s");
     let upload = gst::ElementFactory::make("glupload").build().context("no glupload (gstreamer1.0-gl)")?;
+    let scale = gst::ElementFactory::make("glcolorscale").build()?;
     let convert = gst::ElementFactory::make("glcolorconvert").build()?;
-    let nv12 = gst::Caps::builder("video/x-raw").features(["memory:GLMemory"]).field("format", "NV12").build();
+    let nv12 = gst::Caps::builder("video/x-raw")
+        .features(["memory:GLMemory"])
+        .field("format", "NV12")
+        .field("width", width as i32)
+        .field("height", height as i32)
+        .build();
     let filter = gst::ElementFactory::make("capsfilter").property("caps", &nv12).build()?;
     let encoder = gst::ElementFactory::make("nvh264enc").build().context("no nvh264enc (NVENC)")?;
     // Its properties differ between versions: each set only if it is there.
@@ -225,7 +257,7 @@ fn nvenc(kbps: u32) -> anyhow::Result<Vec<gst::Element>> {
     set("bframes", "0");
     set("zerolatency", "true");
     set("rc-lookahead", "0");
-    Ok(vec![upload, convert, filter, encoder])
+    Ok(vec![upload, scale, convert, filter, encoder])
 }
 
 impl Drop for Encoder {
@@ -234,12 +266,13 @@ impl Drop for Encoder {
     }
 }
 
-/// `orbit-remote-server encode [OUTPUT]`: captures and encodes for 10 s,
-/// says how long a frame takes from the copy to H.264 and how big the
-/// stream is, and writes it to `$XDG_RUNTIME_DIR/orbit-remote-test.h264`.
-pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
+/// `orbit-remote-server encode [OUTPUT [WxH]]`: captures and encodes for
+/// 10 s (fitted to a client's screen of `fit`), says how long a frame
+/// takes from the copy to H.264 and how big the stream is, and writes it
+/// to `$XDG_RUNTIME_DIR/orbit-remote-test.h264`.
+pub fn measure(output: Option<&str>, fit: Option<(u32, u32)>) -> anyhow::Result<()> {
     let mut capture = Capture::open(output, true)?;
-    let encoder = Encoder::new(&capture.planes, Tail::Sink)?;
+    let encoder = Encoder::new(&capture.planes, Tail::Sink, fit)?;
     let out_path = std::env::temp_dir().join("orbit-remote-test.h264");
     let path = std::env::var_os("XDG_RUNTIME_DIR").map_or(out_path, |d| std::path::PathBuf::from(d).join("orbit-remote-test.h264"));
     let mut file = std::fs::File::create(&path)?;
@@ -278,6 +311,16 @@ pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::bitrate_kbps;
+
+    #[test]
+    fn pictures_fit_the_client() {
+        use super::fitted;
+        assert_eq!(fitted((3840, 2160), None), (3840, 2160));
+        assert_eq!(fitted((3840, 2160), Some((800, 600))), (800, 450));
+        assert_eq!(fitted((3840, 2160), Some((1920, 1080))), (1920, 1080));
+        assert_eq!(fitted((1920, 1080), Some((3840, 2160))), (1920, 1080));
+        assert_eq!(fitted((1366, 768), Some((1280, 1024))), (1280, 718));
+    }
 
     #[test]
     fn the_bitrate_follows_the_size() {
