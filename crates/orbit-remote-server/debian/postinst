@@ -1,0 +1,11 @@
+#!/bin/sh
+# The client's gamepads need uinput: the module loaded now (and at every
+# boot, modules-load.d), and /dev/uinput given to the seat's user without
+# waiting for a reboot.
+set -e
+if [ "$1" = configure ]; then
+    modprobe uinput >/dev/null 2>&1 || true
+    udevadm control --reload >/dev/null 2>&1 || true
+    udevadm trigger --action=change --sysname-match=uinput >/dev/null 2>&1 || true
+fi
+exit 0

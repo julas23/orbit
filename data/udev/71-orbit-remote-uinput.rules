@@ -1,0 +1,4 @@
+# orbit-remote-server: the client's gamepads are made in the session with
+# uinput, so /dev/uinput goes to the user at the seat (as Steam's rule does).
+# Before 73-seat-late.rules, which turns the uaccess tag into the ACL.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

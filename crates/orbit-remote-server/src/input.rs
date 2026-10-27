@@ -78,20 +78,21 @@ impl Input {
         Ok(Self { conn, queue, state, pointer, keyboard, start: Instant::now() })
     }
 
-    /// One message from the browser (`move`, `button`, `wheel`, `key`);
+    /// One message from the client (`move`, `button`, `wheel`, `key`);
     /// false if it was not one of those.
     pub fn handle(&mut self, message: &Value) -> anyhow::Result<bool> {
         let time = self.start.elapsed().as_millis() as u32;
         let number = |name: &str| message[name].as_f64().unwrap_or(0.0);
         let down = message["down"].as_bool().unwrap_or(false);
         match message["type"].as_str() {
-            Some("move") => {
-                let at = |v: f64| (v.clamp(0.0, 1.0) * f64::from(EXTENT)).round() as u32;
-                self.pointer.motion_absolute(time, at(number("x")), at(number("y")), EXTENT, EXTENT);
-                self.pointer.frame();
-            }
+            Some("move") => self.move_to(time, number("x"), number("y")),
             Some("button") => {
                 let Some(button) = button(message["button"].as_u64().unwrap_or(0)) else { return Ok(true) };
+                // Where it was pressed: the moves before it may have been
+                // lost or be late, on their own channel.
+                if message["x"].is_number() && message["y"].is_number() {
+                    self.move_to(time, number("x"), number("y"));
+                }
                 let state = if down { wl_pointer::ButtonState::Pressed } else { wl_pointer::ButtonState::Released };
                 self.pointer.button(time, button, state);
                 self.pointer.frame();
@@ -123,6 +124,15 @@ impl Input {
         // Nothing is expected back, but a protocol error would come so.
         self.queue.dispatch_pending(&mut self.state)?;
         Ok(true)
+    }
+}
+
+impl Input {
+    /// The pointer to `x`, `y`, fractions of the monitor.
+    fn move_to(&self, time: u32, x: f64, y: f64) {
+        let at = |v: f64| (v.clamp(0.0, 1.0) * f64::from(EXTENT)).round() as u32;
+        self.pointer.motion_absolute(time, at(x), at(y), EXTENT, EXTENT);
+        self.pointer.frame();
     }
 }
 

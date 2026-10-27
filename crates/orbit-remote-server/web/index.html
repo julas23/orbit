@@ -2,8 +2,11 @@
 <!-- Orbit-Remote: the browser client of orbit-remote-server (phase 1, the
      mirror). Served by the server itself; the pairing code shows on the
      server's screen. The video and the sound come over WebRTC, played with
-     as little buffering as the browser allows; the mouse and keys go back on the
-     WebSocket. Full screen (the button, or F11) holds the keyboard too,
+     as little buffering as the browser allows; the mouse, the keys and the
+     gamepads (the Gamepad API's standard ones, as Xbox 360 controllers the
+     server makes in the session) go back on the server's data channels in
+     the same connection: `input`, reliable, and `motion`, for positions,
+     never sent twice (the WebSocket until they are open). Full screen (the button, or F11) holds the keyboard too,
      so the browser's own shortcuts reach the remote session. -->
 <html lang="en">
 <head>
@@ -88,6 +91,7 @@ async function start() {
   pc.onicecandidate = (e) => {
     if (e.candidate) ws.send(JSON.stringify({ type: "ice", candidate: e.candidate.candidate, sdpMLineIndex: e.candidate.sdpMLineIndex }));
   };
+  pc.ondatachannel = (e) => { channels[e.channel.label] = e.channel; };
   pc.ontrack = (e) => {
     // As little buffering as the browser allows (Chrome: playoutDelayHint;
     // the standard: jitterBufferTarget).
@@ -110,12 +114,13 @@ async function start() {
     $("stats").style.display = "flex";
     stats(e.receiver);
     input();
+    gamepads();
   };
 }
 
 // Frames a second, and the jitter buffer's delay, now and then.
 function stats(receiver) {
-  let last;
+  let last, rtt = "–";
   setInterval(async () => {
     const report = await receiver.getStats();
     report.forEach((s) => {
@@ -127,15 +132,71 @@ function stats(receiver) {
           ? 1000 * (s.jitterBufferDelay - last.jitterBufferDelay) / (s.jitterBufferEmittedCount - last.jitterBufferEmittedCount) : 0;
         const decode = s.framesDecoded > last.framesDecoded
           ? 1000 * (s.totalDecodeTime - last.totalDecodeTime) / (s.framesDecoded - last.framesDecoded) : 0;
-        $("numbers").textContent = `${s.frameWidth}×${s.frameHeight} · ${fps.toFixed(0)} fps · buffer ${jitter.toFixed(0)} ms · decode ${decode.toFixed(1)} ms`;
+        $("numbers").textContent = `${s.frameWidth}×${s.frameHeight} · ${fps.toFixed(0)} fps · buffer ${jitter.toFixed(0)} ms · decode ${decode.toFixed(1)} ms · rtt ${rtt}`;
       }
       last = s;
+    });
+    // The way there and back, from the connection in use.
+    const all = await pc.getStats();
+    all.forEach((s) => {
+      if (s.type === "candidate-pair" && s.nominated && s.currentRoundTripTime !== undefined) rtt = `${(1000 * s.currentRoundTripTime).toFixed(1)} ms`;
     });
   }, 1000);
 }
 
+// The server's data channels, by label, as they come.
+const channels = {};
+const open = (label) => (channels[label] && channels[label].readyState === "open" ? channels[label] : null);
+// Each pointer's and pad's count and last position (orbit-remote-server's
+// `lanes`): a late position is dropped by its number, and once still for
+// REST ms the last one goes again, reliably.
+const REST = 50;
+const streams = {};
+const stream = (key) => (streams[key] = streams[key] || { seq: 0, last: null, axes: {}, timer: 0 });
+
 function send(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  let fast = false, key = null;
+  if (msg.type === "move") {
+    key = "pointer";
+    const s = stream(key);
+    msg.seq = ++s.seq;
+    s.last = msg;
+    fast = true;
+  } else if (msg.type === "button") {
+    msg.seq = stream("pointer").seq;
+  } else if (msg.type === "pad-input") {
+    key = `pad ${msg.id}`;
+    const s = stream(key);
+    msg.seq = ++s.seq;
+    for (const [type, code, value] of msg.events) if (type === EV_ABS) s.axes[code] = value;
+    fast = msg.events.every((e) => e[0] === EV_ABS);
+  } else if (msg.type === "pad-gone") {
+    delete streams[`pad ${msg.id}`];
+  }
+  const text = JSON.stringify(msg);
+  const motion = fast && open("motion"), input = open("input");
+  if (motion) {
+    motion.send(text);
+    const s = streams[key];
+    clearTimeout(s.timer);
+    s.timer = setTimeout(() => rest(key), REST);
+  } else if (input) {
+    input.send(text);
+  } else if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(text);
+  }
+}
+
+// Still: where it stopped, again on `input`.
+function rest(key) {
+  const s = streams[key], input = open("input");
+  if (!s || !input) return;
+  if (key === "pointer") {
+    if (s.last) input.send(JSON.stringify(s.last));
+  } else {
+    const events = Object.entries(s.axes).map(([code, value]) => [EV_ABS, Number(code), value]);
+    input.send(JSON.stringify({ type: "pad-input", id: Number(key.slice(4)), events, seq: s.seq }));
+  }
 }
 
 // Where on the remote screen a point of the page is, as fractions of it:
@@ -159,12 +220,11 @@ function input() {
   v.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     v.setPointerCapture(e.pointerId);
-    send({ type: "move", ...place(e) });
-    send({ type: "button", button: e.button, down: true });
+    send({ type: "button", button: e.button, down: true, ...place(e) });
   });
   v.addEventListener("pointerup", (e) => {
     e.preventDefault();
-    send({ type: "button", button: e.button, down: false });
+    send({ type: "button", button: e.button, down: false, ...place(e) });
   });
   v.addEventListener("contextmenu", (e) => e.preventDefault());
   v.addEventListener("wheel", (e) => {
@@ -196,6 +256,71 @@ function input() {
     // Esc to leave).
     if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
   });
+}
+// The Gamepad API's standard pad as evdev's Xbox 360 controller (the
+// kernel's xpad), so games and Steam take it for one.
+const BTN = { A: 0x130, B: 0x131, X: 0x133, Y: 0x134, TL: 0x136, TR: 0x137, SELECT: 0x13a, START: 0x13b, MODE: 0x13c, THUMBL: 0x13d, THUMBR: 0x13e };
+// The standard buttons by index; 6 and 7 (the triggers) and 12…15 (the
+// pad's arrows) are axes there.
+const BUTTONS = { 0: BTN.A, 1: BTN.B, 2: BTN.X, 3: BTN.Y, 4: BTN.TL, 5: BTN.TR, 8: BTN.SELECT, 9: BTN.START, 10: BTN.THUMBL, 11: BTN.THUMBR, 16: BTN.MODE };
+const ABS = { X: 0, Y: 1, Z: 2, RX: 3, RY: 4, RZ: 5, HAT0X: 0x10, HAT0Y: 0x11 };
+const EV_KEY = 1, EV_ABS = 3;
+const STICK = { min: -32768, max: 32767, fuzz: 16, flat: 128 };
+const XBOX360 = {
+  type: "pad", name: "Microsoft X-Box 360 pad", bus: 3, vendor: 0x045e, product: 0x028e, version: 0x0114,
+  keys: Object.values(BTN),
+  axes: [
+    { code: ABS.X, ...STICK }, { code: ABS.Y, ...STICK }, { code: ABS.RX, ...STICK }, { code: ABS.RY, ...STICK },
+    { code: ABS.Z, min: 0, max: 255 }, { code: ABS.RZ, min: 0, max: 255 },
+    { code: ABS.HAT0X, min: -1, max: 1 }, { code: ABS.HAT0Y, min: -1, max: 1 },
+  ],
+};
+
+// A standard pad's state as evdev's events, by "type:code".
+function padState(g) {
+  const state = {};
+  const pressed = (i) => (g.buttons[i] && g.buttons[i].pressed ? 1 : 0);
+  for (const [i, code] of Object.entries(BUTTONS)) state[`${EV_KEY}:${code}`] = pressed(i);
+  const stick = (v) => Math.max(-32768, Math.min(32767, Math.round((v || 0) * 32767)));
+  [ABS.X, ABS.Y, ABS.RX, ABS.RY].forEach((code, i) => { state[`${EV_ABS}:${code}`] = stick(g.axes[i]); });
+  const trigger = (i) => Math.round(255 * (g.buttons[i] ? g.buttons[i].value : 0));
+  state[`${EV_ABS}:${ABS.Z}`] = trigger(6);
+  state[`${EV_ABS}:${ABS.RZ}`] = trigger(7);
+  state[`${EV_ABS}:${ABS.HAT0X}`] = pressed(15) - pressed(14);
+  state[`${EV_ABS}:${ABS.HAT0Y}`] = pressed(13) - pressed(12);
+  return state;
+}
+
+// Read every frame (the API has no events for its buttons); only what
+// changed goes. A pad the browser does not map as standard is left out.
+function gamepads() {
+  if (!navigator.getGamepads) return;
+  const known = new Map();
+  window.addEventListener("gamepaddisconnected", (e) => {
+    if (known.delete(e.gamepad.index)) send({ type: "pad-gone", id: e.gamepad.index });
+  });
+  const look = () => {
+    for (const g of navigator.getGamepads()) {
+      if (!g || g.mapping !== "standard") continue;
+      const state = padState(g);
+      let before = known.get(g.index);
+      if (!before) {
+        send({ ...XBOX360, id: g.index });
+        before = {};
+        known.set(g.index, before);
+      }
+      const events = [];
+      for (const [k, v] of Object.entries(state)) {
+        if (before[k] === v) continue;
+        const [type, code] = k.split(":").map(Number);
+        events.push([type, code, v]);
+        before[k] = v;
+      }
+      if (events.length) send({ type: "pad-input", id: g.index, events });
+    }
+    requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
 }
 </script>
 </body>

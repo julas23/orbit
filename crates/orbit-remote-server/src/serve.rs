@@ -21,8 +21,8 @@
 //!
 //! A session: `webrtcbin` at the encoder's tail (`encode::Tail::WebRtc`),
 //! offering the video; a thread captures and pushes frames until the
-//! browser goes away. The browser's mouse and keys come back on the
-//! WebSocket (`input`). The capture stopping (the user left the session,
+//! browser goes away. The client's mouse, keys and gamepads come back on
+//! WebRTC data channels (`lanes`), or on the WebSocket until those open. The capture stopping (the user left the session,
 //! its compositor gone) is told as `ended`, for the client not to come back.
 
 use std::{
@@ -46,7 +46,7 @@ use tungstenite::{Message, WebSocket};
 use crate::{
     capture::Capture,
     encode::{Encoder, Tail},
-    input::Input,
+    lanes::Lanes,
 };
 
 const PAGE: &str = include_str!("../web/index.html");
@@ -370,15 +370,6 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
         (Screen::Virtual, None) => None,
     };
     let mut capture = Capture::open(output, true)?;
-    // A compositor without virtual input (an older orbit-core) still
-    // shows the session: the client only watches.
-    let mut input = match Input::open(&capture.name) {
-        Ok(input) => Some(input),
-        Err(err) => {
-            log::warn!("remote: no remote mouse and keys, the session is view only: {err:#}");
-            None
-        }
-    };
     let webrtc = gst::ElementFactory::make("webrtcbin")
         .property_from_str("bundle-policy", "max-bundle")
         .build()
@@ -424,6 +415,9 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
         });
     }
     let encoder = Encoder::new(&capture.planes, Tail::WebRtc(webrtc.clone()), screen.map(|(w, h, _)| (w, h)))?;
+    // The input's channels, in the offer with the video; gone with the client.
+    let lanes = Lanes::open(&webrtc, capture.name.clone())?;
+    encoder.play()?;
     let encoder = Arc::new(encoder);
 
     // Frames, from their own thread, until told to stop. The first makes
@@ -471,11 +465,7 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
             Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => break Ok(()),
             Err(err) => break Err(anyhow!("websocket: {err}")),
         };
-        let handled = match &mut input {
-            Some(input) => input.handle(&message)?,
-            None => matches!(message["type"].as_str(), Some("move" | "button" | "wheel" | "key")),
-        };
-        if handled {
+        if lanes.take(&message) {
             continue;
         }
         match message["type"].as_str() {
@@ -497,5 +487,6 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
     };
     stop.store(true, Ordering::SeqCst);
     let _ = encoder.pipeline.set_state(gst::State::Null);
+    drop(lanes);
     result
 }

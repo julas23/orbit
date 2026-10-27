@@ -10,8 +10,9 @@
 //! asks for its own.
 //!
 //! Paired, the server offers its video over WebRTC (`video`); the answer,
-//! the ICE candidates and the station's mouse and keys go on the same
-//! WebSocket. The session waits on the socket and on a wake-up (`Wake`)
+//! the ICE candidates go on the same WebSocket; the station's mouse, keys
+//! and gamepads (`pads`) on the server's data channels (`lanes`), on the
+//! WebSocket until those are open. The session waits on the socket and on a wake-up (`Wake`)
 //! rung whenever there is something to send, so nothing waits its turn.
 //!
 //! The server lost or gone: tried again every few seconds, for ever. A new
@@ -36,7 +37,11 @@ use serde_json::{Value, json};
 use smithay::reexports::calloop::channel;
 use tungstenite::{Message, WebSocket, stream::MaybeTlsStream};
 
-use crate::video::{Frame, Video};
+use crate::{
+    lanes::Lanes,
+    pads::Pads,
+    video::{Frame, Video},
+};
 
 /// What the link tells the station.
 pub enum Event {
@@ -301,13 +306,18 @@ impl Link {
             MaybeTlsStream::Plain(stream) => stream.try_clone().map_err(|_| Woken::Quit)?,
             _ => return Ok("not a plain connection".into()),
         };
+        // The gamepads, for this session only: the next is told them anew.
+        let mut pads = Pads::new();
+        let mut lanes = Lanes::new(video.channels());
         loop {
             // Whatever rang, all is looked at below.
             while (&self.woken).read(&mut [0u8; 64]).is_ok_and(|n| n > 0) {}
             while let Ok(command) = self.commands.try_recv() {
                 match command {
                     Command::Input(message) => {
-                        if let Err(why) = send(ws, &message) {
+                        if let Some(message) = lanes.send(message)
+                            && let Err(why) = send(ws, &message)
+                        {
                             return Ok(why);
                         }
                     }
@@ -319,6 +329,14 @@ impl Link {
                     return Ok(why);
                 }
             }
+            for message in pads.poll() {
+                if let Some(message) = lanes.send(message)
+                    && let Err(why) = send(ws, &message)
+                {
+                    return Ok(why);
+                }
+            }
+            lanes.settle();
             if let Some(why) = video.failed() {
                 return Ok(why);
             }
@@ -347,8 +365,11 @@ impl Link {
             if let Err(why) = flush(ws) {
                 return Ok(why);
             }
-            let mut fds = [PollFd::new(&fd, PollFlags::IN), PollFd::new(&self.woken, PollFlags::IN)];
-            let _ = poll(&mut fds, Some(&Timespec { tv_sec: 0, tv_nsec: 100_000_000 }));
+            let pad_fds: Vec<_> = pads.fds().collect();
+            let mut fds = vec![PollFd::new(&fd, PollFlags::IN), PollFd::new(&self.woken, PollFlags::IN)];
+            fds.extend(pad_fds.iter().map(|pad| PollFd::new(pad, PollFlags::IN)));
+            let wait = lanes.wait().unwrap_or(Duration::from_millis(100)).min(Duration::from_millis(100));
+            let _ = poll(&mut fds, Some(&Timespec { tv_sec: 0, tv_nsec: wait.as_nanos() as i64 }));
         }
     }
 }

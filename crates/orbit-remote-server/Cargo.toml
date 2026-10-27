@@ -12,14 +12,17 @@ authors.workspace = true
 maintainer = "Juliano <julianoas@gmail.com>"
 section = "net"
 priority = "optional"
-extended-description = "Orbit-Remote-Server: shares an Orbit session over the network. It captures the screen as it changes (orbit-core's screen copies), encodes it on the GPU (VA-API, or NVENC on NVIDIA) and sends it over WebRTC to a browser, which pairs with a code shown on the screen. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+extended-description = "Orbit-Remote-Server: shares an Orbit session over the network. It captures the screen as it changes (orbit-core's screen copies), encodes it on the GPU (VA-API, or NVENC on NVIDIA) and sends it over WebRTC to a browser, which pairs with a code shown on the screen, and makes the client's gamepads devices of the session (uinput). Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-nice, libnotify-bin"
 recommends = "mesa-va-drivers"
 assets = [
     ["target/release/orbit-remote-server", "usr/bin/", "755"],
     ["../../data/remote.yaml", "etc/orbit/", "644"],
+    ["../../data/udev/71-orbit-remote-uinput.rules", "usr/lib/udev/rules.d/", "644"],
+    ["../../data/modules-load/orbit-remote.conf", "usr/lib/modules-load.d/", "644"],
 ]
 conf-files = ["/etc/orbit/remote.yaml"]
+maintainer-scripts = "debian/"
 
 [dependencies]
 anyhow.workspace = true
@@ -42,3 +45,4 @@ serde_json.workspace = true
 orbit-ipc.workspace = true
 getrandom.workspace = true
 sha2.workspace = true
+libc.workspace = true

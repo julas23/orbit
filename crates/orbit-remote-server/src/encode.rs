@@ -149,7 +149,9 @@ impl Encoder {
                 None
             }
         };
-        pipeline.set_state(gst::State::Playing)?;
+        // For WebRTC, ready only: its data channels are made before the
+        // offer (`play` then).
+        pipeline.set_state(if sink.is_some() { gst::State::Playing } else { gst::State::Ready })?;
         Ok(Self {
             pipeline,
             source,
@@ -158,6 +160,12 @@ impl Encoder {
             allocator: gst_allocators::DmaBufAllocator::new(),
             start: Instant::now(),
         })
+    }
+
+    /// Starts a WebRTC encoder, once its data channels are made.
+    pub fn play(&self) -> anyhow::Result<()> {
+        self.pipeline.set_state(gst::State::Playing)?;
+        Ok(())
     }
 
     /// Hands frame `frame` (in `planes[frame.index]`) to the encoder.

@@ -10,7 +10,8 @@
 //!
 //! The server offers; `webrtcbin` here answers, and the ICE candidates go
 //! both ways, all on the link's WebSocket (`Video::offer`, `Video::ice`;
-//! what goes back comes out of `out`). `vapostproc` turns the decoded NV12
+//! what goes back comes out of `out`). The offer brings the server's data
+//! channels for the input too (`lanes`). `vapostproc` turns the decoded NV12
 //! into XRGB at the monitor's size, the picture kept whole with borders
 //! around it, so the screen only has to show it. Otherwise `v4l2convert`
 //! (the Pi's ISP) or `videoconvert` makes XRGB at the server's size and
@@ -35,7 +36,10 @@ use smithay::{
     reexports::calloop::channel,
 };
 
-use crate::link::{Event, Wake};
+use crate::{
+    lanes::Channels,
+    link::{Event, Wake},
+};
 
 /// What the jitter buffer holds back, in milliseconds: none on a LAN,
 /// where packets come in order and on time.
@@ -121,6 +125,7 @@ impl Frame {
 pub struct Video {
     pipeline: gst::Pipeline,
     webrtc: gst::Element,
+    channels: Channels,
 }
 
 impl Video {
@@ -135,6 +140,8 @@ impl Video {
             .build()
             .context("no webrtcbin (gstreamer1.0-plugins-bad, gstreamer1.0-nice)")?;
         pipeline.add(&webrtc)?;
+        let channels = Channels::default();
+        channels.attach(&webrtc);
         {
             webrtc.connect("on-ice-candidate", false, move |values| {
                 let mline = values[1].get::<u32>().expect("an m-line");
@@ -166,7 +173,7 @@ impl Video {
             });
         }
         pipeline.set_state(gst::State::Playing).map_err(|e| anyhow!("starting WebRTC: {e}"))?;
-        Ok(Self { pipeline, webrtc })
+        Ok(Self { pipeline, webrtc, channels })
     }
 
     /// The server's offer: answered, the answer sent on `out`.
@@ -188,6 +195,11 @@ impl Video {
         });
         self.webrtc.emit_by_name::<()>("create-answer", &[&None::<gst::Structure>, &promise]);
         Ok(())
+    }
+
+    /// The server's data channels, as they come.
+    pub fn channels(&self) -> Channels {
+        self.channels.clone()
     }
 
     /// An ICE candidate from the server.

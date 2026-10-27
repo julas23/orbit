@@ -18,10 +18,13 @@
 //! While the session's video shows, the keys and the mouse are the
 //! server's, but for Ctrl+Alt+F1…F12, which change the console, and
 //! Ctrl+Alt+Backspace, which quits; leaving the session on the server
-//! quits too. Before it, F2 types another server.
+//! quits too. Its gamepads and joysticks are the session's as well
+//! (`pads`), made again on the server. Before it, F2 types another server.
 
 mod audio;
+mod lanes;
 mod link;
+mod pads;
 mod screen;
 mod ui;
 mod video;
@@ -221,21 +224,30 @@ impl Station {
                 self.at = (x * width, y * height);
                 None
             }
-            Pointer::Button { code, down } => browser_button(code).map(|button| json!({ "type": "button", "button": button, "down": down })),
+            // Where it is pressed too: its moves go on a channel that may lose them.
+            Pointer::Button { code, down } => browser_button(code).map(|button| {
+                let (x, y) = self.place(video);
+                json!({ "type": "button", "button": button, "down": down, "x": x, "y": y })
+            }),
             Pointer::Wheel { dx, dy } => Some(json!({ "type": "wheel", "dx": dx, "dy": dy })),
         };
         match message {
             Some(message) => self.input(message),
             None => {
-                // The picture is fitted whole, centred: where in it the mouse is.
-                let (sw, sh) = (f64::from(video.source.0), f64::from(video.source.1));
-                let scale = (width / sw).min(height / sh);
-                let (left, top) = ((width - sw * scale) / 2.0, (height - sh * scale) / 2.0);
-                let x = ((self.at.0 - left) / (sw * scale)).clamp(0.0, 1.0);
-                let y = ((self.at.1 - top) / (sh * scale)).clamp(0.0, 1.0);
+                let (x, y) = self.place(video);
                 self.input(json!({ "type": "move", "x": x, "y": y }));
             }
         }
+    }
+
+    /// Where in the server's picture the mouse is, as fractions of it: the
+    /// picture is fitted whole, centred.
+    fn place(&self, video: &Frame) -> (f64, f64) {
+        let (width, height) = (f64::from(self.screen.size.0), f64::from(self.screen.size.1));
+        let (sw, sh) = (f64::from(video.source.0), f64::from(video.source.1));
+        let scale = (width / sw).min(height / sh);
+        let (left, top) = ((width - sw * scale) / 2.0, (height - sh * scale) / 2.0);
+        (((self.at.0 - left) / (sw * scale)).clamp(0.0, 1.0), ((self.at.1 - top) / (sh * scale)).clamp(0.0, 1.0))
     }
 
     pub fn key(&mut self, key: Key) {

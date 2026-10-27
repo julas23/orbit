@@ -8,12 +8,14 @@
 //! takes the monitor's frames as they change (`capture`), encodes them on
 //! the GPU (VA-API or NVENC) and sends them over WebRTC to a browser or to
 //! orbit-local-station, and takes the remote keyboard and mouse back
-//! (`input`).
+//! (`input`) and the client's gamepads (`pads`).
 
 mod audio;
 mod capture;
 mod encode;
 mod input;
+mod lanes;
+mod pads;
 mod serve;
 
 /// The port of the page and its WebSocket.
