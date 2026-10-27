@@ -77,6 +77,8 @@ struct Shared {
 }
 
 pub fn serve(port: u16, screen: Screen) -> anyhow::Result<()> {
+    // Started outside a session, it would share nothing.
+    anyhow::ensure!(std::env::var_os("WAYLAND_DISPLAY").is_some(), "no session to share: WAYLAND_DISPLAY is not set");
     gst::init()?;
     let listener = TcpListener::bind(("0.0.0.0", port)).with_context(|| format!("listening on port {port}"))?;
     let shared = Arc::new(Shared {
@@ -128,12 +130,18 @@ impl Shared {
 }
 
 /// Follows orbit-core's `lock` event. Losing the core's socket (the
-/// session gone) leaves the server locked: nothing pairs anew.
+/// session gone, or a core of an earlier session named) ends the server:
+/// the next session's orbit-session starts it again on its display.
 fn follow_lock(shared: &Shared) {
-    let Ok(mut ipc) = orbit_ipc::Connection::open() else { return };
+    let lost = || {
+        shared.locked.store(true, Ordering::SeqCst);
+        log::error!("remote: orbit-core's socket is gone, quitting");
+        std::process::exit(1);
+    };
+    let Ok(mut ipc) = orbit_ipc::Connection::open() else { return lost() };
     let Some(lock) = orbit_ipc::event_type("lock") else { return };
     if ipc.request(orbit_ipc::SUBSCRIBE, r#"["lock"]"#).is_err() {
-        return;
+        return lost();
     }
     while let Ok((kind, body)) = ipc.receive() {
         if kind != lock {
@@ -148,7 +156,7 @@ fn follow_lock(shared: &Shared) {
             shared.reveal();
         }
     }
-    shared.locked.store(true, Ordering::SeqCst);
+    lost();
 }
 
 /// Where the remembered clients' tokens are kept, one SHA-256 a line.

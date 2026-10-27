@@ -20,6 +20,13 @@ mod serve;
 const PORT: u16 = 7311;
 
 fn main() {
+    // NVENC's GL steps want a GL context, and GStreamer makes its window
+    // on the session's Wayland: an empty one the core tiles. A context
+    // with no surface does the same work and shows nothing.
+    if std::env::var_os("GST_GL_WINDOW").is_none() {
+        // Safety: nothing else runs yet, so nothing reads the environment.
+        unsafe { std::env::set_var("GST_GL_WINDOW", "surfaceless") };
+    }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
