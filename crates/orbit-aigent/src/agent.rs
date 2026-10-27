@@ -8,7 +8,7 @@
 //! as an MCP server (`approve.rs`): the daemon asks aloud and waits for a
 //! spoken yes or a click.
 //!
-//! Gemini CLI, OpenCode and Kimi Code are not driven yet.
+//! Codex CLI (OpenAI's), Gemini CLI, OpenCode and Kimi Code are not driven yet.
 
 use std::{
     io::{BufRead, BufReader},
@@ -17,7 +17,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::config::{Agent, Kind};
+use crate::config::{Agent, Kind, expand};
 
 /// What the agent is told about how its answer is used.
 const SPOKEN: &str = "You are Orbit-Aigent, the voice assistant of the user's Linux desktop (Orbit). \
@@ -200,12 +200,4 @@ pub fn stop(running: &Running) {
 
 fn home() -> PathBuf {
     PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| "/".into()))
-}
-
-/// `~/x` as the home's `x`.
-fn expand(dir: &std::path::Path) -> PathBuf {
-    match dir.strip_prefix("~") {
-        Ok(rest) => home().join(rest),
-        Err(_) => dir.to_owned(),
-    }
 }

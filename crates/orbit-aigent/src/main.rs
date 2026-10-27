@@ -4,14 +4,20 @@
 //!   orbit-aigent toggle|listen|cancel|yes|no|demo
 //!   orbit-aigent agent <name>    use another agent from now on
 //!   orbit-aigent approve         the agent's permission prompt (MCP, stdio)
+//!   orbit-aigent voice <request> the local voice alone, with its times
 //!
 //! The daemon keeps the microphone open, waits for its wake word, hears
 //! the request until a pause, hands it to the agent in use and speaks the
 //! answer, telling the panel's aigent module what it is doing (`Frame`).
+//! With a local voice (`voice:` in aigent.yaml, `voice.rs`), the request
+//! is sorted first: a task goes to the agent, announced at once;
+//! conversation is answered by the voice itself, said as it is written.
+//! Without one, or while it is not up, every request goes to the agent.
+//! The agent's answer is said as it wrote it.
 //! Threads: the microphone's, the socket's (one more per client reading
-//! its commands), Whisper's, the speaker's, one per request to the agent,
-//! and the engine, which owns the state and is the only one that writes to
-//! the clients.
+//! its commands), Whisper's, the speaker's, the local voice's server, one
+//! per request to the agent or the voice, and the engine, which owns the
+//! state and is the only one that writes to the clients.
 
 mod agent;
 mod approve;
@@ -20,6 +26,7 @@ mod mic;
 mod stt;
 mod tts;
 mod vad;
+mod voice;
 mod wake;
 
 use std::{
@@ -28,7 +35,7 @@ use std::{
     os::unix::net::{UnixListener, UnixStream},
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     time::{Duration, Instant},
@@ -69,6 +76,15 @@ enum Event {
     Spoken { id: u64 },
     /// The session locked (or unlocked).
     Locked(bool),
+    /// The local voice is up, or gone.
+    Voice(Option<Arc<voice::Local>>),
+    /// What request `id` is.
+    Routed { id: u64, route: voice::Route },
+    /// A sentence of the voice's answer to request `id`; the last one may
+    /// be empty.
+    Phrase { id: u64, text: String, last: bool },
+    /// The voice's turn for request `id`, to keep in its conversation.
+    Talked { id: u64, turn: voice::Turn, answer: String },
 }
 
 fn main() {
@@ -87,6 +103,7 @@ fn main() {
 fn client(args: &[String]) -> i32 {
     let command = match args {
         [one] if one == "approve" => return approve::serve(),
+        [voice, request @ ..] if voice == "voice" && !request.is_empty() => return voice::try_alone(&request.join(" ")),
         [one] => match one.as_str() {
             "toggle" => Command::Toggle,
             "listen" => Command::Listen,
@@ -111,7 +128,7 @@ fn client(args: &[String]) -> i32 {
 }
 
 fn usage() -> i32 {
-    eprintln!("usage: orbit-aigent [toggle|listen|cancel|yes|no|demo|off|on|agent <name>|approve]");
+    eprintln!("usage: orbit-aigent [toggle|listen|cancel|yes|no|demo|off|on|agent <name>|approve|voice <request>]");
     2
 }
 
@@ -179,6 +196,19 @@ fn daemon() -> anyhow::Result<()> {
     {
         let events = events.clone();
         std::thread::Builder::new().name("lock".into()).spawn(move || follow_lock(&events))?;
+    }
+    // The local voice's server lives as long as this thread, which waits on it.
+    if let Some(voice) = config.voice.clone() {
+        let events = events.clone();
+        std::thread::Builder::new().name("voice".into()).spawn(move || {
+            let ready = events.clone();
+            if let Err(err) = voice::run(&voice, move |local| {
+                let _ = ready.send(Event::Voice(Some(Arc::new(local))));
+            }) {
+                log::error!("aigent: the local voice: {err:#}");
+            }
+            let _ = events.send(Event::Voice(None));
+        })?;
     }
     let mut engine = Engine::new(&config, jobs, events.clone(), Speaker { say, now, hush });
     engine.off = off;
@@ -403,6 +433,8 @@ enum Then {
     Wait,
     /// Listen for the answer to the question just asked.
     Confirm,
+    /// The agent is still at work (its request was just announced).
+    Think,
 }
 
 struct Engine {
@@ -449,6 +481,15 @@ struct Engine {
     session: Option<String>,
     running: agent::Running,
     request_id: u64,
+    /// The request under way, as heard.
+    request: String,
+    /// `request_id`, for the voice's threads: they stop when it changes.
+    current: Arc<AtomicU64>,
+    /// The local voice, while it is up; its conversation; and the speech
+    /// its answer to this request is being said as, once begun.
+    local: Option<Arc<voice::Local>>,
+    talk: Vec<voice::Turn>,
+    parts: Option<u64>,
     speaker: Speaker,
     /// What is being said, and what comes after it; its text, to know
     /// its own voice heard back through the speakers.
@@ -531,6 +572,11 @@ impl Engine {
             session: None,
             running: agent::Running::default(),
             request_id: 0,
+            request: String::new(),
+            current: Arc::default(),
+            local: None,
+            talk: Vec::new(),
+            parts: None,
             speaker,
             saying: String::new(),
             speech: 0,
@@ -579,6 +625,27 @@ impl Engine {
                         self.answered(answer);
                     }
                 }
+                Ok(Event::Voice(local)) => {
+                    if local.is_none() && self.local.is_some() {
+                        log::warn!("aigent: the local voice is gone: requests go straight to the agent");
+                    }
+                    self.local = local;
+                }
+                Ok(Event::Routed { id, route }) => {
+                    if id == self.request_id {
+                        self.routed(route);
+                    }
+                }
+                Ok(Event::Phrase { id, text, last }) => {
+                    if id == self.request_id {
+                        self.phrase(text, last);
+                    }
+                }
+                Ok(Event::Talked { id, turn, answer }) => {
+                    if id == self.request_id {
+                        voice::keep(&mut self.talk, turn, answer);
+                    }
+                }
                 Ok(Event::Spoken { id }) => {
                     if let Some((speech, then)) = self.speaking
                         && speech == id
@@ -587,6 +654,7 @@ impl Engine {
                         match then {
                             Then::Wait => self.enter(State::Idle),
                             Then::Confirm => self.enter(State::Confirm),
+                            Then::Think => self.enter(State::Thinking),
                         }
                     }
                 }
@@ -855,6 +923,8 @@ impl Engine {
                     log::info!("aigent: interrupted");
                     self.speaker.hush.store(true, Ordering::SeqCst);
                     self.speaking = None;
+                    // The rest of the voice's answer, should it come, is not said.
+                    self.next_request();
                 }
                 // "Jarvis, para": done, without hearing it again.
                 if is_stop(&rest) {
@@ -947,8 +1017,135 @@ impl Engine {
         log::info!("aigent: request ({language}) for {}: {request:?}", self.agent);
         self.language = if language == "en" { "en" } else { "pt" };
         self.text = request.clone();
+        self.request = request.clone();
         self.retried = false;
         self.allowed.clear();
+        self.parts = None;
+        let id = self.next_request();
+        let Some(local) = self.local.clone() else {
+            self.start_agent();
+            return;
+        };
+        self.enter(State::Thinking);
+        let events = self.events.clone();
+        let spawned = std::thread::Builder::new().name("route".into()).spawn(move || {
+            let start = Instant::now();
+            let route = local.route(&request).unwrap_or_else(|err| {
+                log::warn!("aigent: sorting the request: {err:#}; it goes to the agent");
+                voice::Route::Task
+            });
+            log::info!("aigent: {route:?}, sorted in {:.2} s", start.elapsed().as_secs_f32());
+            let _ = events.send(Event::Routed { id, route });
+        });
+        if let Err(err) = spawned {
+            log::error!("aigent: sorting the request: {err}");
+            self.start_agent();
+        }
+    }
+
+    /// A new request id, which the voice's threads see.
+    fn next_request(&mut self) -> u64 {
+        self.request_id += 1;
+        self.current.store(self.request_id, Ordering::SeqCst);
+        self.request_id
+    }
+
+    /// The request is sorted: announced and given to the agent, or
+    /// answered by the voice.
+    fn routed(&mut self, route: voice::Route) {
+        match route {
+            voice::Route::Task => {
+                if self.start_agent() {
+                    let name = self.config.agents.get(&self.agent).and_then(|a| a.kind(&self.agent)).map_or("agente", |k| k.said());
+                    let told = if self.language == "en" { format!("Okay, I'll ask {name}.") } else { format!("Certo, vou pedir ao {name}.") };
+                    self.say(&told, Then::Think);
+                }
+            }
+            voice::Route::Talk => self.voice_answers(),
+        }
+    }
+
+    /// The voice's answer to the request, said sentence by sentence as it
+    /// comes.
+    fn voice_answers(&mut self) {
+        let Some(local) = self.local.clone() else {
+            self.start_agent();
+            return;
+        };
+        let (id, events, current) = (self.request_id, self.events.clone(), self.current.clone());
+        let (before, request, language) = (self.talk.clone(), self.request.clone(), self.language.to_owned());
+        let spawned = std::thread::Builder::new().name("talk".into()).spawn(move || {
+            let mut said = false;
+            let mut phrase = |text: String| {
+                said = true;
+                current.load(Ordering::SeqCst) == id && events.send(Event::Phrase { id, text, last: false }).is_ok()
+            };
+            let start = Instant::now();
+            match local.answer(&before, &request, &language, &mut phrase) {
+                Ok((turn, answer)) => {
+                    log::info!("aigent: the voice said, in {:.1} s: {answer:?}", start.elapsed().as_secs_f32());
+                    let _ = events.send(Event::Talked { id, turn, answer });
+                    let _ = events.send(Event::Phrase { id, text: String::new(), last: true });
+                }
+                Err(err) => {
+                    log::warn!("aigent: the voice: {err:#}");
+                    // The agent answers what the voice could not.
+                    let _ = if said {
+                        events.send(Event::Phrase { id, text: String::new(), last: true })
+                    } else {
+                        events.send(Event::Routed { id, route: voice::Route::Task })
+                    };
+                }
+            }
+        });
+        if let Err(err) = spawned {
+            log::error!("aigent: the voice: {err}");
+            self.enter(State::Idle);
+        }
+    }
+
+    /// A sentence of the voice's answer: the first begins saying it, the
+    /// rest follow it, unless it was cut short meanwhile.
+    fn phrase(&mut self, text: String, last: bool) {
+        let speech = match self.parts {
+            Some(speech) if self.speaking.is_some_and(|(id, _)| id == speech) => speech,
+            // Cut short: the rest is not said.
+            Some(_) => return,
+            None if text.is_empty() => {
+                if last && self.state == State::Thinking {
+                    self.enter(State::Idle);
+                }
+                return;
+            }
+            None => {
+                self.speech += 1;
+                self.parts = Some(self.speech);
+                self.speaking = Some((self.speech, Then::Wait));
+                self.speaker.hush.store(false, Ordering::SeqCst);
+                self.saying.clear();
+                self.text.clear();
+                self.enter(State::Speaking);
+                self.speech
+            }
+        };
+        if !text.is_empty() {
+            for out in [&mut self.saying, &mut self.text] {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push_str(&text);
+            }
+            self.dirty = true;
+        }
+        let order = tts::Order::Say { id: speech, text, language: self.language.to_owned(), more: !last };
+        if self.speaker.say.send(order).is_err() {
+            log::error!("aigent: the speaker is gone");
+        }
+    }
+
+    /// Gives the request to the agent in use; false (and said so) if there
+    /// is none.
+    fn start_agent(&mut self) -> bool {
         let Some(agent) = self.config.agents.get(&self.agent).cloned() else {
             let none = if self.language == "en" {
                 "There is no agent installed to do that."
@@ -956,11 +1153,10 @@ impl Engine {
                 "Não há nenhum agente instalado para isso."
             };
             self.say(none, Then::Wait);
-            return;
+            return false;
         };
         self.enter(State::Thinking);
-        self.request_id += 1;
-        let (id, name, session) = (self.request_id, self.agent.clone(), self.session.clone());
+        let (id, name, session, request) = (self.request_id, self.agent.clone(), self.session.clone(), self.request.clone());
         let (running, events) = (self.running.clone(), self.events.clone());
         let spawned = std::thread::Builder::new().name("agent".into()).spawn(move || {
             let answer = agent::ask(&name, &agent, &request, session.as_deref(), &running);
@@ -969,7 +1165,9 @@ impl Engine {
         if let Err(err) = spawned {
             log::error!("aigent: starting the agent: {err}");
             self.enter(State::Idle);
+            return false;
         }
+        true
     }
 
     /// The agent's answer, said.
@@ -983,6 +1181,10 @@ impl Engine {
                 log::info!("aigent: {} answered: {:?}", self.agent, answer.text);
                 self.session = answer.session;
                 self.text = answer.text.clone();
+                // The voice knows what the agent said, for what is asked next.
+                if self.local.is_some() {
+                    voice::keep(&mut self.talk, voice::asked(&self.request, self.language), answer.text.clone());
+                }
                 self.say(&answer.text, Then::Wait);
             }
             Err(err) => {
@@ -1007,6 +1209,7 @@ impl Engine {
             id: self.speech,
             text: text.to_owned(),
             language: self.language.to_owned(),
+            more: false,
         };
         if self.speaker.say.send(order).is_err() {
             log::error!("aigent: the speaker is gone");
@@ -1016,7 +1219,9 @@ impl Engine {
 
     /// The agent asks to use `tool`: the question said, then listened for.
     fn approve(&mut self, tool: &str, input: &serde_json::Value, mut reply: UnixStream) {
-        if self.approval.is_some() || !matches!(self.state, State::Thinking) || self.locked != Some(false) {
+        // While the agent works, its request announced or not.
+        let working = self.state == State::Thinking || matches!(self.speaking, Some((_, Then::Think)));
+        if self.approval.is_some() || !working || self.locked != Some(false) {
             let _ = reply.write_all(b"{\"approved\":false}\n");
             return;
         }
@@ -1056,7 +1261,8 @@ impl Engine {
             let _ = reply.write_all(b"{\"approved\":false}\n");
         }
         // Its answer, should it still come, no longer counts.
-        self.request_id += 1;
+        self.next_request();
+        self.parts = None;
         agent::stop(&self.running);
         self.speaker.hush.store(true, Ordering::SeqCst);
         self.speaking = None;

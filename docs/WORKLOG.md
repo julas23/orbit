@@ -244,3 +244,27 @@ maximized.
 Reproduced and checked nested with a python-xlib client (`DISPLAY` of the
 nested XWayland): a main window, a transient dialog and a menu created at
 0,0 and moved to 300,200 before its map, found by colour in a `grim` shot.
+
+## Orbit-Aigent's local voice — 2026-10-27
+
+The user's idea: a local model only for spoken conversation, handing tasks
+to the agent. Chosen: Gemma 3 4B, local only (the hp's Vega 8, the Julas'
+RTX 3050), llama.cpp's server.
+
+- Colibrì (github.com/JustVugg/colibri) ruled out for the voice: 30–60 s to
+  the first token on its 744B models, and 9.5–35 s to read a 512-token
+  prompt even on a 30B MoE; it runs no Gemma either.
+- Ollama ran on the CPU until `OLLAMA_VULKAN=1`, and rereads the whole
+  prompt every turn (4.5–7 s at ~770 tokens); `llama-server` reuses it.
+- Gemma 3 needs `--swa-full` for that reuse when the prompt only shares a
+  prefix (its sliding window drops the rest); and `-np` slots, one per
+  prompt, or a new conversation lands in a slot with nothing cached.
+- Sorting while answering went badly (30/52, and it claimed to have done
+  things: "Fechei a janela."); as its own one-word question with examples
+  as turns, 44/52 with every error the safe way. Its probabilities are no
+  help: llama-server reports them before the grammar, and they are 1.000
+  for conversations too. Small prompt changes move it between 44 and 50.
+- Summing up the agent's answer, it changed numbers in 5 of 8 runs; the
+  agent's own spoken answer is said instead.
+- Unix socket paths are short (SUN_LEN): a side daemon's runtime directory
+  in the scratchpad was too long; `mktemp -d /tmp/aig.XXXX`.

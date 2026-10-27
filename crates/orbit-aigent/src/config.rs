@@ -3,7 +3,7 @@
 //! ```yaml
 //! agent: claude            # the one in use at start
 //! agents:                  # every one that can be chosen
-//!   claude: {}             # the name is the kind: claude, gemini, opencode, kimi
+//!   claude: {}             # the name is the kind: claude, codex, gemini, opencode, kimi
 //!   work:                  # or a name of one's own, with its kind
 //!     kind: claude
 //!     program: /opt/claude/bin/claude
@@ -21,6 +21,13 @@
 //!   pt: pt_BR-faber-medium
 //!   en: en_US-ryan-medium
 //! chime: true              # two short notes when woken: it listens now
+//! voice:                   # the local voice (voice.rs): left out, none
+//!   model: gemma-3-4b-it-Q4_K_M   # models/<name>.gguf, or a file's path
+//!   server: llama-server   # llama.cpp's server, on the PATH or a path
+//!   env:                   # for the server, as where its GPU backend is
+//!     GGML_BACKEND_PATH: /usr/local/lib/ollama/vulkan/libggml-vulkan.so
+//!   gpu_layers: 99         # all on the GPU
+//!   context: 8192
 //! ```
 //!
 //! A Bluetooth headset's microphone is a poor choice: it records as a phone
@@ -35,7 +42,7 @@
 //! integrated Radeon. On the CPU they would take 1.4 and over 5 s, so
 //! without the feature they are base and small.
 //!
-//! Without the file, the four kinds are offered under their own names and
+//! Without the file, the five kinds are offered under their own names and
 //! those whose program is not installed are left out of the panel's list.
 //! A program is looked for on the `PATH`, then where its installer puts it
 //! (`~/.kimi-code/bin`, `~/.opencode/bin`, …), which is often only on the
@@ -62,6 +69,25 @@ pub struct Config {
     pub voices: std::collections::HashMap<String, String>,
     /// A short sound when woken.
     pub chime: bool,
+    /// The local voice, when there is one.
+    pub voice: Option<Voice>,
+}
+
+/// The local model that talks (`voice.rs`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Voice {
+    pub model: String,
+    pub server: PathBuf,
+    pub env: BTreeMap<String, String>,
+    pub gpu_layers: u32,
+    pub context: u32,
+}
+
+impl Default for Voice {
+    fn default() -> Self {
+        Self { model: "gemma-3-4b-it-Q4_K_M".into(), server: "llama-server".into(), env: BTreeMap::new(), gpu_layers: 99, context: 8192 }
+    }
 }
 
 impl Default for Config {
@@ -75,6 +101,7 @@ impl Default for Config {
             microphone: None,
             voices: Default::default(),
             chime: true,
+            voice: None,
             hints: "Que horas são? Abra o terminal. Quanto espaço livre tem no disco? \
                     What time is it? Open the browser."
                 .into(),
@@ -87,20 +114,34 @@ impl Default for Config {
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Claude,
+    /// OpenAI's Codex CLI.
+    Codex,
     Gemini,
     Opencode,
     Kimi,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Claude, Kind::Gemini, Kind::Opencode, Kind::Kimi];
+    pub const ALL: [Kind; 5] = [Kind::Claude, Kind::Codex, Kind::Gemini, Kind::Opencode, Kind::Kimi];
 
     pub fn name(self) -> &'static str {
         match self {
             Kind::Claude => "claude",
+            Kind::Codex => "codex",
             Kind::Gemini => "gemini",
             Kind::Opencode => "opencode",
             Kind::Kimi => "kimi",
+        }
+    }
+
+    /// As it is said: "vou pedir ao Claude".
+    pub fn said(self) -> &'static str {
+        match self {
+            Kind::Claude => "Claude",
+            Kind::Codex => "Codex",
+            Kind::Gemini => "Gemini",
+            Kind::Opencode => "OpenCode",
+            Kind::Kimi => "Kimi",
         }
     }
 
@@ -109,6 +150,7 @@ impl Kind {
     fn home_dirs(self) -> &'static [&'static str] {
         match self {
             Kind::Claude => &[".claude/local"],
+            Kind::Codex => &[".npm-global/bin", ".local/bin"],
             Kind::Gemini => &[".npm-global/bin"],
             Kind::Opencode => &[".opencode/bin"],
             Kind::Kimi => &[".kimi-code/bin"],
@@ -197,6 +239,14 @@ fn is_executable(path: &Path) -> bool {
     path.metadata().is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
+/// `~/x` as the home's `x`.
+pub fn expand(path: &Path) -> PathBuf {
+    match path.strip_prefix("~") {
+        Ok(rest) => PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| "/".into())).join(rest),
+        Err(_) => path.to_owned(),
+    }
+}
+
 /// `$XDG_CONFIG_HOME/orbit`, falling back to `~/.config/orbit`.
 fn dir() -> PathBuf {
     std::env::var_os("XDG_CONFIG_HOME")
@@ -223,9 +273,18 @@ mod tests {
     }
 
     #[test]
-    fn the_defaults_offer_the_four_kinds() {
+    fn the_voice_takes_its_defaults() {
+        let config: Config = serde_yaml_ng::from_str("voice: {server: /opt/llama-server}\n").unwrap();
+        let voice = config.voice.unwrap();
+        assert_eq!(voice.model, "gemma-3-4b-it-Q4_K_M");
+        assert_eq!(voice.server, PathBuf::from("/opt/llama-server"));
+        assert!(Config::default().voice.is_none());
+    }
+
+    #[test]
+    fn the_defaults_offer_the_five_kinds() {
         let config = Config::default();
         let names: Vec<&str> = config.agents.keys().map(String::as_str).collect();
-        assert_eq!(names, ["claude", "gemini", "kimi", "opencode"]);
+        assert_eq!(names, ["claude", "codex", "gemini", "kimi", "opencode"]);
     }
 }

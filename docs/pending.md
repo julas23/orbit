@@ -70,7 +70,7 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 | orbit-read | medium | Done (alpha) | TXT and MD are simple; PDF needs a rendering library |
 | orbit-files | high | Done (alpha) | A file manager has many edge cases (Yazi as reference) |
 | orbit-edit | high | Done (alpha) | A real text editor |
-| orbit-aigent | high | Working (alpha) | Voice layer for talking to coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget (§13) |
+| orbit-aigent | high | Working (alpha) | Voice layer for talking to coding agents (Claude Code, Codex CLI, Gemini CLI, OpenCode, Kimi Code): Whisper + Piper, latency; ships together with its panel widget (§13) |
 
 Only the station pair (§9) is still to be started.
 
@@ -251,10 +251,13 @@ Pending:
 
 - [ ] Try with speakers: no self-interruption, "Jarvis, para" and confirmations through the echo canceller.
 - [ ] Try the lock after a login with the new core (log: "the session is locked: deaf").
-- [ ] Gemini CLI, OpenCode and Kimi Code: their headless modes and how each asks for permission. Kimi Code is on the hp (`~/.kimi-code/bin`, found there since the installer only adds it to `~/.bashrc`); OpenCode not yet.
+- [ ] Codex CLI (OpenAI, on the list since 2026-10-27, not installed on the hp), Gemini CLI, OpenCode and Kimi Code: their headless modes and how each asks for permission. Kimi Code is on the hp (`~/.kimi-code/bin`, found there since the installer only adds it to `~/.bashrc`); OpenCode not yet.
 - [x] A short sound when woken: two rising notes through `pw-play` as its voice (the echo canceller takes them out), `chime: false` in `aigent.yaml` for none (2026-10-23). Not heard yet.
 - [x] A shortcut: Mod+A, `exec orbit-aigent toggle` (listen, or cancel), among the core's defaults (2026-10-23).
 - [x] Packaging: the PipeWire file, in `/usr/share/pipewire/pipewire.conf.d/`, and pw-play and the echo canceller recommended (2026-10-23).
 - [ ] Packaging: the `vulkan` feature, Piper and its voices, the models (about 800 MB).
-- [ ] Speaking the answer while it is still being written (stream-json), for a shorter wait.
+- [x] The local voice (2026-10-27, `voice.rs`): Gemma 3 4B in llama.cpp's `llama-server`, started by the daemon (a free port, ended with it) when `voice:` is in `aigent.yaml`. Each request is sorted first (its own question, one word forced by a grammar, examples as turns): a task goes to the agent, announced at once ("Certo, vou pedir ao Claude."); conversation is answered by the voice, said sentence by sentence as it is written, in Whisper's language, with the date and time in the turn. The agent's answer is said as the agent wrote it (the user chose this over the voice summing it up, which changed numbers: "861 MB livres em 100 GB" for "92 GB, 100% em uso", and took 2–6 s more on the hp) and kept in the voice's conversation ("repete" works). Measured on 52 of the user's requests: Julas (3050) 44/52, the hp (Vega 8) 43/52, every error a conversation sent to the agent; the route in 0.12 s / 0.5 s, the first sentence 0.3–0.5 s / ~1.2 s. Two slots and `--swa-full` (Gemma 3's sliding window keeps no reusable prefix otherwise). `orbit-aigent voice [--en] <request>` tries it alone. Verified end to end on the hp with requests played as the microphone (`ORBIT_AIGENT_INPUT`, Piper's voice): conversation, a task with Claude, and "repete".
+  - [ ] llama.cpp packaged (not in Debian 13): today the hp points `voice.server` at the one inside Ollama (`/usr/local/lib/ollama/llama-server`, `GGML_BACKEND_PATH` to its Vulkan library); the Julas (CUDA) has none, so it runs without the voice. And the model (~2.5 GB, `models/gemma-3-4b-it-Q4_K_M.gguf`).
+  - [ ] Gemma's weak spots: concepts and opinions often sent to the agent (slower, not wrong); its general knowledge is shaky (a made-up "curiosity"); a long first sentence delays the voice (cut at commas?).
+- [ ] Speaking the agent's answer while it is still being written (stream-json), for a shorter wait.
 - [x] The diagnostics taken out: the room level every 30 s and `ORBIT_AIGENT_DUMP` (2026-10-24).

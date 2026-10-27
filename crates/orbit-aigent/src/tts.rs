@@ -30,8 +30,9 @@ pub type Now = Arc<Mutex<Option<Playing>>>;
 
 pub enum Order {
     /// Say `text` in `language` (`pt`, `en`), then tell the engine with
-    /// `id`.
-    Say { id: u64, text: String, language: String },
+    /// `id`; unless `more` of the same comes (an answer said as it is
+    /// written), told after the last.
+    Say { id: u64, text: String, language: String, more: bool },
 }
 
 /// One Piper, one voice.
@@ -107,11 +108,13 @@ pub fn speak(
     let out = std::env::temp_dir().join(format!("orbit-aigent-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&out);
     let mut running: HashMap<String, Voice> = HashMap::new();
-    for Order::Say { id, text, language } in orders {
+    for Order::Say { id, text, language, more } in orders {
         stop.store(false, Ordering::SeqCst);
         let Some(model) = voices.get(&language).or_else(|| voices.get("pt")) else {
             log::error!("aigent: no voice for {language}");
-            done(id);
+            if !more {
+                done(id);
+            }
             continue;
         };
         for sentence in sentences(&spoken(&text)) {
@@ -139,7 +142,9 @@ pub fn speak(
             play(&wav, now, stop);
             let _ = std::fs::remove_file(&wav);
         }
-        done(id);
+        if !more {
+            done(id);
+        }
     }
 }
 

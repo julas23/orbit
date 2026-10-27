@@ -4485,6 +4485,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger",
+ "libc",
  "log",
  "orbit-audio",
  "orbit-ipc",
@@ -4492,6 +4493,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "ureq",
  "whisper-rs",
  "whisper-rs-sys",
 ]

@@ -37,7 +37,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts (Ferdium recipes) and notifications, EasyList/EasyPrivacy blocking, idle services hibernated, tracking parameters stripped, no telemetry | **working** |
 | **orbitctl** | Commands and queries to orbit-core (and sway), as `swaymsg`: `orbitctl workspace number 2`, `orbitctl -t get_tree` | **working** |
-| orbit-aigent | Voice layer for coding agents (Claude Code, Gemini CLI, OpenCode, Kimi Code): Whisper (speech-to-text) and Piper (text-to-speech) | planned |
+| orbit-aigent | Voice layer for coding agents (Claude Code, Codex CLI, Gemini CLI, OpenCode, Kimi Code): Whisper (speech-to-text) and Piper (text-to-speech) | planned |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
