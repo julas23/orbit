@@ -1,0 +1,30 @@
+#!/bin/sh
+# live-build configuration of the Orbit Linux ISO (docs/PLANO-DISTRO.md §6).
+# Debian from deb.debian.org; Orbit's own packages from the repository at
+# 10.0.0.111 (config/archives). Runs as root on the build VM, never on a
+# workstation: see distro/iso/build.sh.
+set -e
+
+lb config noauto \
+	--distribution trixie \
+	--archive-areas "main contrib non-free non-free-firmware" \
+	--mirror-bootstrap http://deb.debian.org/debian/ \
+	--mirror-chroot http://deb.debian.org/debian/ \
+	--mirror-binary http://deb.debian.org/debian/ \
+	--mirror-chroot-security http://security.debian.org/debian-security/ \
+	--mirror-binary-security http://security.debian.org/debian-security/ \
+	--security true \
+	--updates true \
+	--apt-recommends false \
+	--binary-image iso-hybrid \
+	--bootloaders "grub-efi,syslinux" \
+	--debian-installer none \
+	--firmware-chroot true \
+	--firmware-binary false \
+	--linux-flavours amd64 \
+	--iso-application "Orbit Linux" \
+	--iso-publisher "Orbit Linux; https://github.com/julas23/orbit" \
+	--iso-volume "ORBIT_LINUX" \
+	--bootappend-live "boot=live components noautologin username=orbit hostname=orbit locales=pt_BR.UTF-8 keyboard-layouts=br quiet splash toram" \
+	--cache true \
+	"${@}"

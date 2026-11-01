@@ -1,0 +1,43 @@
+# The Live session: Orbit and what its look needs (docs/PLANO-DISTRO.md §11).
+orbit-desktop
+firefox-esr
+plymouth
+plymouth-themes
+papirus-icon-theme
+breeze-cursor-theme
+fonts-inter
+adwaita-qt
+adwaita-qt6
+
+# Live system
+live-boot
+live-config
+live-config-systemd
+# live-config creates the live user only with user-setup (a Recommends,
+# and the image is built without them)
+user-setup
+zstd
+sudo
+locales
+keyboard-configuration
+console-setup
+systemd-zram-generator
+
+# Graphics and hardware
+libgl1-mesa-dri
+mesa-vulkan-drivers
+mesa-va-drivers
+amd64-microcode
+intel-microcode
+firmware-linux-free
+firmware-misc-nonfree
+firmware-amd-graphics
+firmware-intel-graphics
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+
+# For the installer to come (btrfs, snapshots, LUKS)
+btrfs-progs
+snapper
+cryptsetup
