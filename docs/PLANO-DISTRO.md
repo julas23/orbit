@@ -2,7 +2,8 @@
 
 Status: **em andamento** (2026-10-20; revisto em 2026-10-21 com o
 `orbit-linux.txt` do Juliano — seção 10 — e com o repositório apt já no ar,
-seção 7).
+seção 7; e em 2026-11-01 com as decisões da ISO, do boot, do disco e da
+identidade visual — seções 6 e 11).
 Origem: a ideia de 2026-10-20 de levar o Orbit um passo além do desktop: uma
 distribuição própria, com o orbit-core, os apps Orbit e as suítes criativas
 modernas (ArtCraft) já integrados. Depende de `docs/PLANO-CORE.md`: a distro só
@@ -34,7 +35,7 @@ tem identidade quando o core estiver no uso diário.
 | Nome | **Orbit Linux** (conferir conflito de nome/marca antes da primeira ISO pública) |
 | Base | Debian 13 *trixie* estável; acompanha a próxima estável quando sair |
 | Arquiteturas | amd64 primeiro; arm64 depois (ArtCraft já publica arm64) |
-| Sessão padrão | `orbit` (orbit-core + orbit-greet); sway como sessão de resgate até a regra 1.2 do PLANO-CORE |
+| Sessão padrão | `orbit` (orbit-core + orbit-greet) |
 | Repositório | `https://apt.<domínio>/orbit`, suítes `trixie` (estável) e `trixie-testing` (pré-lançamento) |
 | Chave | `orbit-archive-keyring` (pacote com a chave, como o `debian-archive-keyring`) |
 | Licença dos pacotes Orbit | GPL-3.0-or-later; terceiros mantêm a deles |
@@ -118,57 +119,131 @@ Como entram:
 
 ## 6. Instalação e ISO
 
-Decidido em 2026-10-21 (seção 10): **instalador próprio** e **pacotes
-prontos** — nada é compilado na máquina de quem instala.
+Decidido em 2026-10-21 (seção 10) e revisto em 2026-11-01: **pacotes prontos**
+— nada é compilado na máquina de quem instala — e **uma ISO só**, que sobe
+num menu com duas escolhas.
 
-- **Ferramenta da ISO:** `live-build` (a mesma do Debian live), com a lista de
-  pacotes Orbit e os hooks de configuração versionados em `distro/` no repo.
-  A ISO leva os pacotes da instalação base e do `orbit-desktop`: **instala
-  sem internet**; a rede só serve aos extras (ArtCraft, apps de terceiros).
-- **Live mínima:** só a tela de apresentação e o botão **INSTALL**, rodando
-  no próprio orbit-core (o `cage` como reserva em placas onde o core falhar).
-- **Instalador `orbit-install`:** Rust + GTK4 com o `orbit-app` (o visual do
-  Orbit). Pergunta disco, hostname, usuário e senha, e os metapacotes da seção
-  4. O trabalho é um backend privilegiado em etapas, com progresso
-  ("etapa 3/7") e o log ao vivo na tela (a caixa de saída do orbit-term),
-  gravado em `/var/log/orbit-install.log` no sistema instalado. A senha nunca
-  passa por linha de comando nem por log. Swap temporário (zram) durante a
-  instalação.
-- **Base:** `debootstrap` a partir do repositório Orbit (seção 7), depois os
-  metapacotes escolhidos.
-- **Boot: EFISTUB com UKI** — kernel, initramfs e cmdline num único `.efi`
-  (`systemd-ukify`), sem GRUB:
-  - registrado com `efibootmgr` (com `/sys/firmware/efi/efivars` montado no
-    chroot) **e** copiado para `EFI/BOOT/BOOTX64.EFI`, o caminho que qualquer
-    firmware acha sozinho (um `vmlinuz` solto ali não teria `root=` nem
-    initrd: só a UKI funciona assim);
-  - **duas entradas, atual e anterior**: sem menu de boot, um kernel quebrado
-    deixaria a máquina sem boot;
-  - refeita nos hooks do kernel **e** do `update-initramfs` (o initrd muda sem
-    o kernel mudar);
-  - ESP de 1 GiB; `/boot` separado não é mais preciso;
-  - **Secure Boot desligado** (o kernel do Debian só é aceito via shim);
-    chaves próprias da Orbit ficam para depois;
-  - Plymouth no initramfs (`quiet splash`), passando ao orbit-greet.
+### 6.1 A ISO
+
+- **Ferramenta:** `live-build`, com a configuração e os hooks versionados em
+  `distro/iso/`. Exige root (chroot, squashfs): roda na VM de build do
+  Proxmox (seção 7), nunca numa estação.
+- **Offline:** a imagem leva a instalação base e o `orbit-desktop`; a rede só
+  serve aos extras (ArtCraft, terceiros).
+- **Menu do boot da ISO**, sempre visível, com contagem regressiva (ali a
+  escolha é o objetivo), em UEFI e em BIOS legado:
+  - **Live** — a sessão completa no orbit-core, com painel, dock e apps,
+    carregada na memória (`toram`), usuário `orbit` sem senha; nada é gravado
+    no disco. Serve também de teste de hardware antes de instalar.
+  - **Install** — o debian-installer com preseed, copiando a própria imagem
+    da Live (`--debian-installer live`): offline, e instala exatamente o que
+    acabou de ser testado.
+  - **Opções avançadas** — Live lendo do pendrive (sem `toram`, para pouca
+    memória), Install em modo texto, teste de memória.
+- **A Live entra sem senha** por um arquivo que só existe na imagem da Live,
+  lido pelo orbit-login e pelo orbit-greet; o sistema instalado nunca o tem.
+- **Depois:** o `orbit-install` (Rust + GTK4 com o `orbit-app`, seção 10)
+  vira um ícone "Instalar" dentro da Live, com a tela "vou formatar X / vou
+  manter Y"; a entrada Install do menu continua como alternativa.
+
+### 6.2 O que a instalação pergunta e faz
+
+- Usuário, senha, hostname, disco, e a criptografia do `/home` quando ela
+  se aplica (6.4). A senha nunca passa por linha de comando nem por log.
+- O `late.sh` termina o serviço: UKI e systemd-boot (6.3), subvolumes btrfs
+  e snapper (6.4), apt apontando para o repositório Orbit e o Debian,
+  orbit-login ligado, UID do dono de um `/home` reaproveitado. Log em
+  `/var/log/orbit-install.log`.
+
+### 6.3 Boot do sistema instalado
+
+- **systemd-boot com UKI** (kernel, initramfs e cmdline num `.efi` só, via
+  `systemd-ukify`; `layout=uki` no `kernel-install`). Troca a decisão de
+  EFISTUB puro: a UKI é a mesma, e o systemd-boot invisível custa dezenas de
+  milissegundos e dá a contagem de tentativas, que o EFISTUB não tem.
+- **Sempre duas UKIs, nunca mais:** a do kernel atual e a do anterior. O apt
+  já protege o kernel mais novo, o anterior e o que está rodando; um hook
+  nosso apara o excesso.
+- **Contagem de tentativas:** cada UKI nova nasce com 3; se não chegar ao
+  fim do boot três vezes, o systemd-boot volta sozinho à anterior
+  (`systemd-bless-boot` marca a boa).
+- **Menu escondido atrás do Espaço** (`timeout 0`), e a possibilidade fica
+  clara de três jeitos:
+  1. uma linha discreta no rodapé da imagem da UKI e do Plymouth: *Hold Space
+     while starting to choose another kernel* (traduzida; em pt_BR "Segure
+     Espaço ao ligar para escolher outro kernel");
+  2. no menu de energia do greet, **"Reiniciar no menu de boot"**
+     (`systemctl reboot --boot-loader-menu=30`), que funciona mesmo quando o
+     fast boot do firmware não acorda o teclado USB;
+  3. um **aviso no greet** quando a contagem de tentativas voltou ao kernel
+     anterior.
+- **ESP de 1 GiB**; `/boot` fica dentro do `@` (6.4), então cada snapshot
+  guarda o próprio kernel e initramfs.
+- **BIOS legado:** GRUB, com o grub-btrfs no papel do nosso hook de
+  snapshots. A Live e a Install dão boot nos dois.
+- **Secure Boot desligado** (o kernel do Debian só é aceito via shim); chaves
+  próprias da Orbit ficam para depois.
+- **Plymouth** no initramfs (`quiet splash`), com o tema da seção 11,
+  passando ao orbit-greet sem piscar.
+
+### 6.4 Disco
+
+- **btrfs, snapshots só do sistema.** Subvolumes: `@` (`/`, o único com
+  snapshots; `/boot` e `/var/lib/dpkg` dentro dele), `@log`, `@cache`,
+  `@tmp`, `@snapshots`, e `@home` quando o `/home` não é partição própria.
+  `compress=zstd:1,noatime`. A raiz é montada pelo subvolume padrão (voltar
+  a um snapshot é trocar o padrão).
+- **snapper** com o gancho do apt (um snapshot antes e um depois de cada
+  transação, o que cobre as atualizações do Orbit), limpeza por quantidade
+  (10 pares; 5 em discos de até 64 GB), sem snapshot por hora, sem cotas do
+  btrfs.
+- **Snapshots no menu escondido:** os (até 3) mais recentes cujo kernel é
+  uma das duas UKIs, cada um com a UKI do seu kernel, subindo só para
+  leitura com uma camada temporária na memória. "**Voltar para este**", no
+  greet ou por `snapper rollback`, vale para qualquer snapshot: o hook monta
+  uma UKI a partir do kernel de dentro do snapshot e a põe no lugar da
+  anterior. Modelo: o `sdbootutil` do openSUSE (GPL, shell).
+- **Layout pelo tamanho do disco:**
+
+| Disco | Layout | Criptografia |
+|---|---|---|
+| Menos de 40 GB | Recusado, com mensagem: 40 GB é o mínimo para um uso decente | — |
+| 40 a 120 GB | ESP + **um btrfs só**, com `@` e `@home` | Não oferecida |
+| Acima de 120 GB | ESP + sistema (**25% do disco, no mínimo 60 e no máximo 100 GiB**) + **`/home` em partição própria** (btrfs sem snapshots) | LUKS2 opcional no `/home` |
+
+- **LUKS só no `/home`, opcional.** O sistema não é cifrado, então o boot
+  não pede senha; o `/home` abre no orbit-greet **com a senha do próprio
+  usuário** (uma entrada do LUKS por usuário; trocar a senha troca a
+  entrada) e fica aberto até desligar. Com o `/home` cifrado, o orbit-login
+  **não** abre a sessão antecipada travada no boot: a sessão só começa
+  depois que a senha abre o volume. Uma **chave de recuperação**
+  (`systemd-cryptenroll --recovery-key`) é mostrada uma vez na instalação,
+  com confirmação de que foi anotada.
+- **Swap:** zram em todas as máquinas; swap em disco **só com 4 GB de RAM ou
+  menos**, do tamanho da RAM: partição (cifrada com chave nova a cada boot
+  quando o `/home` é LUKS) no layout separado, arquivo num subvolume `@swap`
+  no layout único. Sem hibernação. `/tmp` na memória, core dumps
+  desligados, para nada do `/home` cair em área sem criptografia.
 - **`/home` existente nunca é apagado** (regra do Juliano, inegociável). O
-  instalador reconhece e reaproveita, sem formatar:
-  - partição própria (ext4, btrfs, xfs…);
-  - volume LVM (o caso do hp: `hp-vg-home`);
-  - LUKS (pede a senha para abrir);
-  - subvolume `@home` do btrfs (recria só o da raiz);
-  - **`/home` como pasta dentro da raiz** (partição única): apaga tudo menos
-    `/home` e instala nessa mesma partição, sem formatar.
-  A alternativa "apagar tudo e instalar do zero" é sempre oferecida, como
-  escolha explícita do usuário.
-  O usuário novo recebe o **UID do dono** da pasta existente. Antes de tocar
-  no disco, uma tela "vou formatar X / vou manter Y" pede confirmação
-  explícita. Cada layout é testado em VM (Proxmox).
-- **Live para experimentar:** depois do instalador, se valer a pena.
-- **Primeiro boot:** o orbit-greet cria o usuário se a instalação foi OEM; tour
-  rápido opcional (atalhos, painel, dock).
-- **Testes:** cada ISO de CI é instalada numa VM do Proxmox (Dell T430) por
-  script, e o teste confere que a sessão sobe e os apps abrem (mesma ideia dos
-  testes headless do PLANO-CORE).
+  instalador reconhece e reaproveita, sem formatar: partição própria (ext4,
+  btrfs, xfs…), volume LVM (o caso do hp: `hp-vg-home`), LUKS (pede a senha
+  para abrir), subvolume `@home` do btrfs (recria só os do sistema).
+  **`/home` como pasta numa partição única**: apaga tudo menos `/home` e
+  instala nessa mesma partição, sem formatar — e por isso **sem btrfs nem
+  snapshots** quando ela é ext4 (o instalador avisa antes). Um `/home`
+  existente não cifrado deixa a opção de LUKS desabilitada (cifrar no lugar é
+  arriscado demais para dados de verdade). "Apagar tudo e instalar do zero"
+  é sempre oferecido, como escolha explícita. O usuário novo recebe o **UID
+  do dono** da pasta existente. Cada layout é testado em VM (Proxmox).
+
+### 6.5 Primeiro boot e testes
+
+- **Primeiro boot:** o orbit-greet cria o usuário se a instalação foi OEM;
+  tour rápido opcional (atalhos, painel, dock).
+- **Testes:** cada ISO é instalada numa VM do Proxmox (OVMF) por script, e o
+  teste confere que a sessão sobe e os apps abrem. A sessão em si se prova no
+  think de verdade: se o orbit-core sobe no virtio-gpu de uma VM não está
+  garantido.
 
 ## 7. Infraestrutura
 
@@ -206,6 +281,7 @@ consultas por hora; esgotadas, o que já foi baixado fica.
 | CI dos pacotes e da ISO | GitHub Actions no começo; runner próprio no Proxmox quando o build pesar |
 | Repositório apt | aptly na LXC `10.0.0.111` (rede de casa, HTTP); a VPS da Oracle com HTTPS para o público, na Fase D |
 | Chave de assinatura | Gerada offline; subchave de assinatura só no CI (segredo do Actions); chave mestre fora de qualquer máquina ligada à rede |
+| Build da ISO | VM 910 `orbit-build` no Proxmox (Debian 13, 8 núcleos, 16 GB, 120 GB, criada em 2026-11-01), com o apt apontando para a LXC 10.0.0.111 |
 | VMs de teste | Proxmox, uma VM descartável por ISO |
 | Downloads da ISO | Releases do GitHub + checksum assinado |
 
@@ -236,9 +312,13 @@ Amarradas às fases do PLANO-CORE.
 
 ### Fase C — ISO (depois da Fase 2 do core)
 
-- `live-build` + Calamares com a marca Orbit; sessão `orbit` com orbit-greet
-  como padrão; sway de resgate.
-- Teste automatizado de instalação em VM do Proxmox.
+- **Etapa 1:** a ISO da seção 6 com `live-build` — Live na memória e Install
+  pelo debian-installer copiando a imagem da Live, systemd-boot com UKI,
+  btrfs com snapshots, LUKS opcional no `/home`, a identidade da seção 11.
+  Ordem: configuração do live-build → Live em VM (OVMF) → Live no think →
+  Install com preseed e `late.sh` em VM (disco inteiro, `/home`
+  reaproveitado, LUKS, disco pequeno) → teste automatizado.
+- **Etapa 2:** o `orbit-install` dentro da Live.
 - **Pronto quando:** a ISO instala no think do zero (disco inteiro, LUKS) e ele
   sobe no orbit-greet com tudo funcionando, sem nenhum passo manual.
 
@@ -290,3 +370,17 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 - Correções do txt: o Orbit é `github.com/julas23/orbit` (não
   `storytold/orbit-core`); `chroot -u` não existe; `sway` não entra;
   "DeskCraft" é a **DeckCraft**.
+
+## 11. Identidade visual (2026-11-01)
+
+| Item | Decisão |
+|---|---|
+| **Marca** | "Trilhas": um núcleo azul (`#4682b4`), uma trilha aberta em volta (`#6ea8e0`) e uma órbita fechada por fora (`#d8dee9`), com a lua laranja (`#ff9500`) sobre ela. Versões colorida (fundo escuro e claro), de uma cor (UKI, terminal, impressão; a lua com um contorno da cor do fundo) e pequena (traços mais grossos, para 16 a 24 px). Fonte do nome ao lado da marca ainda em aberto |
+| **Plymouth** | Tema `script` próprio, leve: fundo preto, a marca no centro; a lua percorre a órbita de fora (sentido anti-horário, 3,6 s por volta) e a trilha de dentro gira no sentido contrário (2,2 s). A imagem `.splash` da UKI é o primeiro quadro, com a marca parada; no fim a marca esmaece até o fundo do greet. A linha do Espaço (6.3) no rodapé |
+| **Ícones** | Papirus-Dark (Debian, GPL-3), com as pastas na cor de destaque; os apps Orbit com ícones próprios no mesmo estilo |
+| **Cursor** | Breeze, que entra nas dependências do `orbit-desktop` (hoje falta: numa máquina nova o cursor cai no padrão) |
+| **Cores** | As duas paletas de `data/palette-*.css`; escuro por padrão; destaque azul-aço, o laranja da lua como secundária; uns 8 tons de destaque para escolher |
+| **Janelas** | Como hoje no orbit-core: cantos de 10, borda de 2 na cor de destaque na janela com foco, sombra suave só nas flutuantes. Terceiros: Adwaita-dark no GTK, `adwaita-qt` no Qt |
+| **Fontes** | Interface: Inter (Noto Sans de reserva). Monoespaçada: a CaskaydiaCove do `orbit-fonts` |
+| **Papel de parede** | Um padrão próprio no tema espacial, o mesmo no greet e na sessão |
+
