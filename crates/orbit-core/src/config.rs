@@ -3,7 +3,7 @@
 //! those of the sway configuration Orbit grew on.
 //!
 //! ```yaml
-//! keyboard: { layout: us, variant: alt-intl }
+//! keyboard: { layout: us, variant: alt-intl }   # default: /etc/default/keyboard
 //! modifier: super        # or alt (nested in a session that takes Super)
 //! terminal: kitty
 //! launcher: gapplication action io.github.julas23.Orbit.Panel menu
@@ -268,15 +268,45 @@ impl Default for Config {
     }
 }
 
+/// The system's keyboard, as the installer and `dpkg-reconfigure
+/// keyboard-configuration` leave it (the console and X read the same file).
+const SYSTEM_KEYBOARD: &str = "/etc/default/keyboard";
+
 impl Default for Keyboard {
+    /// The system's keyboard (`/etc/default/keyboard`), or a US one: a
+    /// `keyboard:` in core.yaml changes only the fields it names.
     fn default() -> Self {
-        Self {
+        let mut keyboard = Self {
             layout: "us".into(),
-            variant: "alt-intl".into(),
+            variant: String::new(),
             model: "pc105".into(),
             options: String::new(),
             repeat_delay: 200,
             repeat_rate: 25,
+        };
+        if let Ok(text) = std::fs::read_to_string(SYSTEM_KEYBOARD) {
+            keyboard.apply_system(&text);
+        }
+        keyboard
+    }
+}
+
+impl Keyboard {
+    /// Takes XKBLAYOUT, XKBVARIANT, XKBMODEL and XKBOPTIONS from the text of
+    /// `/etc/default/keyboard` (shell assignments, quoted or not). Only the
+    /// first layout of a list ("br,us") is kept, with its variant.
+    fn apply_system(&mut self, text: &str) {
+        for line in text.lines() {
+            let Some((key, value)) = line.trim().split_once('=') else { continue };
+            let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
+            let first = value.split(',').next().unwrap_or_default().to_string();
+            match key.trim() {
+                "XKBLAYOUT" if !first.is_empty() => self.layout = first,
+                "XKBVARIANT" => self.variant = first,
+                "XKBMODEL" if !value.is_empty() => self.model = value.to_string(),
+                "XKBOPTIONS" => self.options = value.to_string(),
+                _ => {}
+            }
         }
     }
 }
@@ -424,10 +454,20 @@ mod tests {
     }
 
     #[test]
+    fn keyboard_from_the_system_file() {
+        let mut k = Keyboard { layout: "us".into(), variant: String::new(), model: "pc105".into(), options: String::new(), repeat_delay: 200, repeat_rate: 25 };
+        k.apply_system("# KEYBOARD CONFIGURATION FILE\nXKBMODEL=\"abnt2\"\nXKBLAYOUT=\"br,us\"\nXKBVARIANT=\",alt-intl\"\nXKBOPTIONS=\"grp:alt_shift_toggle\"\nBACKSPACE=\"guess\"\n");
+        assert_eq!((k.layout.as_str(), k.variant.as_str(), k.model.as_str()), ("br", "", "abnt2"));
+        assert_eq!(k.options, "grp:alt_shift_toggle");
+        k.apply_system("XKBLAYOUT=us\nXKBVARIANT=alt-intl\nXKBMODEL=\n");
+        assert_eq!((k.layout.as_str(), k.variant.as_str(), k.model.as_str()), ("us", "alt-intl", "abnt2"));
+    }
+
+    #[test]
     fn empty_and_partial_files() {
         let config: Config = serde_yaml_ng::from_str("gaps: 10\nkeyboard: { variant: intl }").unwrap();
         assert_eq!(config.gaps, 10);
-        assert_eq!(config.keyboard.layout, "us");
+        assert_eq!(config.keyboard.layout, Keyboard::default().layout);
         assert_eq!(config.keyboard.variant, "intl");
         assert_eq!(config.modifier, Modifier::Super);
         assert!(serde_yaml_ng::from_str::<Config>("gapz: 1").is_err());
