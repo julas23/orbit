@@ -1,0 +1,30 @@
+#!/bin/sh
+# Orbit Linux, among the installer's last steps, after the Live's packages
+# are gone (docs/PLANO-DISTRO.md §6.2):
+#   - the language chosen in the installer, in /etc/locale.conf (Debian 13's
+#     file; /etc/default/locale is a link to it, made again at boot if it is
+#     not): the installer leaves the Live image's C.UTF-8 there;
+#   - the UKI made again from the final initramfs (without live-boot), and
+#     any other UKI removed: removing the Live's packages makes one named
+#     after the Live.
+set -e
+T=/target
+LOCALE=$(debconf-get debian-installer/locale 2>/dev/null || true)
+[ -n "$LOCALE" ] || LOCALE=pt_BR.UTF-8
+echo "LANG=$LOCALE" > $T/etc/locale.conf
+ln -sf ../locale.conf $T/etc/default/locale
+logger -t orbit "LANG=$LOCALE"
+
+ESP=$T/boot/efi/EFI/Linux
+if [ -d "$ESP" ] && [ -f $T/etc/kernel/install.conf ]; then
+	for v in $(ls $T/lib/modules); do
+		in-target kernel-install add "$v" "/boot/vmlinuz-$v" || logger -t orbit "kernel-install $v failed"
+	done
+	for f in "$ESP"/*.efi; do
+		case "${f##*/}" in
+			orbit-*) ;;
+			*) rm -f "$f"; logger -t orbit "removed ${f##*/}" ;;
+		esac
+	done
+	logger -t orbit "UKIs: $(ls "$ESP" | tr '\n' ' ')"
+fi

@@ -4,22 +4,3 @@ label live
 	linux @LINUX@
 	initrd @INITRD@
 	append @APPEND_LIVE@ toram
-
-menu begin advanced
-	menu label ^Advanced options
-	menu title Advanced options
-	include stdmenu.cfg
-	label live-medium
-		menu label Orbit Linux Live, read from the boot medium
-		linux @LINUX@
-		initrd @INITRD@
-		append @APPEND_LIVE@
-	label live-safe
-		menu label Orbit Linux Live, safe graphics
-		linux @LINUX@
-		initrd @INITRD@
-		append @APPEND_LIVE@ toram nomodeset
-	label back
-		menu label ^Back
-		menu exit
-menu end

@@ -1,0 +1,3 @@
+# The installer's own systemd-boot step fetches systemd-boot from a mirror
+# (the install is offline) and does not make UKIs: late.sh installs it.
+systemd-boot-installer

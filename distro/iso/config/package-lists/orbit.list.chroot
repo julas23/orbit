@@ -37,7 +37,12 @@ firmware-iwlwifi
 firmware-realtek
 firmware-atheros
 
-# For the installer to come (btrfs, snapshots, LUKS)
+# For the installer: systemd-boot with UKIs (systemd-boot itself is kept as
+# a .deb, see hooks/live/0200), btrfs, snapshots, LUKS
+systemd-boot-efi
+systemd-boot-tools
+systemd-ukify
+efibootmgr
 btrfs-progs
 snapper
 cryptsetup

@@ -1,0 +1,11 @@
+#!/bin/sh
+# systemd-boot is not installed in the image: its postinst trigger runs
+# `esp_path="$(bootctl --print-esp-path)"` under set -e, which fails in a
+# chroot with no ESP when live-build briefly installs shim. Its .deb is kept
+# here instead, and the installer's late.sh installs it in the new system,
+# where the ESP is mounted.
+set -e
+mkdir -p /usr/share/orbit/debs
+cd /usr/share/orbit/debs
+apt-get download systemd-boot
+ls -la

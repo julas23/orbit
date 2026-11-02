@@ -18,7 +18,8 @@ lb config noauto \
 	--apt-recommends false \
 	--binary-image iso-hybrid \
 	--bootloaders "grub-efi,syslinux" \
-	--debian-installer none \
+	--debian-installer live \
+	--debian-installer-gui false \
 	--firmware-chroot true \
 	--firmware-binary false \
 	--linux-flavours amd64 \
