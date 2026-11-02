@@ -35,3 +35,66 @@ Description-pt_BR.UTF-8: Você anotou a chave de recuperação?
  .
  Ela abre o /home se a senha for esquecida. Anote e guarde longe deste
  computador: ela só aparece agora.
+
+Template: orbit/old-home-password
+Type: password
+Description: Password of the encrypted partition ${DEV}:
+ There is an encrypted partition on this computer (${DEV}, ${SIZE}). If it
+ holds a /home of an earlier installation, its password lets the installer
+ keep it. Leave it empty to go on without looking inside.
+ ${ERROR}
+Description-pt_BR.UTF-8: Senha da partição criptografada ${DEV}:
+ Há uma partição criptografada neste computador (${DEV}, ${SIZE}). Se ela
+ tiver o /home de uma instalação anterior, a senha permite mantê-lo. Deixe
+ vazio para seguir sem olhar dentro dela.
+ ${ERROR}
+
+Template: orbit/keep-home
+Type: boolean
+Default: true
+Description: Keep the existing /home?
+ There is a /home on ${DEV} (${SIZE}, ${FSTYPE}) with the folders of:
+ ${USERS}.
+ .
+ ${PLAN}
+ .
+ Its files are not touched: it is not formatted, and stays as it is. A user
+ created with the same name as one of these folders gets it back, files and
+ owner. Answering no goes to the partitioning, where /home can be erased.
+Description-pt_BR.UTF-8: Manter o /home existente?
+ Há um /home em ${DEV} (${SIZE}, ${FSTYPE}) com as pastas de: ${USERS}.
+ .
+ ${PLAN}
+ .
+ Os arquivos dele não são tocados: ele não é formatado e fica como está. O
+ usuário criado com o mesmo nome de uma dessas pastas a recebe de volta, com
+ arquivos e dono. Respondendo não, você vai para o particionamento, onde o
+ /home pode ser apagado.
+
+Template: orbit/keep-home-cannot
+Type: note
+Description: The existing /home cannot be kept here
+ There is a /home on ${DEV} (${SIZE}) with the folders of: ${USERS}. ${REASON}
+ .
+ The partitioning comes next: to keep it, choose manual partitioning and do
+ not format it; erasing the disk erases it too.
+Description-pt_BR.UTF-8: O /home existente não pode ser mantido aqui
+ Há um /home em ${DEV} (${SIZE}) com as pastas de: ${USERS}. ${REASON}
+ .
+ O particionamento vem a seguir: para mantê-lo, escolha o particionamento
+ manual e não o formate; apagar o disco apaga ele também.
+
+Template: orbit/disk-too-small
+Type: error
+Description: The disk is too small for Orbit Linux
+ The biggest disk on this computer has ${SIZE} GB; Orbit Linux needs at least
+ 40 GB. Nothing was changed on it.
+ .
+ Connect a bigger disk and start the installation again, or go back to the
+ installer's menu and turn the computer off.
+Description-pt_BR.UTF-8: O disco é pequeno demais para o Orbit Linux
+ O maior disco deste computador tem ${SIZE} GB; o Orbit Linux precisa de pelo
+ menos 40 GB. Nada foi alterado nele.
+ .
+ Conecte um disco maior e comece a instalação de novo, ou volte ao menu do
+ instalador e desligue o computador.

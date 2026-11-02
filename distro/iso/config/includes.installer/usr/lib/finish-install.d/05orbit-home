@@ -1,6 +1,7 @@
 #!/bin/sh
 # Orbit Linux: the encrypted /home is offered (docs/PLANO-DISTRO.md §6.4),
-# on a disk with /home on a partition of its own. Before 06user-setup,
+# on a disk with /home on a partition of its own; an existing encrypted
+# /home kept (orbit/home.sh) gets the new user's password. Before 06user-setup,
 # which clears the user's password from debconf: when the answer is yes,
 # that password is kept in /tmp/orbit-home-pw (the installer's memory) for
 # late.sh, which encrypts /home with it and then removes it.
@@ -8,11 +9,18 @@ set -e
 . /usr/share/debconf/confmodule
 log() { logger -t orbit-home "$*"; }
 
-[ "$(cat /tmp/orbit-layout 2>/dev/null)" = separate ] || exit 0
-grep -q " /target/home " /proc/mounts || { log "no /home partition"; exit 0; }
-
 debconf-loadtemplate orbit /orbit/orbit.templates
-if [ -f /orbit/test.conf ]; then
+layout=$(cat /tmp/orbit-layout 2>/dev/null)
+if [ "$layout" = keep ]; then
+	# An existing /home kept: never encrypted here; if it already is
+	# (LUKS), the new user's password becomes a keyslot of it (late.sh).
+	. /tmp/orbit-keep-home
+	[ -n "$HOME_LUKS" ] || exit 0
+	answer=true
+elif [ "$layout" != separate ] || ! grep -q " /target/home " /proc/mounts; then
+	log "no /home partition"
+	exit 0
+elif [ -f /orbit/test.conf ]; then
 	. /orbit/test.conf
 	answer=${ENCRYPT_HOME:-false}
 else

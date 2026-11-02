@@ -5,7 +5,8 @@
 # installs systemd-boot.
 #   up to 120 GB: ESP + one btrfs (/ and /home as subvolumes)
 #   above:        ESP + btrfs / (25% of the disk, 60 to 100 GiB) + btrfs /home
-#   below 40 GB:  the recipe does not fit
+#   below 40 GB:  refused, with a message
+#   an existing /home kept (home.sh): ESP + one btrfs, the system alone
 set -e
 . /usr/share/debconf/confmodule
 log() { logger -t orbit-early "$*"; }
@@ -20,9 +21,16 @@ log "biggest disk $disk: $disk_mb MB; RAM: $ram_mb MB"
 echo "$disk_mb" > /tmp/orbit-disk-mb
 echo "$ram_mb" > /tmp/orbit-ram-mb
 
-# Below 40 GB the recipe below does not fit and partman says so; a clear
-# message of our own is still to do.
-[ "$disk_mb" -lt 38146 ] && log "disk smaller than 40 GB"
+# Below 40 GB: refused, saying why, before anything is touched; partman
+# stops and the installer's menu comes back.
+debconf-loadtemplate orbit /orbit/orbit.templates
+if [ "$disk_mb" -lt 38146 ]; then
+	log "disk smaller than 40 GB: $disk_mb MB"
+	db_subst orbit/disk-too-small SIZE "$((disk_mb / 1024))"
+	db_input critical orbit/disk-too-small || true
+	db_go || true
+	exit 1
+fi
 
 if [ -d /sys/firmware/efi ]; then
 	boot='1024 1024 1024 fat32 $iflabel{ gpt } method{ efi } format{ } .'
@@ -38,9 +46,38 @@ if [ -d /sys/firmware/efi ]; then
 	done
 else
 	boot='1 1 1 free $iflabel{ gpt } $reusemethod{ } method{ biosgrub } .'
+	# GRUB goes to the disk the system is on, asking nothing: the
+	# installer's "default" is the disk of /boot.
+	db_set grub-installer/only_debian true
+	db_fset grub-installer/only_debian seen true
+	db_set grub-installer/bootdev default
+	db_fset grub-installer/bootdev seen true
 fi
 
-if [ "$disk_mb" -le 114441 ]; then   # 120 GB
+# An existing /home, kept if the answer is yes (home.sh).
+. /orbit/home.sh
+set +e
+find_existing_home
+set -e
+
+if [ "$ORBIT_LAYOUT" = keep ]; then
+	# The system alone: /home is the existing one.
+	cat > /tmp/orbit-recipe <<RECIPE
+orbit ::
+	$boot
+	20480 10000 -1 btrfs method{ format } format{ } use_filesystem{ } filesystem{ btrfs } mountpoint{ / } .
+RECIPE
+	echo keep > /tmp/orbit-layout
+	if [ "$ORBIT_TARGET" = same ]; then
+		db_set partman-auto/method ""
+		db_set partman-auto/disk ""
+		db_set partman-auto/init_automatically_partition biggest_free
+		db_fset partman-auto/init_automatically_partition seen true
+	else
+		db_set partman-auto/method regular
+		db_set partman-auto/disk "$ORBIT_TARGET"
+	fi
+elif [ "$disk_mb" -le 114441 ]; then   # 120 GB
 	cat > /tmp/orbit-recipe <<RECIPE
 orbit ::
 	$boot

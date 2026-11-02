@@ -3,8 +3,10 @@
 # system in /target (docs/PLANO-DISTRO.md §6.2–6.4):
 #   1. btrfs: @rootfs becomes @, the default subvolume; @log, @cache, @tmp,
 #      @snapshots (and @home on a one-partition disk) take their folders;
-#      a /home of its own encrypted, if 05orbit-home was told so
-#   2. UEFI: systemd-boot and one UKI per kernel, boot counting (3 tries)
+#      a /home of its own encrypted, if 05orbit-home was told so; an
+#      existing /home kept (home.sh) mounted as it is
+#   2. UEFI: systemd-boot and one UKI per kernel, boot counting (3 tries);
+#      BIOS: GRUB installed again on the new subvolume
 #   3. what only the Live has goes: its login, its marker, no idle lock
 #   4. snapper on / only; zram; swap on disk only at 4 GB of RAM or less
 #   5. apt: Debian and Orbit's repository
@@ -105,6 +107,86 @@ if [ -s /tmp/orbit-home-pw ] && [ "$LAYOUT" = separate ] && grep -q " $T/home " 
 	echo "kernel.core_pattern = |/bin/false" > $T/etc/sysctl.d/50-orbit-no-core-dumps.conf
 	ENCRYPTED=1
 fi
+
+# --- 1c. an existing /home kept (home.sh, docs/PLANO-DISTRO.md §6.4) ---------
+# Mounted as it is, never formatted. The new user takes back the folder of
+# the same name, with its owner's uid (and gid); without one, theirs is
+# made there. Encrypted (LUKS), it is opened as the encrypted /home of
+# 1b: the new user's password becomes a keyslot, added with the old one.
+if [ "$LAYOUT" = keep ] && [ -f /tmp/orbit-keep-home ]; then
+	. /tmp/orbit-keep-home
+	OLD=/tmp/orbit-oldhome
+	mkdir -p $OLD
+	PASSNO=2; [ "$HOME_TYPE" = btrfs ] && PASSNO=0
+	HOPTS=defaults; [ "$HOME_TYPE" = btrfs ] && HOPTS="compress=zstd:1,noatime"
+	[ -n "$HOME_SUBVOL" ] && HOPTS="subvol=$HOME_SUBVOL,$HOPTS"
+	sed -i -E '\|^[^#[:space:]]+[[:space:]]+/home[[:space:]]|d' $T/etc/fstab
+	if [ -n "$HOME_LUKS" ]; then
+		LDEV=/dev/disk/by-uuid/$HOME_LUKS
+		cryptsetup open --key-file=/tmp/orbit-old-home-pw "$LDEV" home
+		SRC=/dev/mapper/home
+		SLOT=""
+		if [ -s /tmp/orbit-home-pw ]; then
+			set +x
+			if LC_ALL=C cryptsetup open --test-passphrase -v --key-file=/tmp/orbit-home-pw "$LDEV" > /tmp/orbit-cs 2>&1; then
+				SLOT=$(sed -n 's/^Key slot \([0-9]*\) unlocked.*/\1/p' /tmp/orbit-cs)
+			else
+				LC_ALL=C cryptsetup luksAddKey -v --key-file=/tmp/orbit-old-home-pw "$LDEV" /tmp/orbit-home-pw > /tmp/orbit-cs 2>&1 || true
+				SLOT=$(sed -n 's/^Key slot \([0-9]*\) created.*/\1/p' /tmp/orbit-cs)
+			fi
+			set -x
+			cat /tmp/orbit-cs
+			rm -f /tmp/orbit-cs
+		fi
+		printf '# The LUKS keyslot of each user%ss password on the encrypted /home\n# (orbit-login keeps it; docs/PLANO-DISTRO.md §6.4).\n' "'" > $T/etc/orbit/home-keyslots
+		[ -n "$SLOT" ] && echo "$USERNAME $SLOT" >> $T/etc/orbit/home-keyslots
+		chmod 600 $T/etc/orbit/home-keyslots
+		echo "/dev/mapper/home /home $HOME_TYPE $HOPTS,noauto 0 0" >> $T/etc/fstab
+		echo "home UUID=$HOME_LUKS none luks,noauto" >> $T/etc/crypttab
+		echo "kernel.core_pattern = |/bin/false" > $T/etc/sysctl.d/50-orbit-no-core-dumps.conf
+		ENCRYPTED=1
+	else
+		SRC=/dev/disk/by-uuid/$HOME_FSUUID
+		echo "UUID=$HOME_FSUUID /home $HOME_TYPE $HOPTS 0 $PASSNO" >> $T/etc/fstab
+	fi
+	mount -t "$HOME_TYPE" ${HOME_SUBVOL:+-o subvol=$HOME_SUBVOL} "$SRC" $OLD
+	ls -ln $OLD
+	NEWUID=$(awk -F: -v u="$USERNAME" '$1==u {print $3}' $T/etc/passwd)
+	NEWGID=$(awk -F: -v u="$USERNAME" '$1==u {print $4}' $T/etc/passwd)
+	if [ -d "$OLD/$USERNAME" ]; then
+		OUID=$(ls -ldn "$OLD/$USERNAME" | awk '{print $3}')
+		OGID=$(ls -ldn "$OLD/$USERNAME" | awk '{print $4}')
+		if [ "$OUID" != "$NEWUID" ]; then
+			if awk -F: -v i="$OUID" '$3==i {f=1} END {exit !f}' $T/etc/passwd; then
+				echo "WARNING: uid $OUID is taken in the new system: $USERNAME keeps $NEWUID"
+			else
+				chroot $T usermod -u "$OUID" "$USERNAME"
+			fi
+		fi
+		if [ "$OGID" != "$NEWGID" ] && ! awk -F: -v i="$OGID" '$3==i {f=1} END {exit !f}' $T/etc/group; then
+			chroot $T groupmod -g "$OGID" "$(awk -F: -v g="$NEWGID" '$3==g {print $1}' $T/etc/group)"
+		fi
+		# What the skel gives and the folder lacks (Orbit's configuration,
+		# from another system's /home): added, nothing overwritten.
+		# GNU cp, the new system's: the installer's busybox skips a folder
+		# that exists instead of merging into it.
+		chown -R "$OUID:$OGID" "$T/home/$USERNAME"
+		mkdir -p $T/mnt/orbit-oldhome
+		mount --bind "$OLD/$USERNAME" $T/mnt/orbit-oldhome
+		chroot $T cp -a --update=none "/home/$USERNAME/." /mnt/orbit-oldhome/
+		umount $T/mnt/orbit-oldhome
+		rmdir $T/mnt/orbit-oldhome
+		echo "$USERNAME takes back its folder (uid $OUID, gid $OGID)"
+	else
+		cp -a "$T/home/$USERNAME" "$OLD/"
+		echo "$USERNAME: a new folder in the existing /home"
+	fi
+	# What adduser made under the mount point goes: the folder is the old one.
+	find $T/home -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+	umount $OLD
+	[ -n "$HOME_LUKS" ] && cryptsetup close home
+	rm -f /tmp/orbit-old-home-pw
+fi
 rm -f /tmp/orbit-home-pw
 
 # --- 2. systemd-boot and UKIs (UEFI) -----------------------------------------
@@ -136,6 +218,21 @@ LOADER
 		in-target kernel-install add "$v" "/boot/vmlinuz-$v"
 	done
 	ls -la $T/boot/efi/EFI/Linux/
+else
+	# BIOS: GRUB, which the installer put in before @rootfs became @ (it
+	# would look for /@rootfs/boot/grub): installed again, its menu
+	# hidden as systemd-boot's is (Shift or Esc while starting shows it).
+	DISK=/dev/$(basename "$(readlink -f /sys/class/block/$(basename "$ROOTDEV")/..)")
+	mkdir -p $T/etc/default/grub.d
+	cat > $T/etc/default/grub.d/50-orbit-boot.cfg <<GRUB
+# Orbit Linux (late.sh): the menu hidden; hold Shift or press Esc while
+# starting to see it (docs/PLANO-DISTRO.md §6.3).
+GRUB_TIMEOUT=0
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB
+	chroot $T grub-install "$DISK"
+	chroot $T update-grub
 fi
 
 rm -rf $T/usr/share/orbit/debs
