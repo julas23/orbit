@@ -154,15 +154,18 @@ aptly repo search orbit-local 2>/dev/null | while read -r ref; do
     name=${ref%%_*}
     grep -qx "$name" "$ours" || aptly repo remove orbit-local "Name (= $name)" >/dev/null
 done
-# And of each package only the newest version stays.
-aptly repo search -format='{{.Package}} {{.Version}}' orbit-local 2>/dev/null | sort -k1,1 | while read -r name version; do
-    versions=$(aptly repo search -format='{{.Version}}' orbit-local "Name (= $name)")
+# And of each package only the newest version stays, per architecture: an
+# arm64 package built less often (orbit-local-station for the Raspberry Pi
+# stations) is not the older version of its amd64 twin.
+aptly repo search -format='{{.Package}} {{.Architecture}}' orbit-local 2>/dev/null | sort -u | while read -r name arch; do
+    which="Name (= $name), \$Architecture (= $arch)"
+    versions=$(aptly repo search -format='{{.Version}}' orbit-local "$which")
     newest=""
     for v in $versions; do
         [[ -z "$newest" ]] || dpkg --compare-versions "$v" gt "$newest" && newest=$v
     done
     for v in $versions; do
-        dpkg --compare-versions "$v" lt "$newest" && aptly repo remove orbit-local "Name (= $name), \$Version (= $v)" >/dev/null
+        dpkg --compare-versions "$v" lt "$newest" && aptly repo remove orbit-local "$which, \$Version (= $v)" >/dev/null
     done
     true
 done
