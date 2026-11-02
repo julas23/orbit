@@ -72,6 +72,12 @@ fn keyboard(display: &gdk::Display) -> Option<gtk::Widget> {
     };
     show(&device);
     device.connect_active_layout_index_notify(show.clone());
+    // The keymap comes from the core after the first look (GDK starts
+    // with its own, "English (US)"): its names, notified, replace it.
+    {
+        let show = show.clone();
+        device.connect_notify_local(Some("layout-names"), move |device, _| show(device));
+    }
     device.connect_changed(show);
     item.button.connect_clicked(move |_| {
         if count.get() > 1 {

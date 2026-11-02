@@ -62,6 +62,10 @@ pub fn session(user: &str, vt: u32, command: &str) -> i32 {
     set("SHELL", &account.shell);
     set("PATH", "/usr/local/bin:/usr/bin:/bin:/usr/games");
     set("XDG_CURRENT_DESKTOP", "orbit");
+    // Devices through logind, the session's: seatd (when installed, and
+    // the session's user may reach it) knows one session only, and the
+    // switch between the greeter's and the user's crashed it.
+    set("LIBSEAT_BACKEND", "logind");
     let id = env.iter().find(|(n, _)| n == "XDG_SESSION_ID").map(|(_, v)| v.clone());
 
     // Everything the child needs, made before the fork: after it, only
