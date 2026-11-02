@@ -1,5 +1,8 @@
 # The Live session: Orbit and what its look needs (docs/PLANO-DISTRO.md §11).
 orbit-desktop
+# Orbit Linux's name, version and logo (os-release, banners, fastfetch)
+orbit-release
+fastfetch
 firefox-esr
 plymouth
 plymouth-themes

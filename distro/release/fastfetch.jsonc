@@ -1,0 +1,24 @@
+// Orbit Linux's logo for fastfetch (orbit-release); a user's own
+// ~/.config/fastfetch/config.jsonc takes the place of this one.
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    "logo": {
+        "type": "file",
+        "source": "/usr/share/orbit/ascii/orbit-linux.fastfetch",
+        "color": {
+            "1": "38;2;70;130;180",
+            "2": "38;2;110;168;224",
+            "3": "38;2;216;222;233",
+            "4": "38;2;255;149;0"
+        },
+        "padding": { "top": 1, "right": 3 }
+    },
+    "display": {
+        "color": { "keys": "38;2;110;168;224", "title": "38;2;255;149;0" }
+    },
+    "modules": [
+        "title", "separator", "os", "host", "kernel", "uptime", "packages", "shell",
+        "display", "de", "wm", "terminal", "cpu", "gpu", "memory", "swap", "disk",
+        "localip", "battery", "locale", "break", "colors"
+    ]
+}

@@ -1,0 +1,14 @@
+PRETTY_NAME="Orbit Linux @VERSION@"
+NAME="Orbit Linux"
+VERSION_ID="@VERSION@"
+VERSION="@VERSION@ (Debian 13 trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_CODENAME=trixie
+ID=orbit
+ID_LIKE=debian
+BUILD_ID="@BUILD@"
+HOME_URL="https://github.com/julas23/orbit"
+SUPPORT_URL="https://github.com/julas23/orbit/discussions"
+BUG_REPORT_URL="https://github.com/julas23/orbit/issues"
+LOGO=orbit-linux
+ANSI_COLOR="38;2;70;130;180"

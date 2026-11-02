@@ -81,6 +81,41 @@ cp -r "$ROOT/examples" "$dir/usr/share/doc/orbit/examples"
 chmod -R u=rwX,go=rX "$dir/usr"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-defaults_${VERSION}_all.deb" >/dev/null
 rm -rf "$dir"
+# orbit-release: Orbit Linux's name, version and logo (distro/release/),
+# for the image only. Its version is the system's: the workspace's
+# major.minor; BUILD_ID is this build's.
+REL="$ROOT/distro/release"
+OS_VERSION=$(echo "$BASE" | cut -d. -f1,2)
+BUILD_ID="$(git log -1 --format=%cd --date=format:%Y%m%d).$(git rev-parse --short HEAD)"
+dir=$(mktemp -d)
+mkdir -p "$dir/DEBIAN" "$dir/usr/lib" "$dir/etc/xdg/fastfetch" "$dir/etc/default/grub.d" "$dir/etc/skel/.config/neofetch" \
+    "$dir/usr/share/orbit/ascii" "$dir/usr/share/icons/hicolor/scalable/apps" "$dir/usr/share/doc/orbit-release"
+{
+    echo "Package: orbit-release"
+    echo "Version: $VERSION"
+    echo "Architecture: all"
+    echo "Maintainer: Juliano <julianoas@gmail.com>"
+    echo "Priority: optional"
+    echo "Homepage: https://github.com/julas23/orbit"
+    cat "$REL/control"
+} > "$dir/DEBIAN/control"
+cp "$REL/preinst" "$REL/postrm" "$dir/DEBIAN/"
+printf '%s\n' /etc/xdg/fastfetch/config.jsonc /etc/default/grub.d/orbit-release.cfg /etc/skel/.config/neofetch/config.conf > "$dir/DEBIAN/conffiles"
+fill() { sed -e "s/@VERSION@/$OS_VERSION/g" -e "s/@BUILD@/$BUILD_ID/g" "$1"; }
+fill "$REL/os-release.in" > "$dir/usr/lib/os-release"
+fill "$REL/issue.in" > "$dir/etc/issue"
+fill "$REL/issue.net.in" > "$dir/etc/issue.net"
+cp "$REL/motd" "$dir/etc/motd"
+cp "$REL/fastfetch.jsonc" "$dir/etc/xdg/fastfetch/config.jsonc"
+cp "$REL/grub.cfg" "$dir/etc/default/grub.d/orbit-release.cfg"
+cp "$REL/neofetch.conf" "$dir/etc/skel/.config/neofetch/config.conf"
+cp "$REL"/orbit-linux.fastfetch "$REL"/orbit-linux.neofetch "$REL"/orbit-linux.txt "$dir/usr/share/orbit/ascii/"
+cp "$ROOT/data/brand/orbit-mark.svg" "$dir/usr/share/icons/hicolor/scalable/apps/orbit-linux.svg"
+cp "$ROOT/LICENSE" "$dir/usr/share/doc/orbit-release/copyright" 2>/dev/null || true
+chmod -R u=rwX,go=rX "$dir/usr" "$dir/etc"
+chmod 755 "$dir" "$dir/DEBIAN/preinst" "$dir/DEBIAN/postrm"
+dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-release_${VERSION}_all.deb" >/dev/null
+rm -rf "$dir"
 # orbit-fonts: the Nerd Font the panel and dock draw with, from its
 # release; its own version, the same file every build (fixed dates).
 FONTS_VERSION=3.5.1

@@ -1,0 +1,11 @@
+Description: Orbit Linux: the system's name, version and logo
+ Says this system is Orbit Linux, a Debian 13 underneath: os-release (NAME,
+ VERSION, BUILD_ID; ID_LIKE=debian), the console's banners, the boot
+ menu's name (GRUB_DISTRIBUTOR; the UKIs take theirs from os-release), and
+ the logo, as an icon and in ASCII for fastfetch and neofetch. Debian's
+ files are diverted, and come back if this package is removed. Installed by
+ the Orbit Linux image only: on a Debian with the Orbit desktop, Debian
+ stays Debian.
+Section: admin
+Depends: base-files
+Recommends: fastfetch
