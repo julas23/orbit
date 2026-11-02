@@ -7,3 +7,6 @@ user: juliano
 command: orbit-core --locked
 # The default user's console.
 vt: 1
+# An encrypted /home: its /etc/crypttab entry. While it is shut the
+# greeter's session is on screen, and the default user's password opens it.
+# home: home

@@ -2,7 +2,8 @@
 # Runs in debian-installer at the end (preseed/late_command), with the new
 # system in /target (docs/PLANO-DISTRO.md §6.2–6.4):
 #   1. btrfs: @rootfs becomes @, the default subvolume; @log, @cache, @tmp,
-#      @snapshots (and @home on a one-partition disk) take their folders
+#      @snapshots (and @home on a one-partition disk) take their folders;
+#      a /home of its own encrypted, if 05orbit-home was told so
 #   2. UEFI: systemd-boot and one UKI per kernel, boot counting (3 tries)
 #   3. what only the Live has goes: its login, its marker, no idle lock
 #   4. snapper on / only; zram; swap on disk only at 4 GB of RAM or less
@@ -53,14 +54,65 @@ chmod 1777 $TOP/@tmp
 ID=$(btrfs subvolume list $TOP | awk '$NF=="@" {print $2}')
 btrfs subvolume set-default "$ID" $TOP
 
+# Commands run in the new system below need /proc, /sys and /dev; in-target
+# gives it /proc only, and swallows what they say.
+MOUNTED=""
+for m in proc sys dev; do
+	grep -q " $T/$m " /proc/mounts && continue
+	mount -o bind /$m $T/$m
+	MOUNTED="$T/$m $MOUNTED"
+done
+
+# --- 1b. the encrypted /home (docs/PLANO-DISTRO.md §6.4) ----------------------
+# LUKS2 opened by the user's password (keyslot 0, "user 0" in
+# /etc/orbit/home-keyslots) and a recovery key (systemd-cryptenroll),
+# shown by finish-install.d/96orbit-recovery. /home is only the new
+# user's folder yet: copied out, the partition encrypted and made btrfs
+# again, copied back. Nothing opens it at boot: Orbit-Login does, with the
+# password typed in the greeter (home: in login.yaml).
+ENCRYPTED=""
+if [ -s /tmp/orbit-home-pw ] && [ "$LAYOUT" = separate ] && grep -q " $T/home " /proc/mounts; then
+	HOMEDEV=$(awk -v m="$T/home" '$2==m {print $1}' /proc/mounts)
+	mkdir -p /tmp/orbit-home-copy
+	cp -a $T/home/. /tmp/orbit-home-copy/
+	umount $T/home
+	cryptsetup luksFormat --type luks2 --batch-mode --label orbit-home --key-file=/tmp/orbit-home-pw "$HOMEDEV"
+	HUUID=$(cryptsetup luksUUID "$HOMEDEV")
+	mkdir -p $T/run/orbit-key
+	mount -t tmpfs -o size=1m,mode=700 tmpfs $T/run/orbit-key
+	cp /tmp/orbit-home-pw $T/run/orbit-key/pw
+	set +x
+	chroot $T systemd-cryptenroll --unlock-key-file=/run/orbit-key/pw --recovery-key "$HOMEDEV" > /tmp/orbit-cryptenroll 2>&1 || true
+	grep -oE '([cbdefghijklnrtuv]{8}-){7}[cbdefghijklnrtuv]{8}' /tmp/orbit-cryptenroll | head -1 > /tmp/orbit-recovery-key || true
+	grep -vE '[cbdefghijklnrtuv]{8}-' /tmp/orbit-cryptenroll || true
+	rm -f /tmp/orbit-cryptenroll
+	set -x
+	umount $T/run/orbit-key
+	rmdir $T/run/orbit-key
+	[ -s /tmp/orbit-recovery-key ] || echo "WARNING: no recovery key was made"
+	cryptsetup open --key-file=/tmp/orbit-home-pw "$HOMEDEV" home
+	rm -f /tmp/orbit-home-pw
+	mkfs.btrfs -f -L home /dev/mapper/home
+	mount -t btrfs -o "$OPTS" /dev/mapper/home $T/home
+	cp -a /tmp/orbit-home-copy/. $T/home/
+	rm -rf /tmp/orbit-home-copy
+	sed -i -E '\|^[^#[:space:]]+[[:space:]]+/home[[:space:]]|d' $T/etc/fstab
+	echo "/dev/mapper/home /home btrfs $OPTS,noauto 0 0" >> $T/etc/fstab
+	echo "home UUID=$HUUID none luks,noauto" >> $T/etc/crypttab
+	printf '# The LUKS keyslot of each user%ss password on the encrypted /home\n# (orbit-login keeps it; docs/PLANO-DISTRO.md §6.4).\n%s 0\n' "'" "$USERNAME" > $T/etc/orbit/home-keyslots
+	chmod 600 $T/etc/orbit/home-keyslots
+	# Nothing of /home's in a core dump on the unencrypted disk.
+	echo "kernel.core_pattern = |/bin/false" > $T/etc/sysctl.d/50-orbit-no-core-dumps.conf
+	ENCRYPTED=1
+fi
+rm -f /tmp/orbit-home-pw
+
 # --- 2. systemd-boot and UKIs (UEFI) -----------------------------------------
 if [ -e /tmp/orbit-uefi ]; then
 	# bootctl and efibootmgr in the new system need /sys (with the EFI
 	# variables) and /dev; in-target gives it /proc only.
 	grep -q " /sys/firmware/efi/efivars " /proc/mounts || mount -t efivarfs efivarfs /sys/firmware/efi/efivars
-	grep -q " $T/sys " /proc/mounts || mount -o bind /sys $T/sys
 	grep -q " $T/sys/firmware/efi/efivars " /proc/mounts || mount -o bind /sys/firmware/efi/efivars $T/sys/firmware/efi/efivars
-	grep -q " $T/dev " /proc/mounts || mount -o bind /dev $T/dev
 	mkdir -p $T/etc/kernel
 	echo "layout=uki" > $T/etc/kernel/install.conf
 	echo "root=UUID=$UUID rw rootflags=$OPTS quiet splash" > $T/etc/kernel/cmdline
@@ -105,6 +157,13 @@ user: $USERNAME
 command: orbit-core --locked
 vt: 1
 LOGIN
+if [ -n "$ENCRYPTED" ]; then
+	cat >> $T/etc/orbit/login.yaml <<LOGIN
+# /home is encrypted: while it is shut the greeter's session is on screen,
+# and the password opens it.
+home: home
+LOGIN
+fi
 rm -f $T/etc/orbit/live
 for f in $T/etc/skel/.config/orbit/core.yaml $T/home/*/.config/orbit/core.yaml; do
 	[ -f "$f" ] && sed -i -e '/^# The Live session never locks/d' -e '/^idle_lock: 0$/d' "$f"
@@ -134,7 +193,13 @@ if [ "$RAM_MB" -le 4096 ]; then
 	btrfs filesystem mkswapfile --size "${RAM_MB}m" $TOP/@swap/swapfile
 	mkdir -p $T/swap
 	echo "UUID=$UUID /swap btrfs subvol=@swap,noatime 0 0" >> $T/etc/fstab
-	echo "/swap/swapfile none swap defaults,pri=10 0 0" >> $T/etc/fstab
+	if [ -n "$ENCRYPTED" ]; then
+		# With /home encrypted, swap is too: a new random key at each boot.
+		echo "swap /swap/swapfile /dev/urandom swap,cipher=aes-xts-plain64,size=512,sector-size=4096" >> $T/etc/crypttab
+		echo "/dev/mapper/swap none swap defaults,pri=10 0 0" >> $T/etc/fstab
+	else
+		echo "/swap/swapfile none swap defaults,pri=10 0 0" >> $T/etc/fstab
+	fi
 fi
 
 # --- 5. apt ------------------------------------------------------------------
@@ -163,10 +228,15 @@ Signed-By: /usr/share/keyrings/orbit-archive-keyring.gpg
 SOURCES
 
 cat $T/etc/fstab
+[ -f $T/etc/crypttab ] && cat $T/etc/crypttab
 echo "orbit late.sh done $(date)"
 cp "$LOG" $TOP/@log/orbit-install.log
 umount $T/.snapshots || true
 umount $TOP || true
-for m in $T/sys/firmware/efi/efivars $T/sys $T/dev; do
+if [ -n "$ENCRYPTED" ]; then
+	umount $T/home || true
+	cryptsetup close home || true
+fi
+for m in $T/sys/firmware/efi/efivars $MOUNTED; do
 	grep -q " $m " /proc/mounts && umount "$m" || true
 done

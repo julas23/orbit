@@ -7,6 +7,7 @@
 # and that key for the live user. Never for an image handed to anyone.
 # ORBIT_ISO_TEST=1 makes an image whose installer asks nothing: user teste,
 # password orbit-teste, the whole first disk. For a test VM only.
+# ORBIT_ISO_TEST=luks likewise, and /home encrypted (on a disk above 120 GB).
 set -e
 HOST="${1:-orbit@10.0.0.56}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -40,8 +41,10 @@ d-i partman-partitioning/confirm_write_new_label boolean true
 d-i partman/choose_partition select finish
 d-i partman/confirm boolean true
 d-i partman/confirm_nooverwrite boolean true
-PRESEED"
+PRESEED
+	echo ENCRYPT_HOME=$([ "$ORBIT_ISO_TEST" = luks ] && echo true || echo false) | sudo tee config/includes.installer/orbit/test.conf >/dev/null"
 	VERSION="$VERSION-test"
+	[ "$ORBIT_ISO_TEST" = luks ] && VERSION="$VERSION-luks"
 fi
 ssh "$HOST" "set -e
 	sudo mkdir -p /srv/orbit-iso

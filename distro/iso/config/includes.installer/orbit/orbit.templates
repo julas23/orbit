@@ -1,0 +1,37 @@
+Template: orbit/encrypt-home
+Type: boolean
+Default: false
+Description: Encrypt the personal folders (/home)?
+ With encryption, the files in /home can only be read with your password:
+ if this computer is lost or stolen, they stay unreadable. The system itself
+ is not encrypted, so it starts without asking anything; your password opens
+ /home when you log in.
+ .
+ At the end of the installation a recovery key is shown, to write down. If
+ you forget the password and lose the key, the files in /home are lost.
+Description-pt_BR.UTF-8: Criptografar as pastas pessoais (/home)?
+ Com a criptografia, os arquivos de /home só podem ser lidos com a sua senha:
+ se este computador for perdido ou roubado, eles continuam ilegíveis. O
+ sistema em si não é criptografado, então ele liga sem perguntar nada; a sua
+ senha abre o /home quando você entra.
+ .
+ No fim da instalação aparece uma chave de recuperação, para você anotar. Se
+ você esquecer a senha e perder a chave, os arquivos de /home estarão perdidos.
+
+Template: orbit/recovery-key
+Type: boolean
+Default: false
+Description: Did you write the recovery key down?
+ The recovery key of /home:
+ .
+ ${KEY}
+ .
+ It opens /home if the password is forgotten. Write it down and keep it away
+ from this computer: it is shown only now.
+Description-pt_BR.UTF-8: Você anotou a chave de recuperação?
+ A chave de recuperação do /home:
+ .
+ ${KEY}
+ .
+ Ela abre o /home se a senha for esquecida. Anote e guarde longe deste
+ computador: ela só aparece agora.

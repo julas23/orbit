@@ -2,8 +2,17 @@
 # Orbit-Login takes tty1 from the next boot on (its unit conflicts with
 # getty@tty1, and gives it back if it fails). Another display manager
 # would fight it for the screen: it is left installed, but turned off.
+# The greeter's account (orbit-greeter) is the session on screen while an
+# encrypted /home is shut; PAM's password stack keeps that /home's
+# keyslots following the passwords (/usr/share/pam-configs/orbit-home).
 set -e
 if [ "$1" = configure ]; then
+    if ! getent passwd orbit-greeter >/dev/null; then
+        adduser --system --group --home /var/lib/orbit-greeter --no-create-home \
+            --shell /bin/sh --comment "Orbit greeter" orbit-greeter >/dev/null
+    fi
+    chown orbit-greeter:orbit-greeter /var/lib/orbit-greeter
+    pam-auth-update --package >/dev/null 2>&1 || true
     systemctl daemon-reload >/dev/null 2>&1 || true
     for dm in greetd gdm3 gdm sddm lightdm lxdm; do
         if systemctl is-enabled --quiet "$dm.service" 2>/dev/null; then

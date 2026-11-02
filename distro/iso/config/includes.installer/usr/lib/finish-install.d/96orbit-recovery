@@ -1,0 +1,23 @@
+#!/bin/sh
+# Orbit Linux: the recovery key of the encrypted /home, made by late.sh,
+# shown once; the question comes back until the answer is yes. Then it is
+# gone from the installer's memory.
+set -e
+. /usr/share/debconf/confmodule
+[ -s /tmp/orbit-recovery-key ] || exit 0
+KEY=$(cat /tmp/orbit-recovery-key)
+if [ -f /orbit/test.conf ]; then
+	logger -t orbit-home "test image: recovery key $KEY"
+else
+	debconf-loadtemplate orbit /orbit/orbit.templates
+	db_subst orbit/recovery-key KEY "$KEY"
+	while :; do
+		db_set orbit/recovery-key false
+		db_fset orbit/recovery-key seen false
+		db_input critical orbit/recovery-key || true
+		db_go || true
+		db_get orbit/recovery-key
+		[ "$RET" = true ] && break
+	done
+fi
+rm -f /tmp/orbit-recovery-key

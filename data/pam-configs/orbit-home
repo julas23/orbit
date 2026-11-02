@@ -1,0 +1,6 @@
+Name: Orbit: the encrypted /home follows the password
+Default: yes
+Priority: 0
+Password-Type: Additional
+Password:
+	optional	pam_exec.so expose_authtok quiet /usr/bin/orbit-login --home-key

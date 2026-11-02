@@ -24,7 +24,7 @@ use std::{
 use crate::pam::Pam;
 
 pub fn session(user: &str, vt: u32, command: &str) -> i32 {
-    let Some(account) = orbit_login::user(user) else {
+    let Some(account) = orbit_login::account(user) else {
         log::error!("{user}: no such user");
         return 1;
     };

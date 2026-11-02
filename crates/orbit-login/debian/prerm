@@ -1,7 +1,9 @@
 #!/bin/sh
-# Removed: tty1 is the getty's again from the next boot on.
+# Removed: tty1 is the getty's again from the next boot on, and PAM's
+# password stack forgets the encrypted /home.
 set -e
 if [ "$1" = remove ]; then
     systemctl disable orbit-login.service >/dev/null 2>&1 || true
+    pam-auth-update --package --remove orbit-home >/dev/null 2>&1 || true
 fi
 exit 0

@@ -13,12 +13,14 @@ maintainer = "Juliano <julianoas@gmail.com>"
 section = "admin"
 priority = "optional"
 extended-description = "Orbit-Login: a small root service in the place of a display manager. It opens the default user's Orbit session at boot, locked, and the sessions of other users on their own consoles when the lock screen switches to them. Part of the Orbit desktop (https://github.com/julas23/orbit)."
-depends = "$auto, orbit-core, orbit-greet"
+depends = "$auto, orbit-core, orbit-greet, adduser, libpam-runtime"
 assets = [
     ["target/release/orbit-login", "usr/bin/", "755"],
     ["../../data/pam/orbit-login", "etc/pam.d/", "644"],
     ["../../data/systemd/orbit-login.service", "lib/systemd/system/", "644"],
     ["../../data/login.yaml", "etc/orbit/", "644"],
+    ["../../data/pam-configs/orbit-home", "usr/share/pam-configs/", "644"],
+    ["../../data/greeter/core.yaml", "var/lib/orbit-greeter/.config/orbit/", "644"],
 ]
 conf-files = ["/etc/orbit/login.yaml"]
 # Enables the service on install (and turns other display managers off).

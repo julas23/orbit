@@ -19,6 +19,12 @@
 //! password and open the station (pending §9) on another console, this
 //! session staying locked behind.
 //!
+//! As the greeter (PLANO-DISTRO §6.4: run by a system account, while an
+//! encrypted `/home` is shut and no one's session can start), the card is
+//! for the default user of Orbit-Login, the others below, and the
+//! password goes to Orbit-Login, which opens `/home` with it and shows
+//! that user's session; the greeter's ends.
+//!
 //! It stays running between locks: at each `locked` the field is emptied
 //! and ready. Wrong passwords wait longer each time. Run anywhere else it
 //! is a preview: a right password just quits.
@@ -118,6 +124,8 @@ struct Greet {
     remote: gtk::ToggleButton,
     /// Orbit-Login and orbit-local-station are there.
     can_station: bool,
+    /// The greeter's: every password goes to Orbit-Login's `login`.
+    greeter: bool,
     link: Option<Rc<Link>>,
     app: gtk::Application,
     password: gtk::PasswordEntry,
@@ -208,9 +216,11 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
     // Someone to switch to only from a lock the core holds, on a seat
     // Orbit-Login runs.
     let people = if link.is_some() && orbit_login::available() { orbit_login::users() } else { Vec::new() };
-    let people = if people.len() > 1 && people.iter().any(|p| p.name == user) { people } else { Vec::new() };
+    // A session of no one who can log in is the greeter's.
+    let greeter = !people.is_empty() && !people.iter().any(|p| p.name == user);
+    let people = if greeter || (people.len() > 1 && people.iter().any(|p| p.name == user)) { people } else { Vec::new() };
     // The remote session likewise, with the station installed.
-    let can_station = link.is_some() && orbit_login::available() && glib::find_program_in_path("orbit-local-station").is_some();
+    let can_station = !greeter && link.is_some() && orbit_login::available() && glib::find_program_in_path("orbit-local-station").is_some();
     modes.set_visible(can_station);
     let greet = Rc::new(Greet {
         chosen: RefCell::new(user.clone()),
@@ -223,6 +233,7 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         modes,
         remote,
         can_station,
+        greeter,
         link: link.clone(),
         app: app.clone(),
         password: password.clone(),
@@ -258,7 +269,7 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
                 greet.back();
                 return glib::Propagation::Stop;
             }
-            if key == gdk::Key::Escape && *greet.chosen.borrow() != greet.me && !greet.busy.get() {
+            if key == gdk::Key::Escape && !greet.greeter && *greet.chosen.borrow() != greet.me && !greet.busy.get() {
                 greet.choose(&greet.me.clone());
                 return glib::Propagation::Stop;
             }
@@ -274,7 +285,13 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         let greet = greet.clone();
         link.watch(move |event| greet.event(event));
     }
-    greet.show_others();
+    if greeter {
+        let first = orbit_login::default_user().filter(|d| greet.people.iter().any(|p| &p.name == d));
+        let first = first.unwrap_or_else(|| greet.people[0].name.clone());
+        greet.choose(&first);
+    } else {
+        greet.show_others();
+    }
     window.present();
     password.grab_focus();
 }
@@ -365,17 +382,23 @@ impl Greet {
     }
 
     /// The password of someone else: Orbit-Login checks it and shows
-    /// their session; this one stays locked, back on its own user.
+    /// their session; this one stays locked, back on its own user. The
+    /// greeter's goes away instead.
     fn switch(self: &Rc<Self>, user: String, password: String) {
         let (tx, rx) = async_channel::bounded(1);
+        let request = if self.greeter { orbit_login::Request::Login { user, password } } else { orbit_login::Request::Switch { user, password } };
         std::thread::spawn(move || {
-            let reply = orbit_login::call(&orbit_login::Request::Switch { user, password });
+            let reply = orbit_login::call(&request);
             let _ = tx.send_blocking(reply);
         });
         let greet = self.clone();
         glib::spawn_future_local(async move {
             let reply = rx.recv().await.unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
             match reply {
+                Ok(orbit_login::Reply::Ok) if greet.greeter => {
+                    log::info!("{} logged in", greet.chosen.borrow());
+                    greet.message.set_text("");
+                }
                 Ok(orbit_login::Reply::Ok) => {
                     log::info!("switched to {}", greet.chosen.borrow());
                     greet.failures.set(0);
@@ -450,6 +473,8 @@ impl Greet {
         } else {
             show_avatar(&self.avatar, user, &person.home);
             self.name.set_text(person.shown());
+        }
+        if user != self.me && !self.greeter {
             let user = user.to_owned();
             std::thread::spawn(move || match orbit_login::call(&orbit_login::Request::Prepare { user: user.clone() }) {
                 Ok(orbit_login::Reply::Ok) => log::info!("{user}'s session is ready"),

@@ -219,6 +219,23 @@ num menu com duas escolhas.
   depois que a senha abre o volume. Uma **chave de recuperação**
   (`systemd-cryptenroll --recovery-key`) é mostrada uma vez na instalação,
   com confirmação de que foi anotada.
+  Como ficou (2026-11-02): a pergunta vem no fim da instalação
+  (`finish-install.d/05orbit-home`, só com `/home` em partição própria),
+  antes de o instalador apagar a senha do debconf; o `late.sh` cifra a
+  partição (o `/home` ainda só tem a pasta do usuário novo), e o
+  `96orbit-recovery` mostra a chave até a resposta ser "sim". No sistema,
+  `home: home` no `login.yaml` (a entrada do `/etc/crypttab`, `noauto`, como
+  a linha do `/home` no fstab): com o volume fechado, a sessão do boot é a da
+  conta de sistema `orbit-greeter` (só o orbit-greet, sem painel), e a senha
+  vai ao orbit-login (`login`), que abre o volume (`--disable-keyring`, para
+  a chave ficar na tabela do device mapper), monta o `/home`, abre a sessão
+  do usuário destravada e encerra a do greeter. O slot de cada usuário fica
+  em `/etc/orbit/home-keyslots`; trocar a senha com o `/home` aberto
+  (pam_exec no `common-password`, `orbit-login --home-key`) cria um slot novo
+  com a chave do volume e apaga o antigo, e um login com a senha antiga ou a
+  chave de recuperação também acerta o slot. Com o `/home` cifrado, o swap em
+  disco (4 GB de RAM ou menos) usa uma chave aleatória por boot e os core
+  dumps ficam desligados.
 - **Swap:** zram em todas as máquinas; swap em disco **só com 4 GB de RAM ou
   menos**, do tamanho da RAM: partição (cifrada com chave nova a cada boot
   quando o `/home` é LUKS) no layout separado, arquivo num subvolume `@swap`

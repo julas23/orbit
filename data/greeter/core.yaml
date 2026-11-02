@@ -1,0 +1,6 @@
+# Orbit-Core of the greeter (orbit-login's system account, PLANO-DISTRO
+# §6.4): the session on screen while an encrypted /home is shut. Only the
+# greet: no panel, dock or agents, and it never locks by itself (it is
+# locked from the start and never unlocks).
+startup: []
+idle_lock: 0

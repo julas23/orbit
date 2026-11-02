@@ -19,7 +19,18 @@
 //! to the locked local one. Only programs of the sessions it opened may
 //! ask.
 //!
+//! With an encrypted `/home` (`home:`, docs/PLANO-DISTRO.md §6.4) no one's
+//! session can start before it opens: while it is shut, the session at
+//! boot is the greeter's (the system account `orbit-greeter`, running the
+//! same command), whose greet shows the default user and sends `login`
+//! with their password. That password opens the volume and mounts
+//! `/home`; then their session opens, unlocked, and the greeter's ends.
+//! From then on all is as without encryption: `/home` stays open until
+//! the machine goes down.
+//!
 //!   orbit-login                   the service, as root
+//!   orbit-login --home-key        PAM's password stack (pam_exec): the
+//!                                 new password becomes the user's keyslot
 //!
 //! `/etc/orbit/login.yaml`:
 //!
@@ -27,7 +38,10 @@
 //!   command: orbit-core --locked  run through the user's login shell
 //!   vt: 1                         the default user's console
 //!   station: orbit-local-station  the remote session's command
+//!   home: home                    the /etc/crypttab entry of an encrypted
+//!                                 /home (none: not encrypted)
 
+mod home;
 mod pam;
 mod worker;
 
@@ -47,7 +61,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use orbit_login::{Reply, Request, SOCKET, User};
+use home::Home;
+use orbit_login::{GREETER, Reply, Request, SOCKET, User};
 use serde::Deserialize;
 
 const CONFIG: &str = "/etc/orbit/login.yaml";
@@ -69,12 +84,18 @@ struct Config {
     command: String,
     vt: u32,
     station: String,
+    home: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { user: String::new(), command: "orbit-core --locked".into(), vt: 1, station: "orbit-local-station".into() }
+        Self { user: String::new(), command: "orbit-core --locked".into(), vt: 1, station: "orbit-local-station".into(), home: None }
     }
+}
+
+fn read_config() -> anyhow::Result<Config> {
+    let text = std::fs::read_to_string(CONFIG).map_err(|e| anyhow::anyhow!("{CONFIG}: {e}"))?;
+    serde_yaml_ng::from_str(&text).map_err(|e| anyhow::anyhow!("{CONFIG}: {e}"))
 }
 
 /// A session this service opened.
@@ -96,6 +117,8 @@ struct Service {
     opening: Mutex<()>,
     /// Wrong passwords per user, and the last one's time.
     failures: Mutex<HashMap<String, (u32, Instant)>>,
+    /// The encrypted `/home`, if there is one.
+    home: Option<Home>,
 }
 
 fn main() {
@@ -111,6 +134,7 @@ fn main() {
         },
         ["--session", user, vt, command] => worker::session(user, vt.parse().unwrap_or(0), command),
         ["--check", user] => worker::check(user),
+        ["--home-key"] => home::home_key(read_config().ok().and_then(|c| c.home).as_deref()),
         ["-h" | "--help"] => {
             println!("Usage: orbit-login  (the service, as root; configured in {CONFIG})");
             0
@@ -128,15 +152,22 @@ fn serve() -> anyhow::Result<()> {
     if unsafe { libc::geteuid() } != 0 {
         anyhow::bail!("orbit-login runs as root (the service, orbit-login.service)");
     }
-    let text = std::fs::read_to_string(CONFIG).map_err(|e| anyhow::anyhow!("{CONFIG}: {e}"))?;
-    let config: Config = serde_yaml_ng::from_str(&text).map_err(|e| anyhow::anyhow!("{CONFIG}: {e}"))?;
-    let default = orbit_login::user(&config.user).ok_or_else(|| anyhow::anyhow!("{CONFIG}: user {:?} cannot log in", config.user))?;
+    let config = read_config()?;
+    orbit_login::user(&config.user).ok_or_else(|| anyhow::anyhow!("{CONFIG}: user {:?} cannot log in", config.user))?;
+    let home = match &config.home {
+        Some(name) => Some(Home::find(name).ok_or_else(|| anyhow::anyhow!("{CONFIG}: home {name:?} is not in /etc/crypttab"))?),
+        None => None,
+    };
+    if home.is_some() && orbit_login::account(GREETER).is_none() {
+        anyhow::bail!("the encrypted /home needs the account {GREETER} (orbit-login's postinst makes it)");
+    }
     let service = Arc::new(Service {
         exe: std::env::current_exe()?,
         config,
         sessions: Mutex::default(),
         opening: Mutex::default(),
         failures: Mutex::default(),
+        home,
     });
 
     let _ = std::fs::create_dir_all("/run/orbit");
@@ -145,7 +176,7 @@ fn serve() -> anyhow::Result<()> {
     // Anyone may connect; who asks is checked per request.
     std::fs::set_permissions(SOCKET, std::fs::Permissions::from_mode(0o666))?;
 
-    service.open(&default, Some(service.config.vt)).map_err(|e| anyhow::anyhow!(e))?;
+    service.open_default().map_err(|e| anyhow::anyhow!(e))?;
     log::info!("listening on {SOCKET}");
     // One request at a time: a check waits for PAM anyway.
     for stream in listener.incoming() {
@@ -158,6 +189,25 @@ fn serve() -> anyhow::Result<()> {
 }
 
 impl Service {
+    /// While an encrypted `/home` is shut.
+    fn home_shut(&self) -> bool {
+        self.home.as_ref().is_some_and(|h| !h.is_open())
+    }
+
+    /// The session of the screen at boot, on the default console: the
+    /// default user's, or the greeter's while `/home` is shut.
+    fn open_default(self: &Arc<Self>) -> Result<(), String> {
+        let name = if self.home_shut() { GREETER } else { &self.config.user };
+        let user = orbit_login::account(name).ok_or_else(|| format!("{name}: no such user"))?;
+        self.open(&user, Some(self.config.vt))
+    }
+
+    /// The session on the default console, whichever it is.
+    fn default_key(&self) -> Option<String> {
+        let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        sessions.iter().find(|(_, s)| s.vt == self.config.vt).map(|(k, _)| k.clone())
+    }
+
     /// Opens `user`'s session on `vt`, or on the next free console.
     fn open(self: &Arc<Self>, user: &User, vt: Option<u32>) -> Result<(), String> {
         let command = self.config.command.clone();
@@ -234,7 +284,12 @@ impl Service {
     fn ended(self: &Arc<Self>, name: &str, ran: Duration, status: std::io::Result<ExitStatus>) {
         self.sessions.lock().unwrap_or_else(|e| e.into_inner()).remove(name);
         log::info!("{name}: the session ended after {} s ({status:?})", ran.as_secs());
-        if name == self.config.user {
+        if name == GREETER && !self.home_shut() {
+            // Ended by a login: the user's session is on screen.
+            self.show_something();
+            return;
+        }
+        if name == self.config.user || name == GREETER {
             if ran < RESTART_AFTER {
                 log::error!("{name}'s session died at start: not opened again");
                 if self.sessions.lock().unwrap_or_else(|e| e.into_inner()).is_empty() {
@@ -243,8 +298,8 @@ impl Service {
                 }
                 return;
             }
-            if let Some(user) = orbit_login::user(name)
-                && let Err(err) = self.open(&user, Some(self.config.vt))
+            if self.default_key().is_none()
+                && let Err(err) = self.open_default()
             {
                 log::error!("{err}");
             }
@@ -263,12 +318,13 @@ impl Service {
         if self.sessions.lock().unwrap_or_else(|e| e.into_inner()).values().any(|s| s.id.as_deref() == Some(&active)) {
             return;
         }
-        let Some(user) = orbit_login::user(&self.config.user) else { return };
-        if let Err(err) = self.open(&user, Some(self.config.vt)) {
+        if self.default_key().is_none()
+            && let Err(err) = self.open_default()
+        {
             log::error!("{err}");
             return;
         }
-        if let Some(id) = self.session_id(&user.name) {
+        if let Some(id) = self.default_key().and_then(|key| self.session_id(&key)) {
             activate(&id);
         }
     }
@@ -298,7 +354,7 @@ impl Service {
             return Reply::Error("only the sessions of orbit-login may ask".into());
         }
         let target = match &request {
-            Request::Prepare { user } | Request::Switch { user, .. } => orbit_login::user(user).ok_or_else(|| format!("{user}: no such user")),
+            Request::Prepare { user } | Request::Switch { user, .. } | Request::Login { user, .. } => orbit_login::user(user).ok_or_else(|| format!("{user}: no such user")),
             Request::Station { .. } => orbit_login::user_by_uid(peer).ok_or_else(|| format!("uid {peer}: no such user")),
         };
         let target = match target {
@@ -307,6 +363,13 @@ impl Service {
         };
         match request {
             Request::Station { password } => self.station(&target, password),
+            Request::Login { password, .. } => {
+                if orbit_login::account(GREETER).is_none_or(|g| g.uid != peer) {
+                    return Reply::Error("only the greeter logs in".into());
+                }
+                self.login(&target, password)
+            }
+            Request::Prepare { .. } if self.home_shut() => Reply::Error("/home is shut".into()),
             Request::Prepare { .. } => {
                 if target.uid == peer {
                     return Reply::Ok;
@@ -351,6 +414,62 @@ impl Service {
                 Reply::Ok
             }
         }
+    }
+
+    /// From the greeter: `user`'s password opens `/home` (unless it is
+    /// open), their session opens, the password is checked (unlocking
+    /// their keyring) and becomes their keyslot, and the session is shown
+    /// unlocked. The greeter's ends.
+    fn login(self: &Arc<Self>, user: &User, password: String) -> Reply {
+        log::info!("the greeter logs {} in", user.name);
+        if let Some(wait) = self.wait_left(&user.name) {
+            return Reply::Refused(format!("Too many tries: wait {wait} s"));
+        }
+        let refused = |service: &Self, why: String| {
+            log::warn!("{}: refused: {why}", user.name);
+            let mut failures = service.failures.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = failures.entry(user.name.clone()).or_insert((0, Instant::now()));
+            *entry = (entry.0 + 1, Instant::now());
+            Reply::Refused(why)
+        };
+        if let Some(home) = &self.home
+            && let Err(why) = home.open(&password)
+        {
+            return refused(self, why);
+        }
+        if let Err(err) = self.open(user, None) {
+            return Reply::Error(err);
+        }
+        if let Err(why) = self.check(user, password.clone()) {
+            return refused(self, why);
+        }
+        self.failures.lock().unwrap_or_else(|e| e.into_inner()).remove(&user.name);
+        if let Some(home) = &self.home
+            && let Err(err) = home.follow(&user.name, &password)
+        {
+            log::error!("{}: the /home keyslot did not follow the password: {err}", user.name);
+        }
+        drop(password);
+        let (id, core) = {
+            let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(session) = sessions.get(&user.name) else { return Reply::Error("the session went away".into()) };
+            (session.id.clone(), session.core)
+        };
+        let Some(id) = id else { return Reply::Error("the session has no logind id".into()) };
+        if !activate(&id) {
+            return Reply::Error("logind did not show the session".into());
+        }
+        let uid = user.uid;
+        let greeter = self.sessions.lock().unwrap_or_else(|e| e.into_inner()).get(GREETER).and_then(|s| s.core);
+        std::thread::spawn(move || {
+            unlock(uid, core);
+            if let Some(pid) = greeter {
+                // Safety: a signal to the greeter's core, which this
+                // service started.
+                unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+            }
+        });
+        Reply::Ok
     }
 
     /// `user`'s remote session: their password, then orbit-local-station

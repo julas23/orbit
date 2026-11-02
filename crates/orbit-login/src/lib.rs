@@ -17,6 +17,12 @@ use serde::{Deserialize, Serialize};
 
 pub const SOCKET: &str = "/run/orbit/login.sock";
 
+/// The system account of the greeter: the session on screen while an
+/// encrypted `/home` is shut (no one's session can start before it opens).
+pub const GREETER: &str = "orbit-greeter";
+
+const CONFIG: &str = "/etc/orbit/login.yaml";
+
 /// A switch waits for PAM (a wrong password, a couple of seconds) and
 /// for the other session to open.
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -33,6 +39,10 @@ pub enum Request {
     /// theirs running orbit-local-station (the remote one, pending §9) and
     /// show it; their local session stays locked behind.
     Station { password: String },
+    /// From the greeter, while the encrypted `/home` is shut: open it
+    /// with `user`'s password, check that password and show their session
+    /// unlocked. The greeter's session then ends.
+    Login { user: String, password: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,13 +107,34 @@ pub fn user_by_uid(uid: u32) -> Option<User> {
     users().into_iter().find(|u| u.uid == uid)
 }
 
+/// Any account of `/etc/passwd`, a system one too (the greeter's).
+pub fn account(name: &str) -> Option<User> {
+    let text = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
+    text.lines().find(|l| l.split(':').next() == Some(name)).and_then(parse_any)
+}
+
+/// The user whose session opens at boot (`user:` of `/etc/orbit/login.yaml`).
+pub fn default_user() -> Option<String> {
+    let text = std::fs::read_to_string(CONFIG).ok()?;
+    text.lines().find_map(|l| {
+        let value = l.strip_prefix("user:")?.split('#').next()?.trim().trim_matches(['"', '\'']);
+        (!value.is_empty()).then(|| value.to_owned())
+    })
+}
+
 fn parse(line: &str) -> Option<User> {
+    let user = parse_any(line)?;
+    let shell = &user.shell;
+    if !(1000..60000).contains(&user.uid) || shell.ends_with("/nologin") || shell.ends_with("/false") || shell.is_empty() {
+        return None;
+    }
+    Some(user)
+}
+
+fn parse_any(line: &str) -> Option<User> {
     let fields: Vec<&str> = line.split(':').collect();
     let [name, _, uid, gid, gecos, home, shell] = fields[..] else { return None };
     let uid: u32 = uid.parse().ok()?;
-    if !(1000..60000).contains(&uid) || shell.ends_with("/nologin") || shell.ends_with("/false") || shell.is_empty() {
-        return None;
-    }
     let real = gecos.split(',').next().unwrap_or_default().trim();
     Some(User {
         name: name.to_owned(),
