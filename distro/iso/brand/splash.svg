@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768" width="1024" height="768">
+  <!-- Background of the ISO's boot menu (GRUB and isolinux). The menu itself
+       is drawn by the boot loader below the name. -->
+  <rect width="1024" height="768" fill="#000"/>
+  <g transform="translate(422 120) scale(1.8)">
+    <circle cx="50" cy="50" r="10" fill="#4682b4"/>
+    <circle cx="50" cy="50" r="24" fill="none" stroke="#6ea8e0" stroke-width="6" stroke-linecap="round"
+            stroke-dasharray="100 50.8" transform="rotate(200 50 50)"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#d8dee9" stroke-width="6"/>
+    <circle cx="66.1" cy="84.4" r="6.5" fill="#ff9500"/>
+  </g>
+  <text x="512" y="372" text-anchor="middle" font-family="Inter" font-weight="600" font-size="40" fill="#d8dee9">Orbit Linux</text>
+</svg>

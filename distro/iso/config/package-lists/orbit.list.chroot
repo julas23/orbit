@@ -41,3 +41,57 @@ firmware-atheros
 btrfs-progs
 snapper
 cryptsetup
+
+# Recommends the image is built without, but a desktop needs. Without
+# librsvg2-common GTK loads no SVG icon at all: with Papirus it finds none,
+# not even image-missing, and GTK 4.18 recurses until the stack overflows.
+librsvg2-common
+libgdk-pixbuf2.0-bin
+at-spi2-core
+libnss-systemd
+systemd-timesyncd
+systemd-cryptsetup
+apparmor
+# sound, Wi-Fi, Bluetooth
+alsa-ucm-conf
+rtkit
+wpasupplicant
+dnsmasq-base
+modemmanager
+bluez
+# keyring unlocked at login
+libpam-gnome-keyring
+gnome-keyring-pkcs11
+# orbit-play, orbit-files, orbit-read
+libgtk-4-media-gstreamer
+gstreamer1.0-plugins-bad
+gstreamer1.0-libav
+gstreamer1.0-pipewire
+gstreamer1.0-gl
+va-driver-all
+ffmpegthumbnailer
+libheif-plugin-aomenc
+libheif-plugin-x265
+gvfs-backends
+gvfs-fuse
+poppler-data
+ntfs-3g
+exfatprogs
+dosfstools
+zip
+unzip
+p7zip-full
+eject
+# Qt applications on Wayland
+qt6-wayland
+qtwayland5
+qt6-svg-plugins
+libqt5svg5
+# screen sharing picks an area with slurp
+slurp
+# shell comforts
+bash-completion
+psmisc
+uuid-runtime
+rsync
+enchant-2

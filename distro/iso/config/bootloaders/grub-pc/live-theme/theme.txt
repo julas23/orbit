@@ -1,0 +1,48 @@
+# Orbit Linux boot menu: black, the mark and the name in splash.png, the menu below.
+desktop-image: "../splash.png"
+desktop-color: "#000000"
+title-text: ""
+terminal-font: "Unifont Regular 16"
+
++ boot_menu {
+	left = 30%
+	width = 40%
+	top = 56%
+	height = 30%
+	item_font = "Orbit UI Regular 18"
+	selected_item_font = "Orbit UI Bold Regular 22"
+	item_color = "#8a93a3"
+	selected_item_color = "#ffffff"
+	item_height = 34
+	item_padding = 8
+	item_spacing = 6
+	icon_width = 0
+	icon_height = 0
+	item_icon_space = 0
+	scrollbar = false
+}
+
++ progress_bar {
+	id = "__timeout__"
+	left = 35%
+	width = 30%
+	top = 84%
+	height = 24
+	font = "Orbit UI Small Regular 14"
+	text_color = "#8a93a3"
+	fg_color = "#16263a"
+	bg_color = "#0b0d11"
+	border_color = "#0b0d11"
+	text = "Starting in %d s"
+}
+
++ label {
+	left = 0
+	width = 100%
+	top = 100%-36
+	height = 20
+	align = "center"
+	font = "Orbit UI Small Regular 14"
+	color = "#5f6773"
+	text = "Enter: start    E: edit the entry    C: command line"
+}

@@ -1,0 +1,6 @@
+# Orbit Linux's look (docs/PLANO-DISTRO.md §11), over orbit-defaults' 90_orbit.
+[org.gnome.desktop.interface]
+icon-theme='Papirus-Dark'
+cursor-theme='Breeze_Light'
+font-name='Inter 11'
+document-font-name='Inter 11'

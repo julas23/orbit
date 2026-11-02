@@ -1,0 +1,8 @@
+#!/bin/sh
+# live-build's 9000-remove-gnome-icon-cache drops every icon theme's cache to
+# save space; without them GTK reads Papirus's thousands of files at every
+# start. They are made again here.
+set -e
+for theme in /usr/share/icons/*/; do
+	[ -f "$theme/index.theme" ] && gtk-update-icon-cache -q -f "$theme" || true
+done

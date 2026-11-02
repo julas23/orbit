@@ -1,0 +1,26 @@
+# Orbit Linux's dock for a new user: the Orbit applications and the browser.
+edge: top
+size: 36
+monitor: 0
+reserve: true
+align: end
+icon_size: 24
+apps:
+  - desktop: io.github.julas23.Orbit.Files.desktop
+    group: system
+  - desktop: io.github.julas23.Orbit.Term.desktop
+    group: system
+  - desktop: io.github.julas23.Orbit.Edit.desktop
+    group: work
+  - desktop: io.github.julas23.Orbit.Read.desktop
+    group: work
+  - desktop: firefox-esr.desktop
+    group: web
+  - desktop: io.github.julas23.Orbit.Pathfinder.desktop
+    group: web
+  - desktop: io.github.julas23.Orbit.View.desktop
+    group: media
+  - desktop: io.github.julas23.Orbit.Play.desktop
+    group: media
+  - desktop: io.github.julas23.Orbit.Calc.desktop
+    group: system

@@ -1,0 +1,22 @@
+# Orbit Linux's panel for a new user: the example's modules, without the
+# weather ones, which need a place set first.
+edge: left
+size: 154
+monitor: 0
+reserve: true
+start:
+  - menu
+  - windows
+center: []
+end:
+  - clock
+  - calendar
+  - tray
+  - brightness
+  - volume
+  - network
+  - keyboard
+  - battery
+  - notifications
+  - workspaces
+  - session

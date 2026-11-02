@@ -1,7 +1,8 @@
 #!/bin/sh
 # The Live session opens by itself: Orbit-Login starts the live user's
-# session at boot unlocked, and the session never locks on idle. The
-# installed system never gets these (docs/PLANO-DISTRO.md §6.1).
+# session at boot unlocked. The installed system never gets this
+# (docs/PLANO-DISTRO.md §6.1). The look and the new user's defaults come
+# from config/includes.chroot_after_packages.
 set -e
 
 cat > /etc/orbit/login.yaml <<'YAML'
@@ -11,12 +12,8 @@ command: orbit-core
 vt: 1
 YAML
 
-mkdir -p /etc/skel/.config/orbit
-cat > /etc/skel/.config/orbit/core.yaml <<'YAML'
-idle_lock: 0
-YAML
-
 # Marks the Live image for whatever needs to tell it from an installed system.
 touch /etc/orbit/live
 
+glib-compile-schemas /usr/share/glib-2.0/schemas
 systemctl enable orbit-login.service

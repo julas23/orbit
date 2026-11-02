@@ -1,0 +1,9 @@
+# Orbit Linux's defaults for a new user (docs/PLANO-DISTRO.md §11).
+terminal: orbit-term
+# The Live session never locks on idle (the live user has no password to type).
+idle_lock: 0
+startup:
+  - dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY ORBIT_SOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+  - orbit-polkit
+  - orbit-session
+  - xdg-user-dirs-update
