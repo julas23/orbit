@@ -533,6 +533,39 @@ files-help-views = List, icons, columns
 files-help-tabs = New tab, close tab
 files-help-other-pane = The other pane
 files-help-history = Back, forward, up
+files-properties = Properties
+files-properties-menu = Properties
+files-prop-items = { $n } items
+files-prop-where = Location
+files-prop-size = Size
+files-prop-bytes = { $size } ({ $bytes } bytes)
+files-prop-counting-start = Counting…
+files-prop-counting = Counting… { $n } items, { $size }
+files-prop-contents = { $n } items, { $size }
+files-prop-kind = Kind
+files-prop-link = Link to
+files-prop-modified = Modified
+files-prop-accessed = Accessed
+files-prop-created = Created
+files-prop-owner = Owner
+files-prop-permissions = Permissions
+files-prop-read = Read
+files-prop-write = Write
+files-prop-execute = Run
+files-prop-user = Owner
+files-prop-group = Group
+files-prop-others = Others
+files-mounts-show = Show the network folders mounted into the tree
+files-mounts-hide = Hide the network folders mounted into the tree
+files-help-properties = Properties of the selection, or of the folder
+files-close-busy = { $n ->
+    [one] A job is still running
+   *[other] { $n } jobs are still running
+}
+files-close-busy-detail = Copies, moves and deletions can go on without the window: Orbit-Files keeps running until they end.
+files-close-stay = Don't close
+files-close-stop = Stop and close
+files-close-background = Keep running in the background
 files-help-vim = Down, up, out, in; first, last
 
 # Orbit-Pathfinder

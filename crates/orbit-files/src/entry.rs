@@ -122,29 +122,8 @@ fn list_local(dir: &Path, tx: &async_channel::Sender<Listing>) -> Result<(), Str
     let entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
     let mut batch = Vec::with_capacity(BATCH);
     for entry in entries.filter_map(Result::ok) {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let path = entry.path();
-        let Ok(meta) = entry.metadata() else { continue };
-        let link = meta.file_type().is_symlink();
-        // A link counts as what it points to.
-        let target = if link { std::fs::metadata(&path).ok() } else { None };
-        let dir = target.as_ref().map_or(meta.is_dir(), |t| t.is_dir());
-        let size = target.as_ref().map_or(meta.len(), |t| t.len());
-        let modified = meta
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map_or(0, |d| d.as_secs() as i64);
-        batch.push(Entry {
-            hidden: name.starts_with('.'),
-            mime: if dir { "inode/directory".into() } else { mime_of(&name) },
-            name,
-            location: Location::Path(path),
-            dir,
-            link,
-            size,
-            modified,
-        });
+        let Some(e) = entry_for(&entry.path()) else { continue };
+        batch.push(e);
         if batch.len() >= BATCH {
             if tx.send_blocking(Listing::Batch(std::mem::take(&mut batch))).is_err() {
                 return Ok(());
@@ -156,6 +135,33 @@ fn list_local(dir: &Path, tx: &async_channel::Sender<Listing>) -> Result<(), Str
         let _ = tx.send_blocking(Listing::Batch(batch));
     }
     Ok(())
+}
+
+/// The entry for one local path — what listing its folder would give.
+/// One `lstat` (two for a link); call it off the main thread.
+pub fn entry_for(path: &Path) -> Option<Entry> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    let link = meta.file_type().is_symlink();
+    // A link counts as what it points to.
+    let target = if link { std::fs::metadata(path).ok() } else { None };
+    let dir = target.as_ref().map_or(meta.is_dir(), |t| t.is_dir());
+    let size = target.as_ref().map_or(meta.len(), |t| t.len());
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs() as i64);
+    Some(Entry {
+        hidden: name.starts_with('.'),
+        mime: if dir { "inode/directory".into() } else { mime_of(&name) },
+        name,
+        location: Location::Path(path.to_path_buf()),
+        dir,
+        link,
+        size,
+        modified,
+    })
 }
 
 fn list_gio(dir: &gio::File, tx: &async_channel::Sender<Listing>) -> Result<(), String> {

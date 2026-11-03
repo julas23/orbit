@@ -20,6 +20,7 @@ mod ops;
 mod pane;
 mod places;
 mod preview;
+mod properties;
 mod rename;
 mod thumbs;
 mod window;
@@ -27,7 +28,7 @@ mod window;
 use std::{cell::RefCell, rc::Rc};
 
 use entry::Location;
-use gtk::{gio, glib};
+use gtk::{gio, glib, prelude::*};
 use orbit_common::ConfigDir;
 use serde::Deserialize;
 use window::Window;
@@ -51,7 +52,8 @@ impl Default for Config {
 }
 
 thread_local! {
-    static WINDOW: RefCell<Option<Rc<Window>>> = const { RefCell::new(None) };
+    /// Every window open (launching it again opens another).
+    static WINDOWS: RefCell<Vec<Rc<Window>>> = const { RefCell::new(Vec::new()) };
 }
 
 fn main() -> glib::ExitCode {
@@ -61,6 +63,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/files.css"),
         build,
         resident: false,
+        windows: true,
         open: Some(open),
     })
 }
@@ -68,7 +71,10 @@ fn main() -> glib::ExitCode {
 fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::ApplicationWindow> {
     let window = Window::new(app, dir.app("files")?, actions::load(dir));
     let w = window.window().clone();
-    WINDOW.with(|cell| *cell.borrow_mut() = Some(window.clone()));
+    WINDOWS.with(|cell| cell.borrow_mut().push(window.clone()));
+    w.connect_destroy(|gone| {
+        WINDOWS.with(|cell| cell.borrow_mut().retain(|w| w.window() != gone));
+    });
     // Launched without a folder: home. (A folder given arrives first.)
     glib::idle_add_local_once(move || {
         if !window.has_tabs() {
@@ -79,8 +85,10 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
 }
 
 /// Shows the folders given — a file's folder, for a file.
-fn open(_window: &gtk::ApplicationWindow, files: &[gio::File]) {
-    let Some(window) = WINDOW.with(|cell| cell.borrow().clone()) else { return };
+fn open(window: &gtk::ApplicationWindow, files: &[gio::File]) {
+    let Some(window) = WINDOWS.with(|cell| cell.borrow().iter().find(|w| w.window() == window).cloned()) else {
+        return;
+    };
     for file in files {
         let location = Location::of(file);
         let location = match &location {

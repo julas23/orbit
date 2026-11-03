@@ -32,6 +32,7 @@ const KEYS: &[(&str, &str)] = &[
     ("Ctrl+T, Ctrl+W", "files-help-tabs"),
     ("Tab", "files-help-other-pane"),
     ("Alt+← → ↑", "files-help-history"),
+    ("Alt+Enter", "files-help-properties"),
     ("j k h l, gg G", "files-help-vim"),
 ];
 

@@ -36,6 +36,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/view.css"),
         build,
         resident: false,
+        windows: false,
         open: Some(open),
     })
 }

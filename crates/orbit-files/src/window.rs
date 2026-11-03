@@ -263,8 +263,42 @@ impl Window {
         });
         w.connect_keys();
         w.connect_mouse_buttons();
+        w.connect_close();
         w.actions_group();
         w
+    }
+
+    /// Closing with jobs running asks: leave them running (the program
+    /// stays until they end), stop them, or not close.
+    fn connect_close(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        self.window.connect_close_request(move |window| {
+            let Some(w) = weak.upgrade() else { return glib::Propagation::Proceed };
+            let n = w.jobs.count();
+            if n == 0 {
+                return glib::Propagation::Proceed;
+            }
+            let dialog = gtk::AlertDialog::builder()
+                .modal(true)
+                .message(tr_args("files-close-busy", &[("n", number(n as f64))]))
+                .detail(tr("files-close-busy-detail"))
+                .buttons([tr("files-close-stay"), tr("files-close-stop"), tr("files-close-background")])
+                .cancel_button(0)
+                .default_button(2)
+                .build();
+            let weak = Rc::downgrade(&w);
+            dialog.choose(Some(window), gio::Cancellable::NONE, move |r| {
+                let Some(w) = weak.upgrade() else { return };
+                match r {
+                    Ok(1) => w.jobs.stop_all(),
+                    Ok(2) => {}
+                    _ => return,
+                }
+                // The jobs hold the program; the window goes.
+                w.window.destroy();
+            });
+            glib::Propagation::Stop
+        });
     }
 
     /// The mouse's back and forward buttons (8 and 9), read from the raw
@@ -797,6 +831,27 @@ impl Window {
         }
     }
 
+    /// Alt+Enter: the properties of the selection, or of the folder.
+    fn properties(&self) {
+        let pane = self.pane();
+        let mut selected = pane.selected();
+        if selected.is_empty() {
+            let here = pane.location.borrow().clone();
+            let name = here.name();
+            selected.push(Entry {
+                hidden: name.starts_with('.'),
+                name,
+                location: here,
+                dir: true,
+                link: false,
+                size: 0,
+                modified: 0,
+                mime: "inode/directory".into(),
+            });
+        }
+        crate::properties::show(self.window.upcast_ref(), selected);
+    }
+
     /// F1: the keys.
     fn help(&self) {
         crate::help::show(self.window.upcast_ref());
@@ -827,6 +882,7 @@ impl Window {
         add("compress", |w| w.compress());
         add("extract", |w| w.extract());
         add("copy-path", |w| w.copy_paths());
+        add("properties", |w| w.properties());
         add("new-tab", |w| {
             let at = w.pane().focused().filter(|e| e.dir).map(|e| e.location).unwrap_or_else(|| w.pane().location.borrow().clone());
             w.new_tab(at);
@@ -939,6 +995,7 @@ impl Window {
         if !custom.is_empty() {
             sections.push(custom);
         }
+        sections.push(vec![item(&tr("files-properties-menu"), "files.properties", None)]);
         for (n, section) in sections.into_iter().enumerate() {
             if n > 0 {
                 column.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
@@ -1035,6 +1092,7 @@ impl Window {
                 Key::Left => pane.back(),
                 Key::Right => pane.forward(),
                 Key::Up => pane.up(),
+                Key::Return | Key::KP_Enter => self.properties(),
                 _ => return false,
             }
             return true;

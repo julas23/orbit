@@ -62,6 +62,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/edit.css"),
         build,
         resident: false,
+        windows: false,
         open: Some(open),
     })
 }

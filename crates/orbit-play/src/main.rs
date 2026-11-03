@@ -29,6 +29,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/play.css"),
         build,
         resident: false,
+        windows: false,
         open: Some(open),
     })
 }

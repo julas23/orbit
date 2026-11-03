@@ -4,7 +4,7 @@
 //! server" for SMB, SFTP, FTP or WebDAV shares, which GVfs mounts (asking
 //! for a password when one is needed).
 
-use std::{path::PathBuf, rc::Rc};
+use std::{cell::Cell, path::PathBuf, rc::Rc};
 
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::tr;
@@ -18,8 +18,9 @@ pub struct Places {
     list: gtk::ListBox,
     monitor: gio::VolumeMonitor,
     go: Go,
-    /// Every mount under "Devices", not just volumes.
-    all_mounts: bool,
+    /// Every mount under "Devices", not just volumes; the eye on the
+    /// heading turns it over.
+    all_mounts: Cell<bool>,
 }
 
 impl Places {
@@ -38,7 +39,7 @@ impl Places {
             list,
             monitor: gio::VolumeMonitor::get(),
             go: Rc::new(go),
-            all_mounts,
+            all_mounts: Cell::new(all_mounts),
         });
         places.fill();
         // Disks come and go.
@@ -81,21 +82,25 @@ impl Places {
             }
         }
 
+        let all = self.all_mounts.get();
+        let mut hidden = 0;
         let mounts: Vec<gio::Mount> = self
             .monitor
             .mounts()
             .into_iter()
-            .filter(|m| !m.is_shadowed() && (self.all_mounts || is_volume(m)))
+            .filter(|m| !m.is_shadowed())
+            .filter(|m| all || is_volume(m) || { hidden += 1; false })
             .collect();
         let unmounted: Vec<gio::Volume> = self
             .monitor
             .volumes()
             .into_iter()
             .filter(|v| v.get_mount().is_none() && v.can_mount())
+            .filter(|v| all || !is_network(v) || { hidden += 1; false })
             .collect();
-        // No heading over nothing.
-        if !mounts.is_empty() || !unmounted.is_empty() {
-            self.header(&tr("files-devices"));
+        // No heading over nothing — but over what is hidden, its eye.
+        if !mounts.is_empty() || !unmounted.is_empty() || hidden > 0 {
+            self.devices_header(hidden);
         }
         for mount in mounts {
             let root = mount.root();
@@ -158,6 +163,32 @@ impl Places {
                 p.connect_dialog();
             }
         });
+    }
+
+    /// "Devices", and the eye that shows or hides the network folders
+    /// mounted into the tree (NFS into home, and the like).
+    fn devices_header(self: &Rc<Self>, hidden: usize) {
+        let content = gtk::Box::builder().spacing(5).build();
+        content.append(&gtk::Label::builder().label(tr("files-devices")).xalign(0.0).hexpand(true).css_classes(["places-header"]).build());
+        let all = self.all_mounts.get();
+        if all || hidden > 0 {
+            let eye = gtk::Button::builder()
+                .icon_name(if all { "view-conceal-symbolic" } else { "view-reveal-symbolic" })
+                .tooltip_text(tr(if all { "files-mounts-hide" } else { "files-mounts-show" }))
+                .css_classes(["flat", "eject"])
+                .build();
+            let weak = Rc::downgrade(self);
+            eye.connect_clicked(move |_| {
+                if let Some(p) = weak.upgrade() {
+                    p.all_mounts.set(!p.all_mounts.get());
+                    // Not from inside the button being removed.
+                    glib::idle_add_local_once(move || p.fill());
+                }
+            });
+            content.append(&eye);
+        }
+        let row = gtk::ListBoxRow::builder().child(&content).activatable(false).selectable(false).build();
+        self.list.append(&row);
     }
 
     fn header(&self, title: &str) {
@@ -226,11 +257,20 @@ impl Places {
     }
 }
 
-/// A disk, partition, pendrive or network share — not a folder mounted
-/// somewhere in the tree (NFS into home, bind mounts), which has neither a
-/// volume nor a drive behind it and a plain local path.
+/// A disk, partition, pendrive, or a share connected to through GVfs
+/// (smb://, sftp://…) — not a folder mounted somewhere in the tree: NFS or
+/// CIFS from fstab (UDisks gives those a "network" volume), bind mounts
+/// (no volume, no drive).
 fn is_volume(mount: &gio::Mount) -> bool {
-    mount.volume().is_some() || mount.drive().is_some() || !mount.root().has_uri_scheme("file")
+    if !mount.root().has_uri_scheme("file") || mount.drive().is_some() {
+        return true;
+    }
+    mount.volume().is_some_and(|v| !is_network(&v))
+}
+
+/// A network filesystem from fstab, as UDisks marks it.
+fn is_network(volume: &gio::Volume) -> bool {
+    volume.identifier("class").as_deref() == Some("network")
 }
 
 /// The GTK bookmarks: (location, name).

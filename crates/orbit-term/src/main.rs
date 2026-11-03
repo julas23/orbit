@@ -75,6 +75,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/term.css"),
         build,
         resident: false,
+        windows: false,
         open: None,
     })
 }

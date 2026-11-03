@@ -90,6 +90,9 @@ pub struct App {
     /// handed to this after the window is built, and a second launch with
     /// files hands them to the running window.
     pub open: Option<fn(&gtk::ApplicationWindow, &[gio::File])>,
+    /// Launching it again opens another window, like a file manager,
+    /// instead of bringing the one running forward.
+    pub windows: bool,
 }
 
 /// Runs `spec` until its window is closed. Logging, arguments, the
@@ -115,26 +118,26 @@ pub fn run_app(spec: App) -> glib::ExitCode {
     let app = app.build();
     // The window, built on the first activation or open.
     let keep = std::rc::Rc::new(RefCell::new(None));
-    let window = {
+    // A new window; the stylesheet and the theme, the first time.
+    let make = {
         let keep = keep.clone();
         move |app: &gtk::Application| -> Option<gtk::ApplicationWindow> {
-            if let Some(window) = app.windows().first() {
-                return window.clone().downcast().ok();
-            }
             let Some(display) = gdk::Display::default() else {
                 log::error!("no display");
                 app.quit();
                 return None;
             };
             let dir = ConfigDir::new(&config_dir);
-            let style = Style::install(&display, spec.css, &dir.style_path());
-            let theme = theme::install(&display);
+            if keep.borrow().is_none() {
+                let style = Style::install(&display, spec.css, &dir.style_path());
+                let theme = theme::install(&display);
+                *keep.borrow_mut() = Some((style, theme));
+            }
             match (spec.build)(app, &dir) {
                 Ok(window) => {
                     if spec.resident {
                         window.set_hide_on_close(true);
                     }
-                    *keep.borrow_mut() = Some((style, theme));
                     if !background {
                         window.present();
                     }
@@ -142,16 +145,33 @@ pub fn run_app(spec: App) -> glib::ExitCode {
                 }
                 Err(err) => {
                     log::error!("{err:#}");
-                    app.quit();
+                    if app.windows().is_empty() {
+                        app.quit();
+                    }
                     None
                 }
             }
         }
     };
+    // The window there is (the last one used), or a new one.
+    let window = {
+        let make = make.clone();
+        move |app: &gtk::Application| -> Option<gtk::ApplicationWindow> {
+            match app.windows().first() {
+                Some(window) => window.clone().downcast().ok(),
+                None => make(app),
+            }
+        }
+    };
     {
         let window = window.clone();
+        let windows = spec.windows;
         app.connect_activate(move |app| {
             let built = !app.windows().is_empty();
+            if built && windows {
+                make(app);
+                return;
+            }
             let Some(window) = window(app) else { return };
             if built {
                 if spec.resident && window.is_visible() {

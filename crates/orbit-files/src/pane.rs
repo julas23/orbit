@@ -60,6 +60,9 @@ pub struct Pane {
     forward: RefCell<Vec<Location>>,
     generation: Cell<u64>,
     monitor: RefCell<Option<gio::FileMonitor>>,
+    /// Names the monitor saw change, looked at together a moment later.
+    changed: RefCell<std::collections::HashSet<String>>,
+    flush: RefCell<Option<glib::SourceId>>,
     /// Selected again once the folder is listed (going up selects the
     /// folder left).
     reselect: RefCell<Option<String>>,
@@ -95,7 +98,7 @@ impl Pane {
         let list = column_view(&selection);
         let grid = gtk::GridView::builder()
             .model(&selection)
-            .factory(&grid_factory(&selection))
+            .factory(&grid_factory())
             .max_columns(30)
             .min_columns(1)
             .enable_rubberband(true)
@@ -103,7 +106,7 @@ impl Pane {
             .build();
         let current = gtk::ListView::builder()
             .model(&selection)
-            .factory(&row_factory(Some(&selection)))
+            .factory(&row_factory())
             .css_classes(["column-list"])
             .build();
         let parent_store = gio::ListStore::new::<glib::BoxedAnyObject>();
@@ -113,7 +116,7 @@ impl Pane {
         );
         let parent_list = gtk::ListView::builder()
             .model(&gtk::SingleSelection::builder().model(&parent_sorted).autoselect(false).build())
-            .factory(&row_factory(None))
+            .factory(&row_factory())
             .css_classes(["column-list", "parent"])
             .build();
         let preview = Preview::new();
@@ -184,6 +187,8 @@ impl Pane {
             forward: RefCell::default(),
             generation: Cell::new(0),
             monitor: RefCell::default(),
+            changed: RefCell::default(),
+            flush: RefCell::default(),
             reselect: RefCell::default(),
             show_hidden: Cell::new(false),
             sort: Cell::new((SortKey::Name, true)),
@@ -255,10 +260,14 @@ impl Pane {
                 v.connect_activate(move |_, pos| handler(pos));
             }
             // Right-click: the context menu.
+            // Taken before the view's own handling, which would make the
+            // entry the only one selected.
             let click = gtk::GestureClick::builder().button(3).build();
+            click.set_propagation_phase(gtk::PropagationPhase::Capture);
             let weak = Rc::downgrade(self);
             let widget = activate.clone();
-            click.connect_pressed(move |_, _, x, y| {
+            click.connect_pressed(move |gesture, _, x, y| {
+                gesture.set_state(gtk::EventSequenceState::Claimed);
                 if let Some(p) = weak.upgrade() {
                     p.select_under(&widget, x, y);
                     if let Some(f) = p.on_menu.borrow().as_ref() {
@@ -466,11 +475,10 @@ impl Pane {
     }
 
     fn after_load(&self) {
+        // Nothing selected in a folder just opened; going up, the folder
+        // left; reloading, what was selected.
         let wanted = self.reselect.borrow_mut().take();
-        let position = wanted
-            .and_then(|name| self.position_of(|e| e.name == name))
-            .unwrap_or(0);
-        if self.selection.n_items() > 0 {
+        if let Some(position) = wanted.and_then(|name| self.position_of(|e| e.name == name)) {
             self.selection.select_item(position, true);
             self.scroll_to(position);
         }
@@ -532,63 +540,91 @@ impl Pane {
         monitor.connect_changed(move |_, file, other, event| {
             let Some(p) = weak.upgrade() else { return };
             use gio::FileMonitorEvent as E;
-            match event {
-                E::Created | E::MovedIn => p.added(file),
-                E::Deleted | E::MovedOut => p.removed(file),
-                E::Renamed => {
-                    p.removed(file);
-                    if let Some(new) = other {
-                        p.added(new);
-                    }
-                }
-                E::ChangesDoneHint | E::AttributeChanged => {
-                    p.removed(file);
-                    p.added(file);
-                }
-                _ => {}
+            if !matches!(
+                event,
+                E::Created | E::MovedIn | E::Deleted | E::MovedOut | E::Renamed | E::ChangesDoneHint | E::AttributeChanged
+            ) {
+                return;
+            }
+            p.changed_name(file);
+            if let Some(o) = other.filter(|_| event == E::Renamed) {
+                p.changed_name(o);
             }
         });
         *self.monitor.borrow_mut() = Some(monitor);
     }
 
-    fn added(&self, file: &gio::File) {
-        let name = file.basename().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        if self.store_position(&name).is_some() {
+    /// A name to look at again. A copy into the folder changes its files
+    /// hundreds of times a second: they are gathered for a moment and
+    /// looked at on a thread — over NFS a look at a file being written
+    /// waits for it, and the window must not.
+    fn changed_name(self: &Rc<Self>, file: &gio::File) {
+        let Some(name) = file.basename().map(|n| n.to_string_lossy().into_owned()) else { return };
+        self.changed.borrow_mut().insert(name);
+        if self.flush.borrow().is_some() {
             return;
         }
-        let Ok(info) = file.query_info(
-            "standard::type,standard::size,standard::is-symlink,time::modified",
-            gio::FileQueryInfoFlags::NONE,
-            gio::Cancellable::NONE,
-        ) else {
-            return;
-        };
-        let dir = info.file_type() == gio::FileType::Directory;
-        self.store.append(&glib::BoxedAnyObject::new(Entry {
-            hidden: name.starts_with('.'),
-            mime: if dir { "inode/directory".into() } else { entry::mime_of(&name) },
-            name,
-            location: Location::of(file),
-            dir,
-            link: info.is_symlink(),
-            size: info.size().max(0) as u64,
-            modified: info.modification_date_time().map_or(0, |d| d.to_unix()),
-        }));
-        self.update_status();
+        let weak = Rc::downgrade(self);
+        let id = glib::timeout_add_local_once(Duration::from_millis(250), move || {
+            if let Some(p) = weak.upgrade() {
+                p.flush.borrow_mut().take();
+                p.apply_changes();
+            }
+        });
+        *self.flush.borrow_mut() = Some(id);
     }
 
-    fn removed(&self, file: &gio::File) {
-        let name = file.basename().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        if let Some(n) = self.store_position(&name) {
-            self.store.remove(n);
-            self.update_status();
+    fn apply_changes(self: &Rc<Self>) {
+        let names: Vec<String> = self.changed.borrow_mut().drain().collect();
+        let here = self.location.borrow().clone();
+        let generation = self.generation.get();
+        let (tx, rx) = async_channel::bounded(1);
+        match &here {
+            Location::Path(dir) => {
+                let dir = dir.clone();
+                std::thread::Builder::new()
+                    .name("orbit-files-changes".into())
+                    .spawn(move || {
+                        let found: Vec<(String, Option<Entry>)> =
+                            names.into_iter().map(|n| { let e = entry::entry_for(&dir.join(&n)); (n, e) }).collect();
+                        let _ = tx.send_blocking(found);
+                    })
+                    .ok();
+            }
+            // The trash, a share GIO alone reaches: just listed again.
+            Location::Uri(_) => {
+                self.reload();
+                return;
+            }
         }
-    }
-
-    fn store_position(&self, name: &str) -> Option<u32> {
-        (0..self.store.n_items()).find(|&n| {
-            self.store.item(n).and_then(|o| entry_of(&o)).is_some_and(|e| e.name == name)
-        })
+        let weak = Rc::downgrade(self);
+        glib::spawn_future_local(async move {
+            let Ok(found) = rx.recv().await else { return };
+            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else { return };
+            let mut positions: std::collections::HashMap<String, u32> = (0..p.store.n_items())
+                .filter_map(|n| p.store.item(n).and_then(|o| entry_of(&o)).map(|e| (e.name, n)))
+                .collect();
+            let mut gone: Vec<u32> = Vec::new();
+            for (name, entry) in found {
+                match (positions.remove(&name), entry) {
+                    // Changed: in place, so the selection stays.
+                    (Some(n), Some(e)) => {
+                        if let Some(o) = p.store.item(n).and_downcast::<glib::BoxedAnyObject>() {
+                            *o.borrow_mut::<Entry>() = e;
+                            p.store.items_changed(n, 1, 1);
+                        }
+                    }
+                    (Some(n), None) => gone.push(n),
+                    (None, Some(e)) => p.store.append(&glib::BoxedAnyObject::new(e)),
+                    (None, None) => {}
+                }
+            }
+            gone.sort_unstable();
+            for n in gone.into_iter().rev() {
+                p.store.remove(n);
+            }
+            p.update_status();
+        });
     }
 
     fn activate(self: &Rc<Self>, e: &Entry) {
@@ -646,11 +682,12 @@ impl Pane {
         if n == 0 {
             return;
         }
-        let at = self.focused_position().map_or(0, |p| p as i64);
-        let to = match by {
-            i64::MIN => 0,
-            i64::MAX => n - 1,
-            _ => (at + by).clamp(0, n - 1),
+        // Nothing selected yet: the first key lands on the first entry.
+        let to = match (by, self.focused_position()) {
+            (i64::MIN, _) => 0,
+            (i64::MAX, _) => n - 1,
+            (_, None) => 0,
+            (_, Some(at)) => (at as i64 + by).clamp(0, n - 1),
         } as u32;
         self.cursor.set(Some(to));
         self.anchor.set(Some(to));
@@ -776,24 +813,17 @@ impl Pane {
         }
     }
 
-    /// Right-click on an unselected entry selects it alone.
+    /// Right-click: on an unselected entry, it alone; on a selected one,
+    /// the selection as it is; on no entry, none — the folder's own menu.
     fn select_under(&self, widget: &gtk::Widget, x: f64, y: f64) {
-        let Some(picked) = widget.pick(x, y, gtk::PickFlags::DEFAULT) else { return };
-        let mut node = Some(picked);
-        while let Some(w) = node {
-            if let Some(position) = position_of_cell(&w)
-                && !self.selection.is_selected(position)
-            {
+        match position_under(widget, x, y) {
+            Some(position) if self.selection.is_selected(position) => {}
+            Some(position) => {
                 self.selection.select_item(position, true);
-                return;
             }
-            // No item under the click: the folder's own menu, not the one
-            // for what was selected before.
-            if &w == widget {
+            None => {
                 self.selection.unselect_all();
-                return;
             }
-            node = w.parent();
         }
     }
 
@@ -944,31 +974,6 @@ fn position_under(view: &gtk::Widget, x: f64, y: f64) -> Option<u32> {
     None
 }
 
-/// The selection's box of an entry: ticked while it is selected, and a
-/// click on it puts the entry in or out, the rest left as it is.
-fn check_box(item: &gtk::ListItem, selection: &gtk::MultiSelection) -> gtk::CheckButton {
-    let check = gtk::CheckButton::builder()
-        .focus_on_click(false)
-        .valign(gtk::Align::Center)
-        .css_classes(["select-box"])
-        .build();
-    item.bind_property("selected", &check, "active").sync_create().build();
-    let (item, selection) = (item.downgrade(), selection.downgrade());
-    check.connect_toggled(move |check| {
-        let (Some(item), Some(selection)) = (item.upgrade(), selection.upgrade()) else { return };
-        let position = item.position();
-        if position == gtk::INVALID_LIST_POSITION || check.is_active() == item.is_selected() {
-            return;
-        }
-        if check.is_active() {
-            selection.select_item(position, false);
-        } else {
-            selection.unselect_item(position);
-        }
-    });
-    check
-}
-
 fn remember_position(widget: &impl IsA<gtk::Widget>, item: &gtk::ListItem) {
     unsafe {
         widget.set_data("orbit-item", item.downgrade());
@@ -977,16 +982,12 @@ fn remember_position(widget: &impl IsA<gtk::Widget>, item: &gtk::ListItem) {
 
 // ------------------------------------------------------------ the views
 
-/// An icon and a name, a row of a list; with a `selection`, its box first.
-fn row_factory(selection: Option<&gtk::MultiSelection>) -> gtk::SignalListItemFactory {
+/// An icon and a name, a row of a list.
+fn row_factory() -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    let selection = selection.cloned();
     factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
         let row = gtk::Box::builder().spacing(10).css_classes(["entry-row"]).build();
-        if let Some(selection) = &selection {
-            row.append(&check_box(item, selection));
-        }
         row.append(&gtk::Image::builder().pixel_size(16).build());
         row.append(&gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).build());
         item.set_child(Some(&row));
@@ -1048,7 +1049,7 @@ fn column_view(selection: &gtk::MultiSelection) -> gtk::ColumnView {
     let name = gtk::ColumnViewColumn::builder()
         .id("name")
         .title(tr("files-column-name"))
-        .factory(&row_factory(Some(selection)))
+        .factory(&row_factory())
         .resizable(true)
         .expand(true)
         .sorter(&gtk::CustomSorter::new(|_, _| gtk::Ordering::Equal))
@@ -1071,11 +1072,9 @@ fn column_view(selection: &gtk::MultiSelection) -> gtk::ColumnView {
     view
 }
 
-/// A large icon (or a thumbnail) over the name, the selection's box in
-/// the corner.
-fn grid_factory(selection: &gtk::MultiSelection) -> gtk::SignalListItemFactory {
+/// A large icon (or a thumbnail) over the name.
+fn grid_factory() -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    let selection = selection.clone();
     factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
         let cell = gtk::Box::builder()
@@ -1095,19 +1094,11 @@ fn grid_factory(selection: &gtk::MultiSelection) -> gtk::SignalListItemFactory {
                 .max_width_chars(14)
                 .build(),
         );
-        let overlay = gtk::Overlay::builder().child(&cell).build();
-        let check = check_box(item, &selection);
-        check.set_halign(gtk::Align::Start);
-        check.set_valign(gtk::Align::Start);
-        overlay.add_overlay(&check);
-        item.set_child(Some(&overlay));
+        item.set_child(Some(&cell));
     });
     factory.connect_bind(|_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
-        let (Some(cell), Some(e)) = (
-            item.child().and_downcast::<gtk::Overlay>().and_then(|o| o.child()),
-            item.item().and_then(|o| entry_of(&o)),
-        ) else {
+        let (Some(cell), Some(e)) = (item.child(), item.item().and_then(|o| entry_of(&o))) else {
             return;
         };
         remember_position(&cell, item);

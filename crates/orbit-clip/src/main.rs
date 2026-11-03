@@ -24,6 +24,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/clip.css"),
         build: ui::build,
         resident: true,
+        windows: false,
         open: None,
     })
 }

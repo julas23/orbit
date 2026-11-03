@@ -43,6 +43,7 @@ fn main() -> glib::ExitCode {
         css: include_str!("../../../data/notify.css"),
         build,
         resident: true,
+        windows: false,
         open: None,
     })
 }

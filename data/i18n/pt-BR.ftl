@@ -525,6 +525,39 @@ files-help-views = Lista, ícones, colunas
 files-help-tabs = Nova aba, fechar aba
 files-help-other-pane = O outro painel
 files-help-history = Voltar, avançar, subir
+files-properties = Propriedades
+files-properties-menu = Propriedades
+files-prop-items = { $n } itens
+files-prop-where = Local
+files-prop-size = Tamanho
+files-prop-bytes = { $size } ({ $bytes } bytes)
+files-prop-counting-start = Contando…
+files-prop-counting = Contando… { $n } itens, { $size }
+files-prop-contents = { $n } itens, { $size }
+files-prop-kind = Tipo
+files-prop-link = Link para
+files-prop-modified = Modificado
+files-prop-accessed = Acessado
+files-prop-created = Criado
+files-prop-owner = Dono
+files-prop-permissions = Permissões
+files-prop-read = Ler
+files-prop-write = Escrever
+files-prop-execute = Executar
+files-prop-user = Dono
+files-prop-group = Grupo
+files-prop-others = Outros
+files-mounts-show = Mostrar as pastas de rede montadas na árvore
+files-mounts-hide = Ocultar as pastas de rede montadas na árvore
+files-help-properties = Propriedades da seleção, ou da pasta
+files-close-busy = { $n ->
+    [one] Há um processo em andamento
+   *[other] Há { $n } processos em andamento
+}
+files-close-busy-detail = Cópias, movimentações e exclusões podem continuar sem a janela: o Orbit-Files segue rodando até terminarem.
+files-close-stay = Não fechar
+files-close-stop = Parar e fechar
+files-close-background = Continuar em segundo plano
 files-help-vim = Descer, subir, sair, entrar; primeiro, último
 
 # Orbit-Pathfinder

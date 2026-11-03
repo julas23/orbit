@@ -98,9 +98,5 @@ window.orbit-files popover separator { margin: 5px 0; min-height: 1px; backgroun
 window.orbit-files popover.context-menu .menu-item { padding: 5px 10px; min-height: 20px; border-radius: 5px; }
 window.orbit-files popover.context-menu .menu-item:hover { background-color: alpha(@orbit_accent, 0.35); }
 
-/* The selection's boxes (pane.rs): beside the icon in the lists, in the
- * corner of the icons. Keys (help.rs): the key in the accent. */
-window.orbit-files .select-box { margin: 0; padding: 0; }
-window.orbit-files .grid-cell + .select-box,
-window.orbit-files overlay > .select-box { margin: 5px; }
+/* Keys (help.rs): the key in the accent. */
 window.orbit-files-dialog .help-key { color: @orbit_accent; font-weight: bold; }

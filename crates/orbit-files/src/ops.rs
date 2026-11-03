@@ -3,12 +3,19 @@
 //! button to stop it. When a file is already where it is going, the job
 //! asks: skip, keep both, or replace — for this one or for all.
 //!
-//! Copies go in 1 MiB pieces, so progress shows and stopping is prompt;
-//! moves within a disk are renames (instant); across disks, a copy and a
-//! removal. Pasting into the folder a file came from makes "name (2)".
+//! Copies go through the kernel (`copy_file_range`) in 16 MiB pieces, so
+//! progress shows and stopping is prompt: on NFS 4.2 the server copies by
+//! itself, nothing crosses the network; on btrfs the blocks are shared.
+//! Moves are renames (instant) where the kernel allows; elsewhere — two
+//! disks, or two NFS mounts of one server, as ~/Downloads and ~/Videos —
+//! a copy and a removal. Pasting into the folder a file came from makes
+//! "name (2)".
+//!
+//! A job keeps the program running: closing the window leaves it to
+//! finish (and ask, in a window of its own, if it must).
 
 use std::{
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
@@ -20,7 +27,10 @@ use std::{
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::{number, text, tr, tr_args};
 
-const CHUNK: usize = 1 << 20;
+/// A piece of a file copied at a time.
+const CHUNK: u64 = 16 << 20;
+/// Progress is told at most this often.
+const TELL: std::time::Duration = std::time::Duration::from_millis(100);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -45,10 +55,16 @@ enum Report {
     Finished(Vec<String>),
 }
 
+/// What stops a job.
+type Stop = Rc<dyn Fn()>;
+
 /// The bar of running jobs, along the window's bottom.
 pub struct Jobs {
     pub widget: gtk::Box,
     window: glib::WeakRef<gtk::Window>,
+    /// What stops each running job, by its number.
+    running: std::cell::RefCell<Vec<(u64, Stop)>>,
+    next: std::cell::Cell<u64>,
 }
 
 impl Jobs {
@@ -61,7 +77,33 @@ impl Jobs {
         Rc::new(Self {
             widget,
             window: window.downgrade(),
+            running: Default::default(),
+            next: Default::default(),
         })
+    }
+
+    /// How many jobs are running.
+    pub fn count(&self) -> usize {
+        self.running.borrow().len()
+    }
+
+    /// Stops every job running.
+    pub fn stop_all(&self) {
+        let stops: Vec<_> = self.running.borrow().iter().map(|(_, f)| f.clone()).collect();
+        for stop in stops {
+            stop();
+        }
+    }
+
+    fn started(&self, stop: Stop) -> u64 {
+        let id = self.next.get();
+        self.next.set(id + 1);
+        self.running.borrow_mut().push((id, stop));
+        id
+    }
+
+    fn ended(&self, id: u64) {
+        self.running.borrow_mut().retain(|(n, _)| *n != id);
     }
 
     /// Starts `kind` on `sources`, into `target` (copy, move).
@@ -100,7 +142,12 @@ impl Jobs {
             let cancel = cancel.clone();
             stop.connect_clicked(move |_| cancel.store(true, Ordering::Relaxed));
         }
+        let id = {
+            let cancel = cancel.clone();
+            self.started(Rc::new(move || cancel.store(true, Ordering::Relaxed)))
+        };
         let (tx, rx) = async_channel::unbounded();
+        let hold = self.window.upgrade().and_then(|w| w.application()).map(|a| a.hold());
         std::thread::Builder::new()
             .name("orbit-files-job".into())
             .spawn(move || {
@@ -124,7 +171,9 @@ impl Jobs {
                         let _ = reply.send(answer).await;
                     }
                     Report::Finished(errors) => {
+                        drop(hold);
                         if let Some(j) = jobs.upgrade() {
+                            j.ended(id);
                             j.widget.remove(&row);
                             j.widget.set_visible(j.widget.first_child().is_some());
                             if !errors.is_empty() {
@@ -148,6 +197,7 @@ impl Jobs {
         row.append(&bar);
         self.widget.append(&row);
         self.widget.set_visible(true);
+        let hold = self.window.upgrade().and_then(|w| w.application()).map(|a| a.hold());
         let launcher = gio::SubprocessLauncher::new(gio::SubprocessFlags::STDERR_PIPE | gio::SubprocessFlags::STDOUT_SILENCE);
         launcher.set_cwd(&dir);
         let args: Vec<&std::ffi::OsStr> = argv.iter().map(std::ffi::OsStr::new).collect();
@@ -160,6 +210,10 @@ impl Jobs {
                 return;
             }
         };
+        let id = {
+            let process = process.clone();
+            self.started(Rc::new(move || process.force_exit()))
+        };
         let pulse = glib::timeout_add_local(std::time::Duration::from_millis(150), {
             let bar = bar.clone();
             move || {
@@ -170,7 +224,9 @@ impl Jobs {
         glib::spawn_future_local(async move {
             let output = process.communicate_utf8_future(None).await;
             pulse.remove();
+            drop(hold);
             let Some(j) = jobs.upgrade() else { return };
+            j.ended(id);
             j.widget.remove(&row);
             j.widget.set_visible(j.widget.first_child().is_some());
             if !process.is_successful() {
@@ -228,6 +284,7 @@ struct Ctx<'a> {
     errors: Vec<String>,
     /// SkipAll / ReplaceAll, once chosen.
     standing: Option<Answer>,
+    told: Option<std::time::Instant>,
 }
 
 fn run(
@@ -244,6 +301,7 @@ fn run(
         total: 0,
         errors: Vec::new(),
         standing: None,
+        told: None,
     };
     match kind {
         Kind::Trash => {
@@ -279,7 +337,9 @@ fn run(
         }
         Kind::Copy | Kind::Move => {
             let Some(target) = target else { return ctx.errors };
-            ctx.total = sources.iter().map(|s| size_of(s)).sum();
+            // Where each goes, asked first; what moves by a rename is done
+            // here, before a byte is counted.
+            let mut copies: Vec<(PathBuf, PathBuf)> = Vec::new();
             for src in sources {
                 if cancel.load(Ordering::Relaxed) {
                     break;
@@ -298,10 +358,7 @@ fn run(
                     dest = unique(&dest);
                 } else if dest.symlink_metadata().is_ok() {
                     match ctx.conflict(&dest) {
-                        Answer::Skip | Answer::SkipAll => {
-                            ctx.done += size_of(src);
-                            continue;
-                        }
+                        Answer::Skip | Answer::SkipAll => continue,
                         Answer::KeepBoth => dest = unique(&dest),
                         Answer::Replace | Answer::ReplaceAll => {
                             let removed = if dest.is_dir() && !dest.is_symlink() {
@@ -317,16 +374,22 @@ fn run(
                     }
                 }
                 if kind == Kind::Move && std::fs::rename(src, &dest).is_ok() {
-                    ctx.done += size_of(&dest);
                     ctx.report(&dest);
                     continue;
                 }
-                let copied = ctx.copy(src, &dest);
+                copies.push((src.clone(), dest));
+            }
+            ctx.total = copies.iter().map(|(s, _)| size_of(s)).sum();
+            for (src, dest) in copies {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let copied = ctx.copy(&src, &dest);
                 if copied && kind == Kind::Move && !cancel.load(Ordering::Relaxed) {
                     let removed = if src.is_dir() && !src.is_symlink() {
-                        std::fs::remove_dir_all(src)
+                        std::fs::remove_dir_all(&src)
                     } else {
-                        std::fs::remove_file(src)
+                        std::fs::remove_file(&src)
                     };
                     if let Err(err) = removed {
                         ctx.errors.push(format!("{}: {err}", src.display()));
@@ -339,7 +402,11 @@ fn run(
 }
 
 impl Ctx<'_> {
-    fn report(&self, path: &Path) {
+    fn report(&mut self, path: &Path) {
+        if self.told.is_some_and(|t| t.elapsed() < TELL) {
+            return;
+        }
+        self.told = Some(std::time::Instant::now());
         let _ = self.tx.send_blocking(Report::Progress {
             done: self.done,
             total: self.total,
@@ -399,21 +466,21 @@ impl Ctx<'_> {
     }
 
     fn copy_file(&mut self, src: &Path, dest: &Path, meta: &std::fs::Metadata) -> std::io::Result<()> {
-        let mut from = std::fs::File::open(src)?;
+        let from = std::fs::File::open(src)?;
         let mut to = std::fs::File::create(dest)?;
-        let mut buffer = vec![0u8; CHUNK];
         loop {
             if self.cancel.load(Ordering::Relaxed) {
                 drop(to);
                 let _ = std::fs::remove_file(dest);
                 return Ok(());
             }
-            let n = from.read(&mut buffer)?;
+            // `copy_file_range` underneath (std picks it for files, and
+            // reads and writes where the kernel refuses).
+            let n = std::io::copy(&mut (&from).take(CHUNK), &mut to)?;
             if n == 0 {
                 break;
             }
-            to.write_all(&buffer[..n])?;
-            self.done += n as u64;
+            self.done += n;
             self.report(src);
         }
         to.set_permissions(meta.permissions())?;
@@ -460,7 +527,7 @@ mod tests {
         let src = root.join("src");
         std::fs::create_dir_all(src.join("sub")).unwrap();
         std::fs::write(src.join("a.txt"), b"hello").unwrap();
-        std::fs::write(src.join("sub/b.txt"), vec![7u8; 3 * CHUNK + 5]).unwrap();
+        std::fs::write(src.join("sub/b.txt"), vec![7u8; 3 * CHUNK as usize + 5]).unwrap();
         let dest = root.join("dest");
         std::fs::create_dir_all(&dest).unwrap();
         let (tx, rx) = async_channel::unbounded();
@@ -468,7 +535,7 @@ mod tests {
         let errors = run(Kind::Copy, std::slice::from_ref(&src), Some(&dest), &tx, &cancel);
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(std::fs::read(dest.join("src/a.txt")).unwrap(), b"hello");
-        assert_eq!(std::fs::metadata(dest.join("src/sub/b.txt")).unwrap().len(), (3 * CHUNK + 5) as u64);
+        assert_eq!(std::fs::metadata(dest.join("src/sub/b.txt")).unwrap().len(), 3 * CHUNK + 5);
         assert!(rx.try_recv().is_ok());
         // Into the same folder: a second copy beside it.
         let errors = run(Kind::Copy, &[src.join("a.txt")], Some(&src), &tx, &cancel);
