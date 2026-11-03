@@ -33,7 +33,7 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-notify** | Notification server in place of dunst: bubbles, a centre grouped by app, do not disturb, the panel's bell | **working** |
 | **orbit-view** | Universal image viewer: every format in a sandbox, zoom, thumbnails, EXIF, slideshow | **working** |
 | **orbit-read** | PDF, Markdown and plain-text reader: outline, thumbnails, search, night mode | **working** |
-| **orbit-files** | File manager: Yazi's speed, three views, two panes, preview, bulk rename, actions, archives, network | **working** |
+| **orbit-files** | File manager: Yazi's speed, three views, two panes, preview, search in subfolders and contents, undo, bulk rename, templates, actions, archives, network, as administrator | **working** |
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts (Ferdium recipes) and notifications, EasyList/EasyPrivacy blocking, idle services hibernated, tracking parameters stripped, no telemetry | **working** |
 | **orbitctl** | Commands and queries to orbit-core (and sway), as `swaymsg`: `orbitctl workspace number 2`, `orbitctl -t get_tree` | **working** |

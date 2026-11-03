@@ -59,6 +59,52 @@ window.orbit-files .grid-cell { padding: 5px; }
 window.orbit-files .column-list row { padding: 2px 10px; }
 window.orbit-files .column-list.parent { opacity: 0.8; }
 
+/* Zoom: the icons' sizes, by the class the pane puts on each view. */
+window.orbit-files .zoom-list-0 image.entry-icon { -gtk-icon-size: 16px; }
+window.orbit-files .zoom-list-1 image.entry-icon { -gtk-icon-size: 24px; }
+window.orbit-files .zoom-list-2 image.entry-icon { -gtk-icon-size: 32px; }
+window.orbit-files .zoom-list-3 image.entry-icon { -gtk-icon-size: 48px; }
+window.orbit-files .zoom-list-4 image.entry-icon { -gtk-icon-size: 64px; }
+window.orbit-files .zoom-grid-0 image.entry-icon { -gtk-icon-size: 32px; }
+window.orbit-files .zoom-grid-0 .grid-cell { min-width: 80px; }
+window.orbit-files .zoom-grid-1 image.entry-icon { -gtk-icon-size: 48px; }
+window.orbit-files .zoom-grid-1 .grid-cell { min-width: 90px; }
+window.orbit-files .zoom-grid-2 image.entry-icon { -gtk-icon-size: 64px; }
+window.orbit-files .zoom-grid-2 .grid-cell { min-width: 110px; }
+window.orbit-files .zoom-grid-3 image.entry-icon { -gtk-icon-size: 96px; }
+window.orbit-files .zoom-grid-3 .grid-cell { min-width: 140px; }
+window.orbit-files .zoom-grid-4 image.entry-icon { -gtk-icon-size: 128px; }
+window.orbit-files .zoom-grid-4 .grid-cell { min-width: 170px; }
+window.orbit-files .zoom-grid-5 image.entry-icon { -gtk-icon-size: 192px; }
+window.orbit-files .zoom-grid-5 .grid-cell { min-width: 230px; }
+window.orbit-files .zoom-grid-6 image.entry-icon { -gtk-icon-size: 256px; }
+window.orbit-files .zoom-grid-6 .grid-cell { min-width: 290px; }
+
+/* As administrator: the pane says so. */
+window.orbit-files .pane.admin .pane-status { color: @orbit_alert; font-weight: bold; }
+window.orbit-files .pane.admin { border-color: alpha(@orbit_alert, 0.6); }
+
+/* The search's toggles beside the bar. */
+window.orbit-files .filter-bar togglebutton { padding: 2px 10px; }
+
+/* Computer: a card for each disk. */
+window.orbit-files .computer { padding: 15px; }
+window.orbit-files .computer-card {
+  padding: 10px 15px;
+  min-width: 260px;
+  border-radius: 8px;
+  background: @orbit_surface;
+}
+window.orbit-files .computer-card:hover { background: @orbit_hover; }
+window.orbit-files .computer-name { font-weight: bold; }
+window.orbit-files .computer-card .dim { color: @orbit_muted; font-size: 12px; }
+window.orbit-files .computer-card levelbar trough { min-height: 6px; }
+window.orbit-files .computer-card levelbar block.filled.ok { background: @orbit_accent; }
+window.orbit-files .computer-card levelbar block.filled.almost-full { background: @orbit_alert; }
+
+/* The columns' menu. */
+window.orbit-files .columns-menu { padding: 5px 10px; }
+
 /* Preview. */
 window.orbit-files .preview {
   padding: 10px;

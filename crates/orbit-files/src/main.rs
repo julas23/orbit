@@ -14,6 +14,7 @@
 
 mod actions;
 mod clipboard;
+mod computer;
 mod entry;
 mod help;
 mod ops;
@@ -23,6 +24,7 @@ mod preview;
 mod properties;
 mod rename;
 mod thumbs;
+mod undo;
 mod window;
 
 use std::{cell::RefCell, rc::Rc};
@@ -41,12 +43,22 @@ pub struct Config {
     /// network shares — or `all`, every mount (folders mounted into home
     /// from a server too).
     pub devices: String,
+    /// The list's columns besides the name (size, modified, kind,
+    /// permissions, owner, group, location); kept when chosen in it.
+    pub columns: Option<Vec<String>>,
+    /// The icons' sizes, as steps: the lists' and the icon view's; kept
+    /// when changed with Ctrl and the wheel.
+    pub zoom_list: Option<usize>,
+    pub zoom_grid: Option<usize>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             devices: "volumes".into(),
+            columns: None,
+            zoom_list: None,
+            zoom_grid: None,
         }
     }
 }
@@ -69,7 +81,7 @@ fn main() -> glib::ExitCode {
 }
 
 fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::ApplicationWindow> {
-    let window = Window::new(app, dir.app("files")?, actions::load(dir));
+    let window = Window::new(app, dir.app("files")?, actions::load(dir), dir.clone());
     let w = window.window().clone();
     WINDOWS.with(|cell| cell.borrow_mut().push(window.clone()));
     w.connect_destroy(|gone| {
@@ -90,6 +102,10 @@ fn open(window: &gtk::ApplicationWindow, files: &[gio::File]) {
         return;
     };
     for file in files {
+        if file.uri() == entry::COMPUTER_URI {
+            window.show(Location::Computer);
+            continue;
+        }
         let location = Location::of(file);
         let location = match &location {
             Location::Path(p) if p.is_file() => location.parent().unwrap_or(location),

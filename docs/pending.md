@@ -212,6 +212,10 @@ Pending:
 
 ## 12. Orbit-Files
 - [x] Multiple selection: boxes, Shift+click and Shift+arrows for a range, Ctrl+click and Ctrl+Space for one, Ctrl+A, Ctrl+I; and the function keys F1–F12 (2026-10-22).
+- [x] A click on empty space clears the selection (2026-11-03).
+- [x] What the other file managers have and Files lacked (the user's pick, 2026-11-03): Ctrl+Z (move, rename, copy, trash, new file or folder; `undo.rs`); search in the subfolders, by name or by the text inside (the filter bar's "Subfolders" and "Contents", Ctrl+Shift+F); New document from ~/Templates (or empty); Computer as a page of disk cards with their free space; zoom with Ctrl+wheel or Ctrl+= − 0; the list's columns chosen by right-clicking the headers (permissions, owner, group, folder), and "Sort by" in the menu for every view; Open as administrator (GVfs admin://, polkit). Columns and zoom kept in `files.yaml`. Seen on a virtual output: the list's columns, the zoom, Computer, both searches.
+  - [ ] Not tried by hand yet: Ctrl+Z, the menus (templates, sorting, columns, administrator), Ctrl+wheel.
+  - Left out on purpose (the user, 2026-11-03): restoring the last session, and the view remembered for each folder.
 
 ## 13. Orbit-Aigent
 

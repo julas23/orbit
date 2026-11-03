@@ -11,6 +11,9 @@
 //! a copy and a removal. Pasting into the folder a file came from makes
 //! "name (2)".
 //!
+//! What a job did is remembered for Ctrl+Z (see `undo`), and undoing is
+//! a job too.
+//!
 //! A job keeps the program running: closing the window leaves it to
 //! finish (and ask, in a window of its own, if it must).
 
@@ -26,6 +29,8 @@ use std::{
 
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::{number, text, tr, tr_args};
+
+use crate::undo::{self, Step};
 
 /// A piece of a file copied at a time.
 const CHUNK: u64 = 16 << 20;
@@ -52,8 +57,12 @@ enum Answer {
 enum Report {
     Progress { done: u64, total: u64, name: String },
     Conflict(PathBuf, async_channel::Sender<Answer>),
-    Finished(Vec<String>),
+    /// The errors, and what to remember for Ctrl+Z.
+    Finished(Vec<String>, Option<Step>),
 }
+
+/// What a job does, on its thread.
+type Work = Box<dyn FnOnce(&async_channel::Sender<Report>, &AtomicBool) -> (Vec<String>, Option<Step>) + Send>;
 
 /// What stops a job.
 type Stop = Rc<dyn Fn()>;
@@ -111,6 +120,25 @@ impl Jobs {
         if sources.is_empty() {
             return;
         }
+        let what = tr_args(
+            match kind {
+                Kind::Copy => "files-job-copy",
+                Kind::Move => "files-job-move",
+                Kind::Trash => "files-job-trash",
+                Kind::Delete => "files-job-delete",
+            },
+            &[("n", number(sources.len() as f64))],
+        );
+        self.launch(what, Box::new(move |tx, cancel| run(kind, &sources, target.as_deref(), tx, cancel)));
+    }
+
+    /// Ctrl+Z: undoes `step`, as a job.
+    pub fn undo(self: &Rc<Self>, step: Step) {
+        self.launch(tr("files-job-undo"), Box::new(move |tx, cancel| (undo_step(step, tx, cancel), None)));
+    }
+
+    /// Runs `work` on a thread, with a row in the bar while it does.
+    fn launch(self: &Rc<Self>, what: String, work: Work) {
         let label = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).hexpand(true).build();
         let bar = gtk::ProgressBar::builder().hexpand(true).build();
         let stop = gtk::Button::builder()
@@ -126,16 +154,6 @@ impl Jobs {
         row.append(&stop);
         self.widget.append(&row);
         self.widget.set_visible(true);
-
-        let what = tr_args(
-            match kind {
-                Kind::Copy => "files-job-copy",
-                Kind::Move => "files-job-move",
-                Kind::Trash => "files-job-trash",
-                Kind::Delete => "files-job-delete",
-            },
-            &[("n", number(sources.len() as f64))],
-        );
         label.set_label(&what);
         let cancel = Arc::new(AtomicBool::new(false));
         {
@@ -151,8 +169,8 @@ impl Jobs {
         std::thread::Builder::new()
             .name("orbit-files-job".into())
             .spawn(move || {
-                let errors = run(kind, &sources, target.as_deref(), &tx, &cancel);
-                let _ = tx.send_blocking(Report::Finished(errors));
+                let (errors, step) = work(&tx, &cancel);
+                let _ = tx.send_blocking(Report::Finished(errors, step));
             })
             .ok();
         let jobs = Rc::downgrade(self);
@@ -170,8 +188,11 @@ impl Jobs {
                         };
                         let _ = reply.send(answer).await;
                     }
-                    Report::Finished(errors) => {
+                    Report::Finished(errors, step) => {
                         drop(hold);
+                        if let Some(step) = step {
+                            undo::push(step);
+                        }
                         if let Some(j) = jobs.upgrade() {
                             j.ended(id);
                             j.widget.remove(&row);
@@ -293,7 +314,7 @@ fn run(
     target: Option<&Path>,
     tx: &async_channel::Sender<Report>,
     cancel: &AtomicBool,
-) -> Vec<String> {
+) -> (Vec<String>, Option<Step>) {
     let mut ctx = Ctx {
         tx,
         cancel,
@@ -303,20 +324,8 @@ fn run(
         standing: None,
         told: None,
     };
-    match kind {
-        Kind::Trash => {
-            ctx.total = sources.len() as u64;
-            for src in sources {
-                if cancel.load(Ordering::Relaxed) {
-                    break;
-                }
-                ctx.report(src);
-                if let Err(err) = gio::File::for_path(src).trash(gio::Cancellable::NONE) {
-                    ctx.errors.push(format!("{}: {}", src.display(), err.message()));
-                }
-                ctx.done += 1;
-            }
-        }
+    let step = match kind {
+        Kind::Trash => Some(Step::Trashed(ctx.trash(sources))),
         Kind::Delete => {
             ctx.total = sources.len() as u64;
             for src in sources {
@@ -334,9 +343,13 @@ fn run(
                 }
                 ctx.done += 1;
             }
+            None
         }
         Kind::Copy | Kind::Move => {
-            let Some(target) = target else { return ctx.errors };
+            let Some(target) = target else { return (ctx.errors, None) };
+            // What was done, for Ctrl+Z.
+            let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+            let mut copied: Vec<PathBuf> = Vec::new();
             // Where each goes, asked first; what moves by a rename is done
             // here, before a byte is counted.
             let mut copies: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -375,6 +388,7 @@ fn run(
                 }
                 if kind == Kind::Move && std::fs::rename(src, &dest).is_ok() {
                     ctx.report(&dest);
+                    moved.push((src.clone(), dest));
                     continue;
                 }
                 copies.push((src.clone(), dest));
@@ -384,24 +398,150 @@ fn run(
                 if cancel.load(Ordering::Relaxed) {
                     break;
                 }
-                let copied = ctx.copy(&src, &dest);
-                if copied && kind == Kind::Move && !cancel.load(Ordering::Relaxed) {
+                let whole = ctx.copy(&src, &dest);
+                if whole && kind == Kind::Move && !cancel.load(Ordering::Relaxed) {
                     let removed = if src.is_dir() && !src.is_symlink() {
                         std::fs::remove_dir_all(&src)
                     } else {
                         std::fs::remove_file(&src)
                     };
+                    match removed {
+                        Ok(()) => moved.push((src, dest)),
+                        Err(err) => {
+                            ctx.errors.push(format!("{}: {err}", src.display()));
+                            copied.push(dest);
+                        }
+                    }
+                } else if whole {
+                    copied.push(dest);
+                }
+            }
+            Some(if kind == Kind::Move { Step::Moved(moved) } else { Step::Copied(copied) })
+        }
+    };
+    (ctx.errors, step)
+}
+
+/// Undoes `step`; the errors.
+fn undo_step(step: Step, tx: &async_channel::Sender<Report>, cancel: &AtomicBool) -> Vec<String> {
+    let mut ctx = Ctx {
+        tx,
+        cancel,
+        done: 0,
+        total: 0,
+        errors: Vec::new(),
+        standing: None,
+        told: None,
+    };
+    match step {
+        Step::Moved(pairs) | Step::Renamed(pairs) => {
+            ctx.total = pairs.len() as u64;
+            // Last first: a folder moved, then a file into it, comes back
+            // in the order it went.
+            for (from, to) in pairs.into_iter().rev() {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                ctx.report(&from);
+                ctx.done += 1;
+                if from.symlink_metadata().is_ok() {
+                    ctx.errors.push(format!("{}: {}", from.display(), tr("files-undo-exists")));
+                    continue;
+                }
+                if std::fs::rename(&to, &from).is_ok() {
+                    continue;
+                }
+                // Across disks: copied back, then removed.
+                if ctx.copy(&to, &from) {
+                    let removed = if to.is_dir() && !to.is_symlink() {
+                        std::fs::remove_dir_all(&to)
+                    } else {
+                        std::fs::remove_file(&to)
+                    };
                     if let Err(err) = removed {
-                        ctx.errors.push(format!("{}: {err}", src.display()));
+                        ctx.errors.push(format!("{}: {err}", to.display()));
                     }
                 }
             }
         }
+        Step::Copied(paths) => {
+            ctx.trash(&paths);
+        }
+        Step::Created(path) => {
+            ctx.trash(&[path]);
+        }
+        Step::Trashed(paths) => ctx.restore(&paths),
     }
     ctx.errors
 }
 
 impl Ctx<'_> {
+    /// Sends `paths` to the trash; those that went.
+    fn trash(&mut self, paths: &[PathBuf]) -> Vec<PathBuf> {
+        self.total = paths.len() as u64;
+        let mut gone = Vec::new();
+        for src in paths {
+            if self.cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            self.report(src);
+            match gio::File::for_path(src).trash(gio::Cancellable::NONE) {
+                Ok(()) => gone.push(src.clone()),
+                Err(err) => self.errors.push(format!("{}: {}", src.display(), err.message())),
+            }
+            self.done += 1;
+        }
+        gone
+    }
+
+    /// Brings `paths` back from the trash, where they were: of what the
+    /// trash holds from each, the last sent.
+    fn restore(&mut self, paths: &[PathBuf]) {
+        let trash = gio::File::for_uri("trash:///");
+        let children = match trash.enumerate_children(
+            "standard::name,trash::orig-path,trash::deletion-date",
+            gio::FileQueryInfoFlags::NONE,
+            gio::Cancellable::NONE,
+        ) {
+            Ok(c) => c,
+            Err(err) => {
+                self.errors.push(err.message().to_owned());
+                return;
+            }
+        };
+        let mut newest: std::collections::HashMap<PathBuf, (gio::File, String)> = Default::default();
+        while let Ok(Some(info)) = children.next_file(gio::Cancellable::NONE) {
+            let Some(orig) = info.attribute_byte_string("trash::orig-path") else { continue };
+            let orig = PathBuf::from(orig.as_str());
+            if !paths.contains(&orig) {
+                continue;
+            }
+            let date = info.attribute_string("trash::deletion-date").map(|d| d.to_string()).unwrap_or_default();
+            if newest.get(&orig).is_none_or(|(_, d)| *d < date) {
+                newest.insert(orig, (children.child(&info), date));
+            }
+        }
+        self.total = paths.len() as u64;
+        for path in paths {
+            if self.cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            self.report(path);
+            self.done += 1;
+            let Some((item, _)) = newest.remove(path) else {
+                self.errors.push(format!("{}: {}", path.display(), tr("files-undo-not-in-trash")));
+                continue;
+            };
+            if path.symlink_metadata().is_ok() {
+                self.errors.push(format!("{}: {}", path.display(), tr("files-undo-exists")));
+                continue;
+            }
+            if let Err(err) = item.move_(&gio::File::for_path(path), gio::FileCopyFlags::NONE, gio::Cancellable::NONE, None) {
+                self.errors.push(format!("{}: {}", path.display(), err.message()));
+            }
+        }
+    }
+
     fn report(&mut self, path: &Path) {
         if self.told.is_some_and(|t| t.elapsed() < TELL) {
             return;
@@ -532,19 +672,22 @@ mod tests {
         std::fs::create_dir_all(&dest).unwrap();
         let (tx, rx) = async_channel::unbounded();
         let cancel = AtomicBool::new(false);
-        let errors = run(Kind::Copy, std::slice::from_ref(&src), Some(&dest), &tx, &cancel);
+        let (errors, _) = run(Kind::Copy, std::slice::from_ref(&src), Some(&dest), &tx, &cancel);
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(std::fs::read(dest.join("src/a.txt")).unwrap(), b"hello");
         assert_eq!(std::fs::metadata(dest.join("src/sub/b.txt")).unwrap().len(), 3 * CHUNK + 5);
         assert!(rx.try_recv().is_ok());
         // Into the same folder: a second copy beside it.
-        let errors = run(Kind::Copy, &[src.join("a.txt")], Some(&src), &tx, &cancel);
+        let (errors, _) = run(Kind::Copy, &[src.join("a.txt")], Some(&src), &tx, &cancel);
         assert!(errors.is_empty());
         assert!(src.join("a (2).txt").is_file());
-        // Moving within a disk: a rename.
-        let errors = run(Kind::Move, &[src.join("a (2).txt")], Some(&dest), &tx, &cancel);
+        // Moving within a disk: a rename — and undoing it, one back.
+        let (errors, step) = run(Kind::Move, &[src.join("a (2).txt")], Some(&dest), &tx, &cancel);
         assert!(errors.is_empty());
         assert!(dest.join("a (2).txt").is_file() && !src.join("a (2).txt").exists());
+        assert_eq!(step, Some(Step::Moved(vec![(src.join("a (2).txt"), dest.join("a (2).txt"))])));
+        assert!(undo_step(step.unwrap(), &tx, &cancel).is_empty());
+        assert!(src.join("a (2).txt").is_file() && !dest.join("a (2).txt").exists());
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

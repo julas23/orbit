@@ -22,9 +22,9 @@ use crate::{
     clipboard,
     entry::{Entry, Location},
     ops::{Jobs, Kind},
-    pane::{Pane, View},
+    pane::{self, Pane, SortKey, View},
     places::Places,
-    rename,
+    rename, undo,
 };
 
 /// A tab: one pane, or two side by side.
@@ -57,10 +57,21 @@ pub struct Window {
     pending: Cell<Option<(char, Instant)>>,
     /// Set while the toggles are set from the pane, not by a click.
     syncing: Cell<bool>,
+    /// Where `files.yaml` is, to keep the columns and the zoom in.
+    config_dir: orbit_common::ConfigDir,
+    /// The list's columns besides the name, for every pane.
+    columns: RefCell<Vec<String>>,
+    /// The zoom of the lists and of the icons, for every pane.
+    zoom: Cell<(usize, usize)>,
 }
 
 impl Window {
-    pub fn new(app: &gtk::Application, config: crate::Config, actions: Vec<Action>) -> Rc<Self> {
+    pub fn new(
+        app: &gtk::Application,
+        config: crate::Config,
+        actions: Vec<Action>,
+        config_dir: orbit_common::ConfigDir,
+    ) -> Rc<Self> {
         let window = gtk::ApplicationWindow::builder()
             .application(app)
             .title(tr("files-title"))
@@ -194,6 +205,18 @@ impl Window {
             actions,
             pending: Cell::new(None),
             syncing: Cell::new(false),
+            config_dir,
+            columns: RefCell::new(
+                config
+                    .columns
+                    .clone()
+                    .map(|c| c.into_iter().filter(|c| pane::COLUMNS.contains(&c.as_str())).collect())
+                    .unwrap_or_else(|| pane::COLUMNS_DEFAULT.iter().map(|c| c.to_string()).collect()),
+            ),
+            zoom: Cell::new((
+                config.zoom_list.unwrap_or(pane::ZOOM_DEFAULT.0),
+                config.zoom_grid.unwrap_or(pane::ZOOM_DEFAULT.1),
+            )),
         });
         let weak = Rc::downgrade(&w);
         let places = Places::new(config.devices == "all", move |to| {
@@ -433,6 +456,24 @@ impl Window {
 
     fn make_pane(self: &Rc<Self>) -> Rc<Pane> {
         let pane = Pane::new();
+        pane.set_columns(&self.columns.borrow());
+        pane.set_zoom(self.zoom.get());
+        let weak = Rc::downgrade(self);
+        let p = Rc::downgrade(&pane);
+        pane.connect_columns_menu(move |(widget, x, y)| {
+            if let (Some(w), Some(p)) = (weak.upgrade(), p.upgrade()) {
+                w.activate_pane(&p);
+                w.columns_menu(&widget, Some((x, y)));
+            }
+        });
+        let weak = Rc::downgrade(self);
+        let p = Rc::downgrade(&pane);
+        pane.connect_zoom(move |by| {
+            if let (Some(w), Some(p)) = (weak.upgrade(), p.upgrade()) {
+                w.activate_pane(&p);
+                w.zoom_by(by);
+            }
+        });
         let weak = Rc::downgrade(self);
         pane.connect_open(move |e| {
             if let Some(w) = weak.upgrade() {
@@ -557,15 +598,22 @@ impl Window {
             chain.push(parent);
         }
         chain.reverse();
-        // From home, rather than from the root.
+        // From home, rather than from the root; from a share's own root
+        // (GVfs mounts them under /run/user/…/gvfs), not from there.
         let home = Location::Path(glib::home_dir());
-        if let Some(i) = chain.iter().position(|l| *l == home) {
+        let gvfs = glib::user_runtime_dir().join("gvfs");
+        let share = chain.iter().position(|l| l.path().and_then(|p| p.parent()) == Some(gvfs.as_path()));
+        if let Some(i) = share.or_else(|| chain.iter().position(|l| *l == home)) {
             chain.drain(..i);
         }
         let last = chain.len().saturating_sub(1);
         for (n, place) in chain.into_iter().enumerate() {
             let label = if place == home {
                 tr("files-home")
+            } else if place == Location::Computer {
+                tr("files-computer")
+            } else if share.is_some() && n == 0 {
+                if pane::is_admin(&place) { tr("files-admin-root") } else { place.name() }
             } else if place.parent().is_none() {
                 "/".into()
             } else {
@@ -596,7 +644,9 @@ impl Window {
     fn go_typed(self: &Rc<Self>, typed: &str) {
         let typed = typed.trim();
         let pane = self.pane();
-        if typed.contains("://") {
+        if typed == crate::entry::COMPUTER_URI || typed == "computer:" {
+            pane.go(Location::Computer);
+        } else if typed.contains("://") {
             let file = gio::File::for_uri(typed);
             let op = gtk::MountOperation::new(Some(&self.window));
             let p = Rc::downgrade(&pane);
@@ -701,14 +751,147 @@ impl Window {
                 e.add_css_class("error");
                 return;
             }
-            if let Err(err) = std::fs::create_dir(&path) {
-                log::warn!("new folder: {err}");
+            match std::fs::create_dir(&path) {
+                Ok(()) => undo::push(undo::Step::Created(path)),
+                Err(err) => log::warn!("new folder: {err}"),
             }
             w.close();
         });
         window.present();
         entry.grab_focus();
         entry.select_region(0, -1);
+    }
+
+    /// A new document here: a copy of `template`, or an empty file; its
+    /// name then asked, as F2 does.
+    fn new_document(&self, template: Option<PathBuf>) {
+        let Some(dir) = self.here() else { return };
+        let name = template
+            .as_ref()
+            .and_then(|t| t.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| tr("files-new-document-name"));
+        let mut path = dir.join(&name);
+        if path.symlink_metadata().is_ok() {
+            path = crate::ops::unique(&path);
+        }
+        let made = match &template {
+            Some(t) => std::fs::copy(t, &path).map(|_| ()),
+            None => std::fs::File::create_new(&path).map(|_| ()),
+        };
+        match made {
+            Ok(()) => {
+                undo::push(undo::Step::Created(path.clone()));
+                rename::single(self.window.upcast_ref(), &path);
+            }
+            Err(err) => gtk::AlertDialog::builder()
+                .modal(true)
+                .message(tr("files-job-errors"))
+                .detail(format!("{}: {err}", path.display()))
+                .build()
+                .show(Some(&self.window)),
+        }
+    }
+
+    /// Ctrl+Z.
+    fn undo(&self) {
+        if let Some(step) = undo::pop() {
+            self.jobs.undo(step);
+        }
+    }
+
+    /// A folder as root, through GVfs's admin:// (polkit asks for the
+    /// password), in a tab of its own.
+    fn open_as_admin(self: &Rc<Self>) {
+        let pane = self.pane();
+        let folder = pane
+            .selected()
+            .into_iter()
+            .find(|e| e.dir)
+            .and_then(|e| e.location.path().map(PathBuf::from))
+            .or_else(|| self.here());
+        let Some(folder) = folder else { return };
+        let Ok(uri) = glib::filename_to_uri(&folder, None) else { return };
+        let file = gio::File::for_uri(&uri.replacen("file://", "admin://", 1));
+        let op = gtk::MountOperation::new(Some(&self.window));
+        let weak = Rc::downgrade(self);
+        let f = file.clone();
+        file.mount_enclosing_volume(gio::MountMountFlags::NONE, Some(&op), gio::Cancellable::NONE, move |r| {
+            let Some(w) = weak.upgrade() else { return };
+            match r {
+                Ok(()) => w.new_tab(Location::of(&f)),
+                Err(e) if e.matches(gio::IOErrorEnum::AlreadyMounted) => w.new_tab(Location::of(&f)),
+                Err(e) if e.matches(gio::IOErrorEnum::FailedHandled) => {}
+                Err(e) => gtk::AlertDialog::builder()
+                    .modal(true)
+                    .message(tr("files-admin-failed"))
+                    .detail(e.message())
+                    .build()
+                    .show(Some(&w.window)),
+            }
+        });
+    }
+
+    /// Ctrl with the wheel, or with + and −: every pane alike, kept.
+    fn zoom_by(&self, by: i32) {
+        let zoom = if by == 0 { pane::ZOOM_DEFAULT } else { self.pane().zoomed(by) };
+        if zoom == self.zoom.get() {
+            return;
+        }
+        self.zoom.set(zoom);
+        for tab in self.tabs.borrow().iter() {
+            for p in tab.panes.borrow().iter() {
+                p.set_zoom(zoom);
+            }
+        }
+        let blocks = format!("zoom_list: {}\nzoom_grid: {}\n", zoom.0, zoom.1);
+        if let Err(err) = self.config_dir.save_app_keys("files", &["zoom_list", "zoom_grid"], &blocks) {
+            log::warn!("saving the zoom: {err:#}");
+        }
+    }
+
+    /// The list's columns, each to tick: a right-click on the headers.
+    fn columns_menu(self: &Rc<Self>, widget: &gtk::Widget, at: Option<(f64, f64)>) {
+        let popover = gtk::Popover::builder().css_classes(["context-menu"]).build();
+        let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["columns-menu"]).build();
+        column.append(&gtk::Label::builder().label(tr("files-columns")).xalign(0.0).css_classes(["places-header"]).build());
+        for id in pane::COLUMNS {
+            let check = gtk::CheckButton::builder()
+                .label(tr(&format!("files-column-{id}")))
+                .active(self.columns.borrow().iter().any(|c| c == id))
+                .build();
+            let weak = Rc::downgrade(self);
+            check.connect_toggled(move |b| {
+                if let Some(w) = weak.upgrade() {
+                    w.set_column(id, b.is_active());
+                }
+            });
+            column.append(&check);
+        }
+        popover.set_child(Some(&column));
+        orbit_app::popup::open(&popover, widget, at);
+    }
+
+    fn set_column(&self, id: &str, shown: bool) {
+        {
+            let mut columns = self.columns.borrow_mut();
+            columns.retain(|c| c != id);
+            if shown {
+                columns.push(id.to_owned());
+            }
+            // In the list's order.
+            columns.sort_by_key(|c| pane::COLUMNS.iter().position(|k| k == c));
+        }
+        let columns = self.columns.borrow().clone();
+        for tab in self.tabs.borrow().iter() {
+            for p in tab.panes.borrow().iter() {
+                p.set_columns(&columns);
+            }
+        }
+        let blocks = format!("columns: [{}]\n", columns.join(", "));
+        if let Err(err) = self.config_dir.save_app_keys("files", &["columns"], &blocks) {
+            log::warn!("saving the columns: {err:#}");
+        }
     }
 
     fn rename(&self) {
@@ -847,6 +1030,9 @@ impl Window {
                 size: 0,
                 modified: 0,
                 mime: "inode/directory".into(),
+                mode: 0,
+                uid: 0,
+                gid: 0,
             });
         }
         crate::properties::show(self.window.upcast_ref(), selected);
@@ -883,6 +1069,32 @@ impl Window {
         add("extract", |w| w.extract());
         add("copy-path", |w| w.copy_paths());
         add("properties", |w| w.properties());
+        add("undo", |w| w.undo());
+        add("admin", |w| w.open_as_admin());
+        add("columns", |w| {
+            let pane = w.pane();
+            w.columns_menu(pane.widget.upcast_ref(), None);
+        });
+        add("sort-desc", |w| {
+            let pane = w.pane();
+            let (key, ascending) = pane.sort();
+            pane.sort_by(key, !ascending);
+        });
+        let sort = gio::SimpleAction::new("sort", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(self);
+        sort.connect_activate(move |_, id| {
+            let (Some(w), Some(id)) = (weak.upgrade(), id.and_then(|v| v.get::<String>())) else { return };
+            let pane = w.pane();
+            pane.sort_by(SortKey::from_id(&id), pane.sort().1);
+        });
+        group.add_action(&sort);
+        let new_document = gio::SimpleAction::new("new-document", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(self);
+        new_document.connect_activate(move |_, t| {
+            let (Some(w), Some(t)) = (weak.upgrade(), t.and_then(|v| v.get::<String>())) else { return };
+            w.new_document((!t.is_empty()).then(|| PathBuf::from(t)));
+        });
+        group.add_action(&new_document);
         add("new-tab", |w| {
             let at = w.pane().focused().filter(|e| e.dir).map(|e| e.location).unwrap_or_else(|| w.pane().location.borrow().clone());
             w.new_tab(at);
@@ -942,11 +1154,58 @@ impl Window {
         };
         let item = |label: &str, action: &str, target: Option<glib::Variant>| item_icon(label, action, target, None);
         let mut sections: Vec<Vec<gtk::Widget>> = Vec::new();
-        if selected.is_empty() {
-            sections.push(vec![
+        let pane = self.pane();
+        let in_folder = self.here().is_some();
+        // New: a folder, or a document — empty, or from ~/Templates.
+        let new_items = || {
+            let mut docs = vec![item(&tr("files-new-empty-document"), "files.new-document", Some("".to_variant()))];
+            for t in templates() {
+                let label = t.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                docs.push(item(&label, "files.new-document", Some(t.display().to_string().to_variant())));
+            }
+            vec![
                 item(&tr("files-new-folder"), "files.new-folder", None),
-                item(&tr("files-paste"), "files.paste", None),
-            ]);
+                submenu(&tr("files-new-document"), docs),
+            ]
+        };
+        let as_admin = in_folder
+            && !pane.as_admin()
+            && (selected.is_empty() || (selected.len() == 1 && selected[0].dir && selected[0].location.path().is_some()));
+        if selected.is_empty() {
+            if let Some(step) = undo::last() {
+                sections.push(vec![item(&step.label(), "files.undo", None)]);
+            }
+            if in_folder {
+                let mut new = new_items();
+                new.push(item(&tr("files-paste"), "files.paste", None));
+                sections.push(new);
+            }
+            // Sorting, for every view; the columns, for the list.
+            let (key, ascending) = pane.sort();
+            let mark = |k: SortKey| (k == key).then_some("object-select-symbolic");
+            let mut sort: Vec<gtk::Widget> = [
+                (SortKey::Name, "files-column-name"),
+                (SortKey::Size, "files-column-size"),
+                (SortKey::Modified, "files-column-modified"),
+                (SortKey::Kind, "files-column-kind"),
+            ]
+            .into_iter()
+            .map(|(k, label)| item_icon(&tr(label), "files.sort", Some(k.id().to_variant()), mark(k)))
+            .collect();
+            sort.push(item_icon(
+                &tr("files-sort-descending"),
+                "files.sort-desc",
+                None,
+                (!ascending).then_some("object-select-symbolic"),
+            ));
+            let mut view = vec![submenu(&tr("files-sort-by"), sort)];
+            if pane.view() == View::List {
+                view.push(item(&tr("files-columns-menu"), "files.columns", None));
+            }
+            sections.push(view);
+            if as_admin {
+                sections.push(vec![item(&tr("files-open-admin"), "files.admin", None)]);
+            }
         } else {
             let mut open = vec![item(&tr("files-open"), "files.open", None)];
             if let Some(first) = selected.first().filter(|e| !e.dir) {
@@ -973,7 +1232,12 @@ impl Window {
                 item(&tr("files-copy-path"), "files.copy-path", None),
             ]);
             // Also here: a full folder may leave no empty space to click.
-            sections.push(vec![item(&tr("files-new-folder"), "files.new-folder", None)]);
+            if in_folder {
+                sections.push(new_items());
+            }
+            if as_admin {
+                sections.push(vec![item(&tr("files-open-admin"), "files.admin", None)]);
+            }
             let mut manage = vec![item(&tr("files-rename-menu"), "files.rename", None)];
             if selected.iter().all(|e| actions::is_archive(&e.name)) {
                 manage.push(item(&tr("files-extract"), "files.extract", None));
@@ -1108,7 +1372,12 @@ impl Window {
                 Key::a | Key::A => pane.select_all(),
                 Key::h | Key::H => self.hidden.set_active(!self.hidden.is_active()),
                 Key::l | Key::L => self.edit_path(),
+                Key::f | Key::F if shift => pane.open_search(),
                 Key::f | Key::F => pane.open_filter(),
+                Key::z | Key::Z => self.undo(),
+                Key::plus | Key::equal | Key::KP_Add => self.zoom_by(1),
+                Key::minus | Key::KP_Subtract => self.zoom_by(-1),
+                Key::_0 | Key::KP_0 => self.zoom_by(0),
                 Key::t | Key::T => {
                     let here = pane.location.borrow().clone();
                     self.new_tab(here);
@@ -1219,6 +1488,29 @@ impl Window {
             self.notebook.set_current_page(Some(next as u32));
         }
     }
+}
+
+/// The files in ~/Templates (as "Modelos" in Portuguese), by name.
+fn templates() -> Vec<PathBuf> {
+    let Some(dir) = glib::user_special_dir(glib::UserDirectory::Templates).filter(|d| *d != glib::home_dir()) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|d| {
+            d.filter_map(Result::ok)
+                .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort_by(|a, b| {
+        orbit_common::natural::natural(
+            &a.file_name().unwrap_or_default().to_string_lossy().to_lowercase(),
+            &b.file_name().unwrap_or_default().to_string_lossy().to_lowercase(),
+        )
+    });
+    found
 }
 
 fn same_device(a: &std::path::Path, b: &std::path::Path) -> bool {

@@ -93,6 +93,13 @@ impl ConfigDir {
         self.rewrite(name, &["edge", "monitor"], &blocks, true)
     }
 
+    /// Writes top-level `keys` of application `name`'s file (`files` →
+    /// `files.yaml`) as `blocks`, YAML lines for those keys; the rest of
+    /// the file, comments included, stays.
+    pub fn save_app_keys(&self, name: &str, keys: &[&str], blocks: &str) -> anyhow::Result<()> {
+        self.rewrite(&format!("{name}.yaml"), keys, blocks, false)
+    }
+
     /// File `name` with its top-level `keys` replaced by `blocks`.
     fn rewrite(&self, name: &str, keys: &[&str], blocks: &str, first: bool) -> anyhow::Result<()> {
         let path = self.path.join(name);

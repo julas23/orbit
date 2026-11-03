@@ -127,9 +127,11 @@ fn title(stem: &str) -> String {
 }
 
 /// Renames `files` to `names` in two steps — every one to a temporary
-/// name, then to its new one — so swapping names cannot collide.
+/// name, then to its new one — so swapping names cannot collide. The
+/// errors; what was renamed is remembered for Ctrl+Z.
 pub fn rename_all(files: &[PathBuf], names: &[String]) -> Vec<String> {
     let mut errors = Vec::new();
+    let mut done = Vec::new();
     let mut moved = Vec::new();
     for (n, file) in files.iter().enumerate() {
         let temp = file.with_file_name(format!(".orbit-rename-{}-{n}", std::process::id()));
@@ -143,8 +145,11 @@ pub fn rename_all(files: &[PathBuf], names: &[String]) -> Vec<String> {
             // Back to its old name rather than lost.
             let _ = std::fs::rename(&temp, &old);
             errors.push(format!("{}: {}", new.display(), tr("files-rename-exists")));
+        } else if new != old {
+            done.push((old, new));
         }
     }
+    crate::undo::push(crate::undo::Step::Renamed(done));
     errors
 }
 
@@ -168,8 +173,9 @@ pub fn single(parent: &gtk::Window, file: &Path) {
                 e.add_css_class("error");
                 return;
             }
-            if let Err(err) = std::fs::rename(&file, &to) {
-                log::warn!("rename: {err}");
+            match std::fs::rename(&file, &to) {
+                Ok(()) => crate::undo::push(crate::undo::Step::Renamed(vec![(file.clone(), to)])),
+                Err(err) => log::warn!("rename: {err}"),
             }
         }
         w.close();

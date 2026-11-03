@@ -4,7 +4,7 @@
 //! server" for SMB, SFTP, FTP or WebDAV shares, which GVfs mounts (asking
 //! for a password when one is needed).
 
-use std::{cell::Cell, path::PathBuf, rc::Rc};
+use std::{cell::Cell, rc::Rc};
 
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::tr;
@@ -71,7 +71,7 @@ impl Places {
             }
         }
         self.place("user-trash", &tr("files-trash"), Location::Uri("trash:///".into()));
-        self.place("drive-harddisk", &tr("files-computer"), Location::Path(PathBuf::from("/")));
+        self.place("computer", &tr("files-computer"), Location::Computer);
 
         let bookmarks = bookmarks();
         if !bookmarks.is_empty() {
@@ -261,7 +261,7 @@ impl Places {
 /// (smb://, sftp://…) — not a folder mounted somewhere in the tree: NFS or
 /// CIFS from fstab (UDisks gives those a "network" volume), bind mounts
 /// (no volume, no drive).
-fn is_volume(mount: &gio::Mount) -> bool {
+pub fn is_volume(mount: &gio::Mount) -> bool {
     if !mount.root().has_uri_scheme("file") || mount.drive().is_some() {
         return true;
     }
@@ -269,7 +269,7 @@ fn is_volume(mount: &gio::Mount) -> bool {
 }
 
 /// A network filesystem from fstab, as UDisks marks it.
-fn is_network(volume: &gio::Volume) -> bool {
+pub fn is_network(volume: &gio::Volume) -> bool {
     volume.identifier("class").as_deref() == Some("network")
 }
 
