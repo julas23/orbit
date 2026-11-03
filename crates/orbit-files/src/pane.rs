@@ -286,10 +286,16 @@ impl Pane {
                 let state = gesture.current_event_state();
                 let ctrl = state.contains(gtk::gdk::ModifierType::CONTROL_MASK);
                 let shift = state.contains(gtk::gdk::ModifierType::SHIFT_MASK);
+                let Some(p) = weak.upgrade() else { return };
                 if !(ctrl || shift) {
+                    // A plain click on no entry: nothing selected.
+                    if on_empty(&widget, x, y) {
+                        p.marking.set(false);
+                        p.selection.unselect_all();
+                        p.focus_view();
+                    }
                     return;
                 }
-                let Some(p) = weak.upgrade() else { return };
                 let Some(position) = position_under(&widget, x, y) else { return };
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 if shift {
@@ -972,6 +978,22 @@ fn position_under(view: &gtk::Widget, x: f64, y: f64) -> Option<u32> {
         node = w.parent();
     }
     None
+}
+
+/// Whether (x, y) falls on the view's empty space: no entry, and not
+/// its scrollbars or column headers.
+fn on_empty(view: &gtk::Widget, x: f64, y: f64) -> bool {
+    let mut node = view.pick(x, y, gtk::PickFlags::DEFAULT);
+    while let Some(w) = node {
+        if position_of_cell(&w).is_some() || w.is::<gtk::Scrollbar>() || w.css_name() == "header" {
+            return false;
+        }
+        if &w == view {
+            return true;
+        }
+        node = w.parent();
+    }
+    false
 }
 
 fn remember_position(widget: &impl IsA<gtk::Widget>, item: &gtk::ListItem) {
