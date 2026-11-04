@@ -7,7 +7,13 @@
 # HOST, puts them in the repository server's incoming folder
 # (distro/repo/sync.sh publishes them).
 #
-#   distro/build-debs.sh [--arm64] [--upload root@10.0.0.111]
+#   distro/build-debs.sh [--arm64] [--upload root@10.0.0.111] [--all]
+#
+# With --upload, only the packages that changed since the ones in the
+# incoming folder are built and sent (distro/changed.py says which, and
+# why); the others stay as they are, so an update brings only what
+# changed. --all builds and sends every one, the folder made exactly this
+# build (packages no longer built leave it).
 #
 # Versions: the workspace's, then +git<commit date>.<commit>, so every build
 # of a newer commit is an upgrade (and a build with uncommitted changes says
@@ -18,10 +24,13 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 UPLOAD=""
 ARM64=""
+ALL=""
+INCOMING=/srv/orbit-incoming/orbit
 while [ $# -gt 0 ]; do
     case "$1" in
         --arm64) ARM64=1 ;;
         --upload) UPLOAD=${2:?--upload needs a host}; shift ;;
+        --all) ALL=1 ;;
         *) echo "unknown option $1" >&2; exit 1 ;;
     esac
     shift
@@ -38,7 +47,33 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 echo "Orbit $VERSION"
 
-cargo build --release --locked $(printf -- '-p %s ' "${CRATES[@]}")
+# Only what changed, when sending to a repository (not with --all).
+PLAN=""
+if [ -n "$UPLOAD" ] && [ -z "$ALL" ]; then
+    PUBLISHED=$(mktemp)
+    trap 'rm -f "$PUBLISHED"' EXIT
+    ssh -o BatchMode=yes "${UPLOAD}" ls "$INCOMING" > "$PUBLISHED"
+    PLAN=$(python3 "$ROOT/distro/changed.py" "$PUBLISHED" "${CRATES[@]}")
+    if [ -z "$PLAN" ]; then
+        echo "Nothing changed since the packages published."
+        exit 0
+    fi
+    echo "To build (the rest stays as published):"
+    sed 's/^/  /; s/\t/: /' <<< "$PLAN"
+    kept=()
+    for crate in "${CRATES[@]}"; do
+        cut -f1 <<< "$PLAN" | grep -qx "$crate" && kept+=("$crate")
+    done
+    CRATES=("${kept[@]}")
+fi
+# Whether `name` is to be built; whether the package `file` (always the
+# same, as orbit-fonts) is not published yet.
+want() { [ -z "$PLAN" ] || cut -f1 <<< "$PLAN" | grep -qx "$1"; }
+missing() { [ -z "$PLAN" ] || ! grep -qx "$1" "$PUBLISHED"; }
+
+if [ ${#CRATES[@]} -gt 0 ]; then
+    cargo build --release --locked $(printf -- '-p %s ' "${CRATES[@]}")
+fi
 for crate in "${CRATES[@]}"; do
     cargo deb -p "$crate" --no-build --deb-version "$VERSION" -o "$OUT/" -q
 done
@@ -46,6 +81,7 @@ done
 # Metapackages: distro/meta/<name> holds the control fields that differ.
 for meta in "$ROOT"/distro/meta/*; do
     name=$(basename "$meta")
+    want "$name" || continue
     dir=$(mktemp -d)
     mkdir -p "$dir/DEBIAN"
     {
@@ -62,6 +98,7 @@ for meta in "$ROOT"/distro/meta/*; do
     rm -rf "$dir"
 done
 # orbit-defaults: files, not code (distro/defaults/).
+if want orbit-defaults; then
 dir=$(mktemp -d)
 mkdir -p "$dir/DEBIAN" "$dir/usr/share/applications" "$dir/usr/share/glib-2.0/schemas" "$dir/usr/share/doc/orbit" \
     "$dir/usr/share/xdg-desktop-portal"
@@ -81,12 +118,14 @@ cp -r "$ROOT/examples" "$dir/usr/share/doc/orbit/examples"
 chmod -R u=rwX,go=rX "$dir/usr"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-defaults_${VERSION}_all.deb" >/dev/null
 rm -rf "$dir"
+fi
 # orbit-release: Orbit Linux's name, version and logo (distro/release/),
 # for the image only. Its version is the system's: the workspace's
 # major.minor; BUILD_ID is this build's.
 REL="$ROOT/distro/release"
 OS_VERSION=$(echo "$BASE" | cut -d. -f1,2)
 BUILD_ID="$(git log -1 --format=%cd --date=format:%Y%m%d).$(git rev-parse --short HEAD)"
+if want orbit-release; then
 dir=$(mktemp -d)
 mkdir -p "$dir/DEBIAN" "$dir/usr/lib" "$dir/etc/xdg/fastfetch" "$dir/etc/default/grub.d" "$dir/etc/skel/.config/neofetch" \
     "$dir/usr/share/orbit/ascii" "$dir/usr/share/icons/hicolor/scalable/apps" "$dir/usr/share/doc/orbit-release"
@@ -116,11 +155,13 @@ chmod -R u=rwX,go=rX "$dir/usr" "$dir/etc"
 chmod 755 "$dir" "$dir/DEBIAN/preinst" "$dir/DEBIAN/postrm"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-release_${VERSION}_all.deb" >/dev/null
 rm -rf "$dir"
+fi
 # orbit-fonts: the Nerd Font the panel and dock draw with, from its
 # release; its own version, the same file every build (fixed dates).
 FONTS_VERSION=3.5.1
 FONTS_SHA256=ae598e9401e2846aa3ee364513715de0490b844a4b54f0768991f45f23aa8369
 fonts="$ROOT/target/fonts/CascadiaCode-$FONTS_VERSION.tar.xz"
+if missing "orbit-fonts_${FONTS_VERSION}-1_all.deb"; then
 if ! echo "$FONTS_SHA256  $fonts" | sha256sum -c --status 2>/dev/null; then
     mkdir -p "$(dirname "$fonts")"
     curl -fsSL -o "$fonts" "https://github.com/ryanoasis/nerd-fonts/releases/download/v$FONTS_VERSION/CascadiaCode.tar.xz"
@@ -145,10 +186,12 @@ chmod -R u=rwX,go=rX "$dir"
 find "$dir" -exec touch -h -d @1755734400 {} +
 SOURCE_DATE_EPOCH=1755734400 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-fonts_${FONTS_VERSION}-1_all.deb" >/dev/null
 rm -rf "$dir"
+fi
 # orbit-ruffle: Ruffle's own build, as orbit-fonts is made.
 RUFFLE_NIGHTLY=2026-10-20
 RUFFLE_SHA256=4b9031f38d029dea0fdab69c5ad8886507a4bce753eb7d18fa1bdc4ba9a4bc2c
 ruffle="$ROOT/target/ruffle/ruffle-$RUFFLE_NIGHTLY.tar.gz"
+if missing "orbit-ruffle_0.8.0~nightly${RUFFLE_NIGHTLY//-/}-1_amd64.deb"; then
 if ! echo "$RUFFLE_SHA256  $ruffle" | sha256sum -c --status 2>/dev/null; then
     mkdir -p "$(dirname "$ruffle")"
     curl -fsSL -o "$ruffle" "https://github.com/ruffle-rs/ruffle/releases/download/nightly-$RUFFLE_NIGHTLY/ruffle-nightly-${RUFFLE_NIGHTLY//-/_}-linux-x86_64.tar.gz"
@@ -177,10 +220,11 @@ chmod 755 "$dir/usr/bin/ruffle"
 find "$dir" -exec touch -h -d @1760918400 {} +
 SOURCE_DATE_EPOCH=1760918400 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-ruffle_0.8.0~nightly${RUFFLE_NIGHTLY//-/}-1_amd64.deb" >/dev/null
 rm -rf "$dir"
+fi
 
 # arm64: cross-compiled in a bare Debian 13, from this same tree (so with
 # the same version).
-if [ -n "$ARM64" ]; then
+if [ -n "$ARM64" ] && want orbit-local-station:arm64; then
     # ORBIT_ARM64_CACHE: elsewhere, e.g. on a machine whose container root
     # cannot write the one another machine's root made (an LXC).
     CACHE=${ORBIT_ARM64_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/orbit-arm64}
@@ -192,6 +236,16 @@ fi
 ls -1 "$OUT"
 
 if [ -n "$UPLOAD" ]; then
-    rsync -a --delete "$OUT/" "$UPLOAD:/srv/orbit-incoming/orbit/"
+    if [ -z "$PLAN" ]; then
+        rsync -a --delete "$OUT/" "$UPLOAD:$INCOMING/"
+    else
+        # Added beside the others; of these, the versions they replace go.
+        rsync -a "$OUT/" "$UPLOAD:$INCOMING/"
+        ssh -o BatchMode=yes "$UPLOAD" "cd $INCOMING && for new in $(cd "$OUT" && ls -1 *.deb | tr '\n' ' '); do
+            name=\${new%%_*}; arch=\${new##*_}
+            for old in \${name}_*_\$arch; do [ \"\$old\" = \"\$new\" ] || rm -f -- \"\$old\"; done
+        done"
+    fi
     echo "uploaded to $UPLOAD; run distro/repo/sync.sh there to publish"
+    [ -z "$PLAN" ] || { echo "Updated:"; ls -1 "$OUT" | sed 's/^/  /'; }
 fi
