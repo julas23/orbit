@@ -1,0 +1,2 @@
+# The boot screen's theme lives in the initramfs.
+activate-noawait update-initramfs

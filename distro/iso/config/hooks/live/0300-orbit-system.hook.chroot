@@ -17,3 +17,11 @@ ln -s ../usr/lib/os-release /etc/os-release
 # networking.service waits for its DHCP at boot.
 apt-get purge -y ifupdown
 rm -rf /etc/network/interfaces /etc/network/interfaces.d
+
+# The boot screen: Orbit's Plymouth theme (orbit-release). Debian's default,
+# ceratopsian, comes with desktop-base, not in the image, so Plymouth fell
+# back to its text theme; orbit-release's postinst chooses Orbit's only when
+# Plymouth was installed before it. The initrd the Live boots with is made
+# before the hooks, so again here.
+plymouth-set-default-theme orbit
+update-initramfs -u -k all

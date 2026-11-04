@@ -5,5 +5,8 @@ if [ "$1" = remove ] || [ "$1" = abort-install ] || [ "$1" = disappear ]; then
     for f in /usr/lib/os-release /etc/issue /etc/issue.net /etc/motd; do
         dpkg-divert --package orbit-release --remove --rename --divert "$f.debian" "$f" >/dev/null
     done
+    if command -v plymouth-set-default-theme >/dev/null && [ "$(plymouth-set-default-theme 2>/dev/null)" = orbit ]; then
+        plymouth-set-default-theme --reset || true
+    fi
 fi
 exit 0

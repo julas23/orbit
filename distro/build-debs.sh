@@ -149,7 +149,8 @@ BUILD_ID="$(git log -1 --format=%cd --date=format:%Y%m%d).$(git rev-parse --shor
 if want orbit-release; then
 dir=$(mktemp -d)
 mkdir -p "$dir/DEBIAN" "$dir/usr/lib" "$dir/etc/xdg/fastfetch" "$dir/etc/default/grub.d" "$dir/etc/skel/.config/neofetch" \
-    "$dir/usr/share/orbit/ascii" "$dir/usr/share/icons/hicolor/scalable/apps" "$dir/usr/share/doc/orbit-release"
+    "$dir/usr/share/orbit/ascii" "$dir/usr/share/icons/hicolor/scalable/apps" "$dir/usr/share/doc/orbit-release" \
+    "$dir/usr/share/plymouth/themes"
 {
     echo "Package: orbit-release"
     echo "Version: $VERSION"
@@ -159,7 +160,7 @@ mkdir -p "$dir/DEBIAN" "$dir/usr/lib" "$dir/etc/xdg/fastfetch" "$dir/etc/default
     echo "Homepage: https://github.com/julas23/orbit"
     cat "$REL/control"
 } > "$dir/DEBIAN/control"
-cp "$REL/preinst" "$REL/postrm" "$dir/DEBIAN/"
+cp "$REL/preinst" "$REL/postinst" "$REL/postrm" "$REL/triggers" "$dir/DEBIAN/"
 printf '%s\n' /etc/xdg/fastfetch/config.jsonc /etc/default/grub.d/orbit-release.cfg /etc/skel/.config/neofetch/config.conf > "$dir/DEBIAN/conffiles"
 fill() { sed -e "s/@VERSION@/$OS_VERSION/g" -e "s/@BUILD@/$BUILD_ID/g" "$1"; }
 fill "$REL/os-release.in" > "$dir/usr/lib/os-release"
@@ -171,9 +172,10 @@ cp "$REL/grub.cfg" "$dir/etc/default/grub.d/orbit-release.cfg"
 cp "$REL/neofetch.conf" "$dir/etc/skel/.config/neofetch/config.conf"
 cp "$REL"/orbit-linux.fastfetch "$REL"/orbit-linux.neofetch "$REL"/orbit-linux.txt "$dir/usr/share/orbit/ascii/"
 cp "$ROOT/data/brand/orbit-mark.svg" "$dir/usr/share/icons/hicolor/scalable/apps/orbit-linux.svg"
+cp -r "$REL/plymouth/orbit" "$dir/usr/share/plymouth/themes/"
 cp "$ROOT/LICENSE" "$dir/usr/share/doc/orbit-release/copyright" 2>/dev/null || true
 chmod -R u=rwX,go=rX "$dir/usr" "$dir/etc"
-chmod 755 "$dir" "$dir/DEBIAN/preinst" "$dir/DEBIAN/postrm"
+chmod 755 "$dir" "$dir/DEBIAN/preinst" "$dir/DEBIAN/postinst" "$dir/DEBIAN/postrm"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-release_${VERSION}_all.deb" >/dev/null
 rm -rf "$dir"
 fi

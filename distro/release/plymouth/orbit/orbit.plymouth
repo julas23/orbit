@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Orbit Linux
+Description=The Orbit mark: the moon travels the outer orbit, the inner one turns the other way
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/orbit
+ScriptFile=/usr/share/plymouth/themes/orbit/orbit.script
