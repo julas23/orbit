@@ -154,9 +154,15 @@ impl Module {
         }
     }
 
-    /// Makes sure there are `count` buttons, laid out in the grid.
+    /// Makes sure there are `count` buttons, laid out in the grid: more
+    /// for an area beyond `count` while it exists, fewer once it is gone.
     fn ensure_buttons(self: &Rc<Self>, count: i32) {
         let mut buttons = self.buttons.borrow_mut();
+        while buttons.len() as i32 > count {
+            if let Some(button) = buttons.pop() {
+                self.grid.remove(&button);
+            }
+        }
         let columns = if self.vertical {
             self.config.columns.max(1)
         } else {
