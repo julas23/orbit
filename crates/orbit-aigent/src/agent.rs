@@ -102,8 +102,16 @@ pub type Running = Arc<Mutex<Option<Child>>>;
 
 /// Runs `request` with `agent` (named `name`), on the calling thread, until
 /// it answers.
-pub fn ask(name: &str, agent: &Agent, request: &str, session: Option<&str>, running: &Running) -> anyhow::Result<Answer> {
-    let kind = agent.kind(name).ok_or_else(|| anyhow::anyhow!("agent {name} has no kind"))?;
+pub fn ask(
+    name: &str,
+    agent: &Agent,
+    request: &str,
+    session: Option<&str>,
+    running: &Running,
+) -> anyhow::Result<Answer> {
+    let kind = agent
+        .kind(name)
+        .ok_or_else(|| anyhow::anyhow!("agent {name} has no kind"))?;
     let program = agent
         .find_program(kind)
         .ok_or_else(|| anyhow::anyhow!("{} is not installed", kind.name()))?;
@@ -113,7 +121,13 @@ pub fn ask(name: &str, agent: &Agent, request: &str, session: Option<&str>, runn
     }
 }
 
-fn claude(program: &PathBuf, agent: &Agent, request: &str, session: Option<&str>, running: &Running) -> anyhow::Result<Answer> {
+fn claude(
+    program: &PathBuf,
+    agent: &Agent,
+    request: &str,
+    session: Option<&str>,
+    running: &Running,
+) -> anyhow::Result<Answer> {
     let me = std::env::current_exe()?;
     let mcp = serde_json::json!({
         "mcpServers": { "orbit_aigent": { "command": me, "args": ["approve"] } }
@@ -153,7 +167,9 @@ fn claude(program: &PathBuf, agent: &Agent, request: &str, session: Option<&str>
     let mut session = session.map(str::to_owned);
     for line in BufReader::new(stdout).lines() {
         let Ok(line) = line else { break };
-        let Ok(message) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+        let Ok(message) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
         if let Some(id) = message["session_id"].as_str() {
             session = Some(id.to_owned());
         }

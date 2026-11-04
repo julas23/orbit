@@ -88,11 +88,7 @@ impl Tvm {
         if !n.is_finite() || n <= 0.0 {
             return Err(NoSolution);
         }
-        Ok(if n - n.floor() < 0.005 {
-            n.floor()
-        } else {
-            n.ceil()
-        })
+        Ok(if n - n.floor() < 0.005 { n.floor() } else { n.ceil() })
     }
 
     /// The rate, in percent per period.
@@ -105,11 +101,7 @@ impl Tvm {
 }
 
 fn finite(x: f64) -> Result<f64, NoSolution> {
-    if x.is_finite() {
-        Ok(x)
-    } else {
-        Err(NoSolution)
-    }
+    if x.is_finite() { Ok(x) } else { Err(NoSolution) }
 }
 
 /// A root of `f` on (−100%, +∞): the sign changes of `f` over a grid of
@@ -321,8 +313,7 @@ impl Bond {
         } else {
             let fraction = dsc / e;
             let discount = |k: f64| (1.0 + y).powf(k - 1.0 + fraction);
-            (1..=n).map(|k| c / discount(f64::from(k))).sum::<f64>()
-                + 100.0 / discount(f64::from(n))
+            (1..=n).map(|k| c / discount(f64::from(k))).sum::<f64>() + 100.0 / discount(f64::from(n))
         };
         finite(dirty - accrued).map(|p| (p, accrued))
     }
@@ -374,10 +365,7 @@ mod tests {
         assert_eq!(tvm(10.0, 0.0, 1000.0, 0.0, 0.0).solve_fv(), Ok(-1000.0));
         assert_eq!(tvm(0.0, 0.0, 1000.0, -100.0, 0.0).solve_n(), Ok(10.0));
         // Same signs everywhere: no rate pays that.
-        assert_eq!(
-            tvm(10.0, 0.0, 100.0, 10.0, 100.0).solve_i(),
-            Err(NoSolution)
-        );
+        assert_eq!(tvm(10.0, 0.0, 100.0, 10.0, 100.0).solve_i(), Err(NoSolution));
     }
 
     #[test]
@@ -423,25 +411,9 @@ mod tests {
         assert!(near(i365, -5.178, 0.001));
         let sl = depreciate(Depreciation::StraightLine, 50_000.0, 8_000.0, 6.0, 0.0, 1.0);
         assert_eq!(sl, Ok((7_000.0, 35_000.0)));
-        let (soyd, _) = depreciate(
-            Depreciation::SumOfYearsDigits,
-            50_000.0,
-            8_000.0,
-            6.0,
-            0.0,
-            1.0,
-        )
-        .unwrap();
+        let (soyd, _) = depreciate(Depreciation::SumOfYearsDigits, 50_000.0, 8_000.0, 6.0, 0.0, 1.0).unwrap();
         assert!(near(soyd, 12_000.0, 1e-9));
-        let (db, left) = depreciate(
-            Depreciation::DecliningBalance,
-            10_000.0,
-            1_000.0,
-            5.0,
-            200.0,
-            1.0,
-        )
-        .unwrap();
+        let (db, left) = depreciate(Depreciation::DecliningBalance, 10_000.0, 1_000.0, 5.0, 200.0, 1.0).unwrap();
         assert_eq!((db, left), (4_000.0, 5_000.0));
         assert_eq!(
             depreciate(Depreciation::StraightLine, 1.0, 0.0, 5.0, 0.0, 1.5),

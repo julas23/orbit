@@ -21,7 +21,9 @@ fn main() -> ExitCode {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-t" | "--type" => {
-                let Some(name) = args.next() else { return usage("-t needs a type") };
+                let Some(name) = args.next() else {
+                    return usage("-t needs a type");
+                };
                 match message_type(&name) {
                     Some(t) => kind = t,
                     None => return usage(&format!("unknown type: {name}")),

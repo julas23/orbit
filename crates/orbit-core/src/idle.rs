@@ -38,7 +38,12 @@ pub struct Idle {
 
 impl Default for Idle {
     fn default() -> Self {
-        Self { last_input: Instant::now(), inhibitors: Vec::new(), bus_inhibited: false, timer: None }
+        Self {
+            last_input: Instant::now(),
+            inhibitors: Vec::new(),
+            bus_inhibited: false,
+            timer: None,
+        }
     }
 }
 
@@ -69,7 +74,9 @@ impl Orbit {
         };
         tracing::info!("idle: locks after {} s", timeout.as_secs());
         self.idle.last_input = Instant::now();
-        let token = self.loop_handle.insert_source(Timer::from_duration(timeout), |_, _, state| state.idle_check());
+        let token = self
+            .loop_handle
+            .insert_source(Timer::from_duration(timeout), |_, _, state| state.idle_check());
         match token {
             Ok(token) => self.idle.timer = Some(token),
             Err(err) => tracing::error!("idle timer: {err}"),

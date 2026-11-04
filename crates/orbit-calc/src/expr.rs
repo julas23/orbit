@@ -129,11 +129,7 @@ fn exact_trig(rad: f64, x: f64, angle: Angle, f: fn(f64) -> f64) -> f64 {
             k.round() != 0.0 && (k - k.round()).abs() < 1e-9
         }
     };
-    if on_multiple && y.abs() < 1e-9 {
-        0.0
-    } else {
-        y
-    }
+    if on_multiple && y.abs() < 1e-9 { 0.0 } else { y }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -264,10 +260,7 @@ impl Parser {
                 node = Node::Mul(Box::new(node), Box::new(self.unary()?));
             } else if self.eat(&Token::Divide) {
                 node = Node::Div(Box::new(node), Box::new(self.unary()?));
-            } else if matches!(
-                self.peek(),
-                Some(Token::Num(_) | Token::Open | Token::Func(_))
-            ) {
+            } else if matches!(self.peek(), Some(Token::Num(_) | Token::Open | Token::Func(_))) {
                 // Implicit multiplication: 2π, 3(4+1), 2√9.
                 node = Node::Mul(Box::new(node), Box::new(self.power()?));
             } else {

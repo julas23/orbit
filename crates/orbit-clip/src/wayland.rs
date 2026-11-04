@@ -172,11 +172,7 @@ fn run(
 
         for (offer, primary) in std::mem::take(&mut state.pending) {
             let Some(offer) = offer else { continue };
-            let mimes = state
-                .offers
-                .remove(&offer.id())
-                .map(|(_, m)| m)
-                .unwrap_or_default();
+            let mimes = state.offers.remove(&offer.id()).map(|(_, m)| m).unwrap_or_default();
             let ours = state.own[usize::from(primary)]
                 .as_ref()
                 .is_some_and(|id| state.sources.contains_key(id));
@@ -230,26 +226,15 @@ fn run(
 
 /// Reads a selection: text when offered, else an image; None for secrets,
 /// empty or oversized copies, and other types.
-fn read(
-    conn: &Connection,
-    offer: &ZwlrDataControlOfferV1,
-    mimes: &[String],
-    options: Options,
-) -> Option<Content> {
+fn read(conn: &Connection, offer: &ZwlrDataControlOfferV1, mimes: &[String], options: Options) -> Option<Content> {
     if options.ignore_secrets && mimes.iter().any(|m| m == SECRET) {
         log::debug!("skipping a copy marked as secret");
         return None;
     }
     let text = TEXT.iter().find(|t| mimes.iter().any(|m| m == *t));
-    let image = [
-        "image/png",
-        "image/jpeg",
-        "image/webp",
-        "image/gif",
-        "image/bmp",
-    ]
-    .iter()
-    .find(|t| mimes.iter().any(|m| m == *t));
+    let image = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp"]
+        .iter()
+        .find(|t| mimes.iter().any(|m| m == *t));
     let mime = text.or(image)?;
     let bytes = receive(conn, offer, mime, options.max_bytes)?;
     if bytes.is_empty() {
@@ -267,12 +252,7 @@ fn read(
 
 /// The offer's data in `mime`, through a pipe; gives up after two seconds
 /// of silence or past `max` bytes.
-fn receive(
-    conn: &Connection,
-    offer: &ZwlrDataControlOfferV1,
-    mime: &str,
-    max: usize,
-) -> Option<Vec<u8>> {
+fn receive(conn: &Connection, offer: &ZwlrDataControlOfferV1, mime: &str, max: usize) -> Option<Vec<u8>> {
     let (reader, writer): (OwnedFd, OwnedFd) = rustix::pipe::pipe().ok()?;
     offer.receive(mime.into(), writer.as_fd());
     drop(writer);
@@ -326,15 +306,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
 }
 
 impl Dispatch<wl_seat::WlSeat, ()> for State {
-    fn event(
-        _: &mut Self,
-        _: &wl_seat::WlSeat,
-        _: wl_seat::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
+    fn event(_: &mut Self, _: &wl_seat::WlSeat, _: wl_seat::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
 
 impl Dispatch<ZwlrDataControlManagerV1, ()> for State {

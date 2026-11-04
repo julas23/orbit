@@ -54,12 +54,7 @@ pub fn ask(question: Question, answer: impl FnOnce(bool) + 'static) {
 
 /// Offers `choices` under `title`, with a cancel button labelled `cancel`;
 /// `answer` runs once, with the index chosen or `None`.
-pub fn choose(
-    title: &str,
-    choices: &[Choice],
-    cancel: &str,
-    answer: impl FnOnce(Option<usize>) + 'static,
-) {
+pub fn choose(title: &str, choices: &[Choice], cancel: &str, answer: impl FnOnce(Option<usize>) + 'static) {
     let answer: Answer<Option<usize>> = Rc::new(RefCell::new(Some(Box::new(answer))));
     let windows: Windows = Rc::default();
     let respond = {
@@ -82,12 +77,7 @@ pub fn choose(
             .orientation(gtk::Orientation::Vertical)
             .spacing(10)
             .build();
-        content.append(
-            &gtk::Label::builder()
-                .label(choice.glyph)
-                .css_classes(["glyph"])
-                .build(),
-        );
+        content.append(&gtk::Label::builder().label(choice.glyph).css_classes(["glyph"]).build());
         content.append(&gtk::Label::new(Some(choice.label)));
         let button = gtk::Button::builder()
             .child(&content)
@@ -116,7 +106,12 @@ pub fn choose(
     dialog.append(&gtk::Label::builder().label(title).css_classes(["question"]).build());
     dialog.append(&row);
     dialog.append(&cancel);
-    cover(&windows, dialog.upcast(), cancel.upcast(), Rc::new(move || respond(None)));
+    cover(
+        &windows,
+        dialog.upcast(),
+        cancel.upcast(),
+        Rc::new(move || respond(None)),
+    );
 }
 
 fn close(windows: &Windows) {
@@ -140,10 +135,7 @@ fn cover(windows: &Windows, dialog: gtk::Widget, focus: gtk::Widget, escape: Rc<
     let target = focused_monitor(&monitors);
 
     // Photograph every monitor before any overlay appears.
-    let photos: Vec<Option<gdk::Texture>> = monitors
-        .iter()
-        .map(|m| if layered { photo(m) } else { None })
-        .collect();
+    let photos: Vec<Option<gdk::Texture>> = monitors.iter().map(|m| if layered { photo(m) } else { None }).collect();
 
     let mut dialog = Some(dialog);
     for (i, monitor) in monitors.iter().enumerate() {
@@ -216,20 +208,14 @@ fn dialog(question: &Question, respond: Rc<impl Fn(bool) + 'static>) -> (gtk::Bo
         .css_classes(["question"])
         .build();
     let no = gtk::Button::builder().label(question.no).build();
-    let yes = gtk::Button::builder()
-        .label(question.yes)
-        .css_classes(["yes"])
-        .build();
+    let yes = gtk::Button::builder().label(question.yes).css_classes(["yes"]).build();
     {
         let respond = respond.clone();
         no.connect_clicked(move |_| respond(false));
     }
     yes.connect_clicked(move |_| respond(true));
 
-    let buttons = gtk::Box::builder()
-        .spacing(10)
-        .halign(gtk::Align::End)
-        .build();
+    let buttons = gtk::Box::builder().spacing(10).halign(gtk::Align::End).build();
     buttons.append(&no);
     buttons.append(&yes);
 

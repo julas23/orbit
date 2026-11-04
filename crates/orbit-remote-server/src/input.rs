@@ -14,12 +14,7 @@ use serde_json::Value;
 use wayland_client::{
     Connection, Dispatch, EventQueue, Proxy, QueueHandle,
     globals::{GlobalListContents, registry_queue_init},
-    protocol::{
-        wl_keyboard::KeymapFormat,
-        wl_output, wl_pointer,
-        wl_registry,
-        wl_seat::WlSeat,
-    },
+    protocol::{wl_keyboard::KeymapFormat, wl_output, wl_pointer, wl_registry, wl_seat::WlSeat},
 };
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1, zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
@@ -48,10 +43,12 @@ impl Input {
         let conn = Connection::connect_to_env().context("connecting to the Wayland display")?;
         let (globals, mut queue) = registry_queue_init::<State>(&conn)?;
         let qh = queue.handle();
-        let pointers: ZwlrVirtualPointerManagerV1 =
-            globals.bind(&qh, 2..=2, ()).context("the compositor has no wlr-virtual-pointer version 2")?;
-        let keyboards: ZwpVirtualKeyboardManagerV1 =
-            globals.bind(&qh, 1..=1, ()).context("the compositor has no virtual-keyboard")?;
+        let pointers: ZwlrVirtualPointerManagerV1 = globals
+            .bind(&qh, 2..=2, ())
+            .context("the compositor has no wlr-virtual-pointer version 2")?;
+        let keyboards: ZwpVirtualKeyboardManagerV1 = globals
+            .bind(&qh, 1..=1, ())
+            .context("the compositor has no virtual-keyboard")?;
         let seat: WlSeat = globals.bind(&qh, 1..=8, ()).context("no seat")?;
         let mut state = State::default();
         let outputs: Vec<wl_output::WlOutput> = globals.contents().with_list(|list| {
@@ -73,9 +70,18 @@ impl Input {
         // No keymap of its own: the seat's.
         let none = std::fs::File::open("/dev/null")?;
         keyboard.keymap(KeymapFormat::NoKeymap as u32, std::os::fd::AsFd::as_fd(&none), 0);
-        queue.roundtrip(&mut state).context("the virtual pointer and keyboard")?;
+        queue
+            .roundtrip(&mut state)
+            .context("the virtual pointer and keyboard")?;
         log::info!("remote: the remote mouse and keys are on {output}");
-        Ok(Self { conn, queue, state, pointer, keyboard, start: Instant::now() })
+        Ok(Self {
+            conn,
+            queue,
+            state,
+            pointer,
+            keyboard,
+            start: Instant::now(),
+        })
     }
 
     /// One message from the client (`move`, `button`, `wheel`, `key`);
@@ -87,19 +93,28 @@ impl Input {
         match message["type"].as_str() {
             Some("move") => self.move_to(time, number("x"), number("y")),
             Some("button") => {
-                let Some(button) = button(message["button"].as_u64().unwrap_or(0)) else { return Ok(true) };
+                let Some(button) = button(message["button"].as_u64().unwrap_or(0)) else {
+                    return Ok(true);
+                };
                 // Where it was pressed: the moves before it may have been
                 // lost or be late, on their own channel.
                 if message["x"].is_number() && message["y"].is_number() {
                     self.move_to(time, number("x"), number("y"));
                 }
-                let state = if down { wl_pointer::ButtonState::Pressed } else { wl_pointer::ButtonState::Released };
+                let state = if down {
+                    wl_pointer::ButtonState::Pressed
+                } else {
+                    wl_pointer::ButtonState::Released
+                };
                 self.pointer.button(time, button, state);
                 self.pointer.frame();
             }
             Some("wheel") => {
                 self.pointer.axis_source(wl_pointer::AxisSource::Wheel);
-                for (axis, delta) in [(wl_pointer::Axis::VerticalScroll, number("dy")), (wl_pointer::Axis::HorizontalScroll, number("dx"))] {
+                for (axis, delta) in [
+                    (wl_pointer::Axis::VerticalScroll, number("dy")),
+                    (wl_pointer::Axis::HorizontalScroll, number("dx")),
+                ] {
                     if delta == 0.0 {
                         continue;
                     }
@@ -114,7 +129,10 @@ impl Input {
             }
             Some("key") => {
                 // The station sends evdev's own code; the browser, the key's name.
-                let key = message["evdev"].as_u64().and_then(|k| u32::try_from(k).ok()).or_else(|| message["code"].as_str().and_then(evdev));
+                let key = message["evdev"]
+                    .as_u64()
+                    .and_then(|k| u32::try_from(k).ok())
+                    .or_else(|| message["code"].as_str().and_then(evdev));
                 let Some(key) = key else { return Ok(true) };
                 self.keyboard.key(time, key, u32::from(down));
             }
@@ -276,7 +294,14 @@ struct State {
 }
 
 impl Dispatch<wl_output::WlOutput, usize> for State {
-    fn event(state: &mut Self, _: &wl_output::WlOutput, event: wl_output::Event, index: &usize, _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        _: &wl_output::WlOutput,
+        event: wl_output::Event,
+        index: &usize,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         if let wl_output::Event::Name { name } = event {
             state.names[*index] = name;
         }
@@ -290,10 +315,24 @@ macro_rules! ignore {
         }
     )*};
 }
-ignore!(ZwlrVirtualPointerManagerV1, ZwlrVirtualPointerV1, ZwpVirtualKeyboardManagerV1, ZwpVirtualKeyboardV1, WlSeat);
+ignore!(
+    ZwlrVirtualPointerManagerV1,
+    ZwlrVirtualPointerV1,
+    ZwpVirtualKeyboardManagerV1,
+    ZwpVirtualKeyboardV1,
+    WlSeat
+);
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 #[cfg(test)]

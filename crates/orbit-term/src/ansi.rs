@@ -11,8 +11,8 @@ use gtk::prelude::*;
 
 /// The 16 basic colours, for the dark surface of the box.
 pub const PALETTE: [&str; 16] = [
-    "#3b4252", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#d8dee9",
-    "#6b7280", "#ff8a94", "#b5e890", "#ffd787", "#8cc4ff", "#dc9bf0", "#7fd4de", "#ffffff",
+    "#3b4252", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#d8dee9", "#6b7280", "#ff8a94",
+    "#b5e890", "#ffd787", "#8cc4ff", "#dc9bf0", "#7fd4de", "#ffffff",
 ];
 /// Errors (stderr) without a colour of their own.
 const STDERR: &str = "#e06c75";
@@ -85,7 +85,10 @@ pub struct Writer {
 
 impl Writer {
     pub fn new(buffer: &gtk::TextBuffer) -> Self {
-        Self { buffer: buffer.clone(), tags: HashMap::new() }
+        Self {
+            buffer: buffer.clone(),
+            tags: HashMap::new(),
+        }
     }
 
     pub fn clear(&mut self) {
@@ -217,7 +220,10 @@ impl Writer {
             fg = Some("#8a909c".into());
         }
         if style.reverse {
-            (fg, bg) = (bg.or_else(|| Some("#1b1f27".into())), fg.or_else(|| Some(PALETTE[7].into())));
+            (fg, bg) = (
+                bg.or_else(|| Some("#1b1f27".into())),
+                fg.or_else(|| Some(PALETTE[7].into())),
+            );
         }
         let tag = gtk::TextTag::new(None);
         if let Some(fg) = fg {

@@ -58,11 +58,7 @@ impl Default for BrightnessConfig {
 const GLYPH: &str = "\u{f00df}"; // 󰃟
 
 enum Device {
-    Backlight {
-        name: String,
-        dir: PathBuf,
-        max: u32,
-    },
+    Backlight { name: String, dir: PathBuf, max: u32 },
     Ddc,
 }
 
@@ -167,19 +163,15 @@ fn watch_backlight(module: &Rc<Module>, dir: &Path) {
     }
     let fd = file.as_raw_fd();
     let weak = Rc::downgrade(module);
-    glib_unix::unix_fd_add_local(
-        fd,
-        glib::IOCondition::PRI | glib::IOCondition::ERR,
-        move |_, _| {
-            let Some(module) = weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-            if let Some(value) = read(&mut file) {
-                module.show_raw(value);
-            }
-            glib::ControlFlow::Continue
-        },
-    );
+    glib_unix::unix_fd_add_local(fd, glib::IOCondition::PRI | glib::IOCondition::ERR, move |_, _| {
+        let Some(module) = weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+        if let Some(value) = read(&mut file) {
+            module.show_raw(value);
+        }
+        glib::ControlFlow::Continue
+    });
 }
 
 impl Module {
@@ -241,15 +233,7 @@ impl Module {
         };
         let display = self.config.ddc_display.to_string();
         let value = percent.to_string();
-        let argv = [
-            "ddcutil",
-            "--display",
-            &display,
-            "--noverify",
-            "setvcp",
-            "10",
-            &value,
-        ];
+        let argv = ["ddcutil", "--display", &display, "--noverify", "setvcp", "10", &value];
         let Some(process) = spawn(&argv, gio::SubprocessFlags::NONE) else {
             return;
         };
@@ -303,9 +287,7 @@ fn set_backlight(name: &str, value: u32) {
 }
 
 fn write_backlight(name: &str, value: u32) {
-    let path = Path::new("/sys/class/backlight")
-        .join(name)
-        .join("brightness");
+    let path = Path::new("/sys/class/backlight").join(name).join("brightness");
     if let Err(err) = std::fs::write(&path, value.to_string()) {
         log::error!("brightness: writing {}: {err}", path.display());
     }

@@ -256,7 +256,12 @@ impl Editor {
         let weak = Rc::downgrade(self);
         self.notebook.connect_switch_page(move |_, page, _| {
             let Some(e) = weak.upgrade() else { return };
-            let doc = e.docs.borrow().iter().find(|d| d.widget.upcast_ref::<gtk::Widget>() == page).cloned();
+            let doc = e
+                .docs
+                .borrow()
+                .iter()
+                .find(|d| d.widget.upcast_ref::<gtk::Widget>() == page)
+                .cloned();
             if let Some(doc) = doc {
                 e.findbar.set_doc(Some(&doc));
                 e.status(&doc);
@@ -421,7 +426,11 @@ impl Editor {
 
     fn current(&self) -> Option<Rc<Doc>> {
         let page = self.notebook.nth_page(self.notebook.current_page())?;
-        self.docs.borrow().iter().find(|d| d.widget.upcast_ref::<gtk::Widget>() == &page).cloned()
+        self.docs
+            .borrow()
+            .iter()
+            .find(|d| d.widget.upcast_ref::<gtk::Widget>() == &page)
+            .cloned()
     }
 
     fn new_tab(self: &Rc<Self>) -> Rc<Doc> {
@@ -477,7 +486,12 @@ impl Editor {
             self.set_root(Some(&path));
             return;
         }
-        let existing = self.docs.borrow().iter().find(|d| d.path().as_deref() == Some(path.as_path())).cloned();
+        let existing = self
+            .docs
+            .borrow()
+            .iter()
+            .find(|d| d.path().as_deref() == Some(path.as_path()))
+            .cloned();
         if let Some(doc) = existing {
             self.show(&doc);
             return;
@@ -487,7 +501,13 @@ impl Editor {
             .filter(|d| d.path().is_none() && !d.is_dirty() && d.text().is_empty());
         let doc = blank.unwrap_or_else(|| self.new_tab());
         if let Err(err) = doc.load(Some(&path), None) {
-            self.error(&tr_args("edit-open-failed", &[("name", text(path.display().to_string())), ("reason", text(err.to_string()))]));
+            self.error(&tr_args(
+                "edit-open-failed",
+                &[
+                    ("name", text(path.display().to_string())),
+                    ("reason", text(err.to_string())),
+                ],
+            ));
             return;
         }
         if self.sidebar.root().is_none()
@@ -566,12 +586,19 @@ impl Editor {
 
     fn choose(self: &Rc<Self>) {
         let dialog = gtk::FileDialog::builder().title(tr("edit-open")).modal(true).build();
-        if let Some(dir) = self.current().and_then(|d| d.path()).and_then(|p| p.parent().map(Path::to_path_buf)).or_else(|| self.sidebar.root()) {
+        if let Some(dir) = self
+            .current()
+            .and_then(|d| d.path())
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .or_else(|| self.sidebar.root())
+        {
             dialog.set_initial_folder(Some(&gio::File::for_path(dir)));
         }
         let weak = Rc::downgrade(self);
         dialog.open_multiple(Some(&self.window), gio::Cancellable::NONE, move |result| {
-            let (Some(e), Ok(files)) = (weak.upgrade(), result) else { return };
+            let (Some(e), Ok(files)) = (weak.upgrade(), result) else {
+                return;
+            };
             for file in files.iter::<gio::File>().filter_map(Result::ok) {
                 if let Some(path) = file.path() {
                     e.open(&path);
@@ -581,7 +608,10 @@ impl Editor {
     }
 
     fn choose_folder(self: &Rc<Self>) {
-        let dialog = gtk::FileDialog::builder().title(tr("edit-open-folder")).modal(true).build();
+        let dialog = gtk::FileDialog::builder()
+            .title(tr("edit-open-folder"))
+            .modal(true)
+            .build();
         let weak = Rc::downgrade(self);
         dialog.select_folder(Some(&self.window), gio::Cancellable::NONE, move |result| {
             if let (Some(e), Ok(folder)) = (weak.upgrade(), result)
@@ -601,10 +631,11 @@ impl Editor {
     }
 
     fn quick_open(self: &Rc<Self>) {
-        let root = self
-            .sidebar
-            .root()
-            .or_else(|| self.current().and_then(|d| d.path()).and_then(|p| p.parent().map(Path::to_path_buf)));
+        let root = self.sidebar.root().or_else(|| {
+            self.current()
+                .and_then(|d| d.path())
+                .and_then(|p| p.parent().map(Path::to_path_buf))
+        });
         let Some(root) = root else {
             self.choose_folder();
             return;
@@ -637,15 +668,25 @@ impl Editor {
         let dialog = gtk::FileDialog::builder()
             .title(tr("edit-save-as"))
             .modal(true)
-            .initial_name(doc.path().and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_else(|| tr("edit-untitled-file")))
+            .initial_name(
+                doc.path()
+                    .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                    .unwrap_or_else(|| tr("edit-untitled-file")),
+            )
             .build();
-        if let Some(dir) = doc.path().and_then(|p| p.parent().map(Path::to_path_buf)).or_else(|| self.sidebar.root()) {
+        if let Some(dir) = doc
+            .path()
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .or_else(|| self.sidebar.root())
+        {
             dialog.set_initial_folder(Some(&gio::File::for_path(dir)));
         }
         let weak = Rc::downgrade(self);
         let doc = doc.clone();
         dialog.save(Some(&self.window), gio::Cancellable::NONE, move |result| {
-            let (Some(e), Ok(file)) = (weak.upgrade(), result) else { return };
+            let (Some(e), Ok(file)) = (weak.upgrade(), result) else {
+                return;
+            };
             let Some(path) = file.path() else { return };
             match doc.save(Some(&path)) {
                 Ok(()) => {
@@ -659,7 +700,11 @@ impl Editor {
     }
 
     fn error(&self, message: &str) {
-        gtk::AlertDialog::builder().modal(true).message(message).build().show(Some(&self.window));
+        gtk::AlertDialog::builder()
+            .modal(true)
+            .message(message)
+            .build()
+            .show(Some(&self.window));
     }
 
     fn find(&self, replace: bool) {
@@ -693,7 +738,10 @@ impl Editor {
         let at = doc.buffer.iter_at_mark(&doc.buffer.get_insert());
         self.position.set_label(&tr_args(
             "edit-status-position",
-            &[("line", number(f64::from(at.line() + 1))), ("column", number(f64::from(at.line_offset() + 1)))],
+            &[
+                ("line", number(f64::from(at.line() + 1))),
+                ("column", number(f64::from(at.line_offset() + 1))),
+            ],
         ));
     }
 
@@ -771,7 +819,11 @@ impl Editor {
         let docs = self.docs.borrow();
         let ordered: Vec<Rc<Doc>> = (0..self.notebook.n_pages())
             .filter_map(|n| self.notebook.nth_page(Some(n)))
-            .filter_map(|page| docs.iter().find(|d| d.widget.upcast_ref::<gtk::Widget>() == &page).cloned())
+            .filter_map(|page| {
+                docs.iter()
+                    .find(|d| d.widget.upcast_ref::<gtk::Widget>() == &page)
+                    .cloned()
+            })
             .collect();
         let mut texts = Vec::new();
         let tabs: Vec<Tab> = ordered

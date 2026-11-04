@@ -58,7 +58,10 @@ pub fn play_files(files: &std::ffi::OsStr, mut on_block: impl FnMut(&[f32]) -> b
     let files: Vec<PathBuf> = std::env::split_paths(files).collect();
     for file in &files {
         let samples: Vec<f32> = match std::fs::read(file) {
-            Ok(bytes) => bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect(),
+            Ok(bytes) => bytes
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                .collect(),
             Err(err) => {
                 log::error!("aigent: {}: {err}", file.display());
                 continue;
@@ -101,14 +104,16 @@ fn record_once(source: &CString, on_block: &mut impl FnMut(&[f32]) -> bool) -> i
         supports_memfd: false,
         cookie,
     };
-    protocol::write_command_message(sock.get_mut(), 0, &Command::Auth(auth), protocol::MAX_VERSION)
-        .map_err(other)?;
+    protocol::write_command_message(sock.get_mut(), 0, &Command::Auth(auth), protocol::MAX_VERSION).map_err(other)?;
     let (_, reply) =
         protocol::read_reply_message::<protocol::AuthReply>(&mut sock, protocol::MAX_VERSION).map_err(other)?;
     let version = protocol::MAX_VERSION.min(reply.version);
 
     let mut props = protocol::Props::new();
-    props.set(protocol::Prop::ApplicationName, CString::new("orbit-aigent").expect("no NUL"));
+    props.set(
+        protocol::Prop::ApplicationName,
+        CString::new("orbit-aigent").expect("no NUL"),
+    );
     protocol::write_command_message(sock.get_mut(), 1, &Command::SetClientName(props), version).map_err(other)?;
     protocol::read_reply_message::<protocol::SetClientNameReply>(&mut sock, version).map_err(other)?;
 
@@ -145,8 +150,7 @@ fn record_once(source: &CString, on_block: &mut impl FnMut(&[f32]) -> bool) -> i
         },
         ..Default::default()
     };
-    protocol::write_command_message(sock.get_mut(), 3, &Command::CreateRecordStream(params), version)
-        .map_err(other)?;
+    protocol::write_command_message(sock.get_mut(), 3, &Command::CreateRecordStream(params), version).map_err(other)?;
     let (_, stream) =
         protocol::read_reply_message::<protocol::CreateRecordStreamReply>(&mut sock, version).map_err(other)?;
     log::info!("aigent: recording {source:?}, {} µs behind", stream.stream_latency);
@@ -170,7 +174,11 @@ fn record_once(source: &CString, on_block: &mut impl FnMut(&[f32]) -> bool) -> i
         if desc.channel != stream.channel {
             continue;
         }
-        pending.extend(bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
+        pending.extend(
+            bytes
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+        );
         let mut start = 0;
         while pending.len() - start >= BLOCK {
             if !on_block(&pending[start..start + BLOCK]) {

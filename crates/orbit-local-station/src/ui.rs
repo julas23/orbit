@@ -135,15 +135,29 @@ impl Ui {
     /// The screens, at the monitor's `size`.
     pub fn new((width, height): (u32, u32)) -> anyhow::Result<Self> {
         let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
-        slint::platform::set_platform(Box::new(Station { window: window.clone(), start: Instant::now() }))
-            .map_err(|e| anyhow::anyhow!("Slint: {e}"))?;
+        slint::platform::set_platform(Box::new(Station {
+            window: window.clone(),
+            start: Instant::now(),
+        }))
+        .map_err(|e| anyhow::anyhow!("Slint: {e}"))?;
         let face = Face::new().map_err(|e| anyhow::anyhow!("Slint: {e}"))?;
         window.set_size(PhysicalSize::new(width, height));
         window.dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.0 });
         face.set_unit(height as f32 / 54.0);
         face.show().map_err(|e| anyhow::anyhow!("Slint: {e}"))?;
-        let buffer = MemoryRenderBuffer::new(Fourcc::Abgr8888, (width as i32, height as i32), 1, Transform::Normal, None);
-        Ok(Self { window, face, buffer, width: width as usize })
+        let buffer = MemoryRenderBuffer::new(
+            Fourcc::Abgr8888,
+            (width as i32, height as i32),
+            1,
+            Transform::Normal,
+            None,
+        );
+        Ok(Self {
+            window,
+            face,
+            buffer,
+            width: width as usize,
+        })
     }
 
     /// Lets Slint's timers and animations run, and draws what changed into
@@ -159,12 +173,16 @@ impl Ui {
                 // SAFETY: the pixels are four bytes each with an alignment of
                 // one (`repr(C)` of four `u8`s), and the buffer is a whole
                 // number of them, in the same order as DRM's ABGR8888.
-                let pixels = unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr().cast::<PremultipliedRgbaColor>(), bytes.len() / 4) };
+                let pixels = unsafe {
+                    std::slice::from_raw_parts_mut(bytes.as_mut_ptr().cast::<PremultipliedRgbaColor>(), bytes.len() / 4)
+                };
                 let region = renderer.render(pixels, width);
                 Ok::<_, ()>(
                     region
                         .iter()
-                        .map(|(at, size)| Rectangle::new((at.x, at.y).into(), (size.width as i32, size.height as i32).into()))
+                        .map(|(at, size)| {
+                            Rectangle::new((at.x, at.y).into(), (size.width as i32, size.height as i32).into())
+                        })
                         .collect(),
                 )
             });

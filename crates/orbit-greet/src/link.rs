@@ -46,7 +46,11 @@ impl Link {
             .inspect_err(|err| log::error!("registry: {err}"))
             .ok()?;
         let greet = globals.bind::<OrbitGreetV1, _, _>(&queue.handle(), 1..=1, ()).ok()?;
-        Some(Rc::new(Self { conn, queue: RefCell::new(queue), greet }))
+        Some(Rc::new(Self {
+            conn,
+            queue: RefCell::new(queue),
+            greet,
+        }))
     }
 
     /// Calls `on_event` with each event, in GTK's main loop, starting
@@ -100,7 +104,14 @@ impl Link {
 }
 
 impl Dispatch<OrbitGreetV1, ()> for Inbox {
-    fn event(inbox: &mut Self, _: &OrbitGreetV1, event: orbit_greet_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        inbox: &mut Self,
+        _: &OrbitGreetV1,
+        event: orbit_greet_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         match event {
             orbit_greet_v1::Event::Locked => inbox.0.push(Event::Locked),
             orbit_greet_v1::Event::Unlocked => inbox.0.push(Event::Unlocked),
@@ -110,5 +121,13 @@ impl Dispatch<OrbitGreetV1, ()> for Inbox {
 }
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Inbox {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }

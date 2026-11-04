@@ -200,10 +200,7 @@ mod imp {
                     let item = &items[i];
                     let (x, width) = if item.cols == 1 {
                         // Spread the growth over the row: 0, 1, 3, 4 px left.
-                        (
-                            SIDE + col * PITCH - (MINI_GROW * col + 1) / 3,
-                            CELL + MINI_GROW,
-                        )
+                        (SIDE + col * PITCH - (MINI_GROW * col + 1) / 3, CELL + MINI_GROW)
                     } else {
                         (SIDE + col * PITCH, span(item.cols))
                     };
@@ -308,7 +305,11 @@ impl Board {
             .min_by(|(_, a), (_, b)| distance(a).total_cmp(&distance(b)))
             .map(|(id, r)| {
                 let side = if r.width() < full {
-                    if x < r.x() + r.width() / 2.0 { Side::Left } else { Side::Right }
+                    if x < r.x() + r.width() / 2.0 {
+                        Side::Left
+                    } else {
+                        Side::Right
+                    }
                 } else if y < r.y() + r.height() / 2.0 {
                     Side::Above
                 } else {
@@ -367,10 +368,8 @@ fn place(items: &[Item], part: Part) -> (Vec<Block>, i32) {
         }
         let rows = item.rows.max(content_rows(item));
         let free = |taken: &Vec<[bool; 4]>, r: i32, c: i32| {
-            (r..r + rows).all(|r| {
-                (c..c + item.cols)
-                    .all(|c| taken.get(r as usize).is_none_or(|line| !line[c as usize]))
-            })
+            (r..r + rows)
+                .all(|r| (c..c + item.cols).all(|c| taken.get(r as usize).is_none_or(|line| !line[c as usize])))
         };
         // The first free block from where the last module ended.
         loop {
@@ -404,11 +403,7 @@ fn place(items: &[Item], part: Part) -> (Vec<Block>, i32) {
 /// `STACK_GAP` apart; where one does straddle it, its neighbours keep the
 /// grid's gap to stay level with it.
 fn tops(blocks: &[Block], used: i32) -> (Vec<i32>, i32) {
-    let straddled = |r: i32| {
-        blocks
-            .iter()
-            .any(|&(_, (_, row, rows))| row < r && r < row + rows)
-    };
+    let straddled = |r: i32| blocks.iter().any(|&(_, (_, row, rows))| row < r && r < row + rows);
     let mut tops = Vec::with_capacity(used as usize);
     let mut top = 0;
     for r in 0..used {
@@ -423,9 +418,7 @@ fn tops(blocks: &[Block], used: i32) -> (Vec<i32>, i32) {
 
 /// The rows `item`'s content needs at its width.
 fn content_rows(item: &Item) -> i32 {
-    let (min, natural, _, _) = item
-        .widget
-        .measure(gtk::Orientation::Vertical, span(item.cols));
+    let (min, natural, _, _) = item.widget.measure(gtk::Orientation::Vertical, span(item.cols));
     let rows = (natural.max(min) + GAP + PITCH - 1) / PITCH;
     if rows > item.rows && item.measured.replace(rows) != rows {
         log::warn!(
@@ -459,12 +452,7 @@ mod tests {
     #[test]
     fn stacked_modules_sit_closer() {
         // A 2-row module, then two minis side by side, then a 1-row one.
-        let blocks = [
-            (0, (0, 0, 2)),
-            (1, (0, 2, 1)),
-            (2, (1, 2, 1)),
-            (3, (0, 3, 1)),
-        ];
+        let blocks = [(0, (0, 0, 2)), (1, (0, 2, 1)), (2, (1, 2, 1)), (3, (0, 3, 1))];
         assert_eq!(tops(&blocks, 4), (vec![0, 40, 75, 110], 140));
         // A 2-row module beside two stacked minis keeps the grid's gap.
         let blocks = [(0, (0, 0, 2)), (1, (2, 0, 1)), (2, (2, 1, 1))];

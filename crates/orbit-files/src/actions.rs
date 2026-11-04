@@ -167,7 +167,10 @@ pub fn launch_orbit(app: &str, entries: &[Entry], display: &gtk::gdk::Display) {
     }
     let files: Vec<gio::File> = entries.iter().map(|e| e.location.file()).collect();
     let id = format!("io.github.julas23.Orbit.{app}.desktop");
-    if let Some(info) = gio::AppInfo::all().into_iter().find(|a| a.id().as_deref() == Some(id.as_str())) {
+    if let Some(info) = gio::AppInfo::all()
+        .into_iter()
+        .find(|a| a.id().as_deref() == Some(id.as_str()))
+    {
         if let Err(err) = info.launch(&files, Some(&display.app_launch_context())) {
             log::warn!("opening in {id}: {err}");
         }
@@ -204,9 +207,12 @@ pub const FORMATS: &[(&str, &str)] = &[
 /// Whether `name` is an archive this can extract.
 pub fn is_archive(name: &str) -> bool {
     let n = name.to_lowercase();
-    [".zip", ".tar", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".7z", ".rar", ".gz", ".xz", ".bz2", ".zst"]
-        .iter()
-        .any(|e| n.ends_with(e))
+    [
+        ".zip", ".tar", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".7z", ".rar", ".gz",
+        ".xz", ".bz2", ".zst",
+    ]
+    .iter()
+    .any(|e| n.ends_with(e))
 }
 
 /// The command that packs `names` (in the folder) into `archive`.
@@ -246,12 +252,18 @@ pub fn extract_command(archive: &Path, into: &Path) -> Vec<String> {
 
 /// Where `archive` is extracted: a folder of its name beside it.
 pub fn extract_folder(archive: &Path) -> PathBuf {
-    let name = archive.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = archive
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let lower = name.to_lowercase();
-    let stem = [".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".zip", ".7z", ".rar", ".tar", ".gz", ".xz", ".bz2", ".zst"]
-        .iter()
-        .find(|e| lower.ends_with(*e))
-        .map_or(name.as_str(), |e| &name[..name.len() - e.len()]);
+    let stem = [
+        ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".zip", ".7z", ".rar", ".tar", ".gz",
+        ".xz", ".bz2", ".zst",
+    ]
+    .iter()
+    .find(|e| lower.ends_with(*e))
+    .map_or(name.as_str(), |e| &name[..name.len() - e.len()]);
     let folder = archive.with_file_name(stem);
     if folder.symlink_metadata().is_ok() {
         crate::ops::unique(&folder)
@@ -265,11 +277,20 @@ pub fn compress_dialog(parent: &gtk::Window, dir: PathBuf, names: Vec<String>, j
     let default = if names.len() == 1 {
         names[0].clone()
     } else {
-        dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| tr("files-archive"))
+        dir.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| tr("files-archive"))
     };
-    let entry = gtk::Entry::builder().text(&default).width_chars(30).hexpand(true).build();
+    let entry = gtk::Entry::builder()
+        .text(&default)
+        .width_chars(30)
+        .hexpand(true)
+        .build();
     let format = gtk::DropDown::from_strings(&FORMATS.iter().map(|(f, _)| *f).collect::<Vec<_>>());
-    let go = gtk::Button::builder().label(tr("files-compress")).css_classes(["suggested-action"]).build();
+    let go = gtk::Button::builder()
+        .label(tr("files-compress"))
+        .css_classes(["suggested-action"])
+        .build();
     let row = gtk::Box::builder().spacing(10).build();
     row.append(&entry);
     row.append(&format);
@@ -324,13 +345,25 @@ mod tests {
         assert!(is_archive("a.tar.zst"));
         assert!(is_archive("B.ZIP"));
         assert!(!is_archive("photo.jpg"));
-        assert_eq!(compress_command("x.tar.xz", "tar.xz", &["a".into()]), ["tar", "-caf", "x.tar.xz", "--", "a"]);
-        assert_eq!(compress_command("x.7z", "7z", &["a".into()]), ["7z", "a", "-bd", "x.7z", "a"]);
+        assert_eq!(
+            compress_command("x.tar.xz", "tar.xz", &["a".into()]),
+            ["tar", "-caf", "x.tar.xz", "--", "a"]
+        );
+        assert_eq!(
+            compress_command("x.7z", "7z", &["a".into()]),
+            ["7z", "a", "-bd", "x.7z", "a"]
+        );
     }
 
     #[test]
     fn extracts_into_a_folder_of_its_name() {
-        assert_eq!(extract_folder(Path::new("/nowhere/fotos.tar.gz")), PathBuf::from("/nowhere/fotos"));
-        assert_eq!(extract_command(Path::new("/x/a.zip"), Path::new("/x/a")), ["unzip", "-q", "/x/a.zip", "-d", "/x/a"]);
+        assert_eq!(
+            extract_folder(Path::new("/nowhere/fotos.tar.gz")),
+            PathBuf::from("/nowhere/fotos")
+        );
+        assert_eq!(
+            extract_command(Path::new("/x/a.zip"), Path::new("/x/a")),
+            ["unzip", "-q", "/x/a.zip", "-d", "/x/a"]
+        );
     }
 }

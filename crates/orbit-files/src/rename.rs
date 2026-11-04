@@ -15,9 +15,20 @@ use orbit_app::i18n::{text, tr, tr_args};
 
 #[derive(Debug, Clone)]
 pub enum Rule {
-    Replace { find: String, with: String, regex: bool, case: bool },
-    Number { pattern: String, start: u32 },
-    Insert { before: String, after: String },
+    Replace {
+        find: String,
+        with: String,
+        regex: bool,
+        case: bool,
+    },
+    Number {
+        pattern: String,
+        start: u32,
+    },
+    Insert {
+        before: String,
+        after: String,
+    },
     Case(Case),
 }
 
@@ -45,7 +56,12 @@ fn split(name: &str) -> (&str, &str) {
 /// The new names, in order; `Err` for a bad regular expression.
 pub fn apply(names: &[String], rule: &Rule) -> Result<Vec<String>, String> {
     let regex = match rule {
-        Rule::Replace { find, regex: true, case, .. } if !find.is_empty() => Some(
+        Rule::Replace {
+            find,
+            regex: true,
+            case,
+            ..
+        } if !find.is_empty() => Some(
             regex::RegexBuilder::new(find)
                 .case_insensitive(!case)
                 .build()
@@ -60,11 +76,20 @@ pub fn apply(names: &[String], rule: &Rule) -> Result<Vec<String>, String> {
             let (stem, ext) = split(name);
             let stem = match rule {
                 Rule::Replace { find, .. } if find.is_empty() => stem.to_owned(),
-                Rule::Replace { with, .. } if regex.is_some() => {
-                    regex.as_ref().expect("built").replace_all(stem, with.as_str()).into_owned()
-                }
-                Rule::Replace { find, with, case: true, .. } => stem.replace(find.as_str(), with),
-                Rule::Replace { find, with, case: false, .. } => replace_any_case(stem, find, with),
+                Rule::Replace { with, .. } if regex.is_some() => regex
+                    .as_ref()
+                    .expect("built")
+                    .replace_all(stem, with.as_str())
+                    .into_owned(),
+                Rule::Replace {
+                    find, with, case: true, ..
+                } => stem.replace(find.as_str(), with),
+                Rule::Replace {
+                    find,
+                    with,
+                    case: false,
+                    ..
+                } => replace_any_case(stem, find, with),
                 Rule::Number { pattern, start } => number(pattern, start + n as u32, stem),
                 Rule::Insert { before, after } => format!("{before}{stem}{after}"),
                 Rule::Case(Case::Lower) => stem.to_lowercase(),
@@ -157,7 +182,10 @@ pub fn rename_all(files: &[PathBuf], names: &[String]) -> Vec<String> {
 
 /// F2 on one file: a small window with its name, the stem selected.
 pub fn single(parent: &gtk::Window, file: &Path) {
-    let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let entry = gtk::Entry::builder().text(&name).width_chars(40).build();
     let window = small_window(parent, &tr("files-rename"), &entry);
     let stem = split(&name).0.chars().count() as i32;
@@ -196,7 +224,13 @@ fn small_window(parent: &gtk::Window, title: &str, child: &impl IsA<gtk::Widget>
         .spacing(10)
         .css_classes(["dialog-box"])
         .build();
-    content.append(&gtk::Label::builder().label(title).xalign(0.0).css_classes(["dialog-title"]).build());
+    content.append(
+        &gtk::Label::builder()
+            .label(title)
+            .xalign(0.0)
+            .css_classes(["dialog-title"])
+            .build(),
+    );
     content.append(child);
     window.set_child(Some(&content));
     let keys = gtk::EventControllerKey::new();
@@ -216,7 +250,11 @@ fn small_window(parent: &gtk::Window, title: &str, child: &impl IsA<gtk::Widget>
 pub fn bulk(parent: &gtk::Window, files: Vec<PathBuf>) {
     let names: Vec<String> = files
         .iter()
-        .map(|f| f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+        .map(|f| {
+            f.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
         .collect();
     let mode = gtk::DropDown::from_strings(&[
         &tr("files-rename-replace"),
@@ -230,24 +268,59 @@ pub fn bulk(parent: &gtk::Window, files: Vec<PathBuf>) {
     let case = gtk::CheckButton::with_label(&tr("files-rename-match-case"));
     let start = gtk::SpinButton::with_range(0.0, 1_000_000.0, 1.0);
     start.set_value(1.0);
-    let cases = gtk::DropDown::from_strings(&[&tr("files-case-lower"), &tr("files-case-upper"), &tr("files-case-title")]);
+    let cases = gtk::DropDown::from_strings(&[
+        &tr("files-case-lower"),
+        &tr("files-case-upper"),
+        &tr("files-case-title"),
+    ]);
     let options = gtk::Box::builder().spacing(10).build();
-    for w in [first.upcast_ref::<gtk::Widget>(), second.upcast_ref(), regex.upcast_ref(), case.upcast_ref(), start.upcast_ref(), cases.upcast_ref()] {
+    for w in [
+        first.upcast_ref::<gtk::Widget>(),
+        second.upcast_ref(),
+        regex.upcast_ref(),
+        case.upcast_ref(),
+        start.upcast_ref(),
+        cases.upcast_ref(),
+    ] {
         options.append(w);
     }
-    let list = gtk::ListBox::builder().css_classes(["rename-preview"]).selection_mode(gtk::SelectionMode::None).build();
-    let scroll = gtk::ScrolledWindow::builder().child(&list).min_content_height(300).min_content_width(600).build();
-    let apply_button = gtk::Button::builder().label(tr("files-rename-apply")).css_classes(["suggested-action"]).build();
-    let problem = gtk::Label::builder().xalign(0.0).hexpand(true).css_classes(["error-text"]).build();
+    let list = gtk::ListBox::builder()
+        .css_classes(["rename-preview"])
+        .selection_mode(gtk::SelectionMode::None)
+        .build();
+    let scroll = gtk::ScrolledWindow::builder()
+        .child(&list)
+        .min_content_height(300)
+        .min_content_width(600)
+        .build();
+    let apply_button = gtk::Button::builder()
+        .label(tr("files-rename-apply"))
+        .css_classes(["suggested-action"])
+        .build();
+    let problem = gtk::Label::builder()
+        .xalign(0.0)
+        .hexpand(true)
+        .css_classes(["error-text"])
+        .build();
     let bottom = gtk::Box::builder().spacing(10).build();
     bottom.append(&problem);
     bottom.append(&apply_button);
-    let content = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).build();
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(10)
+        .build();
     content.append(&mode);
     content.append(&options);
     content.append(&scroll);
     content.append(&bottom);
-    let window = small_window(parent, &tr_args("files-rename-many", &[("n", orbit_app::i18n::number(files.len() as f64))]), &content);
+    let window = small_window(
+        parent,
+        &tr_args(
+            "files-rename-many",
+            &[("n", orbit_app::i18n::number(files.len() as f64))],
+        ),
+        &content,
+    );
     window.set_resizable(true);
 
     struct State {
@@ -255,14 +328,36 @@ pub fn bulk(parent: &gtk::Window, files: Vec<PathBuf>) {
         files: Vec<PathBuf>,
         new: std::cell::RefCell<Vec<String>>,
     }
-    let state = Rc::new(State { names, files, new: Default::default() });
+    let state = Rc::new(State {
+        names,
+        files,
+        new: Default::default(),
+    });
     let rule = {
-        let (mode, first, second, regex, case, start, cases) =
-            (mode.clone(), first.clone(), second.clone(), regex.clone(), case.clone(), start.clone(), cases.clone());
+        let (mode, first, second, regex, case, start, cases) = (
+            mode.clone(),
+            first.clone(),
+            second.clone(),
+            regex.clone(),
+            case.clone(),
+            start.clone(),
+            cases.clone(),
+        );
         move || match mode.selected() {
-            0 => Rule::Replace { find: first.text().into(), with: second.text().into(), regex: regex.is_active(), case: case.is_active() },
-            1 => Rule::Number { pattern: first.text().into(), start: start.value() as u32 },
-            2 => Rule::Insert { before: first.text().into(), after: second.text().into() },
+            0 => Rule::Replace {
+                find: first.text().into(),
+                with: second.text().into(),
+                regex: regex.is_active(),
+                case: case.is_active(),
+            },
+            1 => Rule::Number {
+                pattern: first.text().into(),
+                start: start.value() as u32,
+            },
+            2 => Rule::Insert {
+                before: first.text().into(),
+                after: second.text().into(),
+            },
             _ => Rule::Case(match cases.selected() {
                 0 => Case::Lower,
                 1 => Case::Upper,
@@ -272,8 +367,15 @@ pub fn bulk(parent: &gtk::Window, files: Vec<PathBuf>) {
     };
     let refresh = {
         let (state, list, problem, apply_button) = (state.clone(), list.clone(), problem.clone(), apply_button.clone());
-        let (mode, first, second, regex, case, start, cases) =
-            (mode.clone(), first.clone(), second.clone(), regex.clone(), case.clone(), start.clone(), cases.clone());
+        let (mode, first, second, regex, case, start, cases) = (
+            mode.clone(),
+            first.clone(),
+            second.clone(),
+            regex.clone(),
+            case.clone(),
+            start.clone(),
+            cases.clone(),
+        );
         let rule = rule.clone();
         move || {
             let m = mode.selected();
@@ -295,13 +397,26 @@ pub fn bulk(parent: &gtk::Window, files: Vec<PathBuf>) {
             }
             match apply(&state.names, &rule()) {
                 Ok(new) => {
-                    let clash = |n: &String| new.iter().filter(|x| *x == n).count() > 1 || n.is_empty() || n.contains('/');
+                    let clash =
+                        |n: &String| new.iter().filter(|x| *x == n).count() > 1 || n.is_empty() || n.contains('/');
                     let mut bad = false;
                     for (old, n) in state.names.iter().zip(&new) {
                         let row = gtk::Box::builder().spacing(10).build();
-                        row.append(&gtk::Label::builder().label(old).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::Middle).build());
+                        row.append(
+                            &gtk::Label::builder()
+                                .label(old)
+                                .xalign(0.0)
+                                .hexpand(true)
+                                .ellipsize(gtk::pango::EllipsizeMode::Middle)
+                                .build(),
+                        );
                         row.append(&gtk::Label::new(Some("→")));
-                        let label = gtk::Label::builder().label(n).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::Middle).build();
+                        let label = gtk::Label::builder()
+                            .label(n)
+                            .xalign(0.0)
+                            .hexpand(true)
+                            .ellipsize(gtk::pango::EllipsizeMode::Middle)
+                            .build();
                         if clash(n) {
                             label.add_css_class("error-text");
                             bad = true;
@@ -344,7 +459,12 @@ pub fn bulk(parent: &gtk::Window, files: Vec<PathBuf>) {
         let new = state.new.borrow().clone();
         let errors = rename_all(&state.files, &new);
         if !errors.is_empty() {
-            gtk::AlertDialog::builder().modal(true).message(tr("files-job-errors")).detail(errors.join("\n")).build().show(w.transient_for().as_ref());
+            gtk::AlertDialog::builder()
+                .modal(true)
+                .message(tr("files-job-errors"))
+                .detail(errors.join("\n"))
+                .build()
+                .show(w.transient_for().as_ref());
         }
         w.close();
     });
@@ -362,24 +482,70 @@ mod tests {
 
     #[test]
     fn numbering_keeps_extensions() {
-        let out = apply(&names(&["a.jpg", "b.JPG", "c.tar.gz"]), &Rule::Number { pattern: "Viagem ###".into(), start: 9 }).unwrap();
+        let out = apply(
+            &names(&["a.jpg", "b.JPG", "c.tar.gz"]),
+            &Rule::Number {
+                pattern: "Viagem ###".into(),
+                start: 9,
+            },
+        )
+        .unwrap();
         assert_eq!(out, ["Viagem 009.jpg", "Viagem 010.JPG", "Viagem 011.tar.gz"]);
     }
 
     #[test]
     fn replace_plain_any_case_and_regex() {
         let n = names(&["IMG_001.jpg", "img_002.jpg"]);
-        let plain = apply(&n, &Rule::Replace { find: "img_".into(), with: "foto-".into(), regex: false, case: false }).unwrap();
+        let plain = apply(
+            &n,
+            &Rule::Replace {
+                find: "img_".into(),
+                with: "foto-".into(),
+                regex: false,
+                case: false,
+            },
+        )
+        .unwrap();
         assert_eq!(plain, ["foto-001.jpg", "foto-002.jpg"]);
-        let re = apply(&n, &Rule::Replace { find: r"(?i)img_(\d+)".into(), with: "$1-foto".into(), regex: true, case: true }).unwrap();
+        let re = apply(
+            &n,
+            &Rule::Replace {
+                find: r"(?i)img_(\d+)".into(),
+                with: "$1-foto".into(),
+                regex: true,
+                case: true,
+            },
+        )
+        .unwrap();
         assert_eq!(re, ["001-foto.jpg", "002-foto.jpg"]);
-        assert!(apply(&n, &Rule::Replace { find: "(".into(), with: String::new(), regex: true, case: true }).is_err());
+        assert!(
+            apply(
+                &n,
+                &Rule::Replace {
+                    find: "(".into(),
+                    with: String::new(),
+                    regex: true,
+                    case: true
+                }
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn insert_and_case() {
         let n = names(&["minha FOTO.png"]);
-        assert_eq!(apply(&n, &Rule::Insert { before: "2026 ".into(), after: " (1)".into() }).unwrap(), ["2026 minha FOTO (1).png"]);
+        assert_eq!(
+            apply(
+                &n,
+                &Rule::Insert {
+                    before: "2026 ".into(),
+                    after: " (1)".into()
+                }
+            )
+            .unwrap(),
+            ["2026 minha FOTO (1).png"]
+        );
         assert_eq!(apply(&n, &Rule::Case(Case::Title)).unwrap(), ["Minha Foto.png"]);
     }
 

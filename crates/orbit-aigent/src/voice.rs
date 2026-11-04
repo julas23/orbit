@@ -134,7 +134,9 @@ pub fn run(voice: &config::Voice, ready: impl FnOnce(Local)) -> anyhow::Result<(
             Ok(())
         });
     }
-    let mut child = command.spawn().with_context(|| format!("starting {}", voice.server.display()))?;
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("starting {}", voice.server.display()))?;
     // Its log, kept short in ours: what went wrong, and where it runs.
     let stderr = child.stderr.take().expect("piped");
     let (said, lines) = mpsc::channel::<String>();
@@ -143,11 +145,18 @@ pub fn run(voice: &config::Voice, ready: impl FnOnce(Local)) -> anyhow::Result<(
             let _ = said.send(line);
         }
     })?;
-    let local = Local { http: ureq::Agent::config_builder().timeout_global(None).build().into(), base: format!("http://127.0.0.1:{port}") };
+    let local = Local {
+        http: ureq::Agent::config_builder().timeout_global(None).build().into(),
+        base: format!("http://127.0.0.1:{port}"),
+    };
     let start = Instant::now();
     loop {
         for line in lines.try_iter() {
-            if line.contains("error") || line.contains("no usable GPU") || line.contains("using device") || line.contains("offloaded") {
+            if line.contains("error")
+                || line.contains("no usable GPU")
+                || line.contains("using device")
+                || line.contains("offloaded")
+            {
                 log::info!("aigent: llama-server: {}", line.trim());
             }
         }
@@ -159,7 +168,11 @@ pub fn run(voice: &config::Voice, ready: impl FnOnce(Local)) -> anyhow::Result<(
         }
         if start.elapsed() > LOADING {
             let _ = child.kill();
-            bail!("llama-server did not load {} in {} s", model.display(), LOADING.as_secs());
+            bail!(
+                "llama-server did not load {} in {} s",
+                model.display(),
+                LOADING.as_secs()
+            );
         }
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -180,7 +193,10 @@ pub fn run(voice: &config::Voice, ready: impl FnOnce(Local)) -> anyhow::Result<(
 
 impl Local {
     fn healthy(&self) -> bool {
-        self.http.get(format!("{}/health", self.base)).call().is_ok_and(|r| r.status() == 200)
+        self.http
+            .get(format!("{}/health", self.base))
+            .call()
+            .is_ok_and(|r| r.status() == 200)
     }
 
     fn post(&self, body: &Value) -> anyhow::Result<ureq::Body> {
@@ -204,20 +220,36 @@ impl Local {
         let body = json!({ "messages": messages, "id_slot": 0, "cache_prompt": true, "temperature": 0, "max_tokens": 3, "grammar": ROUTE_GRAMMAR });
         let reply: Value = serde_json::from_reader(self.post(&body)?.into_reader())?;
         let word = reply["choices"][0]["message"]["content"].as_str().unwrap_or_default();
-        Ok(if word.trim() == "conversa" { Route::Talk } else { Route::Task })
+        Ok(if word.trim() == "conversa" {
+            Route::Talk
+        } else {
+            Route::Task
+        })
     }
 
     /// The voice's answer to `request`, after `before`, in `language`:
     /// each sentence to `phrase` as soon as it is whole (false from it
     /// stops). The whole answer, and the turn as sent, are returned.
-    pub fn answer(&self, before: &[Turn], request: &str, language: &str, phrase: impl FnMut(String) -> bool) -> anyhow::Result<(Turn, String)> {
+    pub fn answer(
+        &self,
+        before: &[Turn],
+        request: &str,
+        language: &str,
+        phrase: impl FnMut(String) -> bool,
+    ) -> anyhow::Result<(Turn, String)> {
         let turn = asked(request, language);
         let text = self.talk(before, &turn.text, ANSWER_TOKENS, phrase)?;
         Ok((turn, text))
     }
 
     /// A turn of talking (slot 1), streamed.
-    fn talk(&self, before: &[Turn], said: &str, tokens: u32, mut phrase: impl FnMut(String) -> bool) -> anyhow::Result<String> {
+    fn talk(
+        &self,
+        before: &[Turn],
+        said: &str,
+        tokens: u32,
+        mut phrase: impl FnMut(String) -> bool,
+    ) -> anyhow::Result<String> {
         let mut messages = vec![json!({ "role": "system", "content": TALK })];
         for turn in before {
             messages.push(json!({ "role": if turn.user { "user" } else { "assistant" }, "content": turn.text }));
@@ -228,12 +260,16 @@ impl Local {
         let (mut all, mut pending) = (String::new(), String::new());
         for line in reader.lines() {
             let line = line?;
-            let Some(data) = line.strip_prefix("data: ") else { continue };
+            let Some(data) = line.strip_prefix("data: ") else {
+                continue;
+            };
             if data.trim() == "[DONE]" {
                 break;
             }
             let chunk: Value = serde_json::from_str(data).unwrap_or_default();
-            let Some(piece) = chunk["choices"][0]["delta"]["content"].as_str() else { continue };
+            let Some(piece) = chunk["choices"][0]["delta"]["content"].as_str() else {
+                continue;
+            };
             all.push_str(piece);
             pending.push_str(piece);
             while let Some(end) = sentence_end(&pending) {
@@ -266,19 +302,77 @@ fn with_note(text: &str, language: &str) -> String {
 /// The local date and time, said, from the system's clock and zone.
 fn now_said(language: &str) -> String {
     let out = Command::new("date").arg("+%u %-d %-m %Y %H:%M").output().ok();
-    let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+    let text = out
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
     let parts: Vec<&str> = text.split_whitespace().collect();
-    let [weekday, day, month, year, time] = parts.as_slice() else { return String::new() };
-    let index = |s: &str, max: usize| s.parse::<usize>().ok().filter(|n| (1..=max).contains(n)).map_or(0, |n| n - 1);
+    let [weekday, day, month, year, time] = parts.as_slice() else {
+        return String::new();
+    };
+    let index = |s: &str, max: usize| {
+        s.parse::<usize>()
+            .ok()
+            .filter(|n| (1..=max).contains(n))
+            .map_or(0, |n| n - 1)
+    };
     if language == "en" {
-        const DAYS: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-        const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        format!("{}, {} {day}, {year}, {time}", DAYS[index(weekday, 7)], MONTHS[index(month, 12)])
+        const DAYS: [&str; 7] = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ];
+        const MONTHS: [&str; 12] = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        format!(
+            "{}, {} {day}, {year}, {time}",
+            DAYS[index(weekday, 7)],
+            MONTHS[index(month, 12)]
+        )
     } else {
-        const DAYS: [&str; 7] = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"];
-        const MONTHS: [&str; 12] =
-            ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-        format!("{}, {day} de {} de {year}, {time}", DAYS[index(weekday, 7)], MONTHS[index(month, 12)])
+        const DAYS: [&str; 7] = [
+            "segunda-feira",
+            "terça-feira",
+            "quarta-feira",
+            "quinta-feira",
+            "sexta-feira",
+            "sábado",
+            "domingo",
+        ];
+        const MONTHS: [&str; 12] = [
+            "janeiro",
+            "fevereiro",
+            "março",
+            "abril",
+            "maio",
+            "junho",
+            "julho",
+            "agosto",
+            "setembro",
+            "outubro",
+            "novembro",
+            "dezembro",
+        ];
+        format!(
+            "{}, {day} de {} de {year}, {time}",
+            DAYS[index(weekday, 7)],
+            MONTHS[index(month, 12)]
+        )
     }
 }
 
@@ -309,13 +403,19 @@ fn clean(text: &str) -> String {
 
 /// `request` as the conversation keeps it, with its note.
 pub fn asked(request: &str, language: &str) -> Turn {
-    Turn { user: true, text: with_note(request, language) }
+    Turn {
+        user: true,
+        text: with_note(request, language),
+    }
 }
 
 /// The conversation, kept to its last `KEPT` turns.
 pub fn keep(talk: &mut Vec<Turn>, asked: Turn, answered: String) {
     talk.push(asked);
-    talk.push(Turn { user: false, text: answered });
+    talk.push(Turn {
+        user: false,
+        text: answered,
+    });
     if talk.len() > KEPT {
         let extra = talk.len() - KEPT;
         talk.drain(..extra);
@@ -328,7 +428,9 @@ impl config::Voice {
         if self.model.contains('/') {
             config::expand(std::path::Path::new(&self.model))
         } else {
-            crate::stt::data_dir().join("models").join(format!("{}.gguf", self.model))
+            crate::stt::data_dir()
+                .join("models")
+                .join(format!("{}.gguf", self.model))
         }
     }
 }
@@ -389,7 +491,14 @@ mod tests {
     fn the_conversation_keeps_its_last_turns() {
         let mut talk = Vec::new();
         for i in 0..20 {
-            keep(&mut talk, Turn { user: true, text: format!("q{i}") }, format!("a{i}"));
+            keep(
+                &mut talk,
+                Turn {
+                    user: true,
+                    text: format!("q{i}"),
+                },
+                format!("a{i}"),
+            );
         }
         assert_eq!(talk.len(), KEPT);
         assert_eq!(talk[0].text, "q12");

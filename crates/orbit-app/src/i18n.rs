@@ -71,11 +71,7 @@ fn choose(wanted: &str) -> Option<&'static (&'static str, &'static str)> {
     CATALOGS
         .iter()
         .find(|(locale, _)| locale.eq_ignore_ascii_case(wanted))
-        .or_else(|| {
-            CATALOGS
-                .iter()
-                .find(|(locale, _)| language(locale) == language(wanted))
-        })
+        .or_else(|| CATALOGS.iter().find(|(locale, _)| language(locale) == language(wanted)))
 }
 
 fn with<T>(f: impl FnOnce(&Catalogs) -> T) -> T {
@@ -94,16 +90,10 @@ fn with<T>(f: impl FnOnce(&Catalogs) -> T) -> T {
     })
 }
 
-fn format(
-    bundle: &FluentBundle<FluentResource>,
-    id: &str,
-    args: Option<&FluentArgs>,
-) -> Option<String> {
+fn format(bundle: &FluentBundle<FluentResource>, id: &str, args: Option<&FluentArgs>) -> Option<String> {
     let pattern = bundle.get_message(id)?.value()?;
     let mut errors = Vec::new();
-    let text = bundle
-        .format_pattern(pattern, args, &mut errors)
-        .into_owned();
+    let text = bundle.format_pattern(pattern, args, &mut errors).into_owned();
     if !errors.is_empty() {
         log::warn!("i18n: {id}: {errors:?}");
     }
@@ -204,17 +194,9 @@ mod tests {
             "{}",
             muted("pt-BR", "no")
         );
-        assert_eq!(
-            in_locale("pt-BR", "windows-area", &[("area", number(3.0))]),
-            "Área 3"
-        );
+        assert_eq!(in_locale("pt-BR", "windows-area", &[("area", number(3.0))]), "Área 3");
         for locale in ["en-US", "pt-BR"] {
-            assert_eq!(
-                in_locale(locale, "weather-compass", &[])
-                    .split_whitespace()
-                    .count(),
-                16
-            );
+            assert_eq!(in_locale(locale, "weather-compass", &[]).split_whitespace().count(), 16);
         }
         assert!(in_locale("en-US", "weather-compass", &[]).contains(" E "));
         assert!(in_locale("pt-BR", "weather-compass", &[]).contains(" L "));

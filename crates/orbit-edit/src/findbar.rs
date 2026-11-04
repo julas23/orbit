@@ -70,8 +70,14 @@ impl FindBar {
         }
         find_row.append(&gtk::Box::builder().hexpand(true).build());
         find_row.append(&close);
-        let replace_one = gtk::Button::builder().label(tr("edit-replace")).focus_on_click(false).build();
-        let replace_all = gtk::Button::builder().label(tr("edit-replace-all")).focus_on_click(false).build();
+        let replace_one = gtk::Button::builder()
+            .label(tr("edit-replace"))
+            .focus_on_click(false)
+            .build();
+        let replace_all = gtk::Button::builder()
+            .label(tr("edit-replace-all"))
+            .focus_on_click(false)
+            .build();
         let replace_row = gtk::Box::builder().spacing(5).build();
         replace_row.append(&replace);
         replace_row.append(&replace_one);
@@ -253,7 +259,8 @@ impl FindBar {
             buffer.select_range(&s, &e);
             doc.view.scroll_to_iter(&mut s.clone(), 0.1, false, 0.0, 0.0);
             let position = doc.search.occurrence_position(&s, &e);
-            self.count.set_label(&counter(Some(position), doc.search.occurrences_count()));
+            self.count
+                .set_label(&counter(Some(position), doc.search.occurrences_count()));
         } else if !self.find.text().is_empty() {
             self.count.set_label(&counter(None, 0));
         }
@@ -275,7 +282,9 @@ impl FindBar {
         let Some(doc) = self.doc.borrow().clone() else { return };
         let n = doc.search.occurrences_count().max(0);
         match doc.search.replace_all(&self.replace.text()) {
-            Ok(()) => self.count.set_label(&tr_args("edit-replaced", &[("n", number(n as f64))])),
+            Ok(()) => self
+                .count
+                .set_label(&tr_args("edit-replaced", &[("n", number(n as f64))])),
             Err(err) => log::warn!("replace all: {err}"),
         }
     }

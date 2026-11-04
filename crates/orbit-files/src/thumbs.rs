@@ -27,11 +27,16 @@ fn thumbnailers() -> &'static Thumbnailers {
     static T: OnceLock<Thumbnailers> = OnceLock::new();
     T.get_or_init(|| {
         let mut exec = HashMap::new();
-        let dirs = [PathBuf::from("/usr/share/thumbnailers"), glib::user_data_dir().join("thumbnailers")];
+        let dirs = [
+            PathBuf::from("/usr/share/thumbnailers"),
+            glib::user_data_dir().join("thumbnailers"),
+        ];
         for dir in dirs {
             let Ok(entries) = std::fs::read_dir(dir) else { continue };
             for entry in entries.filter_map(Result::ok) {
-                let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
+                let Ok(text) = std::fs::read_to_string(entry.path()) else {
+                    continue;
+                };
                 let field = |key: &str| {
                     text.lines()
                         .find_map(|l| l.strip_prefix(key).and_then(|r| r.strip_prefix('=')))
@@ -43,7 +48,9 @@ fn thumbnailers() -> &'static Thumbnailers {
                 {
                     continue;
                 }
-                let (Some(command), Some(types)) = (field("Exec"), field("MimeType")) else { continue };
+                let (Some(command), Some(types)) = (field("Exec"), field("MimeType")) else {
+                    continue;
+                };
                 if glib::find_program_in_path(command.split_whitespace().next().unwrap_or("")).is_none() {
                     continue;
                 }
@@ -114,7 +121,9 @@ fn start() -> Queue {
 /// Shows `entry`'s thumbnail in `image`, now if cached, else once made.
 pub fn request(entry: &Entry, image: &gtk::Image) {
     let Some(path) = entry.location.path() else { return };
-    if entry.dir || !(entry.mime.starts_with("image/") || entry.mime.starts_with("video/") || entry.mime == "application/pdf") {
+    if entry.dir
+        || !(entry.mime.starts_with("image/") || entry.mime.starts_with("video/") || entry.mime == "application/pdf")
+    {
         mark(image, "");
         return;
     }
@@ -161,12 +170,18 @@ fn set(image: &gtk::Image, file: &Path) {
 
 fn cache_file(uri: &str) -> PathBuf {
     let md5 = glib::compute_checksum_for_string(glib::ChecksumType::Md5, uri).unwrap_or_default();
-    glib::user_cache_dir().join("thumbnails").join("normal").join(format!("{md5}.png"))
+    glib::user_cache_dir()
+        .join("thumbnails")
+        .join("normal")
+        .join(format!("{md5}.png"))
 }
 
 /// A cached thumbnail no older than the file.
 fn is_fresh(thumb: &Path, file: &Path) -> bool {
-    match (std::fs::metadata(thumb).and_then(|m| m.modified()), std::fs::metadata(file).and_then(|m| m.modified())) {
+    match (
+        std::fs::metadata(thumb).and_then(|m| m.modified()),
+        std::fs::metadata(file).and_then(|m| m.modified()),
+    ) {
         (Ok(t), Ok(f)) => t >= f,
         _ => false,
     }

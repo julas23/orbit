@@ -16,7 +16,10 @@ use smithay::{
     },
     wayland::{
         buffer::BufferHandler,
-        compositor::{CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, get_parent, is_sync_subsurface, with_states},
+        compositor::{
+            CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, get_parent,
+            is_sync_subsurface, with_states,
+        },
         shell::{wlr_layer::LayerSurfaceData, xdg::XdgToplevelSurfaceData},
         shm::{ShmHandler, ShmState},
     },
@@ -75,7 +78,12 @@ impl Orbit {
             return;
         }
         with_states(surface, |states| {
-            let delta = states.cached_state.get::<SurfaceAttributes>().current().buffer_delta.take();
+            let delta = states
+                .cached_state
+                .get::<SurfaceAttributes>()
+                .current()
+                .buffer_delta
+                .take();
             if let (Some(delta), Some(data)) = (delta, states.data_map.get::<CursorImageSurfaceData>()) {
                 data.lock().unwrap().hotspot -= delta;
             }
@@ -88,7 +96,10 @@ impl Orbit {
     fn first_configure(&mut self, surface: &WlSurface) {
         if let Some(window) = self.window_for(surface).or_else(|| self.greet_window(surface)) {
             let sent = with_states(surface, |states| {
-                states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
+                states
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .is_some_and(|d| d.lock().unwrap().initial_configure_sent)
             });
             if !sent && let Some(toplevel) = window.toplevel() {
                 // Its parent and size limits are known now: a dialog floats.
@@ -97,16 +108,29 @@ impl Orbit {
             }
             return;
         }
-        let Some(output) = self.space.outputs().find(|o| layer_map_for_output(o).layer_for_surface(surface, smithay::desktop::WindowSurfaceType::TOPLEVEL).is_some()).cloned() else {
+        let Some(output) = self
+            .space
+            .outputs()
+            .find(|o| {
+                layer_map_for_output(o)
+                    .layer_for_surface(surface, smithay::desktop::WindowSurfaceType::TOPLEVEL)
+                    .is_some()
+            })
+            .cloned()
+        else {
             return;
         };
         let sent = with_states(surface, |states| {
-            states.data_map.get::<LayerSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
+            states
+                .data_map
+                .get::<LayerSurfaceData>()
+                .is_some_and(|d| d.lock().unwrap().initial_configure_sent)
         });
         let changed = {
             let mut map = layer_map_for_output(&output);
             let changed = map.arrange();
-            if !sent && let Some(layer) = map.layer_for_surface(surface, smithay::desktop::WindowSurfaceType::TOPLEVEL) {
+            if !sent && let Some(layer) = map.layer_for_surface(surface, smithay::desktop::WindowSurfaceType::TOPLEVEL)
+            {
                 layer.layer_surface().send_configure();
             }
             changed

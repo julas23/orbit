@@ -27,10 +27,8 @@ pub fn render(view: &gtk::TextView, source: &str, base: &Path) -> Rendered {
     let buffer = view.buffer();
     buffer.set_text("");
     let mut out = Writer::new(view, base);
-    let options = Options::ENABLE_TABLES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_FOOTNOTES;
+    let options =
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS | Options::ENABLE_FOOTNOTES;
     for event in Parser::new_ext(source, options) {
         out.event(event);
     }
@@ -127,10 +125,7 @@ impl<'a> Writer<'a> {
         let tags: Vec<&gtk::TextTag> = self
             .active
             .iter()
-            .filter(|t| {
-                t.name()
-                    .is_some_and(|n| n.starts_with("list") || n == "quote")
-            })
+            .filter(|t| t.name().is_some_and(|n| n.starts_with("list") || n == "quote"))
             .collect();
         self.buffer.insert_with_tags(&mut end, text, &tags);
     }
@@ -176,9 +171,7 @@ impl<'a> Writer<'a> {
             }
             Tag::Heading { level, .. } => {
                 self.newline();
-                let mark = self
-                    .buffer
-                    .create_mark(None, &self.buffer.end_iter(), true);
+                let mark = self.buffer.create_mark(None, &self.buffer.end_iter(), true);
                 self.heading = Some((mark, String::new()));
                 self.push(match level {
                     HeadingLevel::H1 => "h1",
@@ -476,10 +469,7 @@ fn create_tags(buffer: &gtk::TextBuffer) {
 /// `url` as a file next to the document, when it is one.
 fn local_path(base: &Path, url: &str) -> Option<PathBuf> {
     if url.contains("://") {
-        return url
-            .strip_prefix("file://")
-            .map(PathBuf::from)
-            .filter(|p| p.is_file());
+        return url.strip_prefix("file://").map(PathBuf::from).filter(|p| p.is_file());
     }
     let url = url.split(['#', '?']).next().unwrap_or(url);
     let path = base.join(percent_decode(url));

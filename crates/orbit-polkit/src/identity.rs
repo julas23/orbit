@@ -30,18 +30,27 @@ fn resolve(identities: &[(String, HashMap<String, glib::Variant>)], passwd: &str
         .lines()
         .filter_map(|line| {
             let f: Vec<&str> = line.split(':').collect();
-            Some((*f.first()?, f.get(2)?.parse().ok()?, f.get(3)?.parse().ok()?, f.get(4).copied().unwrap_or("")))
+            Some((
+                *f.first()?,
+                f.get(2)?.parse().ok()?,
+                f.get(3)?.parse().ok()?,
+                f.get(4).copied().unwrap_or(""),
+            ))
         })
         .collect();
     let mut names: Vec<&str> = Vec::new();
     for (kind, details) in identities {
         match kind.as_str() {
             "unix-user" => {
-                let Some(uid) = details.get("uid").and_then(|v| v.get::<u32>()) else { continue };
+                let Some(uid) = details.get("uid").and_then(|v| v.get::<u32>()) else {
+                    continue;
+                };
                 names.extend(accounts.iter().filter(|a| a.1 == uid).map(|a| a.0));
             }
             "unix-group" => {
-                let Some(gid) = details.get("gid").and_then(|v| v.get::<u32>()) else { continue };
+                let Some(gid) = details.get("gid").and_then(|v| v.get::<u32>()) else {
+                    continue;
+                };
                 let members = group.lines().find_map(|line| {
                     let f: Vec<&str> = line.split(':').collect();
                     (f.get(2)?.parse::<u32>().ok()? == gid).then(|| f.get(3).copied().unwrap_or(""))
@@ -66,7 +75,10 @@ fn resolve(identities: &[(String, HashMap<String, glib::Variant>)], passwd: &str
         .map(|name| {
             let gecos = accounts.iter().find(|a| a.0 == name).map(|a| a.3).unwrap_or("");
             let real = gecos.split(',').next().unwrap_or("").trim();
-            User { name: name.to_owned(), real_name: (!real.is_empty() && real != name).then(|| real.to_owned()) }
+            User {
+                name: name.to_owned(),
+                real_name: (!real.is_empty() && real != name).then(|| real.to_owned()),
+            }
         })
         .collect()
 }

@@ -106,9 +106,7 @@ impl Control {
                 card.upcast()
             }
             Form::Mini | Form::Line => {
-                let holder = gtk::Box::builder()
-                    .css_classes(["control", class, "popup"])
-                    .build();
+                let holder = gtk::Box::builder().css_classes(["control", class, "popup"]).build();
                 holder.append(&scale);
                 let popover = gtk::Popover::builder().child(&holder).build();
                 let classes = if form == Form::Mini {

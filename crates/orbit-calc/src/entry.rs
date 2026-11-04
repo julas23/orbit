@@ -83,9 +83,7 @@ impl Entry {
         if let Some(done) = self.done.take() {
             match key {
                 // An operator continues from the result.
-                Key::Op(_) | Key::Percent | Key::Factorial | Key::Postfix(_) => {
-                    self.text = plain(done.value)
-                }
+                Key::Op(_) | Key::Percent | Key::Factorial | Key::Postfix(_) => self.text = plain(done.value),
                 Key::Sign => {
                     self.text = plain(-done.value);
                     return;

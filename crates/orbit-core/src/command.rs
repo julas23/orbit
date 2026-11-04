@@ -108,7 +108,10 @@ fn words(text: &str) -> Vec<String> {
 fn select(state: &Orbit, criteria: &str) -> Result<Vec<Window>, String> {
     let mut windows: Vec<Window> = state.all_windows().cloned().collect();
     for pair in words(criteria) {
-        let (key, value) = pair.split_once('=').map(|(k, v)| (k.trim(), v.trim())).unwrap_or((pair.as_str(), ""));
+        let (key, value) = pair
+            .split_once('=')
+            .map(|(k, v)| (k.trim(), v.trim()))
+            .unwrap_or((pair.as_str(), ""));
         match key {
             "con_id" => match value {
                 "__focused__" => {
@@ -124,7 +127,11 @@ fn select(state: &Orbit, criteria: &str) -> Result<Vec<Window>, String> {
                 let pattern = RegexBuilder::new(value).build().map_err(|e| format!("{key}: {e}"))?;
                 windows.retain(|w| {
                     let v = state.window_json(w);
-                    pattern.is_match(v[if key == "app_id" { "app_id" } else { "name" }].as_str().unwrap_or_default())
+                    pattern.is_match(
+                        v[if key == "app_id" { "app_id" } else { "name" }]
+                            .as_str()
+                            .unwrap_or_default(),
+                    )
                 });
             }
             "workspace" => windows.retain(|w| state.workspace_of(w).is_some_and(|n| n.to_string() == value)),
@@ -149,7 +156,11 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
     match w.as_slice() {
         ["nop", ..] => Ok(()),
         ["exec" | "exec_always", ..] => {
-            let rest = command.trim_start().split_once(char::is_whitespace).map(|(_, r)| r.trim()).unwrap_or_default();
+            let rest = command
+                .trim_start()
+                .split_once(char::is_whitespace)
+                .map(|(_, r)| r.trim())
+                .unwrap_or_default();
             let rest = rest.strip_prefix("--no-startup-id").unwrap_or(rest).trim();
             if rest.is_empty() {
                 return Err("exec: nothing to run".into());
@@ -173,7 +184,9 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
         // sway's `output NAME position X Y`; the place is remembered.
         ["output", name, "pos" | "position", x, y] => {
             let at = (x.parse::<i32>(), y.parse::<i32>());
-            let (Ok(x), Ok(y)) = at else { return Err(format!("output {name}: not a position: {x} {y}")) };
+            let (Ok(x), Ok(y)) = at else {
+                return Err(format!("output {name}: not a position: {x} {y}"));
+            };
             if state.output_named(name).is_none() {
                 return Err(format!("There is no output called {name}"));
             }
@@ -182,7 +195,9 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
         }
         // Orbit's own: a virtual monitor (orbit-remote-server's client).
         ["output", name, "create", mode] => {
-            let Some((w, h, rate)) = crate::config::parse_mode(mode) else { return Err(format!("output {name}: not a mode: {mode}")) };
+            let Some((w, h, rate)) = crate::config::parse_mode(mode) else {
+                return Err(format!("output {name}: not a mode: {mode}"));
+            };
             state.create_virtual(name, (w, h), rate.unwrap_or(60.0))
         }
         ["output", name, "remove" | "unplug"] => state.remove_virtual(name),
@@ -197,7 +212,9 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             Ok(())
         }
         ["focus"] => {
-            let Some(window) = windows().into_iter().last() else { return Err("No window matches".into()) };
+            let Some(window) = windows().into_iter().last() else {
+                return Err("No window matches".into());
+            };
             state.focus_anywhere(&window);
             Ok(())
         }
@@ -213,7 +230,9 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             Ok(())
         }
         ["focus", "output", which] => {
-            let target = state.output_toward(which).ok_or_else(|| format!("There is no output called {which}"))?;
+            let target = state
+                .output_toward(which)
+                .ok_or_else(|| format!("There is no output called {which}"))?;
             state.focus_output(&target);
             Ok(())
         }
@@ -229,7 +248,9 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             }
             Ok(())
         }
-        ["move", "scratchpad"] | ["move", "to", "scratchpad"] | ["move", "container" | "window", "to", "scratchpad"] => {
+        ["move", "scratchpad"]
+        | ["move", "to", "scratchpad"]
+        | ["move", "container" | "window", "to", "scratchpad"] => {
             for window in windows() {
                 state.move_to_scratchpad(&window);
             }
@@ -256,15 +277,22 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             Ok(())
         }
         ["scratchpad", "show"] => {
-            let Some(window) = state.scratchpad.last().cloned() else { return Err("Scratchpad is empty".into()) };
+            let Some(window) = state.scratchpad.last().cloned() else {
+                return Err("Scratchpad is empty".into());
+            };
             state.focus_anywhere(&window);
             Ok(())
         }
         // sway's `move [container|window] [to] output NAME|DIR`: to the
         // workspace that monitor shows.
         ["move", .., "output", which] => {
-            let target = state.output_toward(which).ok_or_else(|| format!("There is no output called {which}"))?;
-            let num = *state.visible.get(&target).ok_or_else(|| format!("Output {target} shows no workspace"))?;
+            let target = state
+                .output_toward(which)
+                .ok_or_else(|| format!("There is no output called {which}"))?;
+            let num = *state
+                .visible
+                .get(&target)
+                .ok_or_else(|| format!("Output {target} shows no workspace"))?;
             for window in windows() {
                 state.move_to_workspace(&window, num);
             }
@@ -345,9 +373,13 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.set_layout(crate::tile::Layout::parse(name));
             Ok(())
         }
-        ["split" | "splith" | "splitv", ..] | ["layout", ..] | ["resize", ..] | ["gaps", ..] | ["border", ..] | ["sticky", ..] | ["mark", ..] => {
-            Err(format!("not in orbit-core yet: {}", w[0]))
-        }
+        ["split" | "splith" | "splitv", ..]
+        | ["layout", ..]
+        | ["resize", ..]
+        | ["gaps", ..]
+        | ["border", ..]
+        | ["sticky", ..]
+        | ["mark", ..] => Err(format!("not in orbit-core yet: {}", w[0])),
         _ => Err(format!("Unknown/invalid command '{command}'")),
     }
 }
@@ -358,7 +390,10 @@ fn workspace_number(state: &Orbit, rest: &[&str]) -> Result<i32, String> {
     let mut nums: Vec<i32> = state.workspaces.iter().map(|w| state.area_of(w.num).0).collect();
     nums.sort();
     nums.dedup();
-    let pos = nums.iter().position(|n| *n == state.area_of(state.current).0).unwrap_or(0);
+    let pos = nums
+        .iter()
+        .position(|n| *n == state.area_of(state.current).0)
+        .unwrap_or(0);
     let pick = |s: &str| s.split(':').next().and_then(|n| n.parse::<i32>().ok());
     match rest {
         ["number", n, ..] => pick(n).ok_or_else(|| format!("not a workspace number: {n}")),
@@ -388,7 +423,9 @@ impl Orbit {
 
     /// `xkb_switch_layout next|prev|N`.
     fn switch_layout(&mut self, which: &str) -> Result<(), String> {
-        let Some(keyboard) = self.seat.get_keyboard() else { return Err("no keyboard".into()) };
+        let Some(keyboard) = self.seat.get_keyboard() else {
+            return Err("no keyboard".into());
+        };
         let count = self.layouts.0.len().max(1) as u32;
         let target = match which {
             "next" | "prev" => None,
@@ -418,17 +455,22 @@ mod tests {
 
     #[test]
     fn splits_outside_quotes_and_brackets() {
-        assert_eq!(split("[title=\"a;b\"] focus; workspace 2", ';'), vec!["[title=\"a;b\"] focus", " workspace 2"]);
-        assert_eq!(split("move container to workspace number 3, floating disable, focus", ','), vec![
-            "move container to workspace number 3",
-            " floating disable",
-            " focus"
-        ]);
+        assert_eq!(
+            split("[title=\"a;b\"] focus; workspace 2", ';'),
+            vec!["[title=\"a;b\"] focus", " workspace 2"]
+        );
+        assert_eq!(
+            split("move container to workspace number 3, floating disable, focus", ','),
+            vec!["move container to workspace number 3", " floating disable", " focus"]
+        );
     }
 
     #[test]
     fn words_drop_quotes() {
-        assert_eq!(words("app_id=\"(?i)Org Foo\" con_id=3"), vec!["app_id=(?i)Org Foo", "con_id=3"]);
+        assert_eq!(
+            words("app_id=\"(?i)Org Foo\" con_id=3"),
+            vec!["app_id=(?i)Org Foo", "con_id=3"]
+        );
         assert_eq!(words("exec 'a b'"), vec!["exec", "a b"]);
     }
 }

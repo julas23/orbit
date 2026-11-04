@@ -150,17 +150,12 @@ impl Host {
                 None,
                 gio::DBusSignalFlags::NONE,
                 move |s| {
-                    let (Some(host), Some(item)) = (
-                        weak.upgrade(),
-                        s.parameters.child_value(0).str().map(str::to_owned),
-                    ) else {
+                    let (Some(host), Some(item)) =
+                        (weak.upgrade(), s.parameters.child_value(0).str().map(str::to_owned))
+                    else {
                         return;
                     };
-                    if added {
-                        host.add(&item)
-                    } else {
-                        host.remove(&item)
-                    }
+                    if added { host.add(&item) } else { host.remove(&item) }
                 },
             );
             self.keep.borrow_mut().push(Box::new(sub));
@@ -331,12 +326,7 @@ impl Props {
     /// Parses the reply to `GetAll(org.kde.StatusNotifierItem)`.
     pub fn parse(reply: &glib::Variant) -> Props {
         let dict = glib::VariantDict::new(Some(&reply.child_value(0)));
-        let string = |key: &str| {
-            dict.lookup::<String>(key)
-                .ok()
-                .flatten()
-                .unwrap_or_default()
-        };
+        let string = |key: &str| dict.lookup::<String>(key).ok().flatten().unwrap_or_default();
         let pixmaps = dict
             .lookup_value("IconPixmap", None)
             .map(|v| pixmaps(&v))
@@ -367,11 +357,7 @@ impl Props {
             title: string("Title"),
             tooltip,
             menu,
-            item_is_menu: dict
-                .lookup::<bool>("ItemIsMenu")
-                .ok()
-                .flatten()
-                .unwrap_or(false),
+            item_is_menu: dict.lookup::<bool>("ItemIsMenu").ok().flatten().unwrap_or(false),
         }
     }
 }

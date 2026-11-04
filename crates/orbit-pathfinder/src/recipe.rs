@@ -82,8 +82,12 @@ impl Index {
             let Ok(entries) = std::fs::read_dir(dir) else { continue };
             for entry in entries.flatten() {
                 let dir = entry.path();
-                let Ok(text) = std::fs::read_to_string(dir.join("package.json")) else { continue };
-                let Ok(package) = serde_json::from_str::<Package>(&text) else { continue };
+                let Ok(text) = std::fs::read_to_string(dir.join("package.json")) else {
+                    continue;
+                };
+                let Ok(package) = serde_json::from_str::<Package>(&text) else {
+                    continue;
+                };
                 if !dir.join("webview.js").is_file() {
                     continue;
                 }
@@ -125,7 +129,10 @@ fn matching<'a>(recipes: impl Iterator<Item = &'a Recipe> + Clone, url: &str) ->
         return prefix;
     }
     if !SHARED_HOSTS.contains(&host.as_str()) {
-        let mut same: Vec<&Recipe> = recipes.clone().filter(|r| privacy::host(&r.url).as_deref() == Some(&host)).collect();
+        let mut same: Vec<&Recipe> = recipes
+            .clone()
+            .filter(|r| privacy::host(&r.url).as_deref() == Some(&host))
+            .collect();
         same.sort_by(|a, b| a.id.cmp(&b.id));
         if let Some(r) = same.first() {
             return Some(r);
@@ -137,8 +144,9 @@ fn matching<'a>(recipes: impl Iterator<Item = &'a Recipe> + Clone, url: &str) ->
         (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
         _ => true,
     };
-    let mut aliased: Vec<&Recipe> =
-        recipes.filter(|r| r.aliases.iter().any(|a| *a == host || *a == site) && same_product(r)).collect();
+    let mut aliased: Vec<&Recipe> = recipes
+        .filter(|r| r.aliases.iter().any(|a| *a == host || *a == site) && same_product(r))
+        .collect();
     aliased.sort_by(|a, b| a.id.cmp(&b.id));
     aliased.first().copied()
 }
@@ -193,7 +201,12 @@ mod tests {
     use super::*;
 
     fn r(id: &str, url: &str, aliases: &[&str]) -> Recipe {
-        Recipe { id: id.into(), url: url.into(), aliases: aliases.iter().map(|a| a.to_string()).collect(), dir: PathBuf::new() }
+        Recipe {
+            id: id.into(),
+            url: url.into(),
+            aliases: aliases.iter().map(|a| a.to_string()).collect(),
+            dir: PathBuf::new(),
+        }
     }
 
     #[test]
@@ -203,7 +216,11 @@ mod tests {
             r("hangouts", "https://mail.google.com/chat/", &[]),
             r("google-maps", "https://www.google.com/maps", &[]),
             r("linkedin", "https://www.linkedin.com/messaging", &[]),
-            r("office365-owa", "https://outlook.cloud.microsoft/mail/", &["live.com", "outlook"]),
+            r(
+                "office365-owa",
+                "https://outlook.cloud.microsoft/mail/",
+                &["live.com", "outlook"],
+            ),
             r("whatsapp", "https://web.whatsapp.com", &[]),
         ];
         let find = |url: &str| matching(all.iter(), url).map(|r| r.id.as_str());
@@ -229,7 +246,12 @@ mod tests {
         let file = glib::user_config_dir().join("orbit").join("pathfinder.yaml");
         let config: crate::config::Config = serde_yaml_ng::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
         for s in config.groups.iter().flat_map(|g| &g.services) {
-            eprintln!("{:<26} {:<45} {:?}", s.name, s.url, index.find(s.recipe.as_deref(), &s.url).map(|r| &r.id));
+            eprintln!(
+                "{:<26} {:<45} {:?}",
+                s.name,
+                s.url,
+                index.find(s.recipe.as_deref(), &s.url).map(|r| &r.id)
+            );
         }
     }
 

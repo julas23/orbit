@@ -134,7 +134,13 @@ impl Viewer {
             .valign(gtk::Align::Center)
             .halign(gtk::Align::Center)
             .build();
-        page.append(&gtk::Image::builder().icon_name("image-x-generic-symbolic").pixel_size(60).css_classes(["message-icon"]).build());
+        page.append(
+            &gtk::Image::builder()
+                .icon_name("image-x-generic-symbolic")
+                .pixel_size(60)
+                .css_classes(["message-icon"])
+                .build(),
+        );
         page.append(&message);
         page.append(&open);
         let stack = gtk::Stack::builder()
@@ -167,10 +173,7 @@ impl Viewer {
             .build();
         let position = gtk::Label::builder().css_classes(["position"]).build();
         let zoom_out = button("zoom-out-symbolic", "view-zoom-out", "−");
-        let zoom = gtk::Label::builder()
-            .width_chars(5)
-            .css_classes(["zoom"])
-            .build();
+        let zoom = gtk::Label::builder().width_chars(5).css_classes(["zoom"]).build();
         let zoom_in = button("zoom-in-symbolic", "view-zoom-in", "+");
         let fit = button("zoom-fit-best-symbolic", "view-fit", "0");
         let actual = button("zoom-original-symbolic", "view-actual-size", "1");
@@ -200,10 +203,7 @@ impl Viewer {
             }
             b
         };
-        let bar = gtk::Box::builder()
-            .spacing(10)
-            .css_classes(["bar"])
-            .build();
+        let bar = gtk::Box::builder().spacing(10).css_classes(["bar"]).build();
         bar.append(&group(&[previous.upcast_ref(), next.upcast_ref()]));
         bar.append(&position);
         bar.append(&name);
@@ -416,8 +416,8 @@ impl Viewer {
         if self.dir.borrow().as_ref().is_some_and(|(d, _)| d == dir) {
             return;
         }
-        let monitor = gio::File::for_path(dir)
-            .monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE);
+        let monitor =
+            gio::File::for_path(dir).monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE);
         match monitor {
             Ok(monitor) => {
                 let weak = Rc::downgrade(self);
@@ -523,7 +523,10 @@ impl Viewer {
         let generation = self.generation.get() + 1;
         self.generation.set(generation);
         *self.info.borrow_mut() = None;
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         self.name.set_label(&name);
         self.window.set_title(Some(&name));
         self.update_save();
@@ -531,9 +534,7 @@ impl Viewer {
         let rx = decode::load(path.clone());
         let weak = Rc::downgrade(self);
         glib::spawn_future_local(async move {
-            let current = |weak: &std::rc::Weak<Viewer>| {
-                weak.upgrade().filter(|v| v.generation.get() == generation)
-            };
+            let current = |weak: &std::rc::Weak<Viewer>| weak.upgrade().filter(|v| v.generation.get() == generation);
             let mut first = true;
             let mut cache: Vec<(gdk::Texture, Duration)> = Vec::new();
             let mut kept = 0usize;
@@ -596,7 +597,10 @@ impl Viewer {
     }
 
     fn failed(&self, path: &Path, failure: Failure) {
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let reason = match failure {
             Failure::UnknownFormat => tr("view-unknown-format"),
             Failure::Other(reason) => reason,
@@ -723,25 +727,24 @@ impl Viewer {
     fn trash(self: &Rc<Self>) {
         let Some(path) = self.current() else { return };
         let weak = Rc::downgrade(self);
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        gio::File::for_path(&path).trash_async(
-            glib::Priority::DEFAULT,
-            gio::Cancellable::NONE,
-            move |result| {
-                let Some(v) = weak.upgrade() else { return };
-                match result {
-                    Ok(()) => {
-                        v.toast(&tr_args("view-trashed", &[("name", text(name))]));
-                        // The folder's monitor would notice too; no need to wait.
-                        v.relist();
-                    }
-                    Err(err) => v.toast(&tr_args(
-                        "view-trash-failed",
-                        &[("reason", text(err.message().to_owned()))],
-                    )),
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        gio::File::for_path(&path).trash_async(glib::Priority::DEFAULT, gio::Cancellable::NONE, move |result| {
+            let Some(v) = weak.upgrade() else { return };
+            match result {
+                Ok(()) => {
+                    v.toast(&tr_args("view-trashed", &[("name", text(name))]));
+                    // The folder's monitor would notice too; no need to wait.
+                    v.relist();
                 }
-            },
-        );
+                Err(err) => v.toast(&tr_args(
+                    "view-trash-failed",
+                    &[("reason", text(err.message().to_owned()))],
+                )),
+            }
+        });
     }
 
     // ------------------------------------------------- screen and controls
@@ -786,10 +789,7 @@ impl Viewer {
             }
             glib::ControlFlow::Continue
         });
-        *self.slideshow.borrow_mut() = Some(Slideshow {
-            timer,
-            was_fullscreen,
-        });
+        *self.slideshow.borrow_mut() = Some(Slideshow { timer, was_fullscreen });
     }
 
     fn in_slideshow(&self) -> bool {
@@ -842,7 +842,11 @@ impl Viewer {
         self.bottom.set_reveal_child(strip);
         self.bottom.set_can_target(strip);
         self.window
-            .set_cursor_from_name(if shown || !self.window.is_fullscreen() { None } else { Some("none") });
+            .set_cursor_from_name(if shown || !self.window.is_fullscreen() {
+                None
+            } else {
+                Some("none")
+            });
     }
 
     fn hide_controls_later(self: &Rc<Self>) {

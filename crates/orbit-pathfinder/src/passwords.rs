@@ -12,7 +12,10 @@ use gtk::{glib, prelude::*};
 use orbit_app::i18n::{text, tr, tr_args};
 use webkit6::prelude::*;
 
-use crate::{bitwarden, import, ui::{background, close_on_escape}};
+use crate::{
+    bitwarden, import,
+    ui::{background, close_on_escape},
+};
 
 /// Fills the login form in the page: the password field, and the user
 /// field before it (or the one that looks like it). Runs in a world of its
@@ -43,7 +46,11 @@ return (user ? 1 : 0) + (pass ? 2 : 0);
 "#;
 
 fn message(parent: &gtk::Window, text: &str) {
-    gtk::AlertDialog::builder().message(text).modal(true).build().show(Some(parent));
+    gtk::AlertDialog::builder()
+        .message(text)
+        .modal(true)
+        .build()
+        .show(Some(parent));
 }
 
 #[derive(Default)]
@@ -75,11 +82,32 @@ impl Vault {
     }
 
     fn ask_master(self: &Rc<Self>, parent: &gtk::Window, f: impl FnOnce(Option<String>) + 'static) {
-        let entry = gtk::PasswordEntry::builder().show_peek_icon(true).hexpand(true).activates_default(true).build();
-        let status = gtk::Label::builder().xalign(0.0).css_classes(["error-text"]).visible(false).build();
-        let go = gtk::Button::builder().label(tr("pathfinder-bw-unlock")).css_classes(["suggested-action"]).halign(gtk::Align::End).build();
-        let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).css_classes(["dialog-box"]).build();
-        body.append(&gtk::Label::builder().label(tr("pathfinder-bw-master")).xalign(0.0).build());
+        let entry = gtk::PasswordEntry::builder()
+            .show_peek_icon(true)
+            .hexpand(true)
+            .activates_default(true)
+            .build();
+        let status = gtk::Label::builder()
+            .xalign(0.0)
+            .css_classes(["error-text"])
+            .visible(false)
+            .build();
+        let go = gtk::Button::builder()
+            .label(tr("pathfinder-bw-unlock"))
+            .css_classes(["suggested-action"])
+            .halign(gtk::Align::End)
+            .build();
+        let body = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
+            .css_classes(["dialog-box"])
+            .build();
+        body.append(
+            &gtk::Label::builder()
+                .label(tr("pathfinder-bw-master"))
+                .xalign(0.0)
+                .build(),
+        );
         body.append(&entry);
         body.append(&status);
         body.append(&go);
@@ -159,7 +187,9 @@ impl Vault {
     /// Fills the page's login form from the vault; with several logins for
     /// the site, offers them in a menu under `anchor`.
     pub fn fill(self: &Rc<Self>, parent: &gtk::Window, view: &webkit6::WebView, anchor: &gtk::Widget) {
-        let Some(url) = view.uri().map(|u| u.to_string()) else { return };
+        let Some(url) = view.uri().map(|u| u.to_string()) else {
+            return;
+        };
         let (parent2, view, anchor) = (parent.clone(), view.clone(), anchor.clone());
         self.with_session(parent, move |key| {
             let Some(key) = key else { return };
@@ -179,26 +209,58 @@ impl Vault {
     /// and the Firefox primary password if there is one.
     pub fn import_dialog(self: &Rc<Self>, parent: &gtk::Window) {
         let found = import::discover();
-        let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).css_classes(["dialog-box"]).build();
-        body.append(&gtk::Label::builder().label(tr("pathfinder-import-intro")).wrap(true).max_width_chars(50).xalign(0.0).build());
+        let body = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
+            .css_classes(["dialog-box"])
+            .build();
+        body.append(
+            &gtk::Label::builder()
+                .label(tr("pathfinder-import-intro"))
+                .wrap(true)
+                .max_width_chars(50)
+                .xalign(0.0)
+                .build(),
+        );
         let mut checks = Vec::new();
         for f in &found {
             let check = gtk::CheckButton::builder()
-                .label(tr_args("pathfinder-import-source", &[("name", text(f.label())), ("count", text(f.count.to_string()))]))
+                .label(tr_args(
+                    "pathfinder-import-source",
+                    &[("name", text(f.label())), ("count", text(f.count.to_string()))],
+                ))
                 .active(true)
                 .build();
             body.append(&check);
             checks.push((check, f.clone()));
         }
         if found.is_empty() {
-            body.append(&gtk::Label::builder().label(tr("pathfinder-import-nothing")).xalign(0.0).build());
+            body.append(
+                &gtk::Label::builder()
+                    .label(tr("pathfinder-import-nothing"))
+                    .xalign(0.0)
+                    .build(),
+            );
         }
-        let firefox = gtk::PasswordEntry::builder().show_peek_icon(true).placeholder_text(tr("pathfinder-import-firefox-pw")).build();
+        let firefox = gtk::PasswordEntry::builder()
+            .show_peek_icon(true)
+            .placeholder_text(tr("pathfinder-import-firefox-pw"))
+            .build();
         if found.iter().any(|f| f.source == import::Source::Firefox) {
             body.append(&firefox);
         }
-        let status = gtk::Label::builder().xalign(0.0).wrap(true).max_width_chars(50).visible(false).build();
-        let go = gtk::Button::builder().label(tr("pathfinder-import-go")).css_classes(["suggested-action"]).halign(gtk::Align::End).sensitive(!found.is_empty()).build();
+        let status = gtk::Label::builder()
+            .xalign(0.0)
+            .wrap(true)
+            .max_width_chars(50)
+            .visible(false)
+            .build();
+        let go = gtk::Button::builder()
+            .label(tr("pathfinder-import-go"))
+            .css_classes(["suggested-action"])
+            .halign(gtk::Align::End)
+            .sensitive(!found.is_empty())
+            .build();
         body.append(&status);
         body.append(&go);
         let dialog = gtk::Window::builder()
@@ -220,7 +282,11 @@ impl Vault {
             #[weak]
             firefox,
             move |go| {
-                let chosen: Vec<import::Found> = checks.iter().filter(|(c, _)| c.is_active()).map(|(_, f)| f.clone()).collect();
+                let chosen: Vec<import::Found> = checks
+                    .iter()
+                    .filter(|(c, _)| c.is_active())
+                    .map(|(_, f)| f.clone())
+                    .collect();
                 if chosen.is_empty() {
                     return;
                 }
@@ -242,11 +308,17 @@ impl Vault {
                             for f in &chosen {
                                 match import::read(f, firefox_pw.as_deref()) {
                                     Ok(mut l) => logins.append(&mut l),
-                                    Err(import::Error::FirefoxPassword) => problems.push(tr("pathfinder-import-firefox-needed")),
+                                    Err(import::Error::FirefoxPassword) => {
+                                        problems.push(tr("pathfinder-import-firefox-needed"))
+                                    }
                                     Err(import::Error::Other(e)) => problems.push(format!("{}: {e}", f.label())),
                                 }
                             }
-                            let result = if logins.is_empty() { Ok(bitwarden::Imported::default()) } else { bitwarden::import(&key, &logins) };
+                            let result = if logins.is_empty() {
+                                Ok(bitwarden::Imported::default())
+                            } else {
+                                bitwarden::import(&key, &logins)
+                            };
                             (result, problems)
                         },
                         move |(result, problems)| {
@@ -254,7 +326,10 @@ impl Vault {
                             match result {
                                 Ok(r) => lines.push(tr_args(
                                     "pathfinder-import-done",
-                                    &[("added", text(r.added.to_string())), ("already", text(r.already.to_string()))],
+                                    &[
+                                        ("added", text(r.added.to_string())),
+                                        ("already", text(r.already.to_string())),
+                                    ],
                                 )),
                                 Err(e) => lines.push(tr_args("pathfinder-import-failed", &[("error", text(e))])),
                             }
@@ -274,21 +349,38 @@ fn inject(view: &webkit6::WebView, credential: &bitwarden::Credential) {
     let args = glib::VariantDict::new(None);
     args.insert("username", credential.username.as_str());
     args.insert("password", credential.password.as_str());
-    view.call_async_javascript_function(FILL, Some(&args.end()), Some("orbit-pathfinder"), None, gtk::gio::Cancellable::NONE, |result| {
-        if let Err(err) = result {
-            log::warn!("filling the form: {err}");
-        }
-    });
+    view.call_async_javascript_function(
+        FILL,
+        Some(&args.end()),
+        Some("orbit-pathfinder"),
+        None,
+        gtk::gio::Cancellable::NONE,
+        |result| {
+            if let Err(err) = result {
+                log::warn!("filling the form: {err}");
+            }
+        },
+    );
 }
 
 /// Several logins for the site: a menu of them.
 fn choose(anchor: &gtk::Widget, view: &webkit6::WebView, list: Vec<bitwarden::Credential>) {
     let popover = gtk::Popover::builder().has_arrow(false).build();
     popover.set_parent(anchor);
-    let box_ = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["menu-list"]).build();
+    let box_ = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["menu-list"])
+        .build();
     for credential in list {
-        let label = if credential.username.is_empty() { credential.name.clone() } else { format!("{}  ·  {}", credential.username, credential.name) };
-        let button = gtk::Button::builder().label(label).css_classes(["flat", "menu-item"]).build();
+        let label = if credential.username.is_empty() {
+            credential.name.clone()
+        } else {
+            format!("{}  ·  {}", credential.username, credential.name)
+        };
+        let button = gtk::Button::builder()
+            .label(label)
+            .css_classes(["flat", "menu-item"])
+            .build();
         let (view, p) = (view.clone(), popover.clone());
         button.connect_clicked(move |_| {
             p.popdown();

@@ -33,7 +33,11 @@ pub fn build(note: &Note, place: Place, handlers: &Handlers) -> gtk::Box {
     let card = gtk::Box::builder().spacing(10).css_classes(classes).build();
     card.append(&icon(note, 40));
 
-    let text = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(2).hexpand(true).build();
+    let text = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(2)
+        .hexpand(true)
+        .build();
     let top = gtk::Box::builder().spacing(5).build();
     // In the centre the group's heading already names the app: the title
     // takes its place.
@@ -47,8 +51,17 @@ pub fn build(note: &Note, place: Place, handlers: &Handlers) -> gtk::Box {
             .css_classes([if centre { "summary" } else { "app" }])
             .build(),
     );
-    top.append(&gtk::Label::builder().label(when(note.time)).css_classes(["time"]).build());
-    let close = gtk::Button::builder().label("×").css_classes(["close"]).valign(gtk::Align::Start).build();
+    top.append(
+        &gtk::Label::builder()
+            .label(when(note.time))
+            .css_classes(["time"])
+            .build(),
+    );
+    let close = gtk::Button::builder()
+        .label("×")
+        .css_classes(["close"])
+        .valign(gtk::Align::Start)
+        .build();
     {
         let dismiss = handlers.dismiss.clone();
         close.connect_clicked(move |_| dismiss());
@@ -88,14 +101,21 @@ pub fn build(note: &Note, place: Place, handlers: &Handlers) -> gtk::Box {
         text.append(&body);
     }
     if let Some(value) = note.value {
-        let bar = gtk::ProgressBar::builder().fraction(value as f64 / 100.0).css_classes(["value"]).build();
+        let bar = gtk::ProgressBar::builder()
+            .fraction(value as f64 / 100.0)
+            .css_classes(["value"])
+            .build();
         text.append(&bar);
     }
     // Buttons only while the program is there to hear them.
     if note.sender.is_some() {
         let buttons: Vec<_> = note.buttons().cloned().collect();
         if !buttons.is_empty() {
-            let row = gtk::Box::builder().spacing(5).homogeneous(true).css_classes(["actions"]).build();
+            let row = gtk::Box::builder()
+                .spacing(5)
+                .homogeneous(true)
+                .css_classes(["actions"])
+                .build();
             for (key, label) in buttons {
                 let button = gtk::Button::builder().label(label).build();
                 let action = handlers.action.clone();
@@ -128,7 +148,11 @@ pub fn icon(note: &Note, size: i32) -> gtk::Image {
         image.set_pixel_size(size);
         return image;
     }
-    let spec = note.icon.strip_prefix("file://").map(|p| glib::Uri::unescape_string(p, None::<&str>).map(|s| s.to_string()).unwrap_or_else(|| p.to_owned()));
+    let spec = note.icon.strip_prefix("file://").map(|p| {
+        glib::Uri::unescape_string(p, None::<&str>)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| p.to_owned())
+    });
     let spec = spec.unwrap_or_else(|| note.icon.clone());
     if spec.starts_with('/') && std::path::Path::new(&spec).is_file() {
         return orbit_app::icon(&spec, size);
@@ -162,9 +186,14 @@ pub fn desktop_app(note: &Note) -> Option<gio_unix::DesktopAppInfo> {
     if name.is_empty() || name == "notify-send" {
         return None;
     }
-    gio::AppInfo::all().into_iter().filter_map(|a| a.downcast::<gio_unix::DesktopAppInfo>().ok()).find(|a| {
-        a.name().to_lowercase() == name || a.id().is_some_and(|id| id.to_lowercase().trim_end_matches(".desktop").ends_with(&name))
-    })
+    gio::AppInfo::all()
+        .into_iter()
+        .filter_map(|a| a.downcast::<gio_unix::DesktopAppInfo>().ok())
+        .find(|a| {
+            a.name().to_lowercase() == name
+                || a.id()
+                    .is_some_and(|id| id.to_lowercase().trim_end_matches(".desktop").ends_with(&name))
+        })
 }
 
 /// The app's name as its menu entry has it ("Pathfinder", not the
@@ -183,8 +212,14 @@ pub fn app_name(note: &Note) -> String {
 
 /// "14:05" today, "20/10 14:05" before.
 pub fn when(time: i64) -> String {
-    let Ok(then) = glib::DateTime::from_unix_local(time) else { return String::new() };
+    let Ok(then) = glib::DateTime::from_unix_local(time) else {
+        return String::new();
+    };
     let today = glib::DateTime::now_local().ok().map(|n| n.ymd());
-    let format = if today == Some(then.ymd()) { "%H:%M" } else { "%d/%m %H:%M" };
+    let format = if today == Some(then.ymd()) {
+        "%H:%M"
+    } else {
+        "%d/%m %H:%M"
+    };
     then.format(format).map(|s| s.to_string()).unwrap_or_default()
 }

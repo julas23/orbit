@@ -127,7 +127,12 @@ fn save_token(server: &str, token: &str) -> anyhow::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut file = std::fs::OpenOptions::new().create(true).write(true).truncate(true).mode(0o600).open(&path)?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)?;
     std::io::Write::write_all(&mut file, format!("{server} {token}\n").as_bytes())?;
     Ok(())
 }
@@ -142,7 +147,14 @@ pub fn start(server: String, size: (u32, u32), events: channel::Sender<Event>) -
     let (sender, commands) = mpsc::channel();
     let link_wake = wake.clone();
     std::thread::spawn(move || {
-        let mut link = Link { server, size, events, commands, wake: link_wake, woken };
+        let mut link = Link {
+            server,
+            size,
+            events,
+            commands,
+            wake: link_wake,
+            woken,
+        };
         link.run();
     });
     Ok(Commands { sender, wake })
@@ -266,7 +278,10 @@ impl Link {
                 }
                 Some("refused") => wrong = true,
                 Some("forgotten") => {
-                    log::warn!("station: {} no longer knows this station; asking for the code", self.server);
+                    log::warn!(
+                        "station: {} no longer knows this station; asking for the code",
+                        self.server
+                    );
                     let _ = std::fs::remove_file(token_path());
                 }
                 Some("busy") => {
@@ -279,7 +294,10 @@ impl Link {
                 }
                 // A server from before the tokens streams straight away.
                 Some("offer" | "ice") => {
-                    self.tell(Event::Unreachable(format!("{} is too old for the station: update orbit-remote-server", self.server)));
+                    self.tell(Event::Unreachable(format!(
+                        "{} is too old for the station: update orbit-remote-server",
+                        self.server
+                    )));
                     self.sleep(RETRY)?;
                 }
                 other => {
@@ -368,8 +386,17 @@ impl Link {
             let pad_fds: Vec<_> = pads.fds().collect();
             let mut fds = vec![PollFd::new(&fd, PollFlags::IN), PollFd::new(&self.woken, PollFlags::IN)];
             fds.extend(pad_fds.iter().map(|pad| PollFd::new(pad, PollFlags::IN)));
-            let wait = lanes.wait().unwrap_or(Duration::from_millis(100)).min(Duration::from_millis(100));
-            let _ = poll(&mut fds, Some(&Timespec { tv_sec: 0, tv_nsec: wait.as_nanos() as i64 }));
+            let wait = lanes
+                .wait()
+                .unwrap_or(Duration::from_millis(100))
+                .min(Duration::from_millis(100));
+            let _ = poll(
+                &mut fds,
+                Some(&Timespec {
+                    tv_sec: 0,
+                    tv_nsec: wait.as_nanos() as i64,
+                }),
+            );
         }
     }
 }
@@ -399,7 +426,8 @@ fn connect(server: &str) -> anyhow::Result<Socket> {
         .ok_or_else(|| anyhow!("{server}: no address"))?;
     let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT).map_err(|e| anyhow!("{server}: {e}"))?;
     stream.set_nodelay(true)?;
-    let (ws, _) = tungstenite::client(format!("ws://{server}/ws"), MaybeTlsStream::Plain(stream)).map_err(|e| anyhow!("{server}: {e}"))?;
+    let (ws, _) = tungstenite::client(format!("ws://{server}/ws"), MaybeTlsStream::Plain(stream))
+        .map_err(|e| anyhow!("{server}: {e}"))?;
     Ok(ws)
 }
 

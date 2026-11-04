@@ -10,12 +10,7 @@
 //! /dev/uinput is root's alone by default: the package's udev rule gives
 //! it to the user at the seat (`uaccess`), as Steam's does.
 
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::Write,
-    os::fd::AsRawFd,
-};
+use std::{collections::HashMap, fs::File, io::Write, os::fd::AsRawFd};
 
 use anyhow::{Context, bail};
 use serde_json::Value;
@@ -75,10 +70,9 @@ struct Pad {
 impl Pad {
     /// A device as `pad` describes it.
     fn create(pad: &Value) -> anyhow::Result<Self> {
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .open("/dev/uinput")
-            .context("/dev/uinput (the uinput module loaded, and orbit-remote-server's udev rule giving it to the seat's user)")?;
+        let file = std::fs::OpenOptions::new().write(true).open("/dev/uinput").context(
+            "/dev/uinput (the uinput module loaded, and orbit-remote-server's udev rule giving it to the seat's user)",
+        )?;
         let fd = file.as_raw_fd();
         let control = |request: u64, arg: libc::c_ulong| -> anyhow::Result<()> {
             // Safety: requests that take an int, on a file of ours.
@@ -88,7 +82,14 @@ impl Pad {
             Ok(())
         };
         let codes = |name: &str, max: u64| -> Vec<u16> {
-            pad[name].as_array().into_iter().flatten().filter_map(Value::as_u64).filter(|&c| c <= max).map(|c| c as u16).collect()
+            pad[name]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_u64)
+                .filter(|&c| c <= max)
+                .map(|c| c as u16)
+                .collect()
         };
         let keys = codes("keys", KEY_MAX);
         if !keys.is_empty() {
@@ -97,7 +98,12 @@ impl Pad {
                 control(UI_SET_KEYBIT, key.into())?;
             }
         }
-        let axes: Vec<&Value> = pad["axes"].as_array().into_iter().flatten().filter(|a| a["code"].as_u64().is_some_and(|c| c <= ABS_MAX)).collect();
+        let axes: Vec<&Value> = pad["axes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|a| a["code"].as_u64().is_some_and(|c| c <= ABS_MAX))
+            .collect();
         if !axes.is_empty() {
             control(UI_SET_EVBIT, EV_ABS.into())?;
         }
@@ -119,17 +125,31 @@ impl Pad {
             }
         }
         let id = |name: &str| pad[name].as_u64().and_then(|v| u16::try_from(v).ok()).unwrap_or(0);
-        let mut setup = Setup { bustype: id("bus"), vendor: id("vendor"), product: id("product"), version: id("version"), name: [0; 80], ff_effects_max: 0 };
+        let mut setup = Setup {
+            bustype: id("bus"),
+            vendor: id("vendor"),
+            product: id("product"),
+            version: id("version"),
+            name: [0; 80],
+            ff_effects_max: 0,
+        };
         let name = pad["name"].as_str().unwrap_or("Orbit Remote pad");
         // Up to the last whole character that fits, the NUL after it.
-        let end = (0..=name.len().min(79)).rev().find(|&i| name.is_char_boundary(i)).unwrap_or(0);
+        let end = (0..=name.len().min(79))
+            .rev()
+            .find(|&i| name.is_char_boundary(i))
+            .unwrap_or(0);
         setup.name[..end].copy_from_slice(&name.as_bytes()[..end]);
         // Safety: as above.
         if unsafe { libc::ioctl(fd, UI_DEV_SETUP as _, &setup) } < 0 {
             bail!("uinput, the device: {}", std::io::Error::last_os_error());
         }
         control(UI_DEV_CREATE, 0)?;
-        log::info!("remote: the client's {name:?} is a device here ({:04x}:{:04x})", setup.vendor, setup.product);
+        log::info!(
+            "remote: the client's {name:?} is a device here ({:04x}:{:04x})",
+            setup.vendor,
+            setup.product
+        );
         Ok(Self { file })
     }
 
@@ -137,15 +157,25 @@ impl Pad {
     fn write(&mut self, events: &[Value]) -> std::io::Result<()> {
         let mut bytes = Vec::with_capacity((events.len() + 1) * size_of::<libc::input_event>());
         let mut event = |kind: u16, code: u16, value: i32| {
-            let event = libc::input_event { time: libc::timeval { tv_sec: 0, tv_usec: 0 }, type_: kind, code, value };
+            let event = libc::input_event {
+                time: libc::timeval { tv_sec: 0, tv_usec: 0 },
+                type_: kind,
+                code,
+                value,
+            };
             // Safety: a plain struct, read as its bytes.
             bytes.extend_from_slice(unsafe {
-                std::slice::from_raw_parts((&event as *const libc::input_event).cast::<u8>(), size_of::<libc::input_event>())
+                std::slice::from_raw_parts(
+                    (&event as *const libc::input_event).cast::<u8>(),
+                    size_of::<libc::input_event>(),
+                )
             });
         };
         for triple in events {
             let part = |i: usize| triple[i].as_i64();
-            let (Some(kind), Some(code), Some(value)) = (part(0), part(1), part(2)) else { continue };
+            let (Some(kind), Some(code), Some(value)) = (part(0), part(1), part(2)) else {
+                continue;
+            };
             // Only what a pad has: no keyboard keys or relative moves smuggled in.
             let fits = match kind as u16 {
                 EV_KEY => (0..=KEY_MAX as i64).contains(&code),

@@ -19,7 +19,9 @@ use smithay::{
         renderer::{
             Bind, Color32F, Frame, Offscreen, Renderer, Texture,
             element::{Id, Kind, solid::SolidColorRenderElement, texture::TextureRenderElement},
-            gles::{GlesError, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType, UniformValue},
+            gles::{
+                GlesError, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType, UniformValue,
+            },
             utils::{CommitCounter, draw_render_elements},
         },
     },
@@ -120,14 +122,24 @@ void main() {
 
 /// The passes down and up.
 pub fn compile(renderer: &mut GlesRenderer) -> Result<(GlesTexProgram, GlesTexProgram), GlesError> {
-    let uniforms = [UniformName::new("halfpixel", UniformType::_2f), UniformName::new("offset", UniformType::_1f)];
-    Ok((renderer.compile_custom_texture_shader(DOWN, &uniforms)?, renderer.compile_custom_texture_shader(UP, &uniforms)?))
+    let uniforms = [
+        UniformName::new("halfpixel", UniformType::_2f),
+        UniformName::new("offset", UniformType::_1f),
+    ];
+    Ok((
+        renderer.compile_custom_texture_shader(DOWN, &uniforms)?,
+        renderer.compile_custom_texture_shader(UP, &uniforms)?,
+    ))
 }
 
 /// The curve the eyes move on: slow at both ends.
 pub fn ease(p: f32) -> f32 {
     let p = p.clamp(0.0, 1.0);
-    if p < 0.5 { 4.0 * p * p * p } else { 1.0 - (-2.0 * p + 2.0).powi(3) / 2.0 }
+    if p < 0.5 {
+        4.0 * p * p * p
+    } else {
+        1.0 - (-2.0 * p + 2.0).powi(3) / 2.0
+    }
 }
 
 /// The textures of the transition, kept from frame to frame while it
@@ -138,7 +150,12 @@ pub struct Cache(HashMap<(String, u8, usize), GlesTexture>);
 
 impl Cache {
     /// The texture for `key`, of `size`; made when missing or resized.
-    fn target(&mut self, renderer: &mut GlesRenderer, key: (String, u8, usize), size: Size<i32, Buffer>) -> Result<GlesTexture, GlesError> {
+    fn target(
+        &mut self,
+        renderer: &mut GlesRenderer,
+        key: (String, u8, usize),
+        size: Size<i32, Buffer>,
+    ) -> Result<GlesTexture, GlesError> {
         if let Some(texture) = self.0.get(&key).filter(|t| t.size() == size) {
             return Ok(texture.clone());
         }
@@ -154,7 +171,13 @@ impl Cache {
 }
 
 /// Draws `elements` (topmost first) into `texture`, over `clear`.
-fn draw(renderer: &mut GlesRenderer, mut texture: GlesTexture, scale: Scale<f64>, clear: [f32; 4], elements: &[OutputElement]) -> Result<GlesTexture, GlesError> {
+fn draw(
+    renderer: &mut GlesRenderer,
+    mut texture: GlesTexture,
+    scale: Scale<f64>,
+    clear: [f32; 4],
+    elements: &[OutputElement],
+) -> Result<GlesTexture, GlesError> {
     let size = texture.size();
     let size: Size<i32, Physical> = (size.w, size.h).into();
     let full = Rectangle::from_size(size);
@@ -170,7 +193,12 @@ fn draw(renderer: &mut GlesRenderer, mut texture: GlesTexture, scale: Scale<f64>
 }
 
 /// One pass of `program`: `source` drawn into `texture`, filling it.
-fn pass(renderer: &mut GlesRenderer, source: &GlesTexture, mut texture: GlesTexture, program: &GlesTexProgram) -> Result<GlesTexture, GlesError> {
+fn pass(
+    renderer: &mut GlesRenderer,
+    source: &GlesTexture,
+    mut texture: GlesTexture,
+    program: &GlesTexProgram,
+) -> Result<GlesTexture, GlesError> {
     let from = source.size();
     let size = texture.size();
     let size: Size<i32, Physical> = (size.w, size.h).into();
@@ -183,7 +211,17 @@ fn pass(renderer: &mut GlesRenderer, source: &GlesTexture, mut texture: GlesText
             Uniform::new("halfpixel", UniformValue::_2f(0.5 / from.w as f32, 0.5 / from.h as f32)),
             Uniform::new("offset", OFFSET),
         ];
-        frame.render_texture_from_to(source, Rectangle::from_size(from.to_f64()), full, &[full], &[], Transform::Normal, 1.0, Some(program), &uniforms)?;
+        frame.render_texture_from_to(
+            source,
+            Rectangle::from_size(from.to_f64()),
+            full,
+            &[full],
+            &[],
+            Transform::Normal,
+            1.0,
+            Some(program),
+            &uniforms,
+        )?;
         let _ = frame.finish()?;
     }
     Ok(texture)
@@ -222,14 +260,15 @@ fn blurred(
         down.push(pass(renderer, &down[k - 1], texture, programs.0)?);
     }
     // Depth k: k halvings down, then back up to half size.
-    let depth = |cache: &mut Cache, renderer: &mut GlesRenderer, k: usize, chain: u8| -> Result<GlesTexture, GlesError> {
-        let mut texture = down[k].clone();
-        for i in (1..k).rev() {
-            let target = cache.target(renderer, (output.to_owned(), chain, i), down[i].size())?;
-            texture = pass(renderer, &texture, target, programs.1)?;
-        }
-        Ok(texture)
-    };
+    let depth =
+        |cache: &mut Cache, renderer: &mut GlesRenderer, k: usize, chain: u8| -> Result<GlesTexture, GlesError> {
+            let mut texture = down[k].clone();
+            for i in (1..k).rev() {
+                let target = cache.target(renderer, (output.to_owned(), chain, i), down[i].size())?;
+                texture = pass(renderer, &texture, target, programs.1)?;
+            }
+            Ok(texture)
+        };
     let mut layers = vec![(depth(cache, renderer, low, 1)?, 1.0)];
     if high > low && blend > 0.0 {
         layers.push((depth(cache, renderer, high, 2)?, blend));
@@ -255,7 +294,17 @@ pub fn backdrop(
 ) {
     let physical = size.to_physical_precise_round(scale);
     let clear = crate::render::BACKGROUND;
-    match blurred(renderer, cache, (&shaders.down, &shaders.up), &output.name(), physical, scale, clear, session, strength) {
+    match blurred(
+        renderer,
+        cache,
+        (&shaders.down, &shaders.up),
+        &output.name(),
+        physical,
+        scale,
+        clear,
+        session,
+        strength,
+    ) {
         Ok(layers) => {
             let context = renderer.context_id();
             // Topmost first: the deeper blur over the shallower.
@@ -290,8 +339,18 @@ impl crate::state::Orbit {
     /// first, after whatever `elements` holds (the pointer). The blur runs
     /// ahead — whole by two thirds of the way — and black and the greet
     /// lag, so the blur is seen before they cover it.
-    pub fn eyes_elements(&mut self, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, closed: f32, shaders: &crate::rounded::Shaders, elements: &mut Vec<OutputElement>) {
-        let Some(geo) = self.space.output_geometry(output) else { return };
+    pub fn eyes_elements(
+        &mut self,
+        output: &Output,
+        renderer: &mut GlesRenderer,
+        scale: Scale<f64>,
+        closed: f32,
+        shaders: &crate::rounded::Shaders,
+        elements: &mut Vec<OutputElement>,
+    ) {
+        let Some(geo) = self.space.output_geometry(output) else {
+            return;
+        };
         let size = geo.size.to_physical_precise_round(scale);
         let cover = closed * closed;
         crate::session_lock::face_elements(self, output, renderer, scale, cover, elements);
@@ -306,7 +365,17 @@ impl crate::state::Orbit {
         crate::render::session_elements(self, output, renderer, scale, Some(shaders), true, &mut session);
         let mut cache = std::mem::take(&mut self.eyes_cache);
         // The session stays hidden if it fails: black is all that is left.
-        backdrop(renderer, &mut cache, shaders, output, geo.size, scale, &session, (closed * 1.5).min(1.0), elements);
+        backdrop(
+            renderer,
+            &mut cache,
+            shaders,
+            output,
+            geo.size,
+            scale,
+            &session,
+            (closed * 1.5).min(1.0),
+            elements,
+        );
         self.eyes_cache = cache;
     }
 }

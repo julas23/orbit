@@ -36,7 +36,10 @@ fn main() {
         ["capture", output] => capture::measure(Some(output)),
         ["encode"] => encode::measure(None, None),
         ["encode", output] => encode::measure(Some(output), None),
-        ["encode", output, size] => match size.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))) {
+        ["encode", output, size] => match size
+            .split_once('x')
+            .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
+        {
             Some(size) => encode::measure(Some(output), Some(size)),
             None => Err(anyhow::anyhow!("a size as 800x600, not {size}")),
         },
@@ -44,7 +47,9 @@ fn main() {
         ["serve", "--virtual"] => serve::serve(PORT, serve::Screen::Virtual),
         ["serve", output] => serve::serve(PORT, serve::Screen::Mirror(Some(output.to_string()))),
         _ => {
-            eprintln!("usage: orbit-remote-server [serve [--virtual]|capture|encode] [OUTPUT] [WxH: encode, the client's screen]");
+            eprintln!(
+                "usage: orbit-remote-server [serve [--virtual]|capture|encode] [OUTPUT] [WxH: encode, the client's screen]"
+            );
             std::process::exit(2);
         }
     };

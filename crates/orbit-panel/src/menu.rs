@@ -48,7 +48,7 @@ impl Default for MenuConfig {
         Self {
             command: None,
             icon: None,
-            glyph: Some("\u{f17c}".into()), // 
+            glyph: Some("\u{f17c}".into()), //
             tooltip: None,
         }
     }
@@ -64,15 +64,35 @@ const GAP: i32 = 5;
 /// freedesktop.org categories that fall in it). An application goes in the
 /// first that matches; the last takes the rest.
 const CATEGORIES: &[(&str, &str, &[&str])] = &[
-    ("menu-category-utilities", "applications-utilities", &["Utility", "Accessibility"]),
-    ("menu-category-development", "applications-development", &["Development"]),
-    ("menu-category-education", "applications-science", &["Education", "Science"]),
+    (
+        "menu-category-utilities",
+        "applications-utilities",
+        &["Utility", "Accessibility"],
+    ),
+    (
+        "menu-category-development",
+        "applications-development",
+        &["Development"],
+    ),
+    (
+        "menu-category-education",
+        "applications-science",
+        &["Education", "Science"],
+    ),
     ("menu-category-games", "applications-games", &["Game"]),
     ("menu-category-graphics", "applications-graphics", &["Graphics"]),
     ("menu-category-internet", "applications-internet", &["Network"]),
-    ("menu-category-multimedia", "applications-multimedia", &["AudioVideo", "Audio", "Video"]),
+    (
+        "menu-category-multimedia",
+        "applications-multimedia",
+        &["AudioVideo", "Audio", "Video"],
+    ),
     ("menu-category-office", "applications-office", &["Office"]),
-    ("menu-category-settings", "preferences-desktop", &["Settings", "DesktopSettings"]),
+    (
+        "menu-category-settings",
+        "preferences-desktop",
+        &["Settings", "DesktopSettings"],
+    ),
     ("menu-category-system", "applications-system", &["System"]),
     ("menu-category-other", "applications-other", &[]),
 ];
@@ -81,15 +101,17 @@ pub fn new(config: &MenuConfig, edge: Edge, session: SessionConfig) -> gtk::Widg
     let button = gtk::Button::builder().css_classes(["menu"]).build();
     // The icon at the start; beside it, what the button opens and what the
     // menu does, in two lines.
-    let content = gtk::Box::builder()
-        .spacing(8)
-        .halign(gtk::Align::Start)
-        .build();
+    let content = gtk::Box::builder().spacing(8).halign(gtk::Align::Start).build();
     if let Some(icon) = &config.icon {
         // 30 px + 5 px padding each side = 40 px, one column of the grid.
         content.append(&orbit_app::icon(icon, 30));
     } else if let Some(glyph) = &config.glyph {
-        content.append(&gtk::Label::builder().label(glyph.as_str()).css_classes(["glyph"]).build());
+        content.append(
+            &gtk::Label::builder()
+                .label(glyph.as_str())
+                .css_classes(["glyph"])
+                .build(),
+        );
     }
     let lines = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -198,10 +220,7 @@ impl Menu {
             .build();
         let apps = collect(&list);
         let commands = (0..COMMANDS).map(|_| command_row(&list)).collect();
-        let hint = gtk::Label::builder()
-            .wrap(true)
-            .css_classes(["hint"])
-            .build();
+        let hint = gtk::Label::builder().wrap(true).css_classes(["hint"]).build();
         list.set_placeholder(Some(&hint));
 
         // "All", then the categories that have something.
@@ -218,8 +237,17 @@ impl Menu {
             }
         }
 
-        let user = gtk::Box::builder().spacing(10).hexpand(true).css_classes(["user"]).build();
-        user.append(&gtk::Image::builder().icon_name("avatar-default-symbolic").pixel_size(20).build());
+        let user = gtk::Box::builder()
+            .spacing(10)
+            .hexpand(true)
+            .css_classes(["user"])
+            .build();
+        user.append(
+            &gtk::Image::builder()
+                .icon_name("avatar-default-symbolic")
+                .pixel_size(20)
+                .build(),
+        );
         let name = glib::real_name();
         let name = name.to_string_lossy();
         let name = if name.is_empty() || name == "Unknown" {
@@ -296,9 +324,8 @@ impl Menu {
         power: &gtk::Button,
     ) {
         let weak = Rc::downgrade(self);
-        self.list.set_filter_func(move |row| {
-            weak.upgrade().is_some_and(|m| m.shows(row))
-        });
+        self.list
+            .set_filter_func(move |row| weak.upgrade().is_some_and(|m| m.shows(row)));
         let weak = Rc::downgrade(self);
         self.list.set_sort_func(move |a, b| match weak.upgrade() {
             Some(m) => m.order(a, b),
@@ -315,7 +342,9 @@ impl Menu {
         // menu — shows its applications.
         let weak = Rc::downgrade(self);
         categories.connect_row_selected(move |_, row| {
-            let (Some(m), Some(row)) = (weak.upgrade(), row) else { return };
+            let (Some(m), Some(row)) = (weak.upgrade(), row) else {
+                return;
+            };
             let id = ids.get(row.index() as usize).copied().flatten();
             *m.category.borrow_mut() = id;
             if !m.search.text().is_empty() {
@@ -326,7 +355,9 @@ impl Menu {
         let mut child = categories.first_child();
         while let Some(row) = child {
             child = row.next_sibling();
-            let Ok(row) = row.downcast::<gtk::ListBoxRow>() else { continue };
+            let Ok(row) = row.downcast::<gtk::ListBoxRow>() else {
+                continue;
+            };
             let hover = gtk::EventControllerMotion::new();
             let categories = categories.clone();
             let target = row.clone();
@@ -504,7 +535,9 @@ impl Menu {
 
     fn launch(&self, row: &gtk::ListBoxRow) {
         if let Some(i) = self.command(row) {
-            let Some(program) = self.matches.borrow().get(i).cloned() else { return };
+            let Some(program) = self.matches.borrow().get(i).cloned() else {
+                return;
+            };
             // What was typed after the program goes with it, as arguments.
             let typed = self.search.text();
             let mut words = typed.split_whitespace();
@@ -616,7 +649,12 @@ const COMMANDS: usize = 20;
 /// A row for a program on `$PATH`, its name filled in by the search.
 fn command_row(list: &gtk::ListBox) -> (gtk::ListBoxRow, gtk::Label) {
     let content = gtk::Box::builder().spacing(10).build();
-    content.append(&gtk::Image::builder().icon_name("utilities-terminal").pixel_size(30).build());
+    content.append(
+        &gtk::Image::builder()
+            .icon_name("utilities-terminal")
+            .pixel_size(30)
+            .build(),
+    );
     let labels = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .valign(gtk::Align::Center)
@@ -712,14 +750,22 @@ fn place(window: &gtk::Window, card: &gtk::Box, button: &gtk::Button, edge: Edge
     };
     match edge {
         Edge::Left | Edge::Right => {
-            card.set_halign(if edge == Edge::Left { gtk::Align::Start } else { gtk::Align::End });
+            card.set_halign(if edge == Edge::Left {
+                gtk::Align::Start
+            } else {
+                gtk::Align::End
+            });
             card.set_valign(gtk::Align::Start);
             card.set_margin_top(along(at.1, screen.map(|g| g.height()), HEIGHT));
             card.set_margin_start(GAP);
             card.set_margin_end(GAP);
         }
         Edge::Top | Edge::Bottom => {
-            card.set_valign(if edge == Edge::Top { gtk::Align::Start } else { gtk::Align::End });
+            card.set_valign(if edge == Edge::Top {
+                gtk::Align::Start
+            } else {
+                gtk::Align::End
+            });
             card.set_halign(gtk::Align::Start);
             card.set_margin_start(along(at.0, screen.map(|g| g.width()), WIDTH));
             card.set_margin_top(GAP);
@@ -756,7 +802,10 @@ mod tests {
     fn categories_take_the_first_match() {
         let other = CATEGORIES.len() - 1;
         assert_eq!(CATEGORIES[category_of("Graphics;Viewer;")].0, "menu-category-graphics");
-        assert_eq!(CATEGORIES[category_of("GTK;Network;WebBrowser;")].0, "menu-category-internet");
+        assert_eq!(
+            CATEGORIES[category_of("GTK;Network;WebBrowser;")].0,
+            "menu-category-internet"
+        );
         assert_eq!(category_of("Viewer;"), other);
         assert_eq!(category_of(""), other);
     }

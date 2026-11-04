@@ -25,12 +25,7 @@ pub struct Placement {
 impl Placement {
     /// The surface rectangle, in logical pixels, on a monitor with `geometry`.
     pub fn rect(&self, geometry: &gdk::Rectangle) -> gdk::Rectangle {
-        let (x, y, w, h) = (
-            geometry.x(),
-            geometry.y(),
-            geometry.width(),
-            geometry.height(),
-        );
+        let (x, y, w, h) = (geometry.x(), geometry.y(), geometry.width(), geometry.height());
         match self.edge {
             Edge::Top => gdk::Rectangle::new(x, y, w, self.size),
             Edge::Bottom => gdk::Rectangle::new(x, y + h - self.size, w, self.size),
@@ -56,11 +51,7 @@ pub trait Backend {
 /// The monitor `spec` names, if it is there.
 pub fn find_monitor(display: &gdk::Display, spec: &MonitorSpec) -> Option<gdk::Monitor> {
     let monitors = display.monitors();
-    let pick = |i: u32| {
-        monitors
-            .item(i)
-            .and_then(|obj| obj.downcast::<gdk::Monitor>().ok())
-    };
+    let pick = |i: u32| monitors.item(i).and_then(|obj| obj.downcast::<gdk::Monitor>().ok());
     match spec {
         MonitorSpec::Index(index) => pick(*index as u32),
         MonitorSpec::Name(name) => (0..monitors.n_items())

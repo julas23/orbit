@@ -26,7 +26,10 @@ use smithay::{
                 solid::SolidColorRenderElement,
                 surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
             },
-            gles::{GlesError, GlesFrame, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType, UniformValue},
+            gles::{
+                GlesError, GlesFrame, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
+                UniformValue,
+            },
             utils::{CommitCounter, DamageSet, OpaqueRegions, draw_render_elements},
         },
     },
@@ -144,7 +147,11 @@ pub fn square_to_quad(quad: [(f32, f32); 4]) -> Mat3 {
 pub fn card_corners(depth: f32, w: f32, h: f32, cw: f32, ch: f32) -> [(f32, f32); 4] {
     let focal = 1.6 * w;
     // Back and to the right, a little higher, each card.
-    let centre = (0.36 * w + depth * 0.07 * w, 0.60 * h - depth * 0.075 * h, depth * 0.32 * cw);
+    let centre = (
+        0.36 * w + depth * 0.07 * w,
+        0.60 * h - depth * 0.075 * h,
+        depth * 0.32 * cw,
+    );
     let (sin, cos) = TURN.sin_cos();
     let project = |lx: f32, ly: f32| {
         let x = centre.0 + lx * cos;
@@ -216,13 +223,29 @@ impl RenderElement<GlesRenderer> for CardElement {
     ) -> Result<(), GlesError> {
         let size = self.texture.size();
         let uniforms = [
-            Uniform::new("inv", UniformValue::Matrix3x3 { matrices: vec![self.inv.to_cols_array()], transpose: false }),
+            Uniform::new(
+                "inv",
+                UniformValue::Matrix3x3 {
+                    matrices: vec![self.inv.to_cols_array()],
+                    transpose: false,
+                },
+            ),
             Uniform::new("size", (size.w as f32, size.h as f32)),
             Uniform::new("radius", RADIUS * size.w as f32 / self.geometry.size.w.max(1) as f32),
             Uniform::new("aa", self.aa),
             Uniform::new("shade", self.shade),
         ];
-        frame.render_texture_from_to(&self.texture, src, dst, damage, &[], Transform::Normal, self.alpha, Some(&self.program), &uniforms)
+        frame.render_texture_from_to(
+            &self.texture,
+            src,
+            dst,
+            damage,
+            &[],
+            Transform::Normal,
+            self.alpha,
+            Some(&self.program),
+            &uniforms,
+        )
     }
 
     fn underlying_storage(&self, _renderer: &mut GlesRenderer) -> Option<UnderlyingStorage<'_>> {
@@ -240,8 +263,15 @@ fn app_name(app_id: &str) -> String {
         .ok()
         .filter(|d| !d.is_empty())
         .or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.local/share")));
-    let dirs = std::env::var("XDG_DATA_DIRS").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| "/usr/local/share:/usr/share".into());
-    let dirs: Vec<String> = home.into_iter().chain(dirs.split(':').map(str::to_owned)).map(|d| format!("{d}/applications")).collect();
+    let dirs = std::env::var("XDG_DATA_DIRS")
+        .ok()
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    let dirs: Vec<String> = home
+        .into_iter()
+        .chain(dirs.split(':').map(str::to_owned))
+        .map(|d| format!("{d}/applications"))
+        .collect();
     let name_in = |text: &str| {
         let mut in_entry = false;
         for line in text.lines() {
@@ -256,7 +286,10 @@ fn app_name(app_id: &str) -> String {
     };
     for file in [app_id.to_owned(), app_id.to_lowercase()] {
         for dir in &dirs {
-            if let Some(name) = std::fs::read_to_string(format!("{dir}/{file}.desktop")).ok().and_then(|t| name_in(&t)) {
+            if let Some(name) = std::fs::read_to_string(format!("{dir}/{file}.desktop"))
+                .ok()
+                .and_then(|t| name_in(&t))
+            {
                 return name;
             }
         }
@@ -266,7 +299,9 @@ fn app_name(app_id: &str) -> String {
     for dir in &dirs {
         let Ok(entries) = std::fs::read_dir(dir) else { continue };
         for entry in entries.flatten() {
-            let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
+            let Ok(text) = std::fs::read_to_string(entry.path()) else {
+                continue;
+            };
             if text.lines().any(|l| l.trim().eq_ignore_ascii_case(&wm_class))
                 && let Some(name) = name_in(&text)
             {
@@ -276,7 +311,10 @@ fn app_name(app_id: &str) -> String {
     }
     let last = app_id.rsplit('.').next().unwrap_or(app_id);
     let mut chars = last.chars();
-    chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// What a window shows, without the program's name the title often ends
@@ -284,12 +322,18 @@ fn app_name(app_id: &str) -> String {
 fn detail(title: &str, name: &str, app_id: &str) -> String {
     for sep in [" — ", " – ", " - ", " · "] {
         if let Some((head, tail)) = title.rsplit_once(sep)
-            && [name, app_id].iter().any(|n| !n.is_empty() && tail.trim().eq_ignore_ascii_case(n))
+            && [name, app_id]
+                .iter()
+                .any(|n| !n.is_empty() && tail.trim().eq_ignore_ascii_case(n))
         {
             return head.trim().to_owned();
         }
     }
-    if title.trim().eq_ignore_ascii_case(name) { String::new() } else { title.trim().to_owned() }
+    if title.trim().eq_ignore_ascii_case(name) {
+        String::new()
+    } else {
+        title.trim().to_owned()
+    }
 }
 
 /// A window's title and app id (an X window's class).
@@ -297,14 +341,19 @@ fn title_and_app(window: &Window) -> (String, String) {
     if let Some(x) = window.x11_surface() {
         return (x.title(), x.class());
     }
-    let Some(toplevel) = window.toplevel() else { return Default::default() };
+    let Some(toplevel) = window.toplevel() else {
+        return Default::default();
+    };
     with_states(toplevel.wl_surface(), |states| {
         states
             .data_map
             .get::<XdgToplevelSurfaceData>()
             .map(|d| {
                 let d = d.lock().unwrap();
-                (d.title.clone().unwrap_or_default(), d.app_id.clone().unwrap_or_default())
+                (
+                    d.title.clone().unwrap_or_default(),
+                    d.app_id.clone().unwrap_or_default(),
+                )
             })
             .unwrap_or_default()
     })
@@ -331,7 +380,11 @@ fn title_bar(name: &str, detail: &str, w: i32, h: i32, scale: f64) -> Option<Mem
         let markup = if detail.is_empty() {
             format!("<b>{}</b>", escape(name))
         } else {
-            format!("<b>{}</b>   <span foreground=\"#aeb7c6\">{}</span>", escape(name), escape(detail))
+            format!(
+                "<b>{}</b>   <span foreground=\"#aeb7c6\">{}</span>",
+                escape(name),
+                escape(detail)
+            )
         };
         layout.set_markup(&markup);
         let (_, text_h) = layout.pixel_size();
@@ -347,7 +400,14 @@ fn title_bar(name: &str, detail: &str, w: i32, h: i32, scale: f64) -> Option<Mem
     for row in data.chunks(stride as usize).take(h as usize) {
         pixels.extend_from_slice(&row[..(w * 4) as usize]);
     }
-    Some(MemoryRenderBuffer::from_slice(&pixels, Fourcc::Argb8888, (w, h), 1, Transform::Normal, None))
+    Some(MemoryRenderBuffer::from_slice(
+        &pixels,
+        Fourcc::Argb8888,
+        (w, h),
+        1,
+        Transform::Normal,
+        None,
+    ))
 }
 
 impl Orbit {
@@ -357,11 +417,21 @@ impl Orbit {
     }
 
     /// The window's card, `size` pixels: its title bar above its picture.
-    fn draw_card(&mut self, renderer: &mut GlesRenderer, window: &Window, size: Size<i32, Physical>, scale: f64) -> Option<GlesTexture> {
+    fn draw_card(
+        &mut self,
+        renderer: &mut GlesRenderer,
+        window: &Window,
+        size: Size<i32, Physical>,
+        scale: f64,
+    ) -> Option<GlesTexture> {
         let id = crate::workspace::id(window);
         let (title, app_id) = title_and_app(window);
         let cache = &mut self.switcher.as_mut()?.cache;
-        let name = cache.names.entry(app_id.clone()).or_insert_with(|| app_name(&app_id)).clone();
+        let name = cache
+            .names
+            .entry(app_id.clone())
+            .or_insert_with(|| app_name(&app_id))
+            .clone();
         let detail = detail(&title, &name, &app_id);
         let bar_h = (TITLE * scale).round() as i32;
         let bar = match cache.titles.get(&(id, title.clone(), size.w)) {
@@ -391,10 +461,21 @@ impl Orbit {
         )
             .into();
         let picture: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = match window.wl_surface() {
-            Some(surface) => render_elements_from_surface_tree(renderer, &surface, at, Scale::from(k), 1.0, Kind::Unspecified),
+            Some(surface) => {
+                render_elements_from_surface_tree(renderer, &surface, at, Scale::from(k), 1.0, Kind::Unspecified)
+            }
             None => Vec::new(),
         };
-        let bar = MemoryRenderBufferRenderElement::from_buffer(renderer, (0.0, 0.0), &bar, None, None, None, Kind::Unspecified).ok()?;
+        let bar = MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            (0.0, 0.0),
+            &bar,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        )
+        .ok()?;
         let full = Rectangle::from_size(size);
         {
             let mut target = renderer.bind(&mut texture).ok()?;
@@ -408,10 +489,24 @@ impl Orbit {
     }
 
     /// The cards on `output`, topmost first, over the blurred screen.
-    pub fn card_elements(&mut self, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: &crate::rounded::Shaders, elements: &mut Vec<OutputElement>) {
-        let Some(geo) = self.space.output_geometry(output) else { return };
+    pub fn card_elements(
+        &mut self,
+        output: &Output,
+        renderer: &mut GlesRenderer,
+        scale: Scale<f64>,
+        shaders: &crate::rounded::Shaders,
+        elements: &mut Vec<OutputElement>,
+    ) {
+        let Some(geo) = self.space.output_geometry(output) else {
+            return;
+        };
         let Some(switcher) = self.switcher.as_ref() else { return };
-        let (list, index, progress, back) = (switcher.list.clone(), switcher.index, switcher.progress(), switcher.stepped.is_some_and(|(_, b)| b));
+        let (list, index, progress, back) = (
+            switcher.list.clone(),
+            switcher.index,
+            switcher.progress(),
+            switcher.stepped.is_some_and(|(_, b)| b),
+        );
         let stepped = switcher.stepped.is_some();
         let n = list.len();
         let (w, h) = (geo.size.w as f32, geo.size.h as f32);
@@ -429,10 +524,18 @@ impl Orbit {
             let (depth, alpha) = match (stepped && n > 1, back) {
                 (false, _) => (d, 1.0),
                 (true, false) if d as usize == n - 1 => {
-                    if progress < 0.5 { (-progress * 1.2, 1.0 - progress * 2.0) } else { (d + still, progress * 2.0 - 1.0) }
+                    if progress < 0.5 {
+                        (-progress * 1.2, 1.0 - progress * 2.0)
+                    } else {
+                        (d + still, progress * 2.0 - 1.0)
+                    }
                 }
                 (true, true) if d == 0.0 => {
-                    if progress < 0.5 { (n as f32 - 1.0 + progress, 1.0 - progress * 2.0) } else { (-still * 1.2, progress * 2.0 - 1.0) }
+                    if progress < 0.5 {
+                        (n as f32 - 1.0 + progress, 1.0 - progress * 2.0)
+                    } else {
+                        (-still * 1.2, progress * 2.0 - 1.0)
+                    }
                 }
                 (true, false) => (d + still, 1.0),
                 (true, true) => (d - still, 1.0),
@@ -446,18 +549,33 @@ impl Orbit {
         cards.sort_by(|a, b| a.0.total_cmp(&b.0));
         for (depth, alpha, window) in cards {
             let window = window.clone();
-            let Some(texture) = self.draw_card(renderer, &window, size, s) else { continue };
+            let Some(texture) = self.draw_card(renderer, &window, size, s) else {
+                continue;
+            };
             let corners = card_corners(depth, w, h, cw, ch).map(|(x, y)| (x * s as f32, y * s as f32));
-            let (min_x, max_x) = corners.iter().fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.0), b.max(c.0)));
-            let (min_y, max_y) = corners.iter().fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.1), b.max(c.1)));
+            let (min_x, max_x) = corners
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.0), b.max(c.0)));
+            let (min_y, max_y) = corners
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(c.1), b.max(c.1)));
             let bbox = Rectangle::<i32, Physical>::new(
                 (min_x.floor() as i32, min_y.floor() as i32).into(),
-                ((max_x.ceil() - min_x.floor()) as i32, (max_y.ceil() - min_y.floor()) as i32).into(),
+                (
+                    (max_x.ceil() - min_x.floor()) as i32,
+                    (max_y.ceil() - min_y.floor()) as i32,
+                )
+                    .into(),
             );
             if bbox.size.w <= 0 || bbox.size.h <= 0 {
                 continue;
             }
-            let normal = corners.map(|(x, y)| ((x - bbox.loc.x as f32) / bbox.size.w as f32, (y - bbox.loc.y as f32) / bbox.size.h as f32));
+            let normal = corners.map(|(x, y)| {
+                (
+                    (x - bbox.loc.x as f32) / bbox.size.w as f32,
+                    (y - bbox.loc.y as f32) / bbox.size.h as f32,
+                )
+            });
             let projected_w = ((corners[1].0 - corners[0].0).powi(2) + (corners[1].1 - corners[0].1).powi(2)).sqrt();
             elements.push(OutputElement::Card(CardElement {
                 id: Id::new(),
@@ -482,8 +600,14 @@ impl Orbit {
         )));
         let mut session = Vec::new();
         crate::render::session_elements(self, output, renderer, scale, Some(shaders), true, &mut session);
-        let mut blur = self.switcher.as_mut().map(|s| std::mem::take(&mut s.cache.blur)).unwrap_or_default();
-        crate::eyes::backdrop(renderer, &mut blur, shaders, output, geo.size, scale, &session, 0.75, elements);
+        let mut blur = self
+            .switcher
+            .as_mut()
+            .map(|s| std::mem::take(&mut s.cache.blur))
+            .unwrap_or_default();
+        crate::eyes::backdrop(
+            renderer, &mut blur, shaders, output, geo.size, scale, &session, 0.75, elements,
+        );
         if let Some(switcher) = self.switcher.as_mut() {
             switcher.cache.blur = blur;
         }
@@ -500,7 +624,10 @@ mod tests {
         let m = square_to_quad(quad);
         for ((u, v), (x, y)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)].into_iter().zip(quad) {
             let p = m * Vec3::new(u, v, 1.0);
-            assert!((p.x / p.z - x).abs() < 1e-3 && (p.y / p.z - y).abs() < 1e-3, "({u},{v})");
+            assert!(
+                (p.x / p.z - x).abs() < 1e-3 && (p.y / p.z - y).abs() < 1e-3,
+                "({u},{v})"
+            );
         }
         // And back.
         let p = m.inverse() * Vec3::new(100.0, 90.0, 1.0);
@@ -521,7 +648,10 @@ mod tests {
     #[test]
     fn titles_lose_the_program_name() {
         assert_eq!(detail("notes.md — Orbit Edit", "Orbit Edit", "orbit-edit"), "notes.md");
-        assert_eq!(detail("Rust - Mozilla Firefox", "Firefox", "firefox"), "Rust - Mozilla Firefox");
+        assert_eq!(
+            detail("Rust - Mozilla Firefox", "Firefox", "firefox"),
+            "Rust - Mozilla Firefox"
+        );
         assert_eq!(detail("Firefox", "Firefox", "firefox"), "");
         assert_eq!(detail("~/src", "foot", "foot"), "~/src");
     }

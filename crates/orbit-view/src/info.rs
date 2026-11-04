@@ -74,11 +74,7 @@ impl Panel {
 }
 
 /// (label, value, link) for each line.
-fn rows(
-    path: &Path,
-    size: Option<(i32, i32)>,
-    info: Option<&Info>,
-) -> Vec<(String, String, Option<String>)> {
+fn rows(path: &Path, size: Option<(i32, i32)>, info: Option<&Info>) -> Vec<(String, String, Option<String>)> {
     let mut rows = Vec::new();
     let mut add = |id: &str, value: String| rows.push((tr(id), value, None));
     if let Some(name) = path.file_name() {

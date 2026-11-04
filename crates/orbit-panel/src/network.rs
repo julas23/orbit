@@ -21,7 +21,10 @@ use orbit_app::i18n::tr;
 
 use crate::{
     board::Form,
-    status::{Row, clicks, hold, on_changes, open_or_focus, popup, property, quick_button, quick_list, quick_title, switch_row, system_bus},
+    status::{
+        Row, clicks, hold, on_changes, open_or_focus, popup, property, quick_button, quick_list, quick_title,
+        switch_row, system_bus,
+    },
 };
 
 const NM: &str = "org.freedesktop.NetworkManager";
@@ -102,13 +105,7 @@ fn show(row: &Row, conn: &gio::DBusConnection) {
     let address = get(&active, ACTIVE, "Ip4Config")
         .and_then(|v| v.str().map(str::to_owned))
         .filter(|p| p != "/")
-        .and_then(|config| {
-            get(
-                &config,
-                "org.freedesktop.NetworkManager.IP4Config",
-                "AddressData",
-            )
-        })
+        .and_then(|config| get(&config, "org.freedesktop.NetworkManager.IP4Config", "AddressData"))
         .and_then(|data| {
             let first = glib::VariantDict::new(Some(&data.try_child_value(0)?));
             let address = first.lookup::<String>("address").ok()??;
@@ -193,7 +190,13 @@ fn quick(conn: &gio::DBusConnection, anchor: &gtk::Widget, editor: &str) {
 
     if let Some(device) = wifi_on.then(|| wifi_device(conn)).flatten() {
         // Fresh results for the next time; this one shows what NM has.
-        call(conn, &device, WIRELESS, "RequestScan", Some((glib::VariantDict::new(None).end(),).to_variant()));
+        call(
+            conn,
+            &device,
+            WIRELESS,
+            "RequestScan",
+            Some((glib::VariantDict::new(None).end(),).to_variant()),
+        );
         let current = property(conn, NM, &device, WIRELESS, "ActiveAccessPoint")
             .and_then(|v| v.str().map(str::to_owned))
             .and_then(|ap| property(conn, NM, &ap, AP, "Ssid"))
@@ -211,7 +214,10 @@ fn quick(conn: &gio::DBusConnection, anchor: &gtk::Widget, editor: &str) {
             );
             let button = quick_button(&label, &list, {
                 let (conn, device) = (conn.clone(), device.clone());
-                let known = saved.iter().find(|s| s.ssid.as_deref() == Some(&network.ssid)).map(|s| s.path.clone());
+                let known = saved
+                    .iter()
+                    .find(|s| s.ssid.as_deref() == Some(&network.ssid))
+                    .map(|s| s.path.clone());
                 move || join(&conn, &device, &network, known.as_deref())
             });
             if current.as_deref() == Some(name.as_bytes()) {
@@ -220,7 +226,10 @@ fn quick(conn: &gio::DBusConnection, anchor: &gtk::Widget, editor: &str) {
         }
     }
 
-    let vpns: Vec<&Saved> = saved.iter().filter(|s| matches!(s.kind.as_str(), "vpn" | "wireguard")).collect();
+    let vpns: Vec<&Saved> = saved
+        .iter()
+        .filter(|s| matches!(s.kind.as_str(), "vpn" | "wireguard"))
+        .collect();
     if !vpns.is_empty() {
         quick_title(&tr("network-kind-vpn"), &list);
     }
@@ -230,8 +239,20 @@ fn quick(conn: &gio::DBusConnection, anchor: &gtk::Widget, editor: &str) {
         let (conn, path) = (conn.clone(), vpn.path.clone());
         switch.connect_state_set(move |_, want| {
             match (&on, want) {
-                (None, true) => call(&conn, ROOT, NM, "ActivateConnection", Some((op(&path), op("/"), op("/")).to_variant())),
-                (Some(active), false) => call(&conn, ROOT, NM, "DeactivateConnection", Some((op(active),).to_variant())),
+                (None, true) => call(
+                    &conn,
+                    ROOT,
+                    NM,
+                    "ActivateConnection",
+                    Some((op(&path), op("/"), op("/")).to_variant()),
+                ),
+                (Some(active), false) => call(
+                    &conn,
+                    ROOT,
+                    NM,
+                    "DeactivateConnection",
+                    Some((op(active),).to_variant()),
+                ),
                 _ => {}
             }
             glib::Propagation::Proceed
@@ -247,10 +268,22 @@ fn quick(conn: &gio::DBusConnection, anchor: &gtk::Widget, editor: &str) {
 /// asks the secret agent for the password.
 fn join(conn: &gio::DBusConnection, device: &str, network: &Network, saved: Option<&str>) {
     match saved {
-        Some(path) => call(conn, ROOT, NM, "ActivateConnection", Some((op(path), op(device), op(&network.ap)).to_variant())),
+        Some(path) => call(
+            conn,
+            ROOT,
+            NM,
+            "ActivateConnection",
+            Some((op(path), op(device), op(&network.ap)).to_variant()),
+        ),
         None => {
             let settings: HashMap<String, HashMap<String, glib::Variant>> = HashMap::new();
-            call(conn, ROOT, NM, "AddAndActivateConnection", Some((settings, op(device), op(&network.ap)).to_variant()));
+            call(
+                conn,
+                ROOT,
+                NM,
+                "AddAndActivateConnection",
+                Some((settings, op(device), op(&network.ap)).to_variant()),
+            );
         }
     }
 }
@@ -258,7 +291,17 @@ fn join(conn: &gio::DBusConnection, device: &str, network: &Network, saved: Opti
 /// The first Wi-Fi device.
 fn wifi_device(conn: &gio::DBusConnection) -> Option<String> {
     let devices = conn
-        .call_sync(Some(NM), ROOT, NM, "GetDevices", None, None, gio::DBusCallFlags::NONE, 1000, gio::Cancellable::NONE)
+        .call_sync(
+            Some(NM),
+            ROOT,
+            NM,
+            "GetDevices",
+            None,
+            None,
+            gio::DBusCallFlags::NONE,
+            1000,
+            gio::Cancellable::NONE,
+        )
         .ok()?;
     paths(Some(devices.child_value(0)))
         .into_iter()
@@ -267,7 +310,17 @@ fn wifi_device(conn: &gio::DBusConnection) -> Option<String> {
 
 /// The networks `device` sees, one per name, the strongest first.
 fn networks(conn: &gio::DBusConnection, device: &str) -> Vec<Network> {
-    let reply = conn.call_sync(Some(NM), device, WIRELESS, "GetAllAccessPoints", None, None, gio::DBusCallFlags::NONE, 1000, gio::Cancellable::NONE);
+    let reply = conn.call_sync(
+        Some(NM),
+        device,
+        WIRELESS,
+        "GetAllAccessPoints",
+        None,
+        None,
+        gio::DBusCallFlags::NONE,
+        1000,
+        gio::Cancellable::NONE,
+    );
     let mut best: HashMap<Vec<u8>, Network> = HashMap::new();
     for ap in paths(reply.ok().map(|r| r.child_value(0))) {
         let get = |name: &str| property(conn, NM, &ap, AP, name);
@@ -279,7 +332,15 @@ fn networks(conn: &gio::DBusConnection, device: &str) -> Vec<Network> {
             .iter()
             .any(|f| get(f).and_then(|v| v.get::<u32>()).unwrap_or(0) != 0);
         if best.get(&ssid).is_none_or(|n| n.strength < strength) {
-            best.insert(ssid.clone(), Network { ap, ssid, strength, secure });
+            best.insert(
+                ssid.clone(),
+                Network {
+                    ap,
+                    ssid,
+                    strength,
+                    secure,
+                },
+            );
         }
     }
     let mut networks: Vec<Network> = best.into_values().collect();
@@ -305,7 +366,17 @@ fn saved(conn: &gio::DBusConnection) -> Vec<Saved> {
         .into_iter()
         .filter_map(|path| {
             let reply = conn
-                .call_sync(Some(NM), &path, CONNECTION, "GetSettings", None, None, gio::DBusCallFlags::NONE, 1000, gio::Cancellable::NONE)
+                .call_sync(
+                    Some(NM),
+                    &path,
+                    CONNECTION,
+                    "GetSettings",
+                    None,
+                    None,
+                    gio::DBusCallFlags::NONE,
+                    1000,
+                    gio::Cancellable::NONE,
+                )
                 .ok()?;
             // a{sa{sv}}: each setting and its values.
             let groups = reply.child_value(0);
@@ -335,7 +406,8 @@ fn paths(value: Option<glib::Variant>) -> Vec<String> {
 }
 
 fn op(path: &str) -> glib::variant::ObjectPath {
-    glib::variant::ObjectPath::try_from(path.to_owned()).unwrap_or_else(|_| glib::variant::ObjectPath::try_from("/".to_owned()).expect("root path"))
+    glib::variant::ObjectPath::try_from(path.to_owned())
+        .unwrap_or_else(|_| glib::variant::ObjectPath::try_from("/".to_owned()).expect("root path"))
 }
 
 /// Calls NetworkManager without waiting; failures go to the log.
@@ -380,7 +452,10 @@ mod tests {
     fn reads_this_machine() {
         let conn = system_bus().unwrap();
         let saved = saved(&conn);
-        eprintln!("saved: {:?}", saved.iter().map(|s| (&s.id, &s.kind)).collect::<Vec<_>>());
+        eprintln!(
+            "saved: {:?}",
+            saved.iter().map(|s| (&s.id, &s.kind)).collect::<Vec<_>>()
+        );
         if let Some(device) = wifi_device(&conn) {
             for n in networks(&conn, &device) {
                 eprintln!("{} {} {}", String::from_utf8_lossy(&n.ssid), n.strength, n.secure);

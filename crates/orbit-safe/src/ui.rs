@@ -43,7 +43,12 @@ struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { lock_after_minutes: 5, clear_clipboard_seconds: 30, lock_with_session: true, generated_length: 20 }
+        Config {
+            lock_after_minutes: 5,
+            clear_clipboard_seconds: 30,
+            lock_with_session: true,
+            generated_length: 20,
+        }
     }
 }
 
@@ -95,11 +100,32 @@ pub fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::App
         .build();
 
     // Closed: the card.
-    let icon = gtk::Image::builder().icon_name("security-high-symbolic").pixel_size(50).css_classes(["icon"]).build();
-    let title = gtk::Label::builder().label(tr("safe-title")).css_classes(["title"]).build();
-    let ask = gtk::Label::builder().wrap(true).max_width_chars(36).justify(gtk::Justification::Center).css_classes(["ask"]).build();
-    let answer = gtk::Entry::builder().visibility(false).sensitive(false).css_classes(["answer"]).build();
-    let said = gtk::Label::builder().wrap(true).max_width_chars(36).justify(gtk::Justification::Center).css_classes(["said"]).build();
+    let icon = gtk::Image::builder()
+        .icon_name("security-high-symbolic")
+        .pixel_size(50)
+        .css_classes(["icon"])
+        .build();
+    let title = gtk::Label::builder()
+        .label(tr("safe-title"))
+        .css_classes(["title"])
+        .build();
+    let ask = gtk::Label::builder()
+        .wrap(true)
+        .max_width_chars(36)
+        .justify(gtk::Justification::Center)
+        .css_classes(["ask"])
+        .build();
+    let answer = gtk::Entry::builder()
+        .visibility(false)
+        .sensitive(false)
+        .css_classes(["answer"])
+        .build();
+    let said = gtk::Label::builder()
+        .wrap(true)
+        .max_width_chars(36)
+        .justify(gtk::Justification::Center)
+        .css_classes(["said"])
+        .build();
     let card = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(10)
@@ -107,37 +133,81 @@ pub fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::App
         .valign(gtk::Align::Center)
         .css_classes(["card"])
         .build();
-    for w in [icon.upcast_ref::<gtk::Widget>(), title.upcast_ref(), ask.upcast_ref(), answer.upcast_ref(), said.upcast_ref()] {
+    for w in [
+        icon.upcast_ref::<gtk::Widget>(),
+        title.upcast_ref(),
+        ask.upcast_ref(),
+        answer.upcast_ref(),
+        said.upcast_ref(),
+    ] {
         card.append(w);
     }
 
     // Open: the bar, the list and the item.
-    let passwords_tab = gtk::ToggleButton::builder().label(tr("safe-passwords")).active(true).build();
-    let codes_tab = gtk::ToggleButton::builder().label(tr("safe-codes")).group(&passwords_tab).build();
+    let passwords_tab = gtk::ToggleButton::builder()
+        .label(tr("safe-passwords"))
+        .active(true)
+        .build();
+    let codes_tab = gtk::ToggleButton::builder()
+        .label(tr("safe-codes"))
+        .group(&passwords_tab)
+        .build();
     let tabs = gtk::Box::builder().css_classes(["linked", "tabs"]).build();
     tabs.append(&passwords_tab);
     tabs.append(&codes_tab);
-    let search = gtk::SearchEntry::builder().placeholder_text(tr("safe-search")).hexpand(true).build();
-    let new = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text(tr("safe-new")).build();
-    let lock = gtk::Button::builder().icon_name("system-lock-screen-symbolic").tooltip_text(tr("safe-lock")).build();
+    let search = gtk::SearchEntry::builder()
+        .placeholder_text(tr("safe-search"))
+        .hexpand(true)
+        .build();
+    let new = gtk::Button::builder()
+        .icon_name("list-add-symbolic")
+        .tooltip_text(tr("safe-new"))
+        .build();
+    let lock = gtk::Button::builder()
+        .icon_name("system-lock-screen-symbolic")
+        .tooltip_text(tr("safe-lock"))
+        .build();
     let bar = gtk::Box::builder().spacing(10).css_classes(["bar"]).build();
-    for w in [tabs.upcast_ref::<gtk::Widget>(), search.upcast_ref(), new.upcast_ref(), lock.upcast_ref()] {
+    for w in [
+        tabs.upcast_ref::<gtk::Widget>(),
+        search.upcast_ref(),
+        new.upcast_ref(),
+        lock.upcast_ref(),
+    ] {
         bar.append(w);
     }
-    let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::Browse).css_classes(["items"]).build();
-    let scrolled = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&list).vexpand(true).build();
+    let list = gtk::ListBox::builder()
+        .selection_mode(gtk::SelectionMode::Browse)
+        .css_classes(["items"])
+        .build();
+    let scrolled = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&list)
+        .vexpand(true)
+        .build();
     scrolled.set_size_request(300, -1);
-    let details = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).hexpand(true).css_classes(["details"]).build();
+    let details = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(10)
+        .hexpand(true)
+        .css_classes(["details"])
+        .build();
     let body = gtk::Box::builder().spacing(10).vexpand(true).build();
     body.append(&scrolled);
     body.append(&details);
     let status = gtk::Label::builder().xalign(0.0).css_classes(["status"]).build();
-    let open = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).css_classes(["page"]).build();
+    let open = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(10)
+        .css_classes(["page"])
+        .build();
     open.append(&bar);
     open.append(&body);
     open.append(&status);
 
-    let stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
+    let stack = gtk::Stack::builder()
+        .transition_type(gtk::StackTransitionType::Crossfade)
+        .build();
     stack.add_named(&card, Some("closed"));
     stack.add_named(&open, Some("open"));
     window.set_child(Some(&stack));
@@ -171,7 +241,8 @@ pub fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::App
     {
         let safe = safe.clone();
         passwords_tab.connect_toggled(move |tab| {
-            safe.mode.set(if tab.is_active() { Mode::Passwords } else { Mode::Codes });
+            safe.mode
+                .set(if tab.is_active() { Mode::Passwords } else { Mode::Codes });
             safe.rebuild();
         });
     }
@@ -260,7 +331,9 @@ impl Safe {
     }
 
     fn reply(&self, entry: &gtk::Entry) {
-        let Some(answers) = self.answers.borrow().clone() else { return };
+        let Some(answers) = self.answers.borrow().clone() else {
+            return;
+        };
         let answer = Zeroizing::new(entry.text().to_string());
         entry.set_text("");
         entry.set_sensitive(false);
@@ -344,12 +417,17 @@ impl Safe {
         let items = self.items.borrow();
         let mut shown = 0;
         for item in items.iter().filter(|i| i.is_totp() == codes) {
-            let haystack = [Some(item.label.as_str()), item.username(), item.url(), Some(item.collection.as_str())]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>()
-                .join(" ")
-                .to_lowercase();
+            let haystack = [
+                Some(item.label.as_str()),
+                item.username(),
+                item.url(),
+                Some(item.collection.as_str()),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
             if !query.is_empty() && !haystack.contains(&query) {
                 continue;
             }
@@ -366,7 +444,9 @@ impl Safe {
             } else {
                 tr("safe-no-passwords")
             };
-            self.list.set_placeholder(Some(&gtk::Label::builder().label(empty).css_classes(["placeholder"]).build()));
+            self.list.set_placeholder(Some(
+                &gtk::Label::builder().label(empty).css_classes(["placeholder"]).build(),
+            ));
         }
         drop(items);
         self.tick();
@@ -388,7 +468,12 @@ impl Safe {
     }
 
     fn code_row(&self, item: &Item) -> gtk::ListBoxRow {
-        let name = gtk::Label::builder().label(&item.label).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).build();
+        let name = gtk::Label::builder()
+            .label(&item.label)
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build();
         let code = gtk::Label::builder().css_classes(["code"]).build();
         let left = gtk::Label::builder().css_classes(["meta"]).width_chars(3).build();
         let line = gtk::Box::builder().spacing(10).build();
@@ -396,7 +481,11 @@ impl Safe {
         line.append(&code);
         line.append(&left);
         if let Some(totp) = self.codes.borrow().get(&item.path) {
-            self.live.borrow_mut().push(LiveCode { totp: totp.clone(), code, left });
+            self.live.borrow_mut().push(LiveCode {
+                totp: totp.clone(),
+                code,
+                left,
+            });
         }
         gtk::ListBoxRow::builder().child(&line).build()
     }
@@ -423,7 +512,9 @@ impl Safe {
     // ------------------------------------------------------------ the item
 
     fn show(self: &Rc<Self>, path: &str) {
-        let Some(item) = self.items.borrow().iter().find(|i| i.path == path).cloned() else { return };
+        let Some(item) = self.items.borrow().iter().find(|i| i.path == path).cloned() else {
+            return;
+        };
         clear_box(&self.details);
         let form = Form::new(&self.details, item.is_totp(), item.ours());
         form.title.set_text(&item.label);
@@ -435,22 +526,49 @@ impl Safe {
             form.second.set_text(item.url().unwrap_or_default());
         }
         if !item.ours() {
-            let grid = gtk::Grid::builder().column_spacing(10).row_spacing(5).css_classes(["attributes"]).build();
+            let grid = gtk::Grid::builder()
+                .column_spacing(10)
+                .row_spacing(5)
+                .css_classes(["attributes"])
+                .build();
             for (i, (name, value)) in item.attributes.iter().enumerate() {
-                grid.attach(&gtk::Label::builder().label(name).xalign(0.0).css_classes(["meta"]).build(), 0, i as i32, 1, 1);
                 grid.attach(
-                    &gtk::Label::builder().label(value).xalign(0.0).selectable(true).wrap(true).wrap_mode(gtk::pango::WrapMode::WordChar).build(),
+                    &gtk::Label::builder()
+                        .label(name)
+                        .xalign(0.0)
+                        .css_classes(["meta"])
+                        .build(),
+                    0,
+                    i as i32,
+                    1,
+                    1,
+                );
+                grid.attach(
+                    &gtk::Label::builder()
+                        .label(value)
+                        .xalign(0.0)
+                        .selectable(true)
+                        .wrap(true)
+                        .wrap_mode(gtk::pango::WrapMode::WordChar)
+                        .build(),
                     1,
                     i as i32,
                     1,
                     1,
                 );
             }
-            let scrolled = gtk::ScrolledWindow::builder().child(&grid).vexpand(true).hscrollbar_policy(gtk::PolicyType::Never).build();
+            let scrolled = gtk::ScrolledWindow::builder()
+                .child(&grid)
+                .vexpand(true)
+                .hscrollbar_policy(gtk::PolicyType::Never)
+                .build();
             self.details.append(&scrolled);
         }
         let meta = gtk::Label::builder()
-            .label(tr_args("safe-in-collection", &[("collection", text(item.collection.clone()))]))
+            .label(tr_args(
+                "safe-in-collection",
+                &[("collection", text(item.collection.clone()))],
+            ))
             .xalign(0.0)
             .css_classes(["meta"])
             .build();
@@ -477,10 +595,27 @@ impl Safe {
         }
 
         let buttons = gtk::Box::builder().spacing(10).css_classes(["buttons"]).build();
-        let copy = gtk::Button::builder().label(tr(if item.is_totp() { "safe-copy-code" } else { "safe-copy-password" })).build();
-        let copy_user = gtk::Button::builder().label(tr("safe-copy-username")).visible(!item.is_totp() && item.username().is_some()).build();
-        let save = gtk::Button::builder().label(tr("safe-save")).css_classes(["suggested"]).build();
-        let delete = gtk::Button::builder().label(tr("safe-delete")).css_classes(["destructive"]).hexpand(true).halign(gtk::Align::End).build();
+        let copy = gtk::Button::builder()
+            .label(tr(if item.is_totp() {
+                "safe-copy-code"
+            } else {
+                "safe-copy-password"
+            }))
+            .build();
+        let copy_user = gtk::Button::builder()
+            .label(tr("safe-copy-username"))
+            .visible(!item.is_totp() && item.username().is_some())
+            .build();
+        let save = gtk::Button::builder()
+            .label(tr("safe-save"))
+            .css_classes(["suggested"])
+            .build();
+        let delete = gtk::Button::builder()
+            .label(tr("safe-delete"))
+            .css_classes(["destructive"])
+            .hexpand(true)
+            .halign(gtk::Align::End)
+            .build();
         for b in [&copy, &copy_user, &save, &delete] {
             buttons.append(b);
         }
@@ -606,7 +741,12 @@ impl Safe {
             });
             buttons.append(&generate);
         }
-        let save = gtk::Button::builder().label(tr("safe-save")).css_classes(["suggested"]).hexpand(true).halign(gtk::Align::End).build();
+        let save = gtk::Button::builder()
+            .label(tr("safe-save"))
+            .css_classes(["suggested"])
+            .hexpand(true)
+            .halign(gtk::Align::End)
+            .build();
         buttons.append(&save);
         self.details.append(&buttons);
         form.title.grab_focus();
@@ -645,7 +785,9 @@ impl Safe {
             let Ok(service) = safe.service().await else { return };
             let result = async {
                 let collection = service.default_collection().await?;
-                service.create(&collection, &label, &attributes, secret.as_bytes()).await
+                service
+                    .create(&collection, &label, &attributes, secret.as_bytes())
+                    .await
             }
             .await;
             match result {
@@ -708,7 +850,10 @@ impl Safe {
         let safe = self.clone();
         keys.connect_key_pressed(move |_, key, _, _| {
             safe.last_use.set(Instant::now());
-            if key == gdk::Key::Escape && safe.stack.visible_child_name().as_deref() == Some("open") && safe.search.text().is_empty() {
+            if key == gdk::Key::Escape
+                && safe.stack.visible_child_name().as_deref() == Some("open")
+                && safe.search.text().is_empty()
+            {
                 safe.close();
                 return glib::Propagation::Stop;
             }
@@ -728,8 +873,12 @@ impl Safe {
         }
         let (sender, locked) = async_channel::unbounded::<()>();
         let spawned = std::thread::Builder::new().name("lock".into()).spawn(move || {
-            let Ok(mut ipc) = orbit_ipc::Connection::open() else { return };
-            let Some(lock) = orbit_ipc::event_type("lock") else { return };
+            let Ok(mut ipc) = orbit_ipc::Connection::open() else {
+                return;
+            };
+            let Some(lock) = orbit_ipc::event_type("lock") else {
+                return;
+            };
             if ipc.request(orbit_ipc::SUBSCRIBE, r#"["lock"]"#).is_err() {
                 return;
             }
@@ -768,7 +917,17 @@ impl Form {
     fn new(into: &gtk::Box, codes: bool, editable: bool) -> Self {
         let grid = gtk::Grid::builder().column_spacing(10).row_spacing(10).build();
         let field = |row: i32, name: &str, entry: &gtk::Widget| {
-            grid.attach(&gtk::Label::builder().label(tr(name)).xalign(1.0).css_classes(["field"]).build(), 0, row, 1, 1);
+            grid.attach(
+                &gtk::Label::builder()
+                    .label(tr(name))
+                    .xalign(1.0)
+                    .css_classes(["field"])
+                    .build(),
+                0,
+                row,
+                1,
+                1,
+            );
             entry.set_hexpand(true);
             grid.attach(entry, 1, row, 1, 1);
         };
@@ -788,15 +947,33 @@ impl Form {
             field(3, "safe-field-password", secret.upcast_ref());
         }
         into.append(&grid);
-        Form { title, first, second, secret }
+        Form {
+            title,
+            first,
+            second,
+            secret,
+        }
     }
 }
 
 fn password_row(item: &Item) -> gtk::ListBoxRow {
-    let name = gtk::Label::builder().label(&item.label).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build();
-    let meta = [item.username(), item.url()].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+    let name = gtk::Label::builder()
+        .label(&item.label)
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .build();
+    let meta = [item.username(), item.url()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ");
     let meta = if meta.is_empty() { item.collection.clone() } else { meta };
-    let meta = gtk::Label::builder().label(meta).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["meta"]).build();
+    let meta = gtk::Label::builder()
+        .label(meta)
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .css_classes(["meta"])
+        .build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
     column.append(&name);
     column.append(&meta);
@@ -822,8 +999,15 @@ async fn load(service: &Service) -> anyhow::Result<(Vec<Item>, HashMap<String, T
             continue;
         };
         totp.digits = item.attribute(&["digits"]).and_then(|d| d.parse().ok()).unwrap_or(6);
-        totp.period = item.attribute(&["period"]).and_then(|p| p.parse().ok()).filter(|p| *p > 0).unwrap_or(30);
-        totp.algorithm = item.attribute(&["algorithm"]).and_then(totp::Algorithm::parse).unwrap_or(totp::Algorithm::Sha1);
+        totp.period = item
+            .attribute(&["period"])
+            .and_then(|p| p.parse().ok())
+            .filter(|p| *p > 0)
+            .unwrap_or(30);
+        totp.algorithm = item
+            .attribute(&["algorithm"])
+            .and_then(totp::Algorithm::parse)
+            .unwrap_or(totp::Algorithm::Sha1);
         codes.insert(item.path.clone(), totp);
     }
     Ok((items, codes))
@@ -832,12 +1016,22 @@ async fn load(service: &Service) -> anyhow::Result<(Vec<Item>, HashMap<String, T
 /// A key as typed (base32) or an `otpauth://` link.
 fn parse_key(text: &str) -> Option<Totp> {
     let text = text.trim();
-    if text.starts_with("otpauth://") { Totp::from_uri(text) } else { Totp::from_base32(text) }
+    if text.starts_with("otpauth://") {
+        Totp::from_uri(text)
+    } else {
+        Totp::from_base32(text)
+    }
 }
 
 /// A code's attributes: the link's issuer and account unless typed.
 fn totp_attributes(attributes: &mut BTreeMap<String, String>, totp: &Totp, issuer: &str, account: &str) {
-    let pick = |typed: &str, from_link: &str| if typed.trim().is_empty() { from_link.to_owned() } else { typed.trim().to_owned() };
+    let pick = |typed: &str, from_link: &str| {
+        if typed.trim().is_empty() {
+            from_link.to_owned()
+        } else {
+            typed.trim().to_owned()
+        }
+    };
     attributes.insert("xdg:schema".into(), TOTP_SCHEMA.into());
     attributes.insert("issuer".into(), pick(issuer, &totp.issuer));
     attributes.insert("account".into(), pick(account, &totp.account));
@@ -875,7 +1069,11 @@ fn generate_password(length: usize) -> String {
 /// PAM's question in the window's words, when it is the usual one.
 fn prompt_text(text: &str) -> String {
     let plain = text.trim_end_matches(':').trim();
-    if plain.eq_ignore_ascii_case("password") || plain.is_empty() { tr("safe-password") } else { plain.to_owned() }
+    if plain.eq_ignore_ascii_case("password") || plain.is_empty() {
+        tr("safe-password")
+    } else {
+        plain.to_owned()
+    }
 }
 
 /// "123456" as "123 456", as authenticator apps show it.
@@ -885,11 +1083,18 @@ fn spaced(code: &str) -> String {
 }
 
 fn unix_now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or_default()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default()
 }
 
 fn set_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
-    if on { widget.add_css_class(class) } else { widget.remove_css_class(class) }
+    if on {
+        widget.add_css_class(class)
+    } else {
+        widget.remove_css_class(class)
+    }
 }
 
 fn clear(list: &gtk::ListBox) {

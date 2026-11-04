@@ -115,7 +115,11 @@ impl<T: Copy + Default> PerHost<T> {
     pub fn get(&self, host: &str) -> T {
         match self {
             Self::All(value) => *value,
-            Self::ByHost(map) => map.get(host).or_else(|| map.get("default")).copied().unwrap_or_default(),
+            Self::ByHost(map) => map
+                .get(host)
+                .or_else(|| map.get("default"))
+                .copied()
+                .unwrap_or_default(),
         }
     }
 }
@@ -134,8 +138,14 @@ pub enum Effects {
 /// Whether the machine runs on mains power: a mains supply online, or none
 /// at all (a desktop). Read from `power`, `/sys/class/power_supply`.
 pub fn on_mains(power: &std::path::Path) -> bool {
-    let Ok(supplies) = std::fs::read_dir(power) else { return true };
-    let read = |dir: &std::path::Path, name: &str| std::fs::read_to_string(dir.join(name)).map(|s| s.trim().to_owned()).unwrap_or_default();
+    let Ok(supplies) = std::fs::read_dir(power) else {
+        return true;
+    };
+    let read = |dir: &std::path::Path, name: &str| {
+        std::fs::read_to_string(dir.join(name))
+            .map(|s| s.trim().to_owned())
+            .unwrap_or_default()
+    };
     let mains: Vec<bool> = supplies
         .flatten()
         .map(|e| e.path())
@@ -147,7 +157,9 @@ pub fn on_mains(power: &std::path::Path) -> bool {
 
 /// This machine's name.
 pub fn hostname() -> String {
-    std::fs::read_to_string("/proc/sys/kernel/hostname").map(|s| s.trim().to_owned()).unwrap_or_default()
+    std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .map(|s| s.trim().to_owned())
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -297,7 +309,9 @@ impl Keyboard {
     /// first layout of a list ("br,us") is kept, with its variant.
     fn apply_system(&mut self, text: &str) {
         for line in text.lines() {
-            let Some((key, value)) = line.trim().split_once('=') else { continue };
+            let Some((key, value)) = line.trim().split_once('=') else {
+                continue;
+            };
             let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
             let first = value.split(',').next().unwrap_or_default().to_string();
             match key.trim() {
@@ -336,7 +350,9 @@ impl Config {
     /// The monitors of `host`: `host/CONNECTOR` entries become `CONNECTOR`,
     /// over a plain one of that name; other hosts' go.
     fn for_host(mut self, host: &str) -> Self {
-        let (mine, plain): (Vec<_>, Vec<_>) = std::mem::take(&mut self.outputs).into_iter().partition(|(name, _)| name.contains('/'));
+        let (mine, plain): (Vec<_>, Vec<_>) = std::mem::take(&mut self.outputs)
+            .into_iter()
+            .partition(|(name, _)| name.contains('/'));
         self.outputs = plain.into_iter().collect();
         for (name, output) in mine {
             if let Some((for_host, connector)) = name.split_once('/')
@@ -400,7 +416,11 @@ pub fn place(name: &str, at: (i32, i32)) {
 /// "#4682b4" → [r, g, b, 1.0]; a grey for anything else.
 pub fn color(text: &str) -> [f32; 4] {
     let hex = text.trim().trim_start_matches('#');
-    let channel = |i: usize| hex.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()).map(|v| v as f32 / 255.0);
+    let channel = |i: usize| {
+        hex.get(i..i + 2)
+            .and_then(|h| u8::from_str_radix(h, 16).ok())
+            .map(|v| v as f32 / 255.0)
+    };
     match (hex.len(), channel(0), channel(2), channel(4)) {
         (6, Some(r), Some(g), Some(b)) => [r, g, b, 1.0],
         _ => [0.3, 0.34, 0.42, 1.0],
@@ -455,12 +475,25 @@ mod tests {
 
     #[test]
     fn keyboard_from_the_system_file() {
-        let mut k = Keyboard { layout: "us".into(), variant: String::new(), model: "pc105".into(), options: String::new(), repeat_delay: 200, repeat_rate: 25 };
+        let mut k = Keyboard {
+            layout: "us".into(),
+            variant: String::new(),
+            model: "pc105".into(),
+            options: String::new(),
+            repeat_delay: 200,
+            repeat_rate: 25,
+        };
         k.apply_system("# KEYBOARD CONFIGURATION FILE\nXKBMODEL=\"abnt2\"\nXKBLAYOUT=\"br,us\"\nXKBVARIANT=\",alt-intl\"\nXKBOPTIONS=\"grp:alt_shift_toggle\"\nBACKSPACE=\"guess\"\n");
-        assert_eq!((k.layout.as_str(), k.variant.as_str(), k.model.as_str()), ("br", "", "abnt2"));
+        assert_eq!(
+            (k.layout.as_str(), k.variant.as_str(), k.model.as_str()),
+            ("br", "", "abnt2")
+        );
         assert_eq!(k.options, "grp:alt_shift_toggle");
         k.apply_system("XKBLAYOUT=us\nXKBVARIANT=alt-intl\nXKBMODEL=\n");
-        assert_eq!((k.layout.as_str(), k.variant.as_str(), k.model.as_str()), ("us", "alt-intl", "abnt2"));
+        assert_eq!(
+            (k.layout.as_str(), k.variant.as_str(), k.model.as_str()),
+            ("us", "alt-intl", "abnt2")
+        );
     }
 
     #[test]
@@ -478,10 +511,19 @@ mod tests {
         assert_eq!(parse_mode("3840x2160"), Some((3840, 2160, None)));
         assert_eq!(parse_mode("big"), None);
         let config: Config = serde_yaml_ng::from_str("outputs: { DP-2: { transform: 90 } }").unwrap();
-        assert_eq!(config.outputs["DP-2"].transform.as_deref().and_then(parse_transform), Some(smithay::utils::Transform::_90));
-        assert_eq!(parse_transform("flipped-270"), Some(smithay::utils::Transform::Flipped270));
+        assert_eq!(
+            config.outputs["DP-2"].transform.as_deref().and_then(parse_transform),
+            Some(smithay::utils::Transform::_90)
+        );
+        assert_eq!(
+            parse_transform("flipped-270"),
+            Some(smithay::utils::Transform::Flipped270)
+        );
         assert_eq!(parse_transform("sideways"), None);
-        assert_eq!(parse_transform(transform_name(smithay::utils::Transform::Flipped90)), Some(smithay::utils::Transform::Flipped90));
+        assert_eq!(
+            parse_transform(transform_name(smithay::utils::Transform::Flipped90)),
+            Some(smithay::utils::Transform::Flipped90)
+        );
     }
 
     #[test]

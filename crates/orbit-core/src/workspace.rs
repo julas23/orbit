@@ -32,7 +32,13 @@ pub struct Workspace {
 
 impl Workspace {
     pub fn new(num: i32, output: String, layout: crate::tile::Layout) -> Self {
-        Self { num, output, windows: Vec::new(), last_focus: None, layout }
+        Self {
+            num,
+            output,
+            windows: Vec::new(),
+            last_focus: None,
+            layout,
+        }
     }
 }
 
@@ -56,7 +62,19 @@ pub struct Info {
 
 /// The window's info; given on the first call.
 pub fn info(window: &Window) -> &RefCell<Info> {
-    window.user_data().insert_if_missing(|| RefCell::new(Info { id: 0, rect: (0, 0, 0, 0), fullscreen: false, maximized: false, floating: false, float_at: None, float_size: None, snap: None, weight: 1.0 }));
+    window.user_data().insert_if_missing(|| {
+        RefCell::new(Info {
+            id: 0,
+            rect: (0, 0, 0, 0),
+            fullscreen: false,
+            maximized: false,
+            floating: false,
+            float_at: None,
+            float_size: None,
+            snap: None,
+            weight: 1.0,
+        })
+    });
     window.user_data().get::<RefCell<Info>>().expect("just inserted")
 }
 
@@ -79,7 +97,11 @@ impl Orbit {
 
     /// The windows of workspace `num`, in order.
     pub fn windows_of(&self, num: i32) -> Vec<Window> {
-        self.workspaces.iter().find(|w| w.num == num).map(|w| w.windows.clone()).unwrap_or_default()
+        self.workspaces
+            .iter()
+            .find(|w| w.num == num)
+            .map(|w| w.windows.clone())
+            .unwrap_or_default()
     }
 
     /// Every window, on any workspace or in the scratchpad.
@@ -100,7 +122,12 @@ impl Orbit {
     /// The monitor of the focused workspace.
     pub fn focused_output_name(&self) -> String {
         self.ws_output(self.current)
-            .or_else(|| self.visible.iter().find(|(_, n)| **n == self.current).map(|(o, _)| o.clone()))
+            .or_else(|| {
+                self.visible
+                    .iter()
+                    .find(|(_, n)| **n == self.current)
+                    .map(|(o, _)| o.clone())
+            })
             .or_else(|| self.space.outputs().next().map(|o| o.name()))
             .unwrap_or_default()
     }
@@ -123,7 +150,11 @@ impl Orbit {
     /// larger one stands, unless its monitor is missing.
     pub fn resolve_on(&self, num: i32, monitor: usize) -> i32 {
         let (area, on) = self.area_of(num);
-        if num <= self.config.stride.max(1) || on >= self.monitors().len() { self.ws_number(area, monitor) } else { num }
+        if num <= self.config.stride.max(1) || on >= self.monitors().len() {
+            self.ws_number(area, monitor)
+        } else {
+            num
+        }
     }
 
     /// `resolve_on` the focused monitor.
@@ -148,16 +179,28 @@ impl Orbit {
         if let Some(i) = self.workspaces.iter().position(|w| w.num == num) {
             return i;
         }
-        let output = self.monitors().get(self.area_of(num).1).cloned().unwrap_or_else(|| self.focused_output_name());
-        let i = self.workspaces.iter().position(|w| w.num > num).unwrap_or(self.workspaces.len());
-        self.workspaces.insert(i, Workspace::new(num, output, self.config.layout));
+        let output = self
+            .monitors()
+            .get(self.area_of(num).1)
+            .cloned()
+            .unwrap_or_else(|| self.focused_output_name());
+        let i = self
+            .workspaces
+            .iter()
+            .position(|w| w.num > num)
+            .unwrap_or(self.workspaces.len());
+        self.workspaces
+            .insert(i, Workspace::new(num, output, self.config.layout));
         self.workspace_event("init", num, None);
         i
     }
 
     /// The workspace a window is on; `None` in the scratchpad.
     pub fn workspace_of(&self, window: &Window) -> Option<i32> {
-        self.workspaces.iter().find(|w| w.windows.contains(window)).map(|w| w.num)
+        self.workspaces
+            .iter()
+            .find(|w| w.windows.contains(window))
+            .map(|w| w.num)
     }
 
     /// Puts workspace `num` on monitor `output` in place of the one it
@@ -217,7 +260,11 @@ impl Orbit {
         self.current = num;
         let i = self.ensure_ws(num);
         let ws = &self.workspaces[i];
-        let focus = ws.last_focus.clone().filter(|w| ws.windows.contains(w)).or_else(|| ws.windows.last().cloned());
+        let focus = ws
+            .last_focus
+            .clone()
+            .filter(|w| ws.windows.contains(w))
+            .or_else(|| ws.windows.last().cloned());
         self.arrange();
         self.focus_window(focus);
         self.workspace_event("focus", num, Some(old));
@@ -255,7 +302,12 @@ impl Orbit {
             let k = monitors.iter().position(|o| *o == ws.output).unwrap_or(0);
             (state.ws_number(state.area_of(ws.num).0, k), monitors[k].clone())
         };
-        let current = self.workspaces.iter().find(|w| w.num == self.current).map(|w| wanted(self, w).0).unwrap_or(self.current);
+        let current = self
+            .workspaces
+            .iter()
+            .find(|w| w.num == self.current)
+            .map(|w| wanted(self, w).0)
+            .unwrap_or(self.current);
         let before: Vec<i32> = self.workspaces.iter().map(|w| w.num).collect();
         let mut merged: Vec<Workspace> = Vec::new();
         for ws in std::mem::take(&mut self.workspaces) {
@@ -270,10 +322,21 @@ impl Orbit {
         }
         merged.sort_by_key(|w| w.num);
         self.workspaces = merged;
-        for num in before.iter().copied().filter(|n| !self.workspaces.iter().any(|w| w.num == *n)).collect::<Vec<_>>() {
+        for num in before
+            .iter()
+            .copied()
+            .filter(|n| !self.workspaces.iter().any(|w| w.num == *n))
+            .collect::<Vec<_>>()
+        {
             self.workspace_event("empty", num, None);
         }
-        for num in self.workspaces.iter().map(|w| w.num).filter(|n| !before.contains(n)).collect::<Vec<_>>() {
+        for num in self
+            .workspaces
+            .iter()
+            .map(|w| w.num)
+            .filter(|n| !before.contains(n))
+            .collect::<Vec<_>>()
+        {
             self.workspace_event("init", num, None);
         }
         self.current = current;
@@ -326,9 +389,15 @@ impl Orbit {
     /// Swaps two windows' places, on one workspace or across two.
     pub fn swap_windows(&mut self, a: &Window, b: &Window) {
         let place = |state: &Self, w: &Window| {
-            state.workspaces.iter().enumerate().find_map(|(i, ws)| ws.windows.iter().position(|x| x == w).map(|j| (i, j)))
+            state
+                .workspaces
+                .iter()
+                .enumerate()
+                .find_map(|(i, ws)| ws.windows.iter().position(|x| x == w).map(|j| (i, j)))
         };
-        let (Some((ia, ja)), Some((ib, jb))) = (place(self, a), place(self, b)) else { return };
+        let (Some((ia, ja)), Some((ib, jb))) = (place(self, a), place(self, b)) else {
+            return;
+        };
         self.workspaces[ia].windows[ja] = b.clone();
         self.workspaces[ib].windows[jb] = a.clone();
         self.arrange();

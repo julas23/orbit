@@ -73,7 +73,9 @@ pub fn near(text: &str, words: &[String]) -> bool {
 /// `split`, `slack` letters more lenient.
 fn find(text: &str, words: &[String], slack: usize) -> Option<(usize, String)> {
     let spoken: Vec<&str> = text.split_whitespace().collect();
-    let skip = spoken.first().is_some_and(|first| GREETINGS.contains(&fold(first).as_str()));
+    let skip = spoken
+        .first()
+        .is_some_and(|first| GREETINGS.contains(&fold(first).as_str()));
     let spoken = &spoken[usize::from(skip)..];
     for wake in words {
         let wake: Vec<char> = fold(wake).chars().collect();
@@ -114,10 +116,16 @@ mod tests {
     fn heard_spellings_wake_it() {
         for (text, rest) in [
             ("Jarvis, abra o terminal.", "abra o terminal."),
-            ("Javis, abra o terminal e me diga quanto espaço livre tem no disco.", "abra o terminal e me diga quanto espaço livre tem no disco."),
+            (
+                "Javis, abra o terminal e me diga quanto espaço livre tem no disco.",
+                "abra o terminal e me diga quanto espaço livre tem no disco.",
+            ),
             ("Já viz, abro terminal.", "abro terminal."),
             ("Jávis. Abro terminal.", "Abro terminal."),
-            ("Orbit, list the files in my home folder.", "list the files in my home folder."),
+            (
+                "Orbit, list the files in my home folder.",
+                "list the files in my home folder.",
+            ),
             ("Órbita, que horas são?", "que horas são?"),
             ("Hey Jarvis!", ""),
             ("Jarvis.", ""),
@@ -135,7 +143,10 @@ mod tests {
 
     #[test]
     fn says_how_many_words_the_name_took() {
-        assert_eq!(split_at("Hey Jarvis, que horas são?", &words()), Some((2, "que horas são?".into())));
+        assert_eq!(
+            split_at("Hey Jarvis, que horas são?", &words()),
+            Some((2, "que horas são?".into()))
+        );
         assert_eq!(split_at("Já viz, abro", &words()), Some((2, "abro".into())));
     }
 

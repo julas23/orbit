@@ -146,16 +146,11 @@ pub fn choose(config: Rc<SessionConfig>) {
             class: action.class(),
         })
         .collect();
-    confirm::choose(
-        &tr("session-choose"),
-        &choices,
-        &tr("session-cancel"),
-        move |choice| {
-            if let Some(i) = choice {
-                prepare(Action::ALL[i], config);
-            }
-        },
-    );
+    confirm::choose(&tr("session-choose"), &choices, &tr("session-cancel"), move |choice| {
+        if let Some(i) = choice {
+            prepare(Action::ALL[i], config);
+        }
+    });
 }
 
 /// "desligar" → "Desligar": the tooltips are lower case.
@@ -216,10 +211,7 @@ fn prepare(action: Action, config: Rc<SessionConfig>) {
 }
 
 fn ask_anyway(action: Action, config: Rc<SessionConfig>, before: &Before) {
-    let text = before
-        .failed
-        .clone()
-        .unwrap_or_else(|| tr("session-before-failed"));
+    let text = before.failed.clone().unwrap_or_else(|| tr("session-before-failed"));
     let (yes, no) = (tr("session-leave-anyway"), tr("session-cancel"));
     confirm::ask(
         Question {

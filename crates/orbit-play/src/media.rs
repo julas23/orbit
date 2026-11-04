@@ -60,9 +60,7 @@ pub fn folder(dir: &Path, keep: &Path) -> Vec<PathBuf> {
                 .map(|e| e.path())
                 .filter(|p| {
                     p == keep
-                        || (!p
-                            .file_name()
-                            .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                        || (!p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
                             && kind_of(p).is_some()
                             && p.is_file())
                 })
@@ -92,8 +90,14 @@ pub fn subtitle_for(video: &Path) -> Option<PathBuf> {
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| {
-            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let ext = p
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
             name.starts_with(&format!("{stem}.")) && SUBTITLES.contains(&ext.as_str())
         })
         .collect();

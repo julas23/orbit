@@ -208,7 +208,13 @@ fn list_gio(dir: &gio::File, tx: &async_channel::Sender<Listing>) -> Result<(), 
                 .content_type()
                 .and_then(|c| gio::content_type_get_mime_type(&c))
                 .map(|m| m.to_string())
-                .unwrap_or_else(|| if dir_ { "inode/directory".into() } else { "application/octet-stream".into() }),
+                .unwrap_or_else(|| {
+                    if dir_ {
+                        "inode/directory".into()
+                    } else {
+                        "application/octet-stream".into()
+                    }
+                }),
             mode: info.attribute_uint32("unix::mode"),
             uid: info.attribute_uint32("unix::uid"),
             gid: info.attribute_uint32("unix::gid"),
@@ -344,7 +350,12 @@ fn walk(
 ) {
     use std::sync::atomic::Ordering;
     // Not the kernel's own trees.
-    let skip = [Path::new("/proc"), Path::new("/sys"), Path::new("/dev"), Path::new("/run")];
+    let skip = [
+        Path::new("/proc"),
+        Path::new("/sys"),
+        Path::new("/dev"),
+        Path::new("/run"),
+    ];
     let mut dirs = vec![root.to_path_buf()];
     let mut batch = Vec::new();
     let mut found = 0;
@@ -394,7 +405,10 @@ fn walk(
 /// Whether the text of `path` holds `wanted` (lowercase), any case. Only
 /// text files, by their name's type, and not huge ones.
 fn holds(path: &Path, wanted: &str) -> bool {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     if !crate::actions::is_text(&mime_of(&name), &name) {
         return false;
     }

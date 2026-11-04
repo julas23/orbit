@@ -27,15 +27,24 @@ fn file(data: &Path) -> PathBuf {
 }
 
 pub fn load(data: &Path) -> Vec<Trusted> {
-    std::fs::read_to_string(file(data)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    std::fs::read_to_string(file(data))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
 }
 
 /// Keeps `certificate` as trusted for `host`, in place of any it had.
 pub fn add(data: &Path, host: &str, certificate: &gio::TlsCertificate) {
-    let Some(pem) = certificate.certificate_pem() else { return };
+    let Some(pem) = certificate.certificate_pem() else {
+        return;
+    };
     let mut all = load(data);
     all.retain(|t| t.host != host);
-    all.push(Trusted { host: host.to_owned(), pem: pem.to_string(), sha256: fingerprint(certificate) });
+    all.push(Trusted {
+        host: host.to_owned(),
+        pem: pem.to_string(),
+        sha256: fingerprint(certificate),
+    });
     if let Err(err) = write_private(&file(data), &all) {
         log::warn!("trusted certificates: {err}");
     }
@@ -59,9 +68,17 @@ pub fn apply(data: &Path, session: &webkit6::NetworkSession) {
 
 /// "AB:CD:…" — SHA-256 of the certificate's DER.
 pub fn fingerprint(certificate: &gio::TlsCertificate) -> String {
-    let Some(der) = certificate.certificate() else { return String::new() };
-    let hex = glib::compute_checksum_for_data(glib::ChecksumType::Sha256, &der).map(|s| s.to_uppercase()).unwrap_or_default();
-    hex.as_bytes().chunks(2).map(|c| String::from_utf8_lossy(c).into_owned()).collect::<Vec<_>>().join(":")
+    let Some(der) = certificate.certificate() else {
+        return String::new();
+    };
+    let hex = glib::compute_checksum_for_data(glib::ChecksumType::Sha256, &der)
+        .map(|s| s.to_uppercase())
+        .unwrap_or_default();
+    hex.as_bytes()
+        .chunks(2)
+        .map(|c| String::from_utf8_lossy(c).into_owned())
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 fn write_private(file: &Path, all: &[Trusted]) -> std::io::Result<()> {
@@ -71,7 +88,12 @@ fn write_private(file: &Path, all: &[Trusted]) -> std::io::Result<()> {
     }
     let text = serde_json::to_string_pretty(all).map_err(std::io::Error::other)?;
     let tmp = file.with_extension("json.tmp");
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)?;
     f.write_all(text.as_bytes())?;
     std::fs::rename(&tmp, file)
 }

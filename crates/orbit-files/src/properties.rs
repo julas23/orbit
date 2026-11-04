@@ -28,8 +28,15 @@ pub fn show(parent: &gtk::Window, entries: Vec<Entry>) {
     if entries.is_empty() {
         return;
     }
-    let grid = gtk::Grid::builder().column_spacing(15).row_spacing(6).css_classes(["properties"]).build();
-    let rows = Rc::new(Rows { grid: grid.clone(), next: std::cell::Cell::new(0) });
+    let grid = gtk::Grid::builder()
+        .column_spacing(15)
+        .row_spacing(6)
+        .css_classes(["properties"])
+        .build();
+    let rows = Rc::new(Rows {
+        grid: grid.clone(),
+        next: std::cell::Cell::new(0),
+    });
 
     let head = gtk::Box::builder().spacing(12).css_classes(["properties-head"]).build();
     let name = gtk::Label::builder()
@@ -46,7 +53,12 @@ pub fn show(parent: &gtk::Window, entries: Vec<Entry>) {
         head.append(&gtk::Image::builder().gicon(&entry::icon(e)).pixel_size(48).build());
         name.set_label(&e.name);
     } else {
-        head.append(&gtk::Image::builder().icon_name("edit-select-all-symbolic").pixel_size(48).build());
+        head.append(
+            &gtk::Image::builder()
+                .icon_name("edit-select-all-symbolic")
+                .pixel_size(48)
+                .build(),
+        );
         name.set_label(&tr_args("files-prop-items", &[("n", number(entries.len() as f64))]));
     }
     head.append(&name);
@@ -62,7 +74,10 @@ pub fn show(parent: &gtk::Window, entries: Vec<Entry>) {
     // Size: a file's at once; folders added up on a thread.
     let size = value("");
     rows.add(&tr("files-prop-size"), &size);
-    let paths: Vec<PathBuf> = entries.iter().filter_map(|e| e.location.path().map(PathBuf::from)).collect();
+    let paths: Vec<PathBuf> = entries
+        .iter()
+        .filter_map(|e| e.location.path().map(PathBuf::from))
+        .collect();
     let stop = Arc::new(AtomicBool::new(false));
     if single && !entries[0].dir {
         size.set_label(&bytes_text(entries[0].size));
@@ -70,7 +85,10 @@ pub fn show(parent: &gtk::Window, entries: Vec<Entry>) {
         count(paths, size, stop.clone());
     }
 
-    let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(15).build();
+    let body = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(15)
+        .build();
     body.append(&head);
     body.append(&grid);
     let window = gtk::Window::builder()
@@ -105,7 +123,11 @@ pub fn show(parent: &gtk::Window, entries: Vec<Entry>) {
         glib::spawn_future_local(async move {
             let file = e.location.file();
             let Ok(info) = file
-                .query_info_future(ATTRIBUTES, gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS, glib::Priority::DEFAULT)
+                .query_info_future(
+                    ATTRIBUTES,
+                    gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                    glib::Priority::DEFAULT,
+                )
                 .await
             else {
                 return;
@@ -113,9 +135,14 @@ pub fn show(parent: &gtk::Window, entries: Vec<Entry>) {
             details(&rows, &e, &info);
         });
     } else {
-        let kinds: std::collections::BTreeSet<String> =
-            entries.iter().map(|e| gio::content_type_get_description(&e.mime).to_string()).collect();
-        rows.add(&tr("files-prop-kind"), &value(&kinds.into_iter().collect::<Vec<_>>().join(", ")));
+        let kinds: std::collections::BTreeSet<String> = entries
+            .iter()
+            .map(|e| gio::content_type_get_description(&e.mime).to_string())
+            .collect();
+        rows.add(
+            &tr("files-prop-kind"),
+            &value(&kinds.into_iter().collect::<Vec<_>>().join(", ")),
+        );
     }
 }
 
@@ -129,7 +156,12 @@ impl Rows {
     fn add(&self, key: &str, value: &impl IsA<gtk::Widget>) {
         let row = self.next.get();
         self.next.set(row + 1);
-        let key = gtk::Label::builder().label(key).xalign(1.0).yalign(0.0).css_classes(["dim"]).build();
+        let key = gtk::Label::builder()
+            .label(key)
+            .xalign(1.0)
+            .yalign(0.0)
+            .css_classes(["dim"])
+            .build();
         self.grid.attach(&key, 0, row, 1, 1);
         self.grid.attach(value, 1, row, 1, 1);
     }
@@ -154,7 +186,11 @@ fn bytes_text(bytes: u64) -> String {
 }
 
 fn details(rows: &Rows, e: &Entry, info: &gio::FileInfo) {
-    let mime = if e.dir { "inode/directory".to_owned() } else { e.mime.clone() };
+    let mime = if e.dir {
+        "inode/directory".to_owned()
+    } else {
+        e.mime.clone()
+    };
     rows.add(
         &tr("files-prop-kind"),
         &value(&format!("{} ({mime})", gio::content_type_get_description(&mime))),
@@ -173,8 +209,14 @@ fn details(rows: &Rows, e: &Entry, info: &gio::FileInfo) {
         }
     }
     if info.has_attribute("owner::user") {
-        let user = info.attribute_string("owner::user").map(|s| s.to_string()).unwrap_or_default();
-        let group = info.attribute_string("owner::group").map(|s| s.to_string()).unwrap_or_default();
+        let user = info
+            .attribute_string("owner::user")
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        let group = info
+            .attribute_string("owner::group")
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         rows.add(&tr("files-prop-owner"), &value(&format!("{user} : {group}")));
     }
     if info.has_attribute("unix::mode")
@@ -191,13 +233,35 @@ fn details(rows: &Rows, e: &Entry, info: &gio::FileInfo) {
 /// owner's alone can).
 fn permissions(path: &Path, mode: u32, editable: bool) -> gtk::Box {
     let grid = gtk::Grid::builder().column_spacing(10).row_spacing(2).build();
-    for (col, key) in ["files-prop-read", "files-prop-write", "files-prop-execute"].into_iter().enumerate() {
-        grid.attach(&gtk::Label::builder().label(tr(key)).css_classes(["dim"]).build(), col as i32 + 1, 0, 1, 1);
+    for (col, key) in ["files-prop-read", "files-prop-write", "files-prop-execute"]
+        .into_iter()
+        .enumerate()
+    {
+        grid.attach(
+            &gtk::Label::builder().label(tr(key)).css_classes(["dim"]).build(),
+            col as i32 + 1,
+            0,
+            1,
+            1,
+        );
     }
-    let octal = gtk::Label::builder().label(format!("{mode:04o}")).xalign(0.0).css_classes(["dim"]).build();
+    let octal = gtk::Label::builder()
+        .label(format!("{mode:04o}"))
+        .xalign(0.0)
+        .css_classes(["dim"])
+        .build();
     let current = Rc::new(std::cell::Cell::new(mode));
-    for (row, key) in ["files-prop-user", "files-prop-group", "files-prop-others"].into_iter().enumerate() {
-        grid.attach(&gtk::Label::builder().label(tr(key)).xalign(0.0).build(), 0, row as i32 + 1, 1, 1);
+    for (row, key) in ["files-prop-user", "files-prop-group", "files-prop-others"]
+        .into_iter()
+        .enumerate()
+    {
+        grid.attach(
+            &gtk::Label::builder().label(tr(key)).xalign(0.0).build(),
+            0,
+            row as i32 + 1,
+            1,
+            1,
+        );
         for col in 0..3 {
             let bit = 1u32 << ((2 - row) * 3 + (2 - col));
             let check = gtk::CheckButton::builder()
@@ -207,7 +271,11 @@ fn permissions(path: &Path, mode: u32, editable: bool) -> gtk::Box {
                 .build();
             let (path, current, octal) = (path.to_path_buf(), current.clone(), octal.clone());
             check.connect_toggled(move |c| {
-                let mode = if c.is_active() { current.get() | bit } else { current.get() & !bit };
+                let mode = if c.is_active() {
+                    current.get() | bit
+                } else {
+                    current.get() & !bit
+                };
                 current.set(mode);
                 octal.set_label(&format!("{mode:04o}"));
                 let path = path.clone();
@@ -221,7 +289,10 @@ fn permissions(path: &Path, mode: u32, editable: bool) -> gtk::Box {
             grid.attach(&check, col as i32 + 1, row as i32 + 1, 1, 1);
         }
     }
-    let b = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).build();
+    let b = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .build();
     b.append(&grid);
     b.append(&octal);
     b
@@ -244,7 +315,9 @@ fn count(paths: Vec<PathBuf>, label: gtk::Label, stop: Arc<AtomicBool>) {
             // A folder asked about is not one of its items: what is in it is.
             for p in &paths {
                 match std::fs::read_dir(p).ok().filter(|_| !p.is_symlink()) {
-                    Some(dir) => dir.filter_map(Result::ok).for_each(|e| walk(&e.path(), &mut state, &tx, &stop)),
+                    Some(dir) => dir
+                        .filter_map(Result::ok)
+                        .for_each(|e| walk(&e.path(), &mut state, &tx, &stop)),
                     None => walk(p, &mut state, &tx, &stop),
                 }
             }
@@ -254,7 +327,14 @@ fn count(paths: Vec<PathBuf>, label: gtk::Label, stop: Arc<AtomicBool>) {
     glib::spawn_future_local(async move {
         while let Ok((items, bytes, done)) = rx.recv().await {
             let args = [("n", number(items as f64)), ("size", text(entry::size_text(bytes)))];
-            label.set_label(&tr_args(if done { "files-prop-contents" } else { "files-prop-counting" }, &args));
+            label.set_label(&tr_args(
+                if done {
+                    "files-prop-contents"
+                } else {
+                    "files-prop-counting"
+                },
+                &args,
+            ));
         }
     });
 }

@@ -65,11 +65,7 @@ pub fn new(config: &TrayConfig, vertical: bool) -> gtk::Widget {
         .valign(gtk::Align::Center)
         .build();
     let card = gtk::Box::builder()
-        .css_classes(if vertical {
-            vec!["card", "tray"]
-        } else {
-            vec!["tray"]
-        })
+        .css_classes(if vertical { vec!["card", "tray"] } else { vec!["tray"] })
         .build();
     flow.set_hexpand(true);
     card.append(&flow);
@@ -110,9 +106,7 @@ impl Module {
         }
         let conn = self.conn.clone();
         let (bus, path) = sni::split(item);
-        let image = gtk::Image::builder()
-            .pixel_size(self.config.icon_size)
-            .build();
+        let image = gtk::Image::builder().pixel_size(self.config.icon_size).build();
         let button = gtk::Button::builder()
             .child(&image)
             .css_classes(["tray-item"])
@@ -292,9 +286,7 @@ impl Module {
         let middle = gtk::GestureClick::builder().button(2).build();
         {
             let call = call.clone();
-            middle.connect_released(move |_, _, _, _| {
-                call("SecondaryActivate", (0i32, 0i32).to_variant())
-            });
+            middle.connect_released(move |_, _, _, _| call("SecondaryActivate", (0i32, 0i32).to_variant()));
         }
         let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         wheel.connect_scroll(move |_, _, dy| {
@@ -320,9 +312,7 @@ fn set_icon(image: &gtk::Image, name: &str, pixmaps: &[(i32, i32, Vec<u8>)], siz
         image.set_icon_name(Some(name));
         return;
     }
-    let best = pixmaps
-        .iter()
-        .min_by_key(|(w, _, _)| ((w - size).abs(), -w));
+    let best = pixmaps.iter().min_by_key(|(w, _, _)| ((w - size).abs(), -w));
     if let Some((w, h, bytes)) = best {
         let texture = gdk::MemoryTexture::new(
             *w,

@@ -89,7 +89,12 @@ impl Action {
 
 /// The row of buttons; `pressed` gets the action of the one clicked.
 pub fn new(pressed: impl Fn(Action) + Clone + 'static) -> gtk::Widget {
-    let row = gtk::Box::builder().spacing(20).css_classes(["power"]).halign(gtk::Align::Center).valign(gtk::Align::End).build();
+    let row = gtk::Box::builder()
+        .spacing(20)
+        .css_classes(["power"])
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::End)
+        .build();
     for action in Action::ALL {
         let button = gtk::Button::builder()
             .label(action.glyph())

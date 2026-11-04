@@ -127,7 +127,12 @@ fn write_private(file: &Path, cookies: &[SessionCookie]) -> std::io::Result<()> 
     use std::{io::Write, os::unix::fs::OpenOptionsExt};
     let text = serde_json::to_string(cookies).map_err(std::io::Error::other)?;
     let tmp = file.with_extension("json.tmp");
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)?;
     f.write_all(text.as_bytes())?;
     f.sync_all()?;
     std::fs::rename(&tmp, file)

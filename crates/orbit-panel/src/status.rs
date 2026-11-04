@@ -59,12 +59,7 @@ impl Row {
                 .ellipsize(gtk::pango::EllipsizeMode::End)
                 .build()
         };
-        let lines = vec![
-            line("first"),
-            line("second"),
-            line("second"),
-            line("second"),
-        ];
+        let lines = vec![line("first"), line("second"), line("second"), line("second")];
         let root = gtk::Box::builder()
             .spacing(5)
             .css_classes(if form.vertical() {
@@ -267,15 +262,8 @@ pub(crate) fn quick_list(class: &str) -> gtk::Box {
 /// A line of `list`: `label` on the left, a switch on the right.
 pub(crate) fn switch_row(label: &str, on: bool, list: &gtk::Box) -> gtk::Switch {
     let line = gtk::Box::builder().spacing(10).build();
-    let name = gtk::Label::builder()
-        .label(label)
-        .xalign(0.0)
-        .hexpand(true)
-        .build();
-    let switch = gtk::Switch::builder()
-        .active(on)
-        .valign(gtk::Align::Center)
-        .build();
+    let name = gtk::Label::builder().label(label).xalign(0.0).hexpand(true).build();
+    let switch = gtk::Switch::builder().active(on).valign(gtk::Align::Center).build();
     line.append(&name);
     line.append(&switch);
     list.append(&line);
@@ -378,16 +366,11 @@ fn show_keyboard(row: &Row, layouts: &RefCell<Layouts>) {
         .and_then(|mut c| c.query(sway::GET_INPUTS))
         .unwrap_or_default();
     // The first real keyboard: the one with a list of layouts.
-    let keyboard = inputs.iter().find(|i| {
-        i["type"] == "keyboard"
-            && i["xkb_layout_names"]
-                .as_array()
-                .is_some_and(|l| !l.is_empty())
-    });
+    let keyboard = inputs
+        .iter()
+        .find(|i| i["type"] == "keyboard" && i["xkb_layout_names"].as_array().is_some_and(|l| !l.is_empty()));
     let Some(keyboard) = keyboard else { return };
-    let name = keyboard["xkb_active_layout_name"]
-        .as_str()
-        .unwrap_or_default();
+    let name = keyboard["xkb_active_layout_name"].as_str().unwrap_or_default();
     let all: Vec<&str> = keyboard["xkb_layout_names"]
         .as_array()
         .into_iter()
@@ -438,7 +421,10 @@ pub struct BatteryConfig {
 
 /// power-profiles-daemon, by its new name and its old one.
 const PROFILES: [(&str, &str); 2] = [
-    ("org.freedesktop.UPower.PowerProfiles", "/org/freedesktop/UPower/PowerProfiles"),
+    (
+        "org.freedesktop.UPower.PowerProfiles",
+        "/org/freedesktop/UPower/PowerProfiles",
+    ),
     ("net.hadess.PowerProfiles", "/net/hadess/PowerProfiles"),
 ];
 
@@ -493,7 +479,12 @@ fn battery_quick(details: &str, conn: Option<&gio::DBusConnection>, anchor: &gtk
             let active = property(conn, name, path, name, "ActiveProfile")?.str()?.to_owned();
             let all = property(conn, name, path, name, "Profiles")?;
             let profiles: Vec<String> = (0..all.n_children())
-                .filter_map(|i| glib::VariantDict::new(Some(&all.child_value(i))).lookup::<String>("Profile").ok().flatten())
+                .filter_map(|i| {
+                    glib::VariantDict::new(Some(&all.child_value(i)))
+                        .lookup::<String>("Profile")
+                        .ok()
+                        .flatten()
+                })
                 .collect();
             Some((conn.clone(), *name, *path, active, profiles))
         })
@@ -539,12 +530,8 @@ fn battery_quick(details: &str, conn: Option<&gio::DBusConnection>, anchor: &gtk
 
 /// Shows the battery; returns what the tooltip says, without the hint.
 fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) -> String {
-    let get = |name: &str| {
-        conn.and_then(|c| property(c, UPOWER, DISPLAY, "org.freedesktop.UPower.Device", name))
-    };
-    let present = get("IsPresent")
-        .and_then(|v| v.get::<bool>())
-        .unwrap_or(false)
+    let get = |name: &str| conn.and_then(|c| property(c, UPOWER, DISPLAY, "org.freedesktop.UPower.Device", name));
+    let present = get("IsPresent").and_then(|v| v.get::<bool>()).unwrap_or(false)
         && get("Type").and_then(|v| v.get::<u32>()) == Some(2); // 2 = battery
     let uptime = uptime();
     let hint = tr("battery-hint");
@@ -557,13 +544,9 @@ fn show_battery(row: &Row, conn: Option<&gio::DBusConnection>) -> String {
         ); // 󰚥
         return details;
     }
-    let percent = get("Percentage")
-        .and_then(|v| v.get::<f64>())
-        .unwrap_or_default();
+    let percent = get("Percentage").and_then(|v| v.get::<f64>()).unwrap_or_default();
     // UPower states: 1 charging, 2 discharging, 4 fully charged, 5 pending charge.
-    let state = get("State")
-        .and_then(|v| v.get::<u32>())
-        .unwrap_or_default();
+    let state = get("State").and_then(|v| v.get::<u32>()).unwrap_or_default();
     let charging = matches!(state, 1 | 4);
     let glyph = match percent {
         _ if charging => "\u{f0084}",  // 󰂄
@@ -638,14 +621,8 @@ mod tests {
 
     #[test]
     fn layout_names_split_into_language_and_rest() {
-        assert_eq!(
-            split_layout("English (US, alt. intl.)"),
-            ("English", "US, alt. intl.")
-        );
-        assert_eq!(
-            split_layout("Portuguese (Brazil)"),
-            ("Portuguese", "Brazil")
-        );
+        assert_eq!(split_layout("English (US, alt. intl.)"), ("English", "US, alt. intl."));
+        assert_eq!(split_layout("Portuguese (Brazil)"), ("Portuguese", "Brazil"));
         assert_eq!(split_layout("English"), ("English", ""));
     }
 

@@ -40,18 +40,47 @@ pub struct Actions {
 }
 
 impl Centre {
-    pub fn new(app: &gtk::Application, config: &Config, monitor: Option<&gdk::Monitor>, actions: Actions) -> Rc<Centre> {
-        let title = gtk::Label::builder().label(tr("notify-title")).xalign(0.0).hexpand(true).css_classes(["title"]).build();
-        let dnd = gtk::ToggleButton::builder().label(BELL).tooltip_text(tr("notify-dnd")).css_classes(["dnd"]).build();
-        let clear = gtk::Button::builder().label(tr("notify-clear")).css_classes(["clear"]).build();
+    pub fn new(
+        app: &gtk::Application,
+        config: &Config,
+        monitor: Option<&gdk::Monitor>,
+        actions: Actions,
+    ) -> Rc<Centre> {
+        let title = gtk::Label::builder()
+            .label(tr("notify-title"))
+            .xalign(0.0)
+            .hexpand(true)
+            .css_classes(["title"])
+            .build();
+        let dnd = gtk::ToggleButton::builder()
+            .label(BELL)
+            .tooltip_text(tr("notify-dnd"))
+            .css_classes(["dnd"])
+            .build();
+        let clear = gtk::Button::builder()
+            .label(tr("notify-clear"))
+            .css_classes(["clear"])
+            .build();
         let header = gtk::Box::builder().spacing(5).css_classes(["header"]).build();
         header.append(&title);
         header.append(&dnd);
         header.append(&clear);
 
-        let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).css_classes(["groups"]).build();
-        let scrolled = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&list).build();
-        let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).css_classes(["centre"]).build();
+        let list = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
+            .css_classes(["groups"])
+            .build();
+        let scrolled = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .child(&list)
+            .build();
+        let body = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
+            .css_classes(["centre"])
+            .build();
         body.append(&header);
         body.append(&scrolled);
 
@@ -93,10 +122,22 @@ impl Centre {
         ));
         window.add_controller(escape);
 
-        let Actions { dnd: on_dnd, clear: on_clear, clear_group, card } = actions;
+        let Actions {
+            dnd: on_dnd,
+            clear: on_clear,
+            clear_group,
+            card,
+        } = actions;
         dnd.connect_toggled(move |b| on_dnd(b.is_active()));
         clear.connect_clicked(move |_| on_clear());
-        Rc::new(Centre { window, list, dnd, clear, card, clear_group })
+        Rc::new(Centre {
+            window,
+            list,
+            dnd,
+            clear,
+            card,
+            clear_group,
+        })
     }
 
     pub fn toggle(&self) {
@@ -121,7 +162,13 @@ impl Centre {
         }
         self.clear.set_sensitive(!notes.is_empty());
         if notes.is_empty() {
-            self.list.append(&gtk::Label::builder().label(tr("notify-empty")).css_classes(["placeholder"]).vexpand(true).build());
+            self.list.append(
+                &gtk::Label::builder()
+                    .label(tr("notify-empty"))
+                    .css_classes(["placeholder"])
+                    .vexpand(true)
+                    .build(),
+            );
             return;
         }
         // Groups in the order last heard from, newest first.
@@ -136,8 +183,19 @@ impl Centre {
             let first = list[0];
             let head = gtk::Box::builder().spacing(5).css_classes(["group"]).build();
             head.append(&card::icon(first, 16));
-            head.append(&gtk::Label::builder().label(card::app_name(first)).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).build());
-            let close = gtk::Button::builder().label("×").css_classes(["close"]).tooltip_text(tr("notify-clear-group")).build();
+            head.append(
+                &gtk::Label::builder()
+                    .label(card::app_name(first))
+                    .xalign(0.0)
+                    .hexpand(true)
+                    .ellipsize(gtk::pango::EllipsizeMode::End)
+                    .build(),
+            );
+            let close = gtk::Button::builder()
+                .label("×")
+                .css_classes(["close"])
+                .tooltip_text(tr("notify-clear-group"))
+                .build();
             {
                 let clear_group = self.clear_group.clone();
                 let group = group.to_owned();
@@ -146,7 +204,8 @@ impl Centre {
             head.append(&close);
             self.list.append(&head);
             for note in list {
-                self.list.append(&card::build(note, Place::Centre, &(self.card)(note.id)));
+                self.list
+                    .append(&card::build(note, Place::Centre, &(self.card)(note.id)));
             }
         }
     }

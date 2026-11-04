@@ -37,12 +37,17 @@ pub fn install(appimage: &Path) -> anyhow::Result<String> {
     make_executable(&appimage)?;
 
     let scratch = Scratch::new()?;
-    let extract = Extract { appimage: &appimage, dir: &scratch.0 };
+    let extract = Extract {
+        appimage: &appimage,
+        dir: &scratch.0,
+    };
     let desktop = extract.desktop();
     let icon_name = desktop.as_deref().and_then(|text| key(text, "Icon"));
-    let icon = extract
-        .icon(icon_name.as_deref())
-        .and_then(|icon| keep_icon(&appimage, &icon).map_err(|err| log::warn!("dock: {err:#}")).ok());
+    let icon = extract.icon(icon_name.as_deref()).and_then(|icon| {
+        keep_icon(&appimage, &icon)
+            .map_err(|err| log::warn!("dock: {err:#}"))
+            .ok()
+    });
     if icon.is_none() {
         log::warn!("dock: no icon found in {}", appimage.display());
     }
@@ -380,7 +385,9 @@ fn quote(program: &str) -> String {
 /// to the first that is a version or a platform.
 fn pretty_name(appimage: &Path) -> String {
     let stem = appimage.file_stem().unwrap_or_default().to_string_lossy();
-    let noise = ["linux", "x86", "x64", "amd64", "x86-64", "aarch64", "arm64", "anylinux", "ubuntu", "appimage"];
+    let noise = [
+        "linux", "x86", "x64", "amd64", "x86-64", "aarch64", "arm64", "anylinux", "ubuntu", "appimage",
+    ];
     let words: Vec<&str> = stem
         .split(['-', '_', ' '])
         .filter(|w| !w.is_empty())
@@ -391,7 +398,11 @@ fn pretty_name(appimage: &Path) -> String {
             !version && !noise.iter().any(|n| lower.starts_with(n))
         })
         .collect();
-    if words.is_empty() { stem.into_owned() } else { words.join(" ") }
+    if words.is_empty() {
+        stem.into_owned()
+    } else {
+        words.join(" ")
+    }
 }
 
 /// "Bambu Studio" → "bambu-studio".
@@ -435,8 +446,14 @@ mod tests {
     fn names_from_file_names() {
         assert_eq!(pretty_name(Path::new("Scribus-1.6.4-linux-x86_64.AppImage")), "Scribus");
         assert_eq!(pretty_name(Path::new("Zen_Browser.AppImage")), "Zen Browser");
-        assert_eq!(pretty_name(Path::new("BambuStudio_ubuntu22.04-v02.08.AppImage")), "BambuStudio");
-        assert_eq!(pretty_name(Path::new("Raspberry_Pi_Imager-v2.0.11.1-desktop-x86_64.AppImage")), "Raspberry Pi Imager");
+        assert_eq!(
+            pretty_name(Path::new("BambuStudio_ubuntu22.04-v02.08.AppImage")),
+            "BambuStudio"
+        );
+        assert_eq!(
+            pretty_name(Path::new("Raspberry_Pi_Imager-v2.0.11.1-desktop-x86_64.AppImage")),
+            "Raspberry Pi Imager"
+        );
         assert_eq!(slug("Bambu Studio"), "bambu-studio");
         assert_eq!(quote("/a/b.AppImage"), "/a/b.AppImage");
         assert_eq!(quote("/my apps/b$.AppImage"), "\"/my apps/b\\\\$.AppImage\"");
@@ -446,7 +463,11 @@ mod tests {
     fn exec_runs_the_appimage() {
         let text = "[Desktop Entry]\nName=Obsidian\nExec=obsidian %U\nTryExec=obsidian\nIcon=obsidian\nX-AppImage-Version=1\n\
                     [Desktop Action new]\nExec=\"/usr/bin/my app\" --new\n";
-        let out = rewrite(text, Path::new("/a/Obsidian.AppImage"), Some(Path::new("/a/Obsidian.png")));
+        let out = rewrite(
+            text,
+            Path::new("/a/Obsidian.AppImage"),
+            Some(Path::new("/a/Obsidian.png")),
+        );
         assert_eq!(
             out,
             "[Desktop Entry]\nName=Obsidian\nExec=/a/Obsidian.AppImage %U\nIcon=/a/Obsidian.png\n\
@@ -459,7 +480,10 @@ mod tests {
 
     #[test]
     fn links_stay_inside() {
-        assert_eq!(normalize(Path::new("usr/./share/../lib/x.png")), Some(PathBuf::from("usr/lib/x.png")));
+        assert_eq!(
+            normalize(Path::new("usr/./share/../lib/x.png")),
+            Some(PathBuf::from("usr/lib/x.png"))
+        );
         assert_eq!(normalize(Path::new("../etc/passwd")), None);
     }
 
@@ -468,7 +492,9 @@ mod tests {
     #[test]
     #[ignore]
     fn install_these() {
-        let Ok(dir) = std::env::var("ORBIT_APPIMAGES") else { return };
+        let Ok(dir) = std::env::var("ORBIT_APPIMAGES") else {
+            return;
+        };
         for entry in fs::read_dir(dir).unwrap().flatten() {
             if is_appimage(&entry.path()) {
                 match install(&entry.path()) {

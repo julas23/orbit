@@ -52,7 +52,11 @@ impl Doc {
             .smart_home_end(sourceview5::SmartHomeEndType::Before)
             .tab_width(config.tab_width)
             .insert_spaces_instead_of_tabs(config.insert_spaces)
-            .wrap_mode(if config.wrap { gtk::WrapMode::WordChar } else { gtk::WrapMode::None })
+            .wrap_mode(if config.wrap {
+                gtk::WrapMode::WordChar
+            } else {
+                gtk::WrapMode::None
+            })
             .top_margin(5)
             .bottom_margin(200)
             .left_margin(5)
@@ -162,7 +166,11 @@ impl Doc {
             (None, None) => String::new(),
         };
         self.crlf.set(text.contains("\r\n"));
-        let text = if self.crlf.get() { text.replace("\r\n", "\n") } else { text };
+        let text = if self.crlf.get() {
+            text.replace("\r\n", "\n")
+        } else {
+            text
+        };
         self.buffer.begin_irreversible_action();
         self.buffer.set_text(&text);
         self.buffer.end_irreversible_action();
@@ -190,7 +198,10 @@ impl Doc {
         } else {
             text.into_bytes()
         };
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let temporary = path.with_file_name(format!(".{name}.orbit-edit"));
         std::fs::write(&temporary, &bytes)?;
         if let Ok(meta) = std::fs::metadata(&path) {
@@ -213,7 +224,10 @@ impl Doc {
     fn guess_language(&self) {
         let manager = sourceview5::LanguageManager::default();
         let path = self.path();
-        let name = path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned());
+        let name = path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned());
         let content = path.as_deref().map(|p| gio::content_type_guess(Some(p), None).0);
         let language = manager.guess_language(name.as_deref(), content.as_deref());
         self.buffer.set_language(language.as_ref());
@@ -297,11 +311,7 @@ impl Doc {
     /// Ctrl+/: comments the selected lines out with the language's line
     /// comment, or back in when they all have it.
     pub fn toggle_comment(&self) {
-        let Some(comment) = self
-            .buffer
-            .language()
-            .and_then(|l| l.metadata("line-comment-start"))
-        else {
+        let Some(comment) = self.buffer.language().and_then(|l| l.metadata("line-comment-start")) else {
             return;
         };
         let comment = comment.to_string();

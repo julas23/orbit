@@ -53,11 +53,13 @@ impl Stt {
         let mut params = WhisperContextParameters::default();
         // whisper-rs turns the GPU on only with its own GPU features.
         params.use_gpu(cfg!(feature = "vulkan"));
-        let context = WhisperContext::new_with_params(&path, params)
-            .with_context(|| format!("loading {}", path.display()))?;
+        let context =
+            WhisperContext::new_with_params(&path, params).with_context(|| format!("loading {}", path.display()))?;
         let state = context.create_state()?;
         // Half the threads: the desktop stays responsive while it works.
-        let threads = std::thread::available_parallelism().map_or(4, |n| n.get() / 2).clamp(1, 8) as i32;
+        let threads = std::thread::available_parallelism()
+            .map_or(4, |n| n.get() / 2)
+            .clamp(1, 8) as i32;
         let mut stt = Self {
             state,
             name: name.to_owned(),
@@ -65,7 +67,10 @@ impl Stt {
         };
         // The first run is twice as slow as the rest: done now, on a second
         // of silence, not on the first thing said.
-        stt.state.full(full_params(threads, Some(LANGUAGES[0]), "", audio_ctx(0)), &[0.0; 16_000])?;
+        stt.state.full(
+            full_params(threads, Some(LANGUAGES[0]), "", audio_ctx(0)),
+            &[0.0; 16_000],
+        )?;
         log::info!("aigent: Whisper {name} loaded, {threads} threads");
         Ok(stt)
     }
@@ -105,7 +110,11 @@ impl Stt {
                 let params = full_params(self.threads, Some(other), prompt, ctx);
                 self.state.full(params, audio)?;
                 let (heard, sure) = self.read();
-                log::debug!("aigent: as {other}: {heard:?} ({sure:.2}), against {:?} ({:.2})", best.1, best.2);
+                log::debug!(
+                    "aigent: as {other}: {heard:?} ({sure:.2}), against {:?} ({:.2})",
+                    best.1,
+                    best.2
+                );
                 let bonus = if other == LANGUAGES[0] { FIRST_BONUS } else { 0.0 };
                 // The same words as another language ("List the files…"
                 // heard as Portuguese): it was that language after all.
@@ -153,7 +162,10 @@ impl Stt {
                 n += 1;
             }
         }
-        (unrepeated(text.trim()), if n == 0 { f32::NEG_INFINITY } else { sum / n as f32 })
+        (
+            unrepeated(text.trim()),
+            if n == 0 { f32::NEG_INFINITY } else { sum / n as f32 },
+        )
     }
 }
 
@@ -166,7 +178,12 @@ pub fn prompt(wake: &[String]) -> String {
     wake.iter()
         .map(|word| {
             let mut chars = word.chars();
-            let word: String = chars.next().into_iter().flat_map(char::to_uppercase).chain(chars).collect();
+            let word: String = chars
+                .next()
+                .into_iter()
+                .flat_map(char::to_uppercase)
+                .chain(chars)
+                .collect();
             format!("Ok {word}.")
         })
         .collect::<Vec<_>>()
@@ -188,7 +205,10 @@ fn unrepeated(text: &str) -> String {
 
 /// `text` in lower case, letters only, to compare two hearings.
 fn letters(text: &str) -> String {
-    text.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 /// Greedy, one segment, nothing printed, no context from the last run.
@@ -244,9 +264,14 @@ mod tests {
     #[test]
     #[ignore]
     fn hears_the_files() {
-        let Ok(files) = std::env::var("ORBIT_AIGENT_RAW") else { return };
+        let Ok(files) = std::env::var("ORBIT_AIGENT_RAW") else {
+            return;
+        };
         let _ = env_logger::builder().is_test(true).parse_default_env().try_init();
-        for model in std::env::var("ORBIT_AIGENT_MODELS").unwrap_or("base-q5_1,small-q5_1".into()).split(',') {
+        for model in std::env::var("ORBIT_AIGENT_MODELS")
+            .unwrap_or("base-q5_1,small-q5_1".into())
+            .split(',')
+        {
             let mut stt = Stt::load(model).unwrap();
             for file in files.split(':') {
                 let audio: Vec<f32> = std::fs::read(file)
@@ -254,7 +279,9 @@ mod tests {
                     .chunks_exact(4)
                     .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
                     .collect();
-                let heard = stt.hear(&audio, &std::env::var("ORBIT_AIGENT_PROMPT").unwrap_or_default(), true).unwrap();
+                let heard = stt
+                    .hear(&audio, &std::env::var("ORBIT_AIGENT_PROMPT").unwrap_or_default(), true)
+                    .unwrap();
                 eprintln!("{model} {}: {heard:?}", file.rsplit('/').next().unwrap_or(file));
             }
         }

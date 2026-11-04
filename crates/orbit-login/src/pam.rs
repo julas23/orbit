@@ -43,7 +43,8 @@ struct PamHandle {
 
 #[link(name = "libpam.so.0", kind = "dylib", modifiers = "+verbatim")]
 unsafe extern "C" {
-    fn pam_start(service: *const c_char, user: *const c_char, conv: *const PamConv, pamh: *mut *mut PamHandle) -> c_int;
+    fn pam_start(service: *const c_char, user: *const c_char, conv: *const PamConv, pamh: *mut *mut PamHandle)
+    -> c_int;
     fn pam_authenticate(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_acct_mgmt(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_setcred(pamh: *mut PamHandle, flags: c_int) -> c_int;
@@ -79,7 +80,11 @@ extern "C" fn converse(n: c_int, msg: *mut *const PamMessage, resp: *mut *mut Pa
         }
         for i in 0..n as usize {
             let m = &**msg.add(i);
-            let text = if m.msg.is_null() { String::new() } else { CStr::from_ptr(m.msg).to_string_lossy().into_owned() };
+            let text = if m.msg.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(m.msg).to_string_lossy().into_owned()
+            };
             match m.msg_style {
                 PAM_PROMPT_ECHO_OFF => match &conv.password {
                     Some(password) => (*replies.add(i)).resp = libc::strdup(password.as_ptr()),
@@ -115,9 +120,18 @@ pub struct Pam {
 impl Pam {
     pub fn start(service: &CStr, user: &str, password: Option<String>) -> Result<Self, String> {
         let user = CString::new(user).map_err(|_| "bad user name".to_owned())?;
-        let password = password.map(CString::new).transpose().map_err(|_| "bad password".to_owned())?;
-        let mut conv = Box::new(Conversation { password, said: Vec::new() });
-        let pam_conv = Box::new(PamConv { conv: converse, appdata_ptr: &mut *conv as *mut Conversation as *mut c_void });
+        let password = password
+            .map(CString::new)
+            .transpose()
+            .map_err(|_| "bad password".to_owned())?;
+        let mut conv = Box::new(Conversation {
+            password,
+            said: Vec::new(),
+        });
+        let pam_conv = Box::new(PamConv {
+            conv: converse,
+            appdata_ptr: &mut *conv as *mut Conversation as *mut c_void,
+        });
         let mut handle: *mut PamHandle = std::ptr::null_mut();
         // Safety: the strings and the conversation outlive the call; PAM
         // copies the user and keeps the conversation, kept in `Self`.
@@ -125,7 +139,13 @@ impl Pam {
         if rc != PAM_SUCCESS || handle.is_null() {
             return Err(format!("pam_start: {rc}"));
         }
-        Ok(Self { handle, conv, _pam_conv: pam_conv, last: PAM_SUCCESS, opened: false })
+        Ok(Self {
+            handle,
+            conv,
+            _pam_conv: pam_conv,
+            last: PAM_SUCCESS,
+            opened: false,
+        })
     }
 
     fn check(&mut self, rc: c_int) -> Result<(), String> {
@@ -139,7 +159,11 @@ impl Pam {
         }
         // Safety: a live handle; PAM's own static string.
         let text = unsafe { pam_strerror(self.handle, rc) };
-        Err(if text.is_null() { format!("PAM error {rc}") } else { unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned() })
+        Err(if text.is_null() {
+            format!("PAM error {rc}")
+        } else {
+            unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned()
+        })
     }
 
     pub fn putenv(&mut self, name: &str, value: &str) {

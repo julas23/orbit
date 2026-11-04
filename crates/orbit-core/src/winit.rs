@@ -43,10 +43,19 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     let (mut backend, winit) = winit::init::<GlesRenderer>().map_err(|e| anyhow::anyhow!("nested window: {e}"))?;
     backend.window().set_title("Orbit");
 
-    let mode = Mode { size: backend.window_size(), refresh: 60_000 };
+    let mode = Mode {
+        size: backend.window_size(),
+        refresh: 60_000,
+    };
     let output = Output::new(
         "winit".to_string(),
-        PhysicalProperties { size: (0, 0).into(), subpixel: Subpixel::Unknown, make: "Orbit".into(), model: "Nested".into(), serial_number: String::new() },
+        PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Orbit".into(),
+            model: "Nested".into(),
+            serial_number: String::new(),
+        },
     );
     let _global = output.create_global::<Orbit>(&state.display_handle);
     output.change_current_state(Some(mode), Some(Transform::Flipped180), None, Some((0, 0).into()));
@@ -98,7 +107,9 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
 fn render(state: &mut Orbit) {
     state.needs_render = false;
     // Taken out while drawing: the elements are built from the state.
-    let Backend::Winit(mut winit) = std::mem::replace(&mut state.backend, Backend::None) else { return };
+    let Backend::Winit(mut winit) = std::mem::replace(&mut state.backend, Backend::None) else {
+        return;
+    };
     let output = winit.output.clone();
     // Right after the nested window is resized the surface has no age yet
     // (EGL logs BAD_SURFACE): the frame is then drawn whole.
@@ -106,13 +117,18 @@ fn render(state: &mut Orbit) {
     let elements = output_elements(state, &output, winit.backend.renderer(), false);
     let clear = background(state);
     let damage = match winit.backend.bind() {
-        Ok((renderer, mut framebuffer)) => match winit.damage_tracker.render_output(renderer, &mut framebuffer, age, &elements, clear) {
-            Ok(result) => result.damage.cloned(),
-            Err(err) => {
-                tracing::warn!("render: {err:?}");
-                None
+        Ok((renderer, mut framebuffer)) => {
+            match winit
+                .damage_tracker
+                .render_output(renderer, &mut framebuffer, age, &elements, clear)
+            {
+                Ok(result) => result.damage.cloned(),
+                Err(err) => {
+                    tracing::warn!("render: {err:?}");
+                    None
+                }
             }
-        },
+        }
         Err(err) => {
             tracing::warn!("bind: {err:?}");
             None
@@ -120,7 +136,11 @@ fn render(state: &mut Orbit) {
     };
     if let Some(damage) = damage {
         let size = winit.backend.window_size();
-        let damage = if damage.is_empty() { vec![Rectangle::from_size(size)] } else { damage };
+        let damage = if damage.is_empty() {
+            vec![Rectangle::from_size(size)]
+        } else {
+            damage
+        };
         if let Err(err) = winit.backend.submit(Some(&damage)) {
             tracing::warn!("submit: {err:?}");
         }

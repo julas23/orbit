@@ -177,12 +177,7 @@ impl Module {
             (None, _) => tr("bluetooth-connected"),
         };
         // Full: the others under the first.
-        let others: Vec<String> = connected
-            .iter()
-            .skip(1)
-            .take(2)
-            .map(|d| describe(d))
-            .collect();
+        let others: Vec<String> = connected.iter().skip(1).take(2).map(|d| describe(d)).collect();
         let mut lines = vec![first.alias.as_str(), second.as_str()];
         lines.extend(others.iter().map(String::as_str));
         let all: Vec<String> = connected.iter().map(|d| describe(d)).collect();
@@ -287,22 +282,14 @@ fn read(conn: &gio::DBusConnection) -> State {
         {
             state.adapter = Some(Adapter {
                 path: path.clone(),
-                powered: adapter
-                    .lookup::<bool>("Powered")
-                    .ok()
-                    .flatten()
-                    .unwrap_or(false),
+                powered: adapter.lookup::<bool>("Powered").ok().flatten().unwrap_or(false),
             });
         }
         if let Some(device) = props(DEVICE) {
             let get = |name: &str| device.lookup::<bool>(name).ok().flatten().unwrap_or(false);
             state.devices.push(Device {
                 path: path.clone(),
-                alias: device
-                    .lookup::<String>("Alias")
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default(),
+                alias: device.lookup::<String>("Alias").ok().flatten().unwrap_or_default(),
                 paired: get("Paired"),
                 connected: get("Connected"),
                 battery: props(BATTERY).and_then(|b| b.lookup::<u8>("Percentage").ok().flatten()),
@@ -336,13 +323,7 @@ fn set_powered(conn: &gio::DBusConnection, adapter: &str, on: bool) {
 
 /// Connects or disconnects `device`. Connecting can take seconds; if it
 /// fails, the switch goes back.
-fn connect(
-    conn: &gio::DBusConnection,
-    device: &str,
-    on: bool,
-    switch: &gtk::Switch,
-    reverting: Rc<Cell<bool>>,
-) {
+fn connect(conn: &gio::DBusConnection, device: &str, on: bool, switch: &gtk::Switch, reverting: Rc<Cell<bool>>) {
     let switch = switch.downgrade();
     conn.call(
         Some(BLUEZ),
@@ -356,10 +337,7 @@ fn connect(
         gio::Cancellable::NONE,
         move |r| {
             if let Err(e) = r {
-                log::warn!(
-                    "bluetooth: {}: {e}",
-                    if on { "connect" } else { "disconnect" }
-                );
+                log::warn!("bluetooth: {}: {e}", if on { "connect" } else { "disconnect" });
                 if let Some(switch) = switch.upgrade() {
                     reverting.set(true);
                     switch.set_active(!on);

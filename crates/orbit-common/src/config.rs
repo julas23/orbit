@@ -289,8 +289,10 @@ fn module_lists(start: &[ModuleEntry], center: &[ModuleEntry], end: &[ModuleEntr
 /// anything but `- `.
 fn with_blocks(text: &str, keys: &[&str], blocks: &str) -> String {
     let is_key = |line: &str| {
-        keys.iter()
-            .any(|key| line.strip_prefix(key).is_some_and(|rest| rest.trim_start().starts_with(':')))
+        keys.iter().any(|key| {
+            line.strip_prefix(key)
+                .is_some_and(|rest| rest.trim_start().starts_with(':'))
+        })
     };
     let mut kept: Vec<&str> = Vec::new();
     let mut at = None;
@@ -354,8 +356,16 @@ impl TryFrom<RawEntry> for ModuleEntry {
             RawEntry::Sized(map) if map.len() == 1 => {
                 let (name, options) = map.into_iter().next().expect("one entry");
                 Ok(match options {
-                    RawOptions::Size(size) => Self { name, size: Some(size), path: None },
-                    RawOptions::Options(o) => Self { name, size: o.size, path: o.path },
+                    RawOptions::Size(size) => Self {
+                        name,
+                        size: Some(size),
+                        path: None,
+                    },
+                    RawOptions::Options(o) => Self {
+                        name,
+                        size: o.size,
+                        path: o.path,
+                    },
                 })
             }
             RawEntry::Sized(_) => Err("a module entry is `name`, `name: size` or `name: { size, path }`".into()),
@@ -365,13 +375,19 @@ impl TryFrom<RawEntry> for ModuleEntry {
 
 impl From<&str> for ModuleEntry {
     fn from(name: &str) -> Self {
-        Self { name: name.into(), ..Default::default() }
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
     }
 }
 
 impl From<String> for ModuleEntry {
     fn from(name: String) -> Self {
-        Self { name, ..Default::default() }
+        Self {
+            name,
+            ..Default::default()
+        }
     }
 }
 
@@ -466,19 +482,33 @@ mod tests {
 
     #[test]
     fn module_entries_with_and_without_size() {
-        let panel: PanelConfig =
-            serde_yaml_ng::from_str("end: [clock, {volume: mini}, {calendar: normal}]").unwrap();
+        let panel: PanelConfig = serde_yaml_ng::from_str("end: [clock, {volume: mini}, {calendar: normal}]").unwrap();
         assert_eq!(
             panel.end,
             vec![
                 ModuleEntry::from("clock"),
-                ModuleEntry { name: "volume".into(), size: Some(Size::Mini), path: None },
-                ModuleEntry { name: "calendar".into(), size: Some(Size::Normal), path: None },
+                ModuleEntry {
+                    name: "volume".into(),
+                    size: Some(Size::Mini),
+                    path: None
+                },
+                ModuleEntry {
+                    name: "calendar".into(),
+                    size: Some(Size::Normal),
+                    path: None
+                },
             ]
         );
         let panel: PanelConfig =
             serde_yaml_ng::from_str("end: [{disk: {size: full, path: /home}}, {disk: {path: /}}]").unwrap();
-        assert_eq!(panel.end[0], ModuleEntry { name: "disk".into(), size: Some(Size::Full), path: Some("/home".into()) });
+        assert_eq!(
+            panel.end[0],
+            ModuleEntry {
+                name: "disk".into(),
+                size: Some(Size::Full),
+                path: Some("/home".into())
+            }
+        );
         assert_eq!(panel.end[1].path.as_deref(), Some("/"));
         assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{disk: {colour: red}}]").is_err());
         assert!(serde_yaml_ng::from_str::<PanelConfig>("end: [{clock: huge}]").is_err());
@@ -492,7 +522,8 @@ mod tests {
             let start: Vec<ModuleEntry> = start.iter().map(|&n| n.into()).collect();
             module_lists(&start, &[], end)
         };
-        let text = "# Panel\nedge: left\n# The modules:\nstart:\n  - menu\n  # old\n  - windows\nend: [clock]\n\nsize: 154\n";
+        let text =
+            "# Panel\nedge: left\n# The modules:\nstart:\n  - menu\n  # old\n  - windows\nend: [clock]\n\nsize: 154\n";
         let out = with_blocks(
             text,
             KEYS,
@@ -500,8 +531,16 @@ mod tests {
                 &["windows"],
                 &[
                     "clock".into(),
-                    ModuleEntry { name: "volume".into(), size: Some(Size::Mini), path: None },
-                    ModuleEntry { name: "disk".into(), size: Some(Size::Full), path: Some("/mnt/my disk".into()) },
+                    ModuleEntry {
+                        name: "volume".into(),
+                        size: Some(Size::Mini),
+                        path: None,
+                    },
+                    ModuleEntry {
+                        name: "disk".into(),
+                        size: Some(Size::Full),
+                        path: Some("/mnt/my disk".into()),
+                    },
                 ],
             ),
         );

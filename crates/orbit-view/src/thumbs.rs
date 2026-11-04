@@ -127,14 +127,8 @@ impl Strip {
             let weak = weak.clone();
             factory.connect_unbind(move |_, item| {
                 let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
-                if let (Some(strip), Some(path)) = (
-                    weak.upgrade(),
-                    item.item().and_downcast::<gtk::StringObject>(),
-                ) {
-                    strip
-                        .bound
-                        .borrow_mut()
-                        .remove(Path::new(path.string().as_str()));
+                if let (Some(strip), Some(path)) = (weak.upgrade(), item.item().and_downcast::<gtk::StringObject>()) {
+                    strip.bound.borrow_mut().remove(Path::new(path.string().as_str()));
                 }
             });
         }
@@ -180,9 +174,7 @@ impl Strip {
             .collect();
         self.store.splice(0, self.store.n_items(), &items);
         // Thumbnails of files no longer listed go.
-        self.cache
-            .borrow_mut()
-            .retain(|p, _| images.iter().any(|i| i == p));
+        self.cache.borrow_mut().retain(|p, _| images.iter().any(|i| i == p));
         self.syncing.set(false);
         self.select(current);
     }
@@ -193,8 +185,7 @@ impl Strip {
         match index {
             Some(i) if (i as u32) < self.store.n_items() => {
                 self.selection.set_selected(i as u32);
-                self.view
-                    .scroll_to(i as u32, gtk::ListScrollFlags::NONE, None);
+                self.view.scroll_to(i as u32, gtk::ListScrollFlags::NONE, None);
             }
             _ => self.selection.set_selected(gtk::INVALID_LIST_POSITION),
         }
@@ -211,9 +202,7 @@ impl Strip {
     }
 
     fn show(&self, picture: &gtk::Picture, path: &Path) {
-        self.bound
-            .borrow_mut()
-            .insert(path.to_path_buf(), picture.downgrade());
+        self.bound.borrow_mut().insert(path.to_path_buf(), picture.downgrade());
         if let Some(texture) = self.cache.borrow().get(path) {
             picture.set_paintable(Some(texture));
             return;

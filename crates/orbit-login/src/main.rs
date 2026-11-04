@@ -89,7 +89,13 @@ struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { user: String::new(), command: "orbit-core --locked".into(), vt: 1, station: "orbit-local-station".into(), home: None }
+        Self {
+            user: String::new(),
+            command: "orbit-core --locked".into(),
+            vt: 1,
+            station: "orbit-local-station".into(),
+            home: None,
+        }
     }
 }
 
@@ -155,7 +161,9 @@ fn serve() -> anyhow::Result<()> {
     let config = read_config()?;
     orbit_login::user(&config.user).ok_or_else(|| anyhow::anyhow!("{CONFIG}: user {:?} cannot log in", config.user))?;
     let home = match &config.home {
-        Some(name) => Some(Home::find(name).ok_or_else(|| anyhow::anyhow!("{CONFIG}: home {name:?} is not in /etc/crypttab"))?),
+        Some(name) => {
+            Some(Home::find(name).ok_or_else(|| anyhow::anyhow!("{CONFIG}: home {name:?} is not in /etc/crypttab"))?)
+        }
         None => None,
     };
     if home.is_some() && orbit_login::account(GREETER).is_none() {
@@ -205,7 +213,10 @@ impl Service {
     /// The session on the default console, whichever it is.
     fn default_key(&self) -> Option<String> {
         let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        sessions.iter().find(|(_, s)| s.vt == self.config.vt).map(|(k, _)| k.clone())
+        sessions
+            .iter()
+            .find(|(_, s)| s.vt == self.config.vt)
+            .map(|(k, _)| k.clone())
     }
 
     /// Opens `user`'s session on `vt`, or on the next free console.
@@ -217,7 +228,12 @@ impl Service {
     /// Opens a session of `user` running `command`, known as `key`.
     fn open_as(self: &Arc<Self>, key: &str, user: &User, vt: Option<u32>, command: &str) -> Result<(), String> {
         let _turn = self.opening.lock().unwrap_or_else(|e| e.into_inner());
-        if self.sessions.lock().unwrap_or_else(|e| e.into_inner()).contains_key(key) {
+        if self
+            .sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(key)
+        {
             return Ok(());
         }
         let vt = match vt {
@@ -248,7 +264,15 @@ impl Service {
         let id = words.next().filter(|w| *w != "-").map(str::to_owned);
         let core = words.next().and_then(|w| w.parse().ok());
         log::info!("{key}: session {} on tty{vt}", id.as_deref().unwrap_or("?"));
-        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).insert(key.to_owned(), Session { uid: user.uid, vt, id, core });
+        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            key.to_owned(),
+            Session {
+                uid: user.uid,
+                vt,
+                id,
+                core,
+            },
+        );
         let service = self.clone();
         let name = key.to_owned();
         std::thread::spawn(move || {
@@ -275,7 +299,13 @@ impl Service {
         if unsafe { libc::ioctl(tty.as_raw_fd(), VT_GETSTATE, &mut stat) } != 0 {
             return Err(format!("VT_GETSTATE: {}", std::io::Error::last_os_error()));
         }
-        let given: Vec<u32> = self.sessions.lock().unwrap_or_else(|e| e.into_inner()).values().map(|s| s.vt).collect();
+        let given: Vec<u32> = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .map(|s| s.vt)
+            .collect();
         (2..16)
             .find(|&vt| stat.state & (1 << vt) == 0 && !given.contains(&vt) && vt != self.config.vt)
             .ok_or_else(|| "no free console".to_owned())
@@ -315,7 +345,13 @@ impl Service {
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
             .unwrap_or_default();
-        if self.sessions.lock().unwrap_or_else(|e| e.into_inner()).values().any(|s| s.id.as_deref() == Some(&active)) {
+        if self
+            .sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .any(|s| s.id.as_deref() == Some(&active))
+        {
             return;
         }
         if self.default_key().is_none()
@@ -330,7 +366,11 @@ impl Service {
     }
 
     fn session_id(&self, name: &str) -> Option<String> {
-        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).get(name).and_then(|s| s.id.clone())
+        self.sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(name)
+            .and_then(|s| s.id.clone())
     }
 
     fn handle(self: &Arc<Self>, stream: UnixStream) {
@@ -343,19 +383,33 @@ impl Service {
     }
 
     fn answer(self: &Arc<Self>, stream: &UnixStream) -> Reply {
-        let Some(peer) = peer_uid(stream) else { return Reply::Error("who is asking?".into()) };
+        let Some(peer) = peer_uid(stream) else {
+            return Reply::Error("who is asking?".into());
+        };
         let mut line = String::new();
         if BufReader::new(stream.take(64 * 1024)).read_line(&mut line).is_err() {
             return Reply::Error("bad request".into());
         }
-        let Ok(request) = serde_json::from_str::<Request>(&line) else { return Reply::Error("bad request".into()) };
-        if !self.sessions.lock().unwrap_or_else(|e| e.into_inner()).values().any(|s| s.uid == peer) {
+        let Ok(request) = serde_json::from_str::<Request>(&line) else {
+            return Reply::Error("bad request".into());
+        };
+        if !self
+            .sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .any(|s| s.uid == peer)
+        {
             log::warn!("uid {peer} asked, with no session of orbit-login");
             return Reply::Error("only the sessions of orbit-login may ask".into());
         }
         let target = match &request {
-            Request::Prepare { user } | Request::Switch { user, .. } | Request::Login { user, .. } => orbit_login::user(user).ok_or_else(|| format!("{user}: no such user")),
-            Request::Station { .. } => orbit_login::user_by_uid(peer).ok_or_else(|| format!("uid {peer}: no such user")),
+            Request::Prepare { user } | Request::Switch { user, .. } | Request::Login { user, .. } => {
+                orbit_login::user(user).ok_or_else(|| format!("{user}: no such user"))
+            }
+            Request::Station { .. } => {
+                orbit_login::user_by_uid(peer).ok_or_else(|| format!("uid {peer}: no such user"))
+            }
         };
         let target = match target {
             Ok(target) => target,
@@ -399,13 +453,20 @@ impl Service {
                     *entry = (entry.0 + 1, Instant::now());
                     return Reply::Refused(why);
                 }
-                self.failures.lock().unwrap_or_else(|e| e.into_inner()).remove(&target.name);
+                self.failures
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&target.name);
                 let (id, core) = {
                     let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-                    let Some(session) = sessions.get(&target.name) else { return Reply::Error("the session went away".into()) };
+                    let Some(session) = sessions.get(&target.name) else {
+                        return Reply::Error("the session went away".into());
+                    };
                     (session.id.clone(), session.core)
                 };
-                let Some(id) = id else { return Reply::Error("the session has no logind id".into()) };
+                let Some(id) = id else {
+                    return Reply::Error("the session has no logind id".into());
+                };
                 if !activate(&id) {
                     return Reply::Error("logind did not show the session".into());
                 }
@@ -443,7 +504,10 @@ impl Service {
         if let Err(why) = self.check(user, password.clone()) {
             return refused(self, why);
         }
-        self.failures.lock().unwrap_or_else(|e| e.into_inner()).remove(&user.name);
+        self.failures
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&user.name);
         if let Some(home) = &self.home
             && let Err(err) = home.follow(&user.name, &password)
         {
@@ -452,15 +516,24 @@ impl Service {
         drop(password);
         let (id, core) = {
             let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-            let Some(session) = sessions.get(&user.name) else { return Reply::Error("the session went away".into()) };
+            let Some(session) = sessions.get(&user.name) else {
+                return Reply::Error("the session went away".into());
+            };
             (session.id.clone(), session.core)
         };
-        let Some(id) = id else { return Reply::Error("the session has no logind id".into()) };
+        let Some(id) = id else {
+            return Reply::Error("the session has no logind id".into());
+        };
         if !activate(&id) {
             return Reply::Error("logind did not show the session".into());
         }
         let uid = user.uid;
-        let greeter = self.sessions.lock().unwrap_or_else(|e| e.into_inner()).get(GREETER).and_then(|s| s.core);
+        let greeter = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(GREETER)
+            .and_then(|s| s.core);
         std::thread::spawn(move || {
             unlock(uid, core);
             if let Some(pid) = greeter {
@@ -486,13 +559,18 @@ impl Service {
             *entry = (entry.0 + 1, Instant::now());
             return Reply::Refused(why);
         }
-        self.failures.lock().unwrap_or_else(|e| e.into_inner()).remove(&user.name);
+        self.failures
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&user.name);
         let key = format!("{}:station", user.name);
         let command = self.config.station.clone();
         if let Err(err) = self.open_as(&key, user, None, &command) {
             return Reply::Error(err);
         }
-        let Some(id) = self.session_id(&key) else { return Reply::Error("the session has no logind id".into()) };
+        let Some(id) = self.session_id(&key) else {
+            return Reply::Error("the session has no logind id".into());
+        };
         if !activate(&id) {
             return Reply::Error("logind did not show the session".into());
         }
@@ -527,14 +605,21 @@ impl Service {
             Ok(())
         } else {
             let why = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            Err(if why.is_empty() { "Authentication failure".into() } else { why })
+            Err(if why.is_empty() {
+                "Authentication failure".into()
+            } else {
+                why
+            })
         }
     }
 }
 
 /// Shows session `id` (logind switches to its console).
 fn activate(id: &str) -> bool {
-    let ok = Command::new("loginctl").args(["activate", id]).status().is_ok_and(|s| s.success());
+    let ok = Command::new("loginctl")
+        .args(["activate", id])
+        .status()
+        .is_ok_and(|s| s.success());
     if !ok {
         log::error!("loginctl activate {id} failed");
     }
@@ -550,14 +635,20 @@ fn unlock(uid: u32, core: Option<u32>) {
         let path = match core {
             Some(pid) => Some(runtime.join(format!("orbit-ipc.{uid}.{pid}.sock"))),
             None => std::fs::read_dir(&runtime).ok().and_then(|entries| {
-                entries.flatten().map(|e| e.path()).find(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with(&format!("orbit-ipc.{uid}."))))
+                entries.flatten().map(|e| e.path()).find(|p| {
+                    p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with(&format!("orbit-ipc.{uid}.")))
+                })
             }),
         };
         if let Some(path) = path
             && let Ok(mut stream) = UnixStream::connect(&path)
         {
             let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-            if stream.write_all(&orbit_ipc::encode(orbit_ipc::RUN_COMMAND, b"unlock")).is_ok() {
+            if stream
+                .write_all(&orbit_ipc::encode(orbit_ipc::RUN_COMMAND, b"unlock"))
+                .is_ok()
+            {
                 let mut buffer = Vec::new();
                 let mut chunk = [0u8; 1024];
                 while let Ok(n) = stream.read(&mut chunk) {
@@ -582,6 +673,14 @@ fn peer_uid(stream: &UnixStream) -> Option<u32> {
     let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
     let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
     // Safety: SO_PEERCRED fills a struct ucred of that length.
-    let rc = unsafe { libc::getsockopt(stream.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERCRED, &mut cred as *mut _ as *mut libc::c_void, &mut len) };
+    let rc = unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            &mut cred as *mut _ as *mut libc::c_void,
+            &mut len,
+        )
+    };
     (rc == 0).then_some(cred.uid)
 }

@@ -60,7 +60,11 @@ impl Item {
 
     /// The first attribute of `names` present.
     pub fn attribute(&self, names: &[&str]) -> Option<&str> {
-        names.iter().find_map(|n| self.attributes.get(*n)).map(String::as_str).filter(|v| !v.is_empty())
+        names
+            .iter()
+            .find_map(|n| self.attributes.get(*n))
+            .map(String::as_str)
+            .filter(|v| !v.is_empty())
     }
 
     pub fn username(&self) -> Option<&str> {
@@ -79,10 +83,21 @@ pub struct Service {
 
 impl Service {
     pub async fn connect() -> anyhow::Result<Self> {
-        let conn = gio::bus_get_future(gio::BusType::Session).await.context("the session bus")?;
-        let mut service = Service { conn, session: String::new() };
+        let conn = gio::bus_get_future(gio::BusType::Session)
+            .await
+            .context("the session bus")?;
+        let mut service = Service {
+            conn,
+            session: String::new(),
+        };
         let opened = service
-            .call(ROOT, SERVICE, "OpenSession", ("plain", "".to_variant()).to_variant(), "(vo)")
+            .call(
+                ROOT,
+                SERVICE,
+                "OpenSession",
+                ("plain", "".to_variant()).to_variant(),
+                "(vo)",
+            )
             .await
             .context("no keyring answers on the bus (org.freedesktop.secrets)")?;
         service.session = opened.child_value(1).str().unwrap_or_default().to_owned();
@@ -106,12 +121,15 @@ impl Service {
     }
 
     async fn properties(&self, path: &str, iface: &str) -> anyhow::Result<HashMap<String, Variant>> {
-        let all = self.call(path, PROPERTIES, "GetAll", (iface,).to_variant(), "(a{sv})").await?;
+        let all = self
+            .call(path, PROPERTIES, "GetAll", (iface,).to_variant(), "(a{sv})")
+            .await?;
         Ok(all.child_value(0).get().unwrap_or_default())
     }
 
     async fn set(&self, path: &str, iface: &str, name: &str, value: Variant) -> anyhow::Result<()> {
-        self.call(path, PROPERTIES, "Set", (iface, name, value).to_variant(), "()").await?;
+        self.call(path, PROPERTIES, "Set", (iface, name, value).to_variant(), "()")
+            .await?;
         Ok(())
     }
 
@@ -137,7 +155,9 @@ impl Service {
 
     /// The default collection ("login" on gnome-keyring), where new items go.
     pub async fn default_collection(&self) -> anyhow::Result<String> {
-        let alias = self.call(ROOT, SERVICE, "ReadAlias", ("default",).to_variant(), "(o)").await?;
+        let alias = self
+            .call(ROOT, SERVICE, "ReadAlias", ("default",).to_variant(), "(o)")
+            .await?;
         let path = alias.child_value(0).str().unwrap_or("/").to_owned();
         if path == "/" {
             bail!("the keyring has no default collection");
@@ -171,8 +191,13 @@ impl Service {
     /// Unlocks `paths` (collections or items); false when the prompt was
     /// dismissed.
     pub async fn unlock(&self, paths: &[String]) -> anyhow::Result<bool> {
-        let paths: Vec<ObjectPath> = paths.iter().filter_map(|p| ObjectPath::try_from(p.clone()).ok()).collect();
-        let reply = self.call(ROOT, SERVICE, "Unlock", (paths,).to_variant(), "(aoo)").await?;
+        let paths: Vec<ObjectPath> = paths
+            .iter()
+            .filter_map(|p| ObjectPath::try_from(p.clone()).ok())
+            .collect();
+        let reply = self
+            .call(ROOT, SERVICE, "Unlock", (paths,).to_variant(), "(aoo)")
+            .await?;
         self.prompt(reply.child_value(1).str().unwrap_or("/")).await
     }
 
@@ -204,7 +229,9 @@ impl Service {
 
     pub async fn secret(&self, item: &str) -> anyhow::Result<Zeroizing<Vec<u8>>> {
         let session = self.session_path()?;
-        let reply = self.call(item, ITEM, "GetSecret", (session,).to_variant(), "((oayays))").await?;
+        let reply = self
+            .call(item, ITEM, "GetSecret", (session,).to_variant(), "((oayays))")
+            .await?;
         let (_, _, value, _): (ObjectPath, Vec<u8>, Vec<u8>, String) =
             reply.child_value(0).get().context("the secret's shape")?;
         Ok(Zeroizing::new(value))
@@ -212,7 +239,8 @@ impl Service {
 
     pub async fn set_secret(&self, item: &str, value: &[u8]) -> anyhow::Result<()> {
         let secret = self.secret_value(value)?;
-        self.call(item, ITEM, "SetSecret", Variant::tuple_from_iter([secret]), "()").await?;
+        self.call(item, ITEM, "SetSecret", Variant::tuple_from_iter([secret]), "()")
+            .await?;
         Ok(())
     }
 
@@ -240,7 +268,13 @@ impl Service {
         ]);
         let secret = self.secret_value(value)?;
         let reply = self
-            .call(collection, COLLECTION, "CreateItem", Variant::tuple_from_iter([props.to_variant(), secret, false.to_variant()]), "(oo)")
+            .call(
+                collection,
+                COLLECTION,
+                "CreateItem",
+                Variant::tuple_from_iter([props.to_variant(), secret, false.to_variant()]),
+                "(oo)",
+            )
             .await?;
         let item = reply.child_value(0).str().unwrap_or("/").to_owned();
         let prompt = reply.child_value(1).str().unwrap_or("/").to_owned();
@@ -265,7 +299,13 @@ impl Service {
     /// The Secret struct, `(oayays)`: a variant inside a tuple would go as
     /// `v`, so the calls that take it build their tuples by hand.
     fn secret_value(&self, value: &[u8]) -> anyhow::Result<Variant> {
-        Ok((self.session_path()?, Vec::<u8>::new(), value.to_vec(), "text/plain; charset=utf8").to_variant())
+        Ok((
+            self.session_path()?,
+            Vec::<u8>::new(),
+            value.to_vec(),
+            "text/plain; charset=utf8",
+        )
+            .to_variant())
     }
 }
 
@@ -287,17 +327,29 @@ mod tests {
                 ("xdg:schema".to_owned(), TOTP_SCHEMA.to_owned()),
                 ("issuer".to_owned(), "orbit-safe test".to_owned()),
             ]);
-            let path = service.create(&default, "orbit-safe test", &attributes, b"GEZDGNBVGY3TQOJQ").await.unwrap();
+            let path = service
+                .create(&default, "orbit-safe test", &attributes, b"GEZDGNBVGY3TQOJQ")
+                .await
+                .unwrap();
             assert_eq!(service.secret(&path).await.unwrap().as_slice(), b"GEZDGNBVGY3TQOJQ");
             service.set_secret(&path, b"MFRGGZDF").await.unwrap();
             service.set_label(&path, "orbit-safe test 2").await.unwrap();
             let collection = collections.iter().find(|c| c.path == default).unwrap();
-            let item = service.items(collection).await.unwrap().into_iter().find(|i| i.path == path).unwrap();
+            let item = service
+                .items(collection)
+                .await
+                .unwrap()
+                .into_iter()
+                .find(|i| i.path == path)
+                .unwrap();
             assert_eq!(item.label, "orbit-safe test 2");
             assert!(item.is_totp() && item.ours());
             assert_eq!(service.secret(&path).await.unwrap().as_slice(), b"MFRGGZDF");
             service.delete(&path).await.unwrap();
-            println!("collections: {:?}", collections.iter().map(|c| (&c.label, c.locked)).collect::<Vec<_>>());
+            println!(
+                "collections: {:?}",
+                collections.iter().map(|c| (&c.label, c.locked)).collect::<Vec<_>>()
+            );
         });
     }
 }

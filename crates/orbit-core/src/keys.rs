@@ -96,7 +96,12 @@ struct Held {
 
 impl Held {
     fn of(mods: &ModifiersState) -> Self {
-        Self { logo: mods.logo, alt: mods.alt, ctrl: mods.ctrl, shift: mods.shift }
+        Self {
+            logo: mods.logo,
+            alt: mods.alt,
+            ctrl: mods.ctrl,
+            shift: mods.shift,
+        }
     }
 }
 
@@ -186,12 +191,19 @@ fn parse(combo: &str, modifier: Modifier) -> Result<(Held, Keysym), String> {
 
 /// `$terminal`, `$launcher` and `$run` as `core.yaml` says.
 fn expand(command: &str, config: &Config) -> String {
-    command.replace("$terminal", &config.terminal).replace("$launcher", &config.launcher).replace("$run", &config.run)
+    command
+        .replace("$terminal", &config.terminal)
+        .replace("$launcher", &config.launcher)
+        .replace("$run", &config.run)
 }
 
 /// A Latin capital's small letter ("Q" with Shift is still Q).
 fn xkb_lower(raw: u32) -> u32 {
-    if (u32::from(b'A')..=u32::from(b'Z')).contains(&raw) { raw + 32 } else { raw }
+    if (u32::from(b'A')..=u32::from(b'Z')).contains(&raw) {
+        raw + 32
+    } else {
+        raw
+    }
 }
 
 #[cfg(test)]
@@ -199,7 +211,11 @@ mod tests {
     use super::*;
 
     fn mods(logo: bool, shift: bool) -> ModifiersState {
-        ModifiersState { logo, shift, ..Default::default() }
+        ModifiersState {
+            logo,
+            shift,
+            ..Default::default()
+        }
     }
 
     fn keys(file: &str, config: &Config) -> Keys {
@@ -224,28 +240,48 @@ mod tests {
         assert_eq!(k.command(&mods(false, true), Keysym::Q), None);
         assert_eq!(k.command(&mods(true, false), Keysym::x), None);
         assert_eq!(k.command(&mods(true, false), Keysym::_3), Some("workspace number 3"));
-        assert_eq!(k.command(&mods(true, true), Keysym::_0), Some("move container to workspace number 10"));
+        assert_eq!(
+            k.command(&mods(true, true), Keysym::_0),
+            Some("move container to workspace number 10")
+        );
         // No more modifiers held than the combination's.
-        let ctrl = ModifiersState { logo: true, ctrl: true, ..Default::default() };
+        let ctrl = ModifiersState {
+            logo: true,
+            ctrl: true,
+            ..Default::default()
+        };
         assert_eq!(k.command(&ctrl, Keysym::q), None);
     }
 
     #[test]
     fn the_file_adds_changes_and_removes() {
         let config = Config::default();
-        let k = keys("Mod+B: exec firefox\nMod+Return: exec foot\nMod+Shift+E: none\nCtrl+Alt+t: exec $terminal\n", &config);
+        let k = keys(
+            "Mod+B: exec firefox\nMod+Return: exec foot\nMod+Shift+E: none\nCtrl+Alt+t: exec $terminal\n",
+            &config,
+        );
         assert_eq!(k.command(&mods(true, false), Keysym::b), Some("exec firefox"));
         assert_eq!(k.command(&mods(true, false), Keysym::Return), Some("exec foot"));
         assert_eq!(k.command(&mods(true, true), Keysym::e), None);
-        let ctrl_alt = ModifiersState { ctrl: true, alt: true, ..Default::default() };
+        let ctrl_alt = ModifiersState {
+            ctrl: true,
+            alt: true,
+            ..Default::default()
+        };
         assert_eq!(k.command(&ctrl_alt, Keysym::t), Some("exec kitty"));
     }
 
     #[test]
     fn mod_follows_the_modifier() {
-        let config = Config { modifier: Modifier::Alt, ..Config::default() };
+        let config = Config {
+            modifier: Modifier::Alt,
+            ..Config::default()
+        };
         let k = keys("", &config);
-        let alt = ModifiersState { alt: true, ..Default::default() };
+        let alt = ModifiersState {
+            alt: true,
+            ..Default::default()
+        };
         assert_eq!(k.command(&alt, Keysym::Return), Some("exec kitty"));
         assert_eq!(k.command(&mods(true, false), Keysym::Return), None);
     }
@@ -255,6 +291,16 @@ mod tests {
         assert!(parse("Hyper+Q", Modifier::Super).is_err());
         assert!(parse("Mod+NoSuchKey", Modifier::Super).is_err());
         assert!(parse("Mod+", Modifier::Super).is_err());
-        assert_eq!(parse("mod+shift+q", Modifier::Super), Ok((Held { logo: true, shift: true, ..Default::default() }, Keysym::q)));
+        assert_eq!(
+            parse("mod+shift+q", Modifier::Super),
+            Ok((
+                Held {
+                    logo: true,
+                    shift: true,
+                    ..Default::default()
+                },
+                Keysym::q
+            ))
+        );
     }
 }

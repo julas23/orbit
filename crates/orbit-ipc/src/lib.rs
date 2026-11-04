@@ -116,7 +116,10 @@ pub fn decode(buffer: &mut Vec<u8>) -> io::Result<Option<(u32, Vec<u8>)>> {
 
 /// The socket to talk to: Orbit-Core's, or sway's.
 pub fn socket_path() -> Option<PathBuf> {
-    ["ORBIT_SOCK", "SWAYSOCK", "I3SOCK"].iter().find_map(std::env::var_os).map(PathBuf::from)
+    ["ORBIT_SOCK", "SWAYSOCK", "I3SOCK"]
+        .iter()
+        .find_map(std::env::var_os)
+        .map(PathBuf::from)
 }
 
 /// Whether a compositor that speaks this protocol is there.
@@ -129,7 +132,8 @@ pub struct Connection(UnixStream);
 
 impl Connection {
     pub fn open() -> io::Result<Self> {
-        let path = socket_path().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "neither ORBIT_SOCK nor SWAYSOCK is set"))?;
+        let path = socket_path()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "neither ORBIT_SOCK nor SWAYSOCK is set"))?;
         Ok(Self(UnixStream::connect(path)?))
     }
 
@@ -176,7 +180,10 @@ mod tests {
         buffer.extend(encode(RUN_COMMAND, b"workspace 2"));
         buffer.extend(&encode(SUBSCRIBE, b"[\"window\"]")[..5]);
         assert_eq!(decode(&mut buffer).unwrap(), Some((GET_TREE, Vec::new())));
-        assert_eq!(decode(&mut buffer).unwrap(), Some((RUN_COMMAND, b"workspace 2".to_vec())));
+        assert_eq!(
+            decode(&mut buffer).unwrap(),
+            Some((RUN_COMMAND, b"workspace 2".to_vec()))
+        );
         // Half a message: wait for the rest.
         assert_eq!(decode(&mut buffer).unwrap(), None);
         let mut junk = b"GET / HTTP/1.1\r\n".to_vec();

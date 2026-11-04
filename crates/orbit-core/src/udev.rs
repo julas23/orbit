@@ -53,7 +53,10 @@ use smithay::{
         dmabuf::{DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
     },
 };
-use smithay_drm_extras::{display_info, drm_scanner::{DrmScanEvent, DrmScanner}};
+use smithay_drm_extras::{
+    display_info,
+    drm_scanner::{DrmScanEvent, DrmScanner},
+};
 
 use crate::{
     render::{OutputElement, background, output_elements},
@@ -67,7 +70,12 @@ use crate::{
 fn wait_until_shown() {
     let active = || -> zbus::Result<bool> {
         let connection = zbus::blocking::Connection::system()?;
-        let session = zbus::blocking::Proxy::new(&connection, "org.freedesktop.login1", "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session")?;
+        let session = zbus::blocking::Proxy::new(
+            &connection,
+            "org.freedesktop.login1",
+            "/org/freedesktop/login1/session/auto",
+            "org.freedesktop.login1.Session",
+        )?;
         session.get_property::<bool>("Active")
     };
     let mut told = false;
@@ -147,7 +155,11 @@ fn gpu(seat: &str) -> anyhow::Result<std::path::PathBuf> {
     let renders = |path: &std::path::Path| {
         let Some(card) = path.file_name() else { return false };
         let dir = std::path::Path::new("/sys/class/drm").join(card).join("device/drm");
-        std::fs::read_dir(dir).is_ok_and(|entries| entries.flatten().any(|e| e.file_name().to_string_lossy().starts_with("renderD")))
+        std::fs::read_dir(dir).is_ok_and(|entries| {
+            entries
+                .flatten()
+                .any(|e| e.file_name().to_string_lossy().starts_with("renderD"))
+        })
     };
     let primary = primary_gpu(seat)?;
     let all = all_gpus(seat).unwrap_or_default();
@@ -165,7 +177,8 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     // The seat first, even behind another session: taking control holds
     // the console (graphics mode, keyboard off), so logind starts no getty
     // on it when it is shown and the keys never reach one.
-    let (mut session, notifier) = LibSeatSession::new().map_err(|e| anyhow::anyhow!("no seat session (run it from a text console): {e}"))?;
+    let (mut session, notifier) =
+        LibSeatSession::new().map_err(|e| anyhow::anyhow!("no seat session (run it from a text console): {e}"))?;
     wait_until_shown();
     let seat = session.seat();
 
@@ -173,7 +186,10 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     let node = DrmNode::from_path(&path)?;
     tracing::info!("GPU {} ({})", path.display(), node);
     let fd = session
-        .open(&path, OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK)
+        .open(
+            &path,
+            OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
+        )
         .map_err(|e| anyhow::anyhow!("opening {}: {e}", path.display()))?;
     let fd = DrmDeviceFd::new(DeviceFd::from(fd));
     let (drm, drm_notifier) = DrmDevice::new(fd.clone(), true)?;
@@ -183,7 +199,10 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     let context = EGLContext::new(&display)?;
     let mut renderer = unsafe { GlesRenderer::new(context)? };
     let render_formats = renderer.egl_context().dmabuf_render_formats().clone();
-    let render_node = node.node_with_type(NodeType::Render).and_then(Result::ok).unwrap_or(node);
+    let render_node = node
+        .node_with_type(NodeType::Render)
+        .and_then(Result::ok)
+        .unwrap_or(node);
     let manager = DrmOutputManager::new(
         drm,
         GbmAllocator::new(gbm.clone(), GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT),
@@ -207,10 +226,14 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
 
     // Keyboard, mouse, touchpad.
     let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
-    libinput.udev_assign_seat(&seat).map_err(|()| anyhow::anyhow!("libinput: no seat {seat}"))?;
+    libinput
+        .udev_assign_seat(&seat)
+        .map_err(|()| anyhow::anyhow!("libinput: no seat {seat}"))?;
     event_loop
         .handle()
-        .insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, state| state.process_input_event(event))
+        .insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, state| {
+            state.process_input_event(event)
+        })
         .map_err(|e| anyhow::anyhow!("libinput in the event loop: {e}"))?;
 
     // Leaving for another VT, and coming back.
@@ -294,7 +317,10 @@ fn scan(state: &mut Orbit) {
     };
     for event in events {
         match event {
-            DrmScanEvent::Connected { connector, crtc: Some(crtc) } => connected(state, connector, crtc),
+            DrmScanEvent::Connected {
+                connector,
+                crtc: Some(crtc),
+            } => connected(state, connector, crtc),
             DrmScanEvent::Disconnected { crtc: Some(crtc), .. } => disconnected(state, crtc),
             _ => {}
         }
@@ -305,7 +331,13 @@ fn scan(state: &mut Orbit) {
 /// The mode `wanted` in core.yaml (`1920x1080@60`; without the rate, the
 /// fastest at that size), or the monitor's preferred one.
 fn choose_mode(name: &str, modes: &[Mode], wanted: Option<&str>) -> Option<Mode> {
-    let preferred = || modes.iter().find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED)).or_else(|| modes.first()).copied();
+    let preferred = || {
+        modes
+            .iter()
+            .find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED))
+            .or_else(|| modes.first())
+            .copied()
+    };
     let Some(text) = wanted else { return preferred() };
     let Some((w, h, rate)) = crate::config::parse_mode(text) else {
         tracing::warn!("{name}: mode {text:?} is not WIDTHxHEIGHT[@HZ]; using the preferred one");
@@ -354,7 +386,10 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
             size: (w as i32, h as i32).into(),
             subpixel: connector.subpixel().into(),
             make: info.as_ref().and_then(|i| i.make()).unwrap_or_else(|| "Unknown".into()),
-            model: info.as_ref().and_then(|i| i.model()).unwrap_or_else(|| "Unknown".into()),
+            model: info
+                .as_ref()
+                .and_then(|i| i.model())
+                .unwrap_or_else(|| "Unknown".into()),
             serial_number: info.as_ref().and_then(|i| i.serial()).unwrap_or_default(),
         },
     );
@@ -386,7 +421,19 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
     };
     tracing::info!("{name}: {}x{}@{}", wl_mode.size.w, wl_mode.size.h, wl_mode.refresh);
     let modes = connector.modes().to_vec();
-    drm.surfaces.insert(crtc, Surface { output: output.clone(), modes, drm_output, global, waiting: false, scheduled: false, dirty: true, failures: 0 });
+    drm.surfaces.insert(
+        crtc,
+        Surface {
+            output: output.clone(),
+            modes,
+            drm_output,
+            global,
+            waiting: false,
+            scheduled: false,
+            dirty: true,
+            failures: 0,
+        },
+    );
     state.add_output(&output);
     state.request_render();
 }
@@ -397,29 +444,54 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
 pub fn set_mode(state: &mut Orbit, output: &Output, size: (i32, i32), refresh: i32) -> bool {
     let wanted = |m: &WlMode| m.size == size.into() && (refresh == 0 || (m.refresh - refresh).abs() < 500);
     if state.virtual_names().contains(&output.name()) {
-        let mode = WlMode { size: size.into(), refresh: if refresh == 0 { 60_000 } else { refresh } };
+        let mode = WlMode {
+            size: size.into(),
+            refresh: if refresh == 0 { 60_000 } else { refresh },
+        };
         output.change_current_state(Some(mode), None, None, None);
         return true;
     }
-    let Backend::Drm(drm) = &mut state.backend else { return false };
-    let Some(surface) = drm.surfaces.values_mut().find(|s| s.output == *output) else { return false };
-    let Some(mode) = surface.modes.iter().filter(|m| wanted(&WlMode::from(**m))).max_by_key(|m| WlMode::from(**m).refresh).copied() else {
+    let Backend::Drm(drm) = &mut state.backend else {
+        return false;
+    };
+    let Some(surface) = drm.surfaces.values_mut().find(|s| s.output == *output) else {
+        return false;
+    };
+    let Some(mode) = surface
+        .modes
+        .iter()
+        .filter(|m| wanted(&WlMode::from(**m)))
+        .max_by_key(|m| WlMode::from(**m).refresh)
+        .copied()
+    else {
         tracing::warn!("{}: no mode {}x{}@{}", output.name(), size.0, size.1, refresh);
         return false;
     };
-    if let Err(err) = surface.drm_output.use_mode(mode, &mut drm.renderer, &DrmOutputRenderElements::<_, Element>::default()) {
+    if let Err(err) = surface.drm_output.use_mode(
+        mode,
+        &mut drm.renderer,
+        &DrmOutputRenderElements::<_, Element>::default(),
+    ) {
         tracing::warn!("{}: setting {}x{}: {err}", output.name(), size.0, size.1);
         return false;
     }
     output.change_current_state(Some(WlMode::from(mode)), None, None, None);
-    tracing::info!("{}: now {}x{}@{}", output.name(), mode.size().0, mode.size().1, mode.vrefresh());
+    tracing::info!(
+        "{}: now {}x{}@{}",
+        output.name(),
+        mode.size().0,
+        mode.size().1,
+        mode.vrefresh()
+    );
     state.request_render();
     true
 }
 
 fn disconnected(state: &mut Orbit, crtc: crtc::Handle) {
     let Backend::Drm(drm) = &mut state.backend else { return };
-    let Some(surface) = drm.surfaces.remove(&crtc) else { return };
+    let Some(surface) = drm.surfaces.remove(&crtc) else {
+        return;
+    };
     tracing::info!("{}: gone", surface.output.name());
     state.display_handle.disable_global::<Orbit>(surface.global.clone());
     state.remove_output(&surface.output);
@@ -446,7 +518,9 @@ pub fn schedule(state: &mut Orbit) {
 
 fn vblank(state: &mut Orbit, crtc: crtc::Handle) {
     let Backend::Drm(drm) = &mut state.backend else { return };
-    let Some(surface) = drm.surfaces.get_mut(&crtc) else { return };
+    let Some(surface) = drm.surfaces.get_mut(&crtc) else {
+        return;
+    };
     if let Err(err) = surface.drm_output.frame_submitted() {
         tracing::warn!("frame submitted: {err:?}");
     }
@@ -461,7 +535,9 @@ fn vblank(state: &mut Orbit, crtc: crtc::Handle) {
 
 fn render(state: &mut Orbit, crtc: crtc::Handle) {
     // Taken out while drawing: the elements are built from the state.
-    let Backend::Drm(mut drm) = std::mem::replace(&mut state.backend, Backend::None) else { return };
+    let Backend::Drm(mut drm) = std::mem::replace(&mut state.backend, Backend::None) else {
+        return;
+    };
     let Some(output) = drm.surfaces.get(&crtc).map(|s| s.output.clone()) else {
         state.backend = Backend::Drm(drm);
         return;
@@ -481,7 +557,10 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
     let elements = output_elements(state, &output, &mut drm.renderer, true);
     let clear = background(state);
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
-        let failed = match surface.drm_output.render_frame(&mut drm.renderer, &elements, clear, FrameFlags::DEFAULT) {
+        let failed = match surface
+            .drm_output
+            .render_frame(&mut drm.renderer, &elements, clear, FrameFlags::DEFAULT)
+        {
             Ok(result) if !result.is_empty => match surface.drm_output.queue_frame(()) {
                 Ok(()) => {
                     surface.waiting = true;
@@ -502,10 +581,12 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
                 surface.failures += 1;
                 surface.dirty = true;
                 surface.scheduled = true;
-                let retry = state.loop_handle.insert_source(Timer::from_duration(RETRY), move |_, _, state| {
-                    render(state, crtc);
-                    TimeoutAction::Drop
-                });
+                let retry = state
+                    .loop_handle
+                    .insert_source(Timer::from_duration(RETRY), move |_, _, state| {
+                        render(state, crtc);
+                        TimeoutAction::Drop
+                    });
                 if retry.is_err() {
                     surface.scheduled = false;
                 }
@@ -533,8 +614,11 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
 fn preferred_scale(state: &Orbit, output: &Output) {
     let scale = output.current_scale().fractional_scale();
     let whole = scale.ceil() as i32;
-    let tell = |surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, states: &smithay::wayland::compositor::SurfaceData| {
-        smithay::wayland::fractional_scale::with_fractional_scale(states, |fractional| fractional.set_preferred_scale(scale));
+    let tell = |surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+                states: &smithay::wayland::compositor::SurfaceData| {
+        smithay::wayland::fractional_scale::with_fractional_scale(states, |fractional| {
+            fractional.set_preferred_scale(scale)
+        });
         smithay::wayland::compositor::send_surface_state(surface, states, whole, Transform::Normal);
     };
     for window in state.space.elements_for_output(output) {
@@ -557,7 +641,11 @@ fn preferred_scale(state: &Orbit, output: &Output) {
 pub fn send_frames(state: &mut Orbit, output: &Output) {
     let time = state.start_time.elapsed();
     preferred_scale(state, output);
-    for window in state.space.elements_for_output(output).filter(|_| state.session_shown()) {
+    for window in state
+        .space
+        .elements_for_output(output)
+        .filter(|_| state.session_shown())
+    {
         window.send_frame(output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
     }
     for layer in layer_map_for_output(output).layers().filter(|_| state.session_shown()) {
@@ -571,7 +659,13 @@ pub fn send_frames(state: &mut Orbit, output: &Output) {
             (),
             |_, _, &()| TraversalAction::DoChildren(()),
             |_, states, &()| {
-                for callback in states.cached_state.get::<SurfaceAttributes>().current().frame_callbacks.drain(..) {
+                for callback in states
+                    .cached_state
+                    .get::<SurfaceAttributes>()
+                    .current()
+                    .frame_callbacks
+                    .drain(..)
+                {
                     callback.done(time.as_millis() as u32);
                 }
             },

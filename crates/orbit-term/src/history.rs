@@ -48,12 +48,20 @@ impl History {
     pub fn load(dir: &Path) -> Self {
         let outputs = std::fs::read_to_string(dir.join("outputs.json"))
             .ok()
-            .and_then(|text| serde_json::from_str(&text).inspect_err(|e| log::warn!("term: outputs.json: {e}")).ok())
+            .and_then(|text| {
+                serde_json::from_str(&text)
+                    .inspect_err(|e| log::warn!("term: outputs.json: {e}"))
+                    .ok()
+            })
             .unwrap_or_default();
         let commands = std::fs::read_to_string(dir.join("commands"))
             .map(|text| text.lines().map(str::to_owned).collect())
             .unwrap_or_default();
-        Self { dir: dir.to_path_buf(), outputs, commands }
+        Self {
+            dir: dir.to_path_buf(),
+            outputs,
+            commands,
+        }
     }
 
     /// Notes a command for ↑ and ↓ (not twice in a row).
@@ -109,7 +117,13 @@ mod tests {
     use super::*;
 
     fn output(n: usize) -> Output {
-        Output { command: format!("echo {n}"), cwd: "~".into(), time: "t".into(), seconds: 0.0, text: n.to_string() }
+        Output {
+            command: format!("echo {n}"),
+            cwd: "~".into(),
+            time: "t".into(),
+            seconds: 0.0,
+            text: n.to_string(),
+        }
     }
 
     #[test]

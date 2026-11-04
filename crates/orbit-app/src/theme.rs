@@ -71,8 +71,7 @@ pub fn accent() -> gdk::RGBA {
     };
     match state.accent() {
         Some((r, g, b)) => gdk::RGBA::new(r as f32, g as f32, b as f32, 1.0),
-        None => gdk::RGBA::parse(if state.dark() { "#4682b4" } else { "#3b6ea5" })
-            .expect("valid colour"),
+        None => gdk::RGBA::parse(if state.dark() { "#4682b4" } else { "#3b6ea5" }).expect("valid colour"),
     }
 }
 
@@ -96,11 +95,7 @@ impl State {
         log::info!(
             "theme: {} palette{}",
             if dark { "dark" } else { "light" },
-            if self.accent().is_some() {
-                ", system accent"
-            } else {
-                ""
-            }
+            if self.accent().is_some() { ", system accent" } else { "" }
         );
     }
 
@@ -122,13 +117,11 @@ impl State {
             .ok()
         };
         // ReadOne returns (v); the older Read wraps the value once more.
-        call("ReadOne")
-            .and_then(|r| r.child_value(0).as_variant())
-            .or_else(|| {
-                call("Read")
-                    .and_then(|r| r.child_value(0).as_variant())
-                    .and_then(|v| v.as_variant())
-            })
+        call("ReadOne").and_then(|r| r.child_value(0).as_variant()).or_else(|| {
+            call("Read")
+                .and_then(|r| r.child_value(0).as_variant())
+                .and_then(|v| v.as_variant())
+        })
     }
 
     /// 1 = prefer dark, 2 = prefer light, 0 or unknown = no preference.

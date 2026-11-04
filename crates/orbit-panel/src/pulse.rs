@@ -54,16 +54,10 @@ impl Connection {
             supports_memfd: false,
             cookie,
         };
-        protocol::write_command_message(
-            sock.get_mut(),
-            0,
-            &Command::Auth(auth),
-            protocol::MAX_VERSION,
-        )
-        .map_err(other)?;
+        protocol::write_command_message(sock.get_mut(), 0, &Command::Auth(auth), protocol::MAX_VERSION)
+            .map_err(other)?;
         let (_, reply) =
-            protocol::read_reply_message::<protocol::AuthReply>(&mut sock, protocol::MAX_VERSION)
-                .map_err(other)?;
+            protocol::read_reply_message::<protocol::AuthReply>(&mut sock, protocol::MAX_VERSION).map_err(other)?;
         let version = protocol::MAX_VERSION.min(reply.version);
 
         let mut props = protocol::Props::new();
@@ -71,22 +65,15 @@ impl Connection {
             protocol::Prop::ApplicationName,
             CString::new("orbit-panel").expect("no NUL"),
         );
-        protocol::write_command_message(sock.get_mut(), 1, &Command::SetClientName(props), version)
-            .map_err(other)?;
-        protocol::read_reply_message::<protocol::SetClientNameReply>(&mut sock, version)
-            .map_err(other)?;
-        Ok(Self {
-            sock,
-            version,
-            seq: 2,
-        })
+        protocol::write_command_message(sock.get_mut(), 1, &Command::SetClientName(props), version).map_err(other)?;
+        protocol::read_reply_message::<protocol::SetClientNameReply>(&mut sock, version).map_err(other)?;
+        Ok(Self { sock, version, seq: 2 })
     }
 
     fn send(&mut self, command: &Command) -> io::Result<u32> {
         let seq = self.seq;
         self.seq = self.seq.wrapping_add(1);
-        protocol::write_command_message(self.sock.get_mut(), seq, command, self.version)
-            .map_err(other)?;
+        protocol::write_command_message(self.sock.get_mut(), seq, command, self.version).map_err(other)?;
         Ok(seq)
     }
 
@@ -94,8 +81,7 @@ impl Connection {
     pub fn default_sink(&mut self) -> io::Result<Sink> {
         self.send(&Command::GetServerInfo)?;
         let (_, server) =
-            protocol::read_reply_message::<protocol::ServerInfo>(&mut self.sock, self.version)
-                .map_err(other)?;
+            protocol::read_reply_message::<protocol::ServerInfo>(&mut self.sock, self.version).map_err(other)?;
         let name = server
             .default_sink_name
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no default sink"))?;
@@ -105,11 +91,9 @@ impl Connection {
             name: Some(name),
         }))?;
         let (_, info) =
-            protocol::read_reply_message::<protocol::SinkInfo>(&mut self.sock, self.version)
-                .map_err(other)?;
+            protocol::read_reply_message::<protocol::SinkInfo>(&mut self.sock, self.version).map_err(other)?;
         let volumes = info.cvolume.channels();
-        let average = volumes.iter().map(|v| u64::from(v.as_u32())).sum::<u64>()
-            / volumes.len().max(1) as u64;
+        let average = volumes.iter().map(|v| u64::from(v.as_u32())).sum::<u64>() / volumes.len().max(1) as u64;
         Ok(Sink {
             index: info.index,
             percent: ((average * 100 + u64::from(NORM) / 2) / u64::from(NORM)) as u32,
@@ -231,9 +215,8 @@ pub fn record_monitor(rate: u32, block: u32, mut on_samples: impl FnMut(&[f32]) 
         },
         ..Default::default()
     }))?;
-    let (_, stream) =
-        protocol::read_reply_message::<protocol::CreateRecordStreamReply>(&mut conn.sock, conn.version)
-            .map_err(other)?;
+    let (_, stream) = protocol::read_reply_message::<protocol::CreateRecordStreamReply>(&mut conn.sock, conn.version)
+        .map_err(other)?;
     log::debug!(
         "pulse: recording in blocks of {} bytes, {} µs behind",
         stream.buffer_attr.fragment_size,
@@ -245,8 +228,7 @@ pub fn record_monitor(rate: u32, block: u32, mut on_samples: impl FnMut(&[f32]) 
     loop {
         let desc = protocol::read_descriptor(&mut conn.sock).map_err(other)?;
         if desc.channel == u32::MAX {
-            let (_, command) =
-                Command::read_tag_prefixed(&mut conn.sock, conn.version).map_err(other)?;
+            let (_, command) = Command::read_tag_prefixed(&mut conn.sock, conn.version).map_err(other)?;
             match command {
                 Command::SubscribeEvent(_) => return Ok(Stop::Again),
                 Command::RecordStreamKilled(index) if index == stream.channel => return Ok(Stop::Again),
@@ -260,7 +242,11 @@ pub fn record_monitor(rate: u32, block: u32, mut on_samples: impl FnMut(&[f32]) 
             continue;
         }
         samples.clear();
-        samples.extend(bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
+        samples.extend(
+            bytes
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+        );
         if !on_samples(&samples) {
             return Ok(Stop::Done);
         }

@@ -62,7 +62,11 @@ impl Note {
     pub fn from_call(id: u32, params: &glib::Variant, sender: Option<&str>) -> Note {
         let string = |i: usize| params.child_value(i).str().unwrap_or_default().to_owned();
         let list: Vec<String> = params.child_value(5).get().unwrap_or_default();
-        let actions = list.chunks(2).filter(|p| p.len() == 2).map(|p| (p[0].clone(), p[1].clone())).collect();
+        let actions = list
+            .chunks(2)
+            .filter(|p| p.len() == 2)
+            .map(|p| (p[0].clone(), p[1].clone()))
+            .collect();
         let hints = glib::VariantDict::new(Some(&params.child_value(6)));
         let hint_str = |keys: &[&str]| {
             keys.iter()
@@ -70,11 +74,18 @@ impl Note {
                 .unwrap_or_default()
         };
         let hint_bool = |key: &str| {
-            hints.lookup_value(key, None).and_then(|v| v.get::<bool>()).unwrap_or(false)
+            hints
+                .lookup_value(key, None)
+                .and_then(|v| v.get::<bool>())
+                .unwrap_or(false)
         };
         let urgency = hints
             .lookup_value("urgency", None)
-            .and_then(|v| v.get::<u8>().or_else(|| v.get::<u32>().map(|u| u as u8)).or_else(|| v.get::<i32>().map(|u| u as u8)))
+            .and_then(|v| {
+                v.get::<u8>()
+                    .or_else(|| v.get::<u32>().map(|u| u as u8))
+                    .or_else(|| v.get::<i32>().map(|u| u as u8))
+            })
             .unwrap_or(1)
             .min(2);
         let image = ["image-data", "image_data", "icon_data"]
@@ -112,7 +123,11 @@ impl Note {
 
     /// The group in the centre: the app's desktop file, or its name.
     pub fn group(&self) -> &str {
-        if self.desktop.is_empty() { &self.app } else { &self.desktop }
+        if self.desktop.is_empty() {
+            &self.app
+        } else {
+            &self.desktop
+        }
     }
 
     /// Whether clicking it can tell the program.
@@ -159,7 +174,11 @@ pub fn body_markup(body: &str) -> String {
     text.push_str(rest);
     let text = text.trim().to_owned();
     // Links are GTK's, not Pango's: checked as spans.
-    if gtk::pango::parse_markup(&links_as_spans(&text), '\0').is_ok() { text } else { glib::markup_escape_text(&text).to_string() }
+    if gtk::pango::parse_markup(&links_as_spans(&text), '\0').is_ok() {
+        text
+    } else {
+        glib::markup_escape_text(&text).to_string()
+    }
 }
 
 fn links_as_spans(text: &str) -> String {
@@ -194,10 +213,22 @@ fn texture(v: &glib::Variant) -> Option<gdk::Texture> {
     let alpha = v.child_value(3).get::<bool>()?;
     let bits = v.child_value(4).get::<i32>()?;
     let bytes = glib::Bytes::from(v.child_value(6).data());
-    if width <= 0 || height <= 0 || bits != 8 || bytes.len() < (stride * (height - 1) + width * if alpha { 4 } else { 3 }) as usize {
+    if width <= 0
+        || height <= 0
+        || bits != 8
+        || bytes.len() < (stride * (height - 1) + width * if alpha { 4 } else { 3 }) as usize
+    {
         return None;
     }
-    let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_bytes(&bytes, gtk::gdk_pixbuf::Colorspace::Rgb, alpha, bits, width, height, stride);
+    let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_bytes(
+        &bytes,
+        gtk::gdk_pixbuf::Colorspace::Rgb,
+        alpha,
+        bits,
+        width,
+        height,
+        stride,
+    );
     let side = width.max(height);
     let pixbuf = if side > IMAGE_MAX {
         let scale = IMAGE_MAX as f64 / side as f64;
@@ -232,7 +263,10 @@ pub struct Saved {
 }
 
 pub fn load() -> Saved {
-    std::fs::read_to_string(history_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    std::fs::read_to_string(history_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
 }
 
 pub fn save(saved: &Saved) {
@@ -245,7 +279,12 @@ pub fn save(saved: &Saved) {
         let text = serde_json::to_string(saved).map_err(std::io::Error::other)?;
         let tmp = path.with_extension("json.tmp");
         // Notifications can carry private text: readable by their owner only.
-        let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)?;
         f.write_all(text.as_bytes())?;
         std::fs::rename(&tmp, &path)
     };
@@ -264,7 +303,10 @@ mod tests {
         assert_eq!(body_markup("a & b < c"), "a &amp; b &lt; c");
         assert_eq!(body_markup("foto <img src=\"x.png\" alt=\"x\"/> aqui"), "foto  aqui");
         assert_eq!(body_markup("linha<br/>outra"), "linha\noutra");
-        assert_eq!(body_markup("<a href=\"https://x.org\">link</a>"), "<a href=\"https://x.org\">link</a>");
+        assert_eq!(
+            body_markup("<a href=\"https://x.org\">link</a>"),
+            "<a href=\"https://x.org\">link</a>"
+        );
         assert_eq!(body_markup("eu <3 rust"), "eu &lt;3 rust");
     }
 }

@@ -30,8 +30,18 @@ impl WlrLayerShellHandler for Orbit {
         &mut self.layer_shell_state
     }
 
-    fn new_layer_surface(&mut self, surface: WlrLayerSurface, output: Option<WlOutput>, _layer: Layer, namespace: String) {
-        let Some(output) = output.as_ref().and_then(Output::from_resource).or_else(|| self.pointer_output()) else {
+    fn new_layer_surface(
+        &mut self,
+        surface: WlrLayerSurface,
+        output: Option<WlOutput>,
+        _layer: Layer,
+        namespace: String,
+    ) {
+        let Some(output) = output
+            .as_ref()
+            .and_then(Output::from_resource)
+            .or_else(|| self.pointer_output())
+        else {
             tracing::warn!("layer surface {namespace}: no output");
             return;
         };
@@ -68,10 +78,17 @@ impl WlrLayerShellHandler for Orbit {
     fn layer_destroyed(&mut self, surface: WlrLayerSurface) {
         let gone = self.space.outputs().find_map(|o| {
             let map = layer_map_for_output(o);
-            map.layers().find(|l| l.layer_surface() == &surface).cloned().map(|l| (o.clone(), l))
+            map.layers()
+                .find(|l| l.layer_surface() == &surface)
+                .cloned()
+                .map(|l| (o.clone(), l))
         });
         let Some((output, layer)) = gone else { return };
-        let had_keyboard = self.seat.get_keyboard().and_then(|k| k.current_focus()).is_some_and(|f| f.is(layer.wl_surface()));
+        let had_keyboard = self
+            .seat
+            .get_keyboard()
+            .and_then(|k| k.current_focus())
+            .is_some_and(|f| f.is(layer.wl_surface()));
         layer_map_for_output(&output).unmap_layer(&layer);
         // Its room goes back to the windows.
         self.arrange();

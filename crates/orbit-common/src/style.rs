@@ -17,21 +17,13 @@ impl Style {
     pub fn install(display: &gdk::Display, builtin_css: &str, user_path: &Path) -> Self {
         let builtin = gtk::CssProvider::new();
         builtin.load_from_string(builtin_css);
-        gtk::style_context_add_provider_for_display(
-            display,
-            &builtin,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
+        gtk::style_context_add_provider_for_display(display, &builtin, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
         let user = gtk::CssProvider::new();
         user.connect_parsing_error(|_, section, err| {
             log::warn!("css: {}: {}", section.to_str(), err.message());
         });
-        gtk::style_context_add_provider_for_display(
-            display,
-            &user,
-            gtk::STYLE_PROVIDER_PRIORITY_USER,
-        );
+        gtk::style_context_add_provider_for_display(display, &user, gtk::STYLE_PROVIDER_PRIORITY_USER);
 
         let file = gio::File::for_path(user_path);
         load_user(&user, &file);

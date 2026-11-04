@@ -114,7 +114,11 @@ impl Look {
         let target = self.target();
         self.edge = self.edge.towards(target, 1.0 - (-dt / EDGE_TAU).exp());
         self.core = self.core.towards(target, 1.0 - (-dt / CORE_TAU).exp());
-        let alpha = if self.online && !self.frame.off { 1.0 } else { OFFLINE_ALPHA };
+        let alpha = if self.online && !self.frame.off {
+            1.0
+        } else {
+            OFFLINE_ALPHA
+        };
         self.alpha += (alpha - self.alpha) * (1.0 - (-dt / CORE_TAU).exp());
         let mut resting = true;
         for (k, shown) in self.bands.iter_mut().enumerate() {
@@ -163,7 +167,10 @@ pub fn new(_config: &AigentConfig, form: Form) -> gtk::Widget {
         .can_target(false)
         .build();
     let root: gtk::Widget = if form == Form::Full {
-        let overlay = gtk::Overlay::builder().child(&area).css_classes(["aigent-card"]).build();
+        let overlay = gtk::Overlay::builder()
+            .child(&area)
+            .css_classes(["aigent-card"])
+            .build();
         overlay.add_overlay(&agent);
         overlay.upcast()
     } else {
@@ -217,7 +224,9 @@ pub fn new(_config: &AigentConfig, form: Form) -> gtk::Widget {
         glib::spawn_future_local(async move {
             while woken.recv().await.is_ok() {
                 let Some(root) = weak.upgrade() else { break };
-                let Some(message) = latest.lock().unwrap().take() else { continue };
+                let Some(message) = latest.lock().unwrap().take() else {
+                    continue;
+                };
                 let mut look = look.borrow_mut();
                 match message {
                     Message::Frame(frame) => {
@@ -500,7 +509,9 @@ mod tests {
         Look {
             frame: Frame {
                 state,
-                bands: (0..BANDS).map(|k| bands * (0.4 + 0.6 * ((k as f32) * 0.7).sin().abs())).collect(),
+                bands: (0..BANDS)
+                    .map(|k| bands * (0.4 + 0.6 * ((k as f32) * 0.7).sin().abs()))
+                    .collect(),
                 ..Frame::default()
             },
             online: true,
@@ -557,7 +568,9 @@ mod tests {
     #[test]
     #[ignore]
     fn draws_the_states() {
-        let Ok(path) = std::env::var("ORBIT_AIGENT_PPM") else { return };
+        let Ok(path) = std::env::var("ORBIT_AIGENT_PPM") else {
+            return;
+        };
         let (scale, gap) = (4.0, 10.0);
         let states = [
             (State::Idle, 0.0, 0.0),
@@ -569,7 +582,8 @@ mod tests {
         let width = gap + states.len() as f64 * (fw + gap);
         let height = gap + fh + gap + mh + gap;
         let mut surface =
-            cairo::ImageSurface::create(cairo::Format::ARgb32, (width * scale) as i32, (height * scale) as i32).unwrap();
+            cairo::ImageSurface::create(cairo::Format::ARgb32, (width * scale) as i32, (height * scale) as i32)
+                .unwrap();
         let cr = cairo::Context::new(&surface).unwrap();
         cr.scale(scale, scale);
         cr.set_source_rgb(0.08, 0.09, 0.11);
@@ -595,7 +609,11 @@ mod tests {
         }
         drop(cr);
         surface.flush();
-        let (w, h, stride) = (surface.width() as usize, surface.height() as usize, surface.stride() as usize);
+        let (w, h, stride) = (
+            surface.width() as usize,
+            surface.height() as usize,
+            surface.stride() as usize,
+        );
         let data = surface.data().unwrap();
         let mut ppm = format!("P6 {w} {h} 255\n").into_bytes();
         for y in 0..h {

@@ -65,11 +65,18 @@ impl Dialog {
         }
 
         let icon = gtk::Image::builder()
-            .icon_name(if request.icon.is_empty() { "dialog-password-symbolic" } else { &request.icon })
+            .icon_name(if request.icon.is_empty() {
+                "dialog-password-symbolic"
+            } else {
+                &request.icon
+            })
             .pixel_size(50)
             .css_classes(["icon"])
             .build();
-        let title = gtk::Label::builder().label(tr("polkit-title")).css_classes(["title"]).build();
+        let title = gtk::Label::builder()
+            .label(tr("polkit-title"))
+            .css_classes(["title"])
+            .build();
         let what = gtk::Label::builder()
             .label(&request.message)
             .wrap(true)
@@ -87,7 +94,11 @@ impl Dialog {
             list.add_css_class("users");
             list.upcast()
         } else {
-            gtk::Label::builder().label(shown_name(&request.users[0])).css_classes(["name"]).build().upcast()
+            gtk::Label::builder()
+                .label(shown_name(&request.users[0]))
+                .css_classes(["name"])
+                .build()
+                .upcast()
         };
         let password = gtk::Entry::builder()
             .visibility(false)
@@ -96,10 +107,19 @@ impl Dialog {
             .sensitive(false)
             .css_classes(["password"])
             .build();
-        let message = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).css_classes(["message"]).build();
+        let message = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .css_classes(["message"])
+            .build();
 
-        let details = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["details"]).build();
-        for (key, value) in std::iter::once(("action".to_owned(), request.action.clone())).chain(request.details.iter().cloned()) {
+        let details = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["details"])
+            .build();
+        for (key, value) in
+            std::iter::once(("action".to_owned(), request.action.clone())).chain(request.details.iter().cloned())
+        {
             let line = gtk::Label::builder()
                 .label(format!("{key}: {value}"))
                 .xalign(0.0)
@@ -109,11 +129,23 @@ impl Dialog {
                 .build();
             details.append(&line);
         }
-        let expander = gtk::Expander::builder().label(tr("polkit-details")).child(&details).css_classes(["more"]).build();
+        let expander = gtk::Expander::builder()
+            .label(tr("polkit-details"))
+            .child(&details)
+            .css_classes(["more"])
+            .build();
 
         let cancel = gtk::Button::builder().label(tr("polkit-cancel")).hexpand(true).build();
-        let allow = gtk::Button::builder().label(tr("polkit-authenticate")).hexpand(true).css_classes(["suggested-action"]).build();
-        let buttons = gtk::Box::builder().spacing(10).css_classes(["buttons"]).homogeneous(true).build();
+        let allow = gtk::Button::builder()
+            .label(tr("polkit-authenticate"))
+            .hexpand(true)
+            .css_classes(["suggested-action"])
+            .build();
+        let buttons = gtk::Box::builder()
+            .spacing(10)
+            .css_classes(["buttons"])
+            .homogeneous(true)
+            .build();
         buttons.append(&cancel);
         buttons.append(&allow);
 
@@ -317,12 +349,16 @@ impl Dialog {
     /// Answers polkitd (an error name, or allowed) and goes away; only the
     /// first call counts.
     fn finish(&self, error: Option<&str>) {
-        let Some(request) = self.request.borrow_mut().take() else { return };
+        let Some(request) = self.request.borrow_mut().take() else {
+            return;
+        };
         self.tries.set(self.tries.get() + 1);
         self.helper.borrow_mut().take();
         match error {
             None => request.invocation.return_value(None),
-            Some(name) => request.invocation.return_dbus_error(name, "the authentication dialog was dismissed"),
+            Some(name) => request
+                .invocation
+                .return_dbus_error(name, "the authentication dialog was dismissed"),
         }
         self.window.destroy();
         if let Some(finished) = self.finished.borrow_mut().take() {

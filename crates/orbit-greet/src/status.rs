@@ -32,7 +32,11 @@ impl Item {
         let content = gtk::Box::builder().spacing(5).build();
         content.append(&glyph);
         content.append(&line);
-        let button = gtk::Button::builder().child(&content).css_classes(["item", class]).can_focus(false).build();
+        let button = gtk::Button::builder()
+            .child(&content)
+            .css_classes(["item", class])
+            .can_focus(false)
+            .build();
         Self { button, glyph, line }
     }
 
@@ -44,7 +48,12 @@ impl Item {
 }
 
 pub fn new(display: &gdk::Display) -> gtk::Widget {
-    let row = gtk::Box::builder().spacing(10).css_classes(["status"]).halign(gtk::Align::End).valign(gtk::Align::Start).build();
+    let row = gtk::Box::builder()
+        .spacing(10)
+        .css_classes(["status"])
+        .halign(gtk::Align::End)
+        .valign(gtk::Align::Start)
+        .build();
     for item in [keyboard(display), network(), battery()].into_iter().flatten() {
         row.append(&item);
     }
@@ -60,7 +69,9 @@ fn keyboard(display: &gdk::Display) -> Option<gtk::Widget> {
         move |device: &gdk::Device| {
             let names = device.layout_names();
             count.set(names.len());
-            let active = usize::try_from(device.active_layout_index()).ok().and_then(|i| names.get(i));
+            let active = usize::try_from(device.active_layout_index())
+                .ok()
+                .and_then(|i| names.get(i));
             match active {
                 Some(name) => {
                     item.show("\u{f030c}", short_layout(name)); // 󰌌
@@ -81,7 +92,8 @@ fn keyboard(display: &gdk::Display) -> Option<gtk::Widget> {
     device.connect_changed(show);
     item.button.connect_clicked(move |_| {
         if count.get() > 1 {
-            let sent = sway::Connection::open().and_then(|mut c| c.request(sway::RUN_COMMAND, "input type:keyboard xkb_switch_layout next"));
+            let sent = sway::Connection::open()
+                .and_then(|mut c| c.request(sway::RUN_COMMAND, "input type:keyboard xkb_switch_layout next"));
             if let Err(err) = sent {
                 log::warn!("keyboard: no layout switch through the core's IPC: {err}");
             }
@@ -93,7 +105,8 @@ fn keyboard(display: &gdk::Display) -> Option<gtk::Widget> {
 /// "English (US, alt. intl.)" → "US, alt. intl."; a name without the
 /// parentheses stays whole.
 fn short_layout(name: &str) -> &str {
-    name.split_once(" (").map_or(name, |(_, rest)| rest.trim_end_matches(')'))
+    name.split_once(" (")
+        .map_or(name, |(_, rest)| rest.trim_end_matches(')'))
 }
 
 fn network() -> Option<gtk::Widget> {
@@ -110,7 +123,9 @@ fn network() -> Option<gtk::Widget> {
 }
 
 fn show_network(item: &Item, conn: &gio::DBusConnection) {
-    let get = |path: &str, iface: &str, name: &str| property(conn, NM, path, iface, name).and_then(|v| v.str().map(str::to_owned));
+    let get = |path: &str, iface: &str, name: &str| {
+        property(conn, NM, path, iface, name).and_then(|v| v.str().map(str::to_owned))
+    };
     let Some(active) = get("/org/freedesktop/NetworkManager", NM, "PrimaryConnection").filter(|p| p != "/") else {
         item.show("\u{f05aa}", &tr("network-none")); // 󰖪
         return;
@@ -118,9 +133,9 @@ fn show_network(item: &Item, conn: &gio::DBusConnection) {
     let iface = "org.freedesktop.NetworkManager.Connection.Active";
     let id = get(&active, iface, "Id").unwrap_or_default();
     let glyph = match get(&active, iface, "Type").as_deref() {
-        Some("802-11-wireless") => "\u{f05a9}", // 󰖩
+        Some("802-11-wireless") => "\u{f05a9}",   // 󰖩
         Some("vpn" | "wireguard") => "\u{f0582}", // 󰖂
-        _ => "\u{f0200}", // 󰈀
+        _ => "\u{f0200}",                         // 󰈀
     };
     item.show(glyph, &id);
 }
@@ -140,7 +155,8 @@ fn battery() -> Option<gtk::Widget> {
 
 fn show_battery(item: &Item, conn: &gio::DBusConnection) {
     let get = |name: &str| property(conn, UPOWER, DISPLAY, "org.freedesktop.UPower.Device", name);
-    let present = get("IsPresent").and_then(|v| v.get::<bool>()).unwrap_or(false) && get("Type").and_then(|v| v.get::<u32>()) == Some(2); // 2 = battery
+    let present = get("IsPresent").and_then(|v| v.get::<bool>()).unwrap_or(false)
+        && get("Type").and_then(|v| v.get::<u32>()) == Some(2); // 2 = battery
     if !present {
         item.button.set_visible(false);
         return;
@@ -160,7 +176,9 @@ fn show_battery(item: &Item, conn: &gio::DBusConnection) {
 }
 
 fn system_bus() -> Option<gio::DBusConnection> {
-    gio::bus_get_sync(gio::BusType::System, gio::Cancellable::NONE).inspect_err(|err| log::warn!("status: no system bus: {err}")).ok()
+    gio::bus_get_sync(gio::BusType::System, gio::Cancellable::NONE)
+        .inspect_err(|err| log::warn!("status: no system bus: {err}"))
+        .ok()
 }
 
 /// Reads one D-Bus property.
@@ -183,19 +201,32 @@ fn property(conn: &gio::DBusConnection, dest: &str, path: &str, iface: &str, nam
 
 /// Calls `refresh` once, on the next idle, after any PropertiesChanged
 /// from `sender` (NetworkManager sends them in bursts).
-fn on_changes(conn: &gio::DBusConnection, sender: &str, path: Option<&str>, refresh: impl Fn() + 'static) -> gio::SignalSubscription {
+fn on_changes(
+    conn: &gio::DBusConnection,
+    sender: &str,
+    path: Option<&str>,
+    refresh: impl Fn() + 'static,
+) -> gio::SignalSubscription {
     let refresh = Rc::new(refresh);
     let pending = Rc::new(Cell::new(false));
-    conn.subscribe_to_signal(Some(sender), Some("org.freedesktop.DBus.Properties"), Some("PropertiesChanged"), path, None, gio::DBusSignalFlags::NONE, move |_| {
-        if pending.replace(true) {
-            return;
-        }
-        let (refresh, pending) = (refresh.clone(), pending.clone());
-        glib::idle_add_local_once(move || {
-            pending.set(false);
-            refresh();
-        });
-    })
+    conn.subscribe_to_signal(
+        Some(sender),
+        Some("org.freedesktop.DBus.Properties"),
+        Some("PropertiesChanged"),
+        path,
+        None,
+        gio::DBusSignalFlags::NONE,
+        move |_| {
+            if pending.replace(true) {
+                return;
+            }
+            let (refresh, pending) = (refresh.clone(), pending.clone());
+            glib::idle_add_local_once(move || {
+                pending.set(false);
+                refresh();
+            });
+        },
+    )
 }
 
 /// Keeps `keep` alive as long as `widget` exists.

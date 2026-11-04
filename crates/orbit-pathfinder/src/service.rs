@@ -135,14 +135,19 @@ impl Env {
             name,
             move |context| {
                 let urls = env.notify_origins.borrow().get(&name).cloned().unwrap_or_default();
-                let origins: Vec<webkit6::SecurityOrigin> = urls.iter().map(|u| webkit6::SecurityOrigin::for_uri(u)).collect();
+                let origins: Vec<webkit6::SecurityOrigin> =
+                    urls.iter().map(|u| webkit6::SecurityOrigin::for_uri(u)).collect();
                 let refs: Vec<&webkit6::SecurityOrigin> = origins.iter().collect();
                 context.initialize_notification_permissions(&refs, &[]);
             }
         ));
 
         let waiting: Waiting = Rc::new(RefCell::new(Some(Vec::new())));
-        let profile = Rc::new(Profile { session: session.clone(), context, waiting: waiting.clone() });
+        let profile = Rc::new(Profile {
+            session: session.clone(),
+            context,
+            waiting: waiting.clone(),
+        });
         self.profiles.borrow_mut().insert(name, profile.clone());
         let ready = move || {
             let list = waiting.borrow_mut().take().unwrap_or_default();
@@ -168,7 +173,11 @@ impl Env {
         let url = privacy::clean(url);
         if let Some(command) = &self.external_browser {
             let quoted = glib::shell_quote(&url).to_string_lossy().into_owned();
-            let line = if command.contains("%u") { command.replace("%u", &quoted) } else { format!("{command} {quoted}") };
+            let line = if command.contains("%u") {
+                command.replace("%u", &quoted)
+            } else {
+                format!("{command} {quoted}")
+            };
             match glib::shell_parse_argv(&line) {
                 Ok(argv) => {
                     let args: Vec<&std::ffi::OsStr> = argv.iter().map(|a| a.as_os_str()).collect();
@@ -188,7 +197,6 @@ impl Env {
 
 /// The size of a service's icon on its button.
 const ICON: i32 = 22;
-
 
 pub struct Service {
     pub cfg: RefCell<config::Service>,
@@ -235,7 +243,10 @@ pub struct Service {
 
 impl Service {
     pub fn new(cfg: config::Service, env: &Rc<Env>, zoom: f64) -> Rc<Self> {
-        let image = gtk::Image::builder().pixel_size(ICON).css_classes(["service-icon"]).build();
+        let image = gtk::Image::builder()
+            .pixel_size(ICON)
+            .css_classes(["service-icon"])
+            .build();
         let badge = gtk::Label::builder()
             .css_classes(["badge"])
             .halign(gtk::Align::End)
@@ -255,7 +266,11 @@ impl Service {
         {
             shield.attach(&content);
         }
-        let recipe = if cfg.browser { None } else { env.recipes.find(cfg.recipe.as_deref(), &cfg.url).cloned() };
+        let recipe = if cfg.browser {
+            None
+        } else {
+            env.recipes.find(cfg.recipe.as_deref(), &cfg.url).cloned()
+        };
         let script = recipe.as_ref().and_then(|r| r.script());
         if let Some(source) = &script {
             let script = webkit6::UserScript::for_world(
@@ -295,13 +310,19 @@ impl Service {
         });
         service.apply_icon();
         if script.is_some() {
-            log::info!("{}: recipe {}", service.key, service.recipe.as_ref().map(|r| r.id.as_str()).unwrap_or_default());
+            log::info!(
+                "{}: recipe {}",
+                service.key,
+                service.recipe.as_ref().map(|r| r.id.as_str()).unwrap_or_default()
+            );
             let weak = Rc::downgrade(&service);
-            service.content.connect_script_message_received(Some(recipe::HANDLER), move |_, value| {
-                if let Some(service) = weak.upgrade() {
-                    service.recipe_message(&value.to_str());
-                }
-            });
+            service
+                .content
+                .connect_script_message_received(Some(recipe::HANDLER), move |_, value| {
+                    if let Some(service) = weak.upgrade() {
+                        service.recipe_message(&value.to_str());
+                    }
+                });
         }
         service
     }
@@ -309,7 +330,9 @@ impl Service {
     /// What the recipe in the page says: a count, a link to open, a page
     /// script to run.
     fn recipe_message(&self, text: &str) {
-        let Ok(message) = serde_json::from_str::<serde_json::Value>(text) else { return };
+        let Ok(message) = serde_json::from_str::<serde_json::Value>(text) else {
+            return;
+        };
         if let Some(counts) = message.get("badge").and_then(|b| b.as_array()) {
             let n = |i: usize| counts.get(i).and_then(|v| v.as_u64()).unwrap_or(0).min(u32::MAX as u64) as u32;
             self.recipe_counts.set(true);
@@ -342,7 +365,8 @@ impl Service {
         let (n, indirect) = (self.unread.get(), self.indirect.get());
         if n > 0 {
             self.badge.remove_css_class("indirect");
-            self.badge.set_label(&if n > 99 { "99+".to_owned() } else { n.to_string() });
+            self.badge
+                .set_label(&if n > 99 { "99+".to_owned() } else { n.to_string() });
         } else {
             self.badge.add_css_class("indirect");
             self.badge.set_label("");
@@ -401,7 +425,11 @@ impl Service {
     /// where it was; the next click loads it there. The count stays as it
     /// was last read.
     pub fn hibernate(&self) {
-        *self.resume.borrow_mut() = self.view().and_then(|v| v.uri()).map(|u| u.to_string()).filter(|u| u.starts_with("http"));
+        *self.resume.borrow_mut() = self
+            .view()
+            .and_then(|v| v.uri())
+            .map(|u| u.to_string())
+            .filter(|u| u.starts_with("http"));
         self.drop_view();
         self.button.add_css_class("hibernated");
     }
@@ -417,7 +445,12 @@ impl Service {
             // Not opened this run: what was saved stays.
             return self.restore.borrow().0.clone();
         }
-        self.views.borrow().iter().filter_map(|v| v.uri().map(|u| u.to_string())).filter(|u| u.starts_with("http")).collect()
+        self.views
+            .borrow()
+            .iter()
+            .filter_map(|v| v.uri().map(|u| u.to_string()))
+            .filter(|u| u.starts_with("http"))
+            .collect()
     }
 
     pub fn zoom(&self) -> f64 {
@@ -449,7 +482,9 @@ impl Service {
         match icon {
             Some(url) if url.starts_with("https://") || url.starts_with("http://") => {
                 match cached {
-                    Some(file) => self.image.set_from_gicon(&gio::FileIcon::new(&gio::File::for_path(file))),
+                    Some(file) => self
+                        .image
+                        .set_from_gicon(&gio::FileIcon::new(&gio::File::for_path(file))),
                     None => placeholder(),
                 }
                 self.fetch_icon(url);
@@ -460,7 +495,9 @@ impl Service {
             }
             Some(name) => self.image.set_icon_name(Some(&name)),
             None => match cached {
-                Some(file) => self.image.set_from_gicon(&gio::FileIcon::new(&gio::File::for_path(file))),
+                Some(file) => self
+                    .image
+                    .set_from_gicon(&gio::FileIcon::new(&gio::File::for_path(file))),
                 None => placeholder(),
             },
         }
@@ -493,7 +530,12 @@ impl Service {
     /// A page a script opened (`window.open`), taken as a tab: it shares the
     /// opener's storage and process, as WebKit requires.
     fn adopt_tab(self: &Rc<Self>, opener: &webkit6::WebView) -> webkit6::WebView {
-        let view = webkit6::WebView::builder().related_view(opener).user_content_manager(&self.content).hexpand(true).vexpand(true).build();
+        let view = webkit6::WebView::builder()
+            .related_view(opener)
+            .user_content_manager(&self.content)
+            .hexpand(true)
+            .vexpand(true)
+            .build();
         if let Some(settings) = WebViewExt::settings(opener) {
             view.set_settings(&settings);
         }
@@ -578,15 +620,26 @@ impl Service {
         let changed = trust::changed(&env.data, host, certificate);
         let mut detail = tr_args("pathfinder-cert-detail", &[("host", text(host.to_owned()))]);
         if changed {
-            detail = format!("{}\n\n{detail}", tr_args("pathfinder-cert-changed", &[("host", text(host.to_owned()))]));
+            detail = format!(
+                "{}\n\n{detail}",
+                tr_args("pathfinder-cert-changed", &[("host", text(host.to_owned()))])
+            );
         }
         let subject = certificate.subject_name().map(|s| s.to_string()).unwrap_or_default();
-        let until = certificate.not_valid_after().and_then(|d| d.format("%x").ok()).map(|d| d.to_string()).unwrap_or_default();
+        let until = certificate
+            .not_valid_after()
+            .and_then(|d| d.format("%x").ok())
+            .map(|d| d.to_string())
+            .unwrap_or_default();
         detail = format!(
             "{detail}\n\n{}",
             tr_args(
                 "pathfinder-cert-facts",
-                &[("subject", text(subject)), ("until", text(until)), ("sha256", text(trust::fingerprint(certificate)))],
+                &[
+                    ("subject", text(subject)),
+                    ("until", text(until)),
+                    ("sha256", text(trust::fingerprint(certificate)))
+                ],
             )
         );
         let dialog = gtk::AlertDialog::builder()
@@ -619,7 +672,9 @@ impl Service {
         if !self.cfg.borrow().browser {
             return false;
         }
-        let Some(http) = privacy::http_fallback(uri) else { return false };
+        let Some(http) = privacy::http_fallback(uri) else {
+            return false;
+        };
         if self.tried_http.borrow().as_deref() == Some(uri) {
             return false;
         }
@@ -636,7 +691,9 @@ impl Service {
             move || fetch(&url),
             move |bytes| {
                 let Some(service) = weak.upgrade() else { return };
-                match bytes.and_then(|b| gdk::Texture::from_bytes(&glib::Bytes::from_owned(b)).map_err(|e| e.to_string())) {
+                match bytes
+                    .and_then(|b| gdk::Texture::from_bytes(&glib::Bytes::from_owned(b)).map_err(|e| e.to_string()))
+                {
                     Ok(texture) => {
                         service.good_icon.set(true);
                         service.show_icon(&texture);
@@ -689,7 +746,10 @@ impl Service {
     /// Writes the session cookies of a loaded service (see `cookies`),
     /// then calls `done`.
     pub fn save_cookies(&self, done: impl FnOnce() + 'static) {
-        let manager = self.view().and_then(|v| v.network_session()).and_then(|s| s.cookie_manager());
+        let manager = self
+            .view()
+            .and_then(|v| v.network_session())
+            .and_then(|s| s.cookie_manager());
         match (manager, self.env.upgrade()) {
             (Some(manager), Some(env)) => cookies::save(&manager, &env.profile_dir(&self.profile()), done),
             _ => done(),
@@ -722,14 +782,21 @@ impl Service {
         if let Some(env) = self.env.upgrade() {
             cookies::forget(&env.profile_dir(&self.profile()));
         }
-        let Some(manager) = view.network_session().and_then(|s| s.website_data_manager()) else { return };
+        let Some(manager) = view.network_session().and_then(|s| s.website_data_manager()) else {
+            return;
+        };
         let guard = glib::thread_guard::ThreadGuard::new(view.clone());
-        manager.clear(webkit6::WebsiteDataTypes::ALL, glib::TimeSpan::from_seconds(0), gio::Cancellable::NONE, move |result| {
-            if let Err(err) = result {
-                log::warn!("clearing data: {err}");
-            }
-            guard.get_ref().reload();
-        });
+        manager.clear(
+            webkit6::WebsiteDataTypes::ALL,
+            glib::TimeSpan::from_seconds(0),
+            gio::Cancellable::NONE,
+            move |result| {
+                if let Err(err) = result {
+                    log::warn!("clearing data: {err}");
+                }
+                guard.get_ref().reload();
+            },
+        );
     }
 
     fn set_unread(&self, n: u32) {
@@ -851,7 +918,10 @@ impl Service {
             weak,
             move |view, event| {
                 let Some(service) = weak.upgrade() else { return };
-                if event != webkit6::LoadEvent::Finished || service.good_icon.get() || service.cfg.borrow().icon.is_some() {
+                if event != webkit6::LoadEvent::Finished
+                    || service.good_icon.get()
+                    || service.cfg.borrow().icon.is_some()
+                {
                     return;
                 }
                 let has_favicon = view.favicon().is_some();
@@ -867,7 +937,8 @@ impl Service {
                         let Ok(value) = result else { return };
                         let found = value.to_str();
                         let (kind, url) = found.split_once(' ').unwrap_or(("", ""));
-                        if url.starts_with("https://") && (kind == "touch" || !has_favicon) && !service.good_icon.get() {
+                        if url.starts_with("https://") && (kind == "touch" || !has_favicon) && !service.good_icon.get()
+                        {
                             // Once a run: further pages need not ask again.
                             service.good_icon.set(true);
                             service.fetch_icon(url.to_owned());
@@ -902,7 +973,11 @@ impl Service {
                     // pointer lock, storage across sites and the rest are not.
                     request.is::<webkit6::ClipboardPermissionRequest>()
                 };
-                if allow { request.allow() } else { request.deny() }
+                if allow {
+                    request.allow()
+                } else {
+                    request.deny()
+                }
                 true
             }
         ));
@@ -915,15 +990,26 @@ impl Service {
             false,
             move |view, decision, kind| {
                 let Some(service) = weak.upgrade() else { return false };
-                let Some(nav) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else { return false };
-                let Some(action) = nav.navigation_action() else { return false };
-                let uri = action.request().and_then(|r| r.uri()).map(|u| u.to_string()).unwrap_or_default();
+                let Some(nav) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() else {
+                    return false;
+                };
+                let Some(action) = nav.navigation_action() else {
+                    return false;
+                };
+                let uri = action
+                    .request()
+                    .and_then(|r| r.uri())
+                    .map(|u| u.to_string())
+                    .unwrap_or_default();
                 match kind {
                     webkit6::PolicyDecisionType::NewWindowAction => {
                         let cfg = service.cfg.borrow();
                         // The browser: a link meant for a new window is a new
                         // tab (behind it, for a middle click).
-                        if cfg.browser && action.navigation_type() == webkit6::NavigationType::LinkClicked && !uri.is_empty() {
+                        if cfg.browser
+                            && action.navigation_type() == webkit6::NavigationType::LinkClicked
+                            && !uri.is_empty()
+                        {
                             decision.ignore();
                             let show = action.mouse_button() != 2;
                             drop(cfg);
@@ -946,7 +1032,8 @@ impl Service {
                         true
                     }
                     webkit6::PolicyDecisionType::NavigationAction
-                        if action.is_user_gesture() && action.navigation_type() == webkit6::NavigationType::LinkClicked =>
+                        if action.is_user_gesture()
+                            && action.navigation_type() == webkit6::NavigationType::LinkClicked =>
                     {
                         let clean = privacy::clean(&uri);
                         if clean == uri {
@@ -1016,7 +1103,12 @@ impl Service {
                 log::warn!("TLS error: {host}: {errors:?}");
                 let Some(service) = weak.upgrade() else { return false };
                 if !privacy::is_local(&host) {
-                    error_page(view, uri, &tr("pathfinder-error-tls"), &tr("pathfinder-error-tls-detail"));
+                    error_page(
+                        view,
+                        uri,
+                        &tr("pathfinder-error-tls"),
+                        &tr("pathfinder-error-tls-detail"),
+                    );
                     return true;
                 }
                 service.ask_trust(view, uri, &host, certificate);
@@ -1051,7 +1143,11 @@ impl Service {
         if cfg.browser || !cfg.notifications || cfg.muted {
             return;
         }
-        if self.last_page_notification.get().is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(20)) {
+        if self
+            .last_page_notification
+            .get()
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(20))
+        {
             return;
         }
         if env.watching.borrow().as_ref().is_some_and(|w| w(self)) {
@@ -1069,7 +1165,10 @@ impl Service {
     /// Hands a page's notification to the desktop.
     fn notify(&self, view: &webkit6::WebView, notification: &webkit6::Notification) {
         let Some(env) = self.env.upgrade() else { return };
-        let title = notification.title().map(|t| t.to_string()).unwrap_or_else(|| self.name());
+        let title = notification
+            .title()
+            .map(|t| t.to_string())
+            .unwrap_or_else(|| self.name());
         let n = gio::Notification::new(&title);
         if let Some(body) = notification.body() {
             n.set_body(Some(&body));
@@ -1101,7 +1200,10 @@ return icon && icon.href ? 'icon ' + icon.href : '';
 
 /// An icon's bytes (two megabytes at most).
 fn fetch(url: &str) -> Result<Vec<u8>, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(std::time::Duration::from_secs(15))).build().into();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(15)))
+        .build()
+        .into();
     agent
         .get(url)
         .call()
@@ -1117,7 +1219,12 @@ fn fetch(url: &str) -> Result<Vec<u8>, String> {
 /// (WebKit's own writes black on it) and in the user's language.
 fn error_page(view: &webkit6::WebView, uri: &str, title: &str, detail: &str) {
     let host = privacy::host(uri).unwrap_or_else(|| uri.to_owned());
-    let escape = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let escape = |t: &str| {
+        t.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
     let html = format!(
         r#"<!doctype html><html><head><meta charset="utf-8"><title>{host}</title><style>
 :root {{ color-scheme: dark light; }}
@@ -1140,7 +1247,11 @@ code {{ opacity: .6; font-size: 13px; }}
 fn mac_agent(agent: &str) -> String {
     match (agent.find('('), agent.find(')')) {
         (Some(open), Some(close)) if open < close => {
-            format!("{}(Macintosh; Intel Mac OS X 10_15_7){}", &agent[..open], &agent[close + 1..])
+            format!(
+                "{}(Macintosh; Intel Mac OS X 10_15_7){}",
+                &agent[..open],
+                &agent[close + 1..]
+            )
         }
         _ => agent.to_owned(),
     }
@@ -1152,7 +1263,11 @@ fn mac_agent(agent: &str) -> String {
 /// goes there.
 fn popup(view: &webkit6::WebView, service: Weak<Service>) -> webkit6::WebView {
     let popup = webkit6::WebView::builder().related_view(view).build();
-    let window = gtk::Window::builder().default_width(1000).default_height(760).child(&popup).build();
+    let window = gtk::Window::builder()
+        .default_width(1000)
+        .default_height(760)
+        .child(&popup)
+        .build();
     if let Some(parent) = view.root().and_downcast::<gtk::Window>() {
         window.set_transient_for(Some(&parent));
     }
@@ -1180,7 +1295,9 @@ fn popup(view: &webkit6::WebView, service: Weak<Service>) -> webkit6::WebView {
             if event != webkit6::LoadEvent::Committed {
                 return;
             }
-            let (Some(uri), Some(service)) = (p.uri(), service.upgrade()) else { return };
+            let (Some(uri), Some(service)) = (p.uri(), service.upgrade()) else {
+                return;
+            };
             let home = privacy::host(&service.cfg.borrow().url);
             if privacy::host(&uri).is_some() && privacy::host(&uri) == home {
                 view.load_uri(&uri);
@@ -1197,7 +1314,11 @@ fn watch_download(env: &Rc<Env>, download: &webkit6::Download) {
     download.connect_decide_destination(|download, suggested| {
         let dir = glib::user_special_dir(glib::UserDirectory::Downloads).unwrap_or_else(glib::home_dir);
         let name: String = suggested.chars().map(|c| if c == '/' { '_' } else { c }).collect();
-        let name = if name.trim().is_empty() || name.starts_with('.') { format!("download{name}") } else { name };
+        let name = if name.trim().is_empty() || name.starts_with('.') {
+            format!("download{name}")
+        } else {
+            name
+        };
         let path = unique(dir.join(name));
         download.set_destination(&path.to_string_lossy());
         true
@@ -1207,7 +1328,10 @@ fn watch_download(env: &Rc<Env>, download: &webkit6::Download) {
         env.app,
         move |download| {
             let Some(dest) = download.destination() else { return };
-            let name = PathBuf::from(dest.as_str()).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = PathBuf::from(dest.as_str())
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let n = gio::Notification::new(&tr_args("pathfinder-downloaded", &[("name", text(name))]));
             n.set_icon(&gio::ThemedIcon::new("folder-download"));
             app.send_notification(None, &n);
@@ -1221,8 +1345,14 @@ fn unique(path: PathBuf) -> PathBuf {
     if path.symlink_metadata().is_err() {
         return path;
     }
-    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let ext = path
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
     (2..)
         .map(|n| path.with_file_name(format!("{stem} ({n}){ext}")))
         .find(|p| p.symlink_metadata().is_err())
@@ -1233,7 +1363,8 @@ fn unique(path: PathBuf) -> PathBuf {
 mod tests {
     #[test]
     fn makes_mac_agents() {
-        let linux = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
+        let linux =
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
         assert_eq!(
             super::mac_agent(linux),
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"

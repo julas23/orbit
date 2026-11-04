@@ -7,9 +7,31 @@
 
 /// Query parameters that only exist to follow you.
 const TRACKING: &[&str] = &[
-    "fbclid", "gclid", "gclsrc", "dclid", "gbraid", "wbraid", "msclkid", "mc_cid", "mc_eid",
-    "igshid", "igsh", "yclid", "twclid", "ttclid", "li_fat_id", "_hsenc", "_hsmi", "mkt_tok",
-    "oly_anon_id", "oly_enc_id", "vero_id", "rb_clickid", "s_cid", "ref_src", "si",
+    "fbclid",
+    "gclid",
+    "gclsrc",
+    "dclid",
+    "gbraid",
+    "wbraid",
+    "msclkid",
+    "mc_cid",
+    "mc_eid",
+    "igshid",
+    "igsh",
+    "yclid",
+    "twclid",
+    "ttclid",
+    "li_fat_id",
+    "_hsenc",
+    "_hsmi",
+    "mkt_tok",
+    "oly_anon_id",
+    "oly_enc_id",
+    "vero_id",
+    "rb_clickid",
+    "s_cid",
+    "ref_src",
+    "si",
 ];
 
 /// Second-level names under which sites register ("com.br", "co.uk").
@@ -19,14 +41,18 @@ const SECOND_LEVEL: &[&str] = &["com", "net", "org", "gov", "edu", "co", "ac", "
 /// redirect to another address.
 pub fn clean(url: &str) -> String {
     let url = unwrap_redirect(url).unwrap_or_else(|| url.to_owned());
-    let Some((base, rest)) = url.split_once('?') else { return url };
+    let Some((base, rest)) = url.split_once('?') else {
+        return url;
+    };
     let (query, fragment) = match rest.split_once('#') {
         Some((q, f)) => (q, Some(f)),
         None => (rest, None),
     };
     // "si" only tracks on YouTube and Spotify; elsewhere it may mean anything.
     let host = host(base).unwrap_or_default();
-    let si_tracks = ["youtube.com", "youtu.be", "spotify.com"].iter().any(|h| same_site(&host, h));
+    let si_tracks = ["youtube.com", "youtu.be", "spotify.com"]
+        .iter()
+        .any(|h| same_site(&host, h));
     let kept: Vec<&str> = query
         .split('&')
         .filter(|p| !p.is_empty())
@@ -51,7 +77,11 @@ pub fn clean(url: &str) -> String {
 /// The address a redirect wrapper leads to.
 fn unwrap_redirect(url: &str) -> Option<String> {
     let host = host(url)?;
-    let (path, query) = url.split_once("://")?.1.split_once('/').map(|(_, p)| p.split_once('?').unwrap_or((p, "")))?;
+    let (path, query) = url
+        .split_once("://")?
+        .1
+        .split_once('/')
+        .map(|(_, p)| p.split_once('?').unwrap_or((p, "")))?;
     let param = |name: &str| {
         query
             .split('&')
@@ -111,7 +141,11 @@ pub fn site(host: &str) -> String {
     if n <= 2 {
         return host.to_owned();
     }
-    let take = if labels[n - 1].len() == 2 && SECOND_LEVEL.contains(&labels[n - 2]) { 3 } else { 2 };
+    let take = if labels[n - 1].len() == 2 && SECOND_LEVEL.contains(&labels[n - 2]) {
+        3
+    } else {
+        2
+    };
     labels[n - take.min(n)..].join(".")
 }
 
@@ -138,7 +172,9 @@ pub fn stays_inside(url: &str, service_url: &str, domains: &[String]) -> bool {
     if url.is_empty() || url == "about:blank" {
         return true;
     }
-    let (Some(h), Some(service)) = (host(url), host(service_url)) else { return false };
+    let (Some(h), Some(service)) = (host(url), host(service_url)) else {
+        return false;
+    };
     same_site(&h, &service) || LOGIN_HOSTS.contains(&h.as_str()) || domains.iter().any(|d| same_site(&h, d))
 }
 
@@ -152,7 +188,10 @@ pub fn unread(title: &str) -> Option<u32> {
             b'[' => b']',
             _ => continue,
         };
-        let digits: String = title[i + 1..].chars().take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '+').collect();
+        let digits: String = title[i + 1..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '+')
+            .collect();
         let after = i + 1 + digits.len();
         if !digits.is_empty() && bytes.get(after) == Some(&close) {
             let n: String = digits.chars().filter(char::is_ascii_digit).collect();
@@ -174,7 +213,10 @@ pub fn typed(text: &str, search: &str) -> String {
         return String::new();
     }
     let lower = text.to_ascii_lowercase();
-    if ["http://", "https://", "file://", "about:"].iter().any(|s| lower.starts_with(s)) {
+    if ["http://", "https://", "file://", "about:"]
+        .iter()
+        .any(|s| lower.starts_with(s))
+    {
         return clean(text);
     }
     let host = text.split(['/', '?', '#']).next().unwrap_or_default();
@@ -202,7 +244,12 @@ pub fn typed(text: &str, search: &str) -> String {
 /// `.lan`, `.home.arpa`, and the private IPv4 ranges.
 pub fn is_local(host: &str) -> bool {
     let host = host.trim_start_matches('[').trim_end_matches(']');
-    if host == "localhost" || host == "::1" || [".local", ".lan", ".home.arpa", ".localhost"].iter().any(|s| host.ends_with(s)) {
+    if host == "localhost"
+        || host == "::1"
+        || [".local", ".lan", ".home.arpa", ".localhost"]
+            .iter()
+            .any(|s| host.ends_with(s))
+    {
         return true;
     }
     let parts: Vec<u8> = host.split('.').filter_map(|p| p.parse().ok()).collect();
@@ -226,7 +273,10 @@ mod tests {
 
     #[test]
     fn strips_tracking() {
-        assert_eq!(clean("https://a.com/p?utm_source=x&id=3&fbclid=abc#top"), "https://a.com/p?id=3#top");
+        assert_eq!(
+            clean("https://a.com/p?utm_source=x&id=3&fbclid=abc#top"),
+            "https://a.com/p?id=3#top"
+        );
         assert_eq!(clean("https://a.com/p?utm_medium=y"), "https://a.com/p");
         assert_eq!(clean("https://a.com/p?si=keep"), "https://a.com/p?si=keep");
         assert_eq!(clean("https://youtu.be/x?si=abc"), "https://youtu.be/x");
@@ -239,7 +289,10 @@ mod tests {
             clean("https://www.google.com/url?q=https%3A%2F%2Fexample.org%2Fa%3Futm_source%3Dm&sa=D"),
             "https://example.org/a"
         );
-        assert_eq!(clean("https://l.facebook.com/l.php?u=https%3A%2F%2Fb.org%2F&h=x"), "https://b.org/");
+        assert_eq!(
+            clean("https://l.facebook.com/l.php?u=https%3A%2F%2Fb.org%2F&h=x"),
+            "https://b.org/"
+        );
     }
 
     #[test]
@@ -247,11 +300,26 @@ mod tests {
         assert_eq!(site("mail.google.com"), "google.com");
         assert_eq!(site("www.zapimoveis.com.br"), "zapimoveis.com.br");
         assert_eq!(site("teams.live.com"), "live.com");
-        assert_eq!(host("https://user@Web.WhatsApp.com:443/x"), Some("web.whatsapp.com".into()));
-        assert!(stays_inside("https://accounts.google.com/o", "https://mail.google.com/", &[]));
-        assert!(stays_inside("https://docs.google.com/x", "https://mail.google.com/", &[]));
+        assert_eq!(
+            host("https://user@Web.WhatsApp.com:443/x"),
+            Some("web.whatsapp.com".into())
+        );
+        assert!(stays_inside(
+            "https://accounts.google.com/o",
+            "https://mail.google.com/",
+            &[]
+        ));
+        assert!(stays_inside(
+            "https://docs.google.com/x",
+            "https://mail.google.com/",
+            &[]
+        ));
         assert!(!stays_inside("https://example.org/", "https://mail.google.com/", &[]));
-        assert!(stays_inside("https://res.cdn.office.net/", "https://teams.live.com/", &["office.net".into()]));
+        assert!(stays_inside(
+            "https://res.cdn.office.net/",
+            "https://teams.live.com/",
+            &["office.net".into()]
+        ));
     }
 
     #[test]
@@ -261,7 +329,10 @@ mod tests {
         assert_eq!(typed("https://a.com/x?utm_source=y", g), "https://a.com/x");
         assert_eq!(typed("localhost:8080/app", g), "https://localhost:8080/app");
         assert_eq!(typed("10.0.0.250:8006", g), "https://10.0.0.250:8006");
-        assert_eq!(typed("previsão do tempo", g), "https://www.google.com/search?q=previs%C3%A3o+do+tempo");
+        assert_eq!(
+            typed("previsão do tempo", g),
+            "https://www.google.com/search?q=previs%C3%A3o+do+tempo"
+        );
         assert_eq!(typed("rust", g), "https://www.google.com/search?q=rust");
         assert_eq!(typed("  ", g), "");
     }
@@ -271,7 +342,10 @@ mod tests {
         assert!(is_local("localhost") && is_local("10.0.0.250") && is_local("192.168.1.1") && is_local("172.20.0.5"));
         assert!(is_local("printer.local") && is_local("[::1]"));
         assert!(!is_local("8.8.8.8") && !is_local("172.32.0.1") && !is_local("example.org") && !is_local("10.0.0"));
-        assert_eq!(http_fallback("https://127.0.0.1:8765/a.html").as_deref(), Some("http://127.0.0.1:8765/a.html"));
+        assert_eq!(
+            http_fallback("https://127.0.0.1:8765/a.html").as_deref(),
+            Some("http://127.0.0.1:8765/a.html")
+        );
         assert_eq!(http_fallback("https://example.org/"), None);
     }
 

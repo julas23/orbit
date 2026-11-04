@@ -173,9 +173,7 @@ fn extension(mime: &str) -> &str {
 
 impl Store {
     pub fn new(dir: &Path) -> Self {
-        Store {
-            dir: dir.to_path_buf(),
-        }
+        Store { dir: dir.to_path_buf() }
     }
 
     fn images(&self) -> PathBuf {
@@ -227,8 +225,7 @@ impl Store {
     /// the files of images no longer in it.
     pub fn save(&self, history: &History) -> anyhow::Result<()> {
         let images = self.images();
-        std::fs::create_dir_all(&images)
-            .with_context(|| format!("creating {}", images.display()))?;
+        std::fs::create_dir_all(&images).with_context(|| format!("creating {}", images.display()))?;
         let mut kept = HashSet::new();
         let mut saved = Vec::new();
         for item in &history.items {
@@ -246,8 +243,7 @@ impl Store {
                     let file = format!("{}.{}", item.id, extension(mime));
                     let path = images.join(&file);
                     if !path.exists() {
-                        std::fs::write(&path, bytes)
-                            .with_context(|| format!("writing {}", path.display()))?;
+                        std::fs::write(&path, bytes).with_context(|| format!("writing {}", path.display()))?;
                     }
                     kept.insert(file.clone());
                     s.image = Some(file);
@@ -262,8 +258,7 @@ impl Store {
         let temporary = self.dir.join("history.json.new");
         std::fs::write(&temporary, serde_json::to_vec(&saved)?)
             .with_context(|| format!("writing {}", temporary.display()))?;
-        std::fs::rename(&temporary, &path)
-            .with_context(|| format!("replacing {}", path.display()))?;
+        std::fs::rename(&temporary, &path).with_context(|| format!("replacing {}", path.display()))?;
         for entry in std::fs::read_dir(&images)?.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             if !kept.contains(&name) {

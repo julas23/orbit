@@ -161,7 +161,13 @@ impl Module {
             // Its place first: there may be more than one disk.
             Form::Normal => vec![
                 format!("{} · {percent:.0}%", self.path),
-                format!("{} / {} · {} {}", short(used), short(total), tr("disk-free"), short(free)),
+                format!(
+                    "{} / {} · {} {}",
+                    short(used),
+                    short(total),
+                    tr("disk-free"),
+                    short(free)
+                ),
             ],
             _ => vec![format!("{percent:.0}%")],
         };
@@ -187,7 +193,9 @@ pub fn mounts() -> Vec<String> {
     let mut mounts: Vec<String> = Vec::new();
     for line in text.lines() {
         let mut f = line.split_whitespace();
-        let (Some(device), Some(point), Some(kind)) = (f.next(), f.next(), f.next()) else { continue };
+        let (Some(device), Some(point), Some(kind)) = (f.next(), f.next(), f.next()) else {
+            continue;
+        };
         if !device.starts_with("/dev/") || device.starts_with("/dev/loop") || kind == "squashfs" {
             continue;
         }

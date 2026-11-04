@@ -53,7 +53,9 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
 /// Links from other programs (the default browser): they open in the
 /// built-in browser, which comes forward.
 fn open(_window: &gtk::ApplicationWindow, files: &[gio::File]) {
-    let Some(window) = WINDOW.with(|cell| cell.borrow().clone()) else { return };
+    let Some(window) = WINDOW.with(|cell| cell.borrow().clone()) else {
+        return;
+    };
     for file in files {
         window.open_link(&file.uri());
     }

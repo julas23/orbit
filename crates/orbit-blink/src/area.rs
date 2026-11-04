@@ -201,12 +201,7 @@ impl Overlay {
             let mut sel = self.selection.borrow_mut();
             sel.pointer = Some(p);
             // The topmost window under the pointer (floating ones come last).
-            sel.hover = self
-                .windows
-                .iter()
-                .rev()
-                .find(|w| w.contains(p.0, p.1))
-                .copied();
+            sel.hover = self.windows.iter().rev().find(|w| w.contains(p.0, p.1)).copied();
         }
         for area in self.areas.borrow().iter() {
             area.queue_draw();
@@ -314,11 +309,7 @@ impl Overlay {
 
     /// A small label on a dark background, kept inside the screen.
     fn tag(&self, cr: &cairo::Context, text: &str, x: f64, y: f64, screen_h: f64) {
-        cr.select_font_face(
-            "monospace",
-            cairo::FontSlant::Normal,
-            cairo::FontWeight::Bold,
-        );
+        cr.select_font_face("monospace", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
         cr.set_font_size(13.0);
         let Ok(ext) = cr.text_extents(text) else {
             return;
@@ -334,16 +325,7 @@ impl Overlay {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn loupe(
-        &self,
-        cr: &cairo::Context,
-        surface: &cairo::ImageSurface,
-        px: f64,
-        py: f64,
-        scale: f64,
-        w: f64,
-        h: f64,
-    ) {
+    fn loupe(&self, cr: &cairo::Context, surface: &cairo::ImageSurface, px: f64, py: f64, scale: f64, w: f64, h: f64) {
         let side = LOUPE_SPAN * LOUPE_ZOOM;
         // Below and to the right of the pointer, or flipped near the edges.
         let bx = if px + 20.0 + side > w {
@@ -361,8 +343,7 @@ impl Overlay {
         cr.clip();
         cr.translate(bx + side / 2.0, by + side / 2.0);
         cr.scale(LOUPE_ZOOM / scale, LOUPE_ZOOM / scale);
-        cr.set_source_surface(surface, -px * scale, -py * scale)
-            .ok();
+        cr.set_source_surface(surface, -px * scale, -py * scale).ok();
         cr.source().set_filter(cairo::Filter::Nearest);
         cr.paint().ok();
         cr.restore().ok();

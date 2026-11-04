@@ -35,21 +35,35 @@ impl Badges {
         };
         // The subscriptions hold the badges; they go when the dock does.
         let held = badges.clone();
-        let update = conn.subscribe_to_signal(None, Some(INTERFACE), Some("Update"), None, None, gio::DBusSignalFlags::NONE, move |s| {
-            let badges = &held;
-            let uri = s.parameters.child_value(0).str().unwrap_or_default().to_owned();
-            let props = glib::VariantDict::new(Some(&s.parameters.child_value(1)));
-            let count = props.lookup_value("count", None).and_then(|v| v.get::<i64>()).unwrap_or(0);
-            let visible = props.lookup_value("count-visible", None).and_then(|v| v.get::<bool>()).unwrap_or(false);
-            {
-                let mut senders = badges.senders.borrow_mut();
-                let uris = senders.entry(s.sender_name.to_owned()).or_default();
-                if !uris.contains(&uri) {
-                    uris.push(uri.clone());
+        let update = conn.subscribe_to_signal(
+            None,
+            Some(INTERFACE),
+            Some("Update"),
+            None,
+            None,
+            gio::DBusSignalFlags::NONE,
+            move |s| {
+                let badges = &held;
+                let uri = s.parameters.child_value(0).str().unwrap_or_default().to_owned();
+                let props = glib::VariantDict::new(Some(&s.parameters.child_value(1)));
+                let count = props
+                    .lookup_value("count", None)
+                    .and_then(|v| v.get::<i64>())
+                    .unwrap_or(0);
+                let visible = props
+                    .lookup_value("count-visible", None)
+                    .and_then(|v| v.get::<bool>())
+                    .unwrap_or(false);
+                {
+                    let mut senders = badges.senders.borrow_mut();
+                    let uris = senders.entry(s.sender_name.to_owned()).or_default();
+                    if !uris.contains(&uri) {
+                        uris.push(uri.clone());
+                    }
                 }
-            }
-            badges.show(&uri, if visible { count.max(0) as u64 } else { 0 });
-        });
+                badges.show(&uri, if visible { count.max(0) as u64 } else { 0 });
+            },
+        );
         // A program that quits takes its counts along.
         let held = badges.clone();
         let gone = conn.subscribe_to_signal(
@@ -83,7 +97,12 @@ impl Badges {
     /// Wraps `image` so it can carry a count, for the launcher known by
     /// `names`.
     pub fn wrap(&self, image: &gtk::Image, names: Vec<String>) -> gtk::Overlay {
-        let badge = gtk::Label::builder().css_classes(["badge"]).halign(gtk::Align::End).valign(gtk::Align::Start).visible(false).build();
+        let badge = gtk::Label::builder()
+            .css_classes(["badge"])
+            .halign(gtk::Align::End)
+            .valign(gtk::Align::Start)
+            .visible(false)
+            .build();
         badge.set_can_target(false);
         let overlay = gtk::Overlay::builder().child(image).build();
         overlay.add_overlay(&badge);
@@ -95,7 +114,11 @@ impl Badges {
         let names = names_of(uri);
         for (launcher, badge) in self.launchers.borrow().iter() {
             if launcher.iter().any(|n| names.contains(n)) {
-                badge.set_label(&if count > 99 { "99+".to_owned() } else { count.to_string() });
+                badge.set_label(&if count > 99 {
+                    "99+".to_owned()
+                } else {
+                    count.to_string()
+                });
                 badge.set_visible(count > 0);
             }
         }
@@ -107,7 +130,9 @@ impl Badges {
 fn names_of(uri: &str) -> Vec<String> {
     let file = uri.strip_prefix("application://").unwrap_or(uri);
     let id = file.trim_end_matches(".desktop");
-    let mut names: Vec<String> = gio_unix::DesktopAppInfo::new(&format!("{id}.desktop")).map(|i| crate::keys(&i)).unwrap_or_default();
+    let mut names: Vec<String> = gio_unix::DesktopAppInfo::new(&format!("{id}.desktop"))
+        .map(|i| crate::keys(&i))
+        .unwrap_or_default();
     names.push(normalize(id.rsplit('.').next().unwrap_or(id)));
     names.retain(|n| !n.is_empty());
     names

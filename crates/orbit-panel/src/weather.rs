@@ -107,10 +107,7 @@ fn build(config: &WeatherConfig, form: Form) -> Card {
 
     // Row 1: picture on the left; temperature, min and max on the right.
     let (min, max) = (label("min"), label("max"));
-    let range = gtk::Box::builder()
-        .spacing(5)
-        .halign(gtk::Align::End)
-        .build();
+    let range = gtk::Box::builder().spacing(5).halign(gtk::Align::End).build();
     range.append(&min);
     range.append(&max);
     let numbers = gtk::Box::builder()
@@ -305,12 +302,7 @@ impl Marquee {
         if self.running.replace(true) {
             return; // the running timer picks the new text up
         }
-        let (label, text, running, width) = (
-            self.label.clone(),
-            self.text.clone(),
-            self.running.clone(),
-            self.width,
-        );
+        let (label, text, running, width) = (self.label.clone(), self.text.clone(), self.running.clone(), self.width);
         let step = Cell::new(0usize);
         glib::timeout_add_local(std::time::Duration::from_millis(300), move || {
             let full = text.borrow().clone();
@@ -320,12 +312,7 @@ impl Marquee {
                 return glib::ControlFlow::Break;
             }
             let lap: Vec<char> = format!("{full}{MARQUEE_GAP}").chars().collect();
-            let window: String = lap
-                .iter()
-                .cycle()
-                .skip(step.get() % lap.len())
-                .take(width)
-                .collect();
+            let window: String = lap.iter().cycle().skip(step.get() % lap.len()).take(width).collect();
             label.set_label(&window);
             step.set(step.get() + 1);
             glib::ControlFlow::Continue

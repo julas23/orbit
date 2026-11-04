@@ -28,8 +28,8 @@ use smithay::{
     desktop::{PopupManager, Window, layer_map_for_output},
     input::pointer::{CursorIcon, CursorImageStatus, CursorImageSurfaceData},
     output::Output,
-    render_elements,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
+    render_elements,
     utils::{Logical, Physical, Point, Rectangle, Scale},
     wayland::{compositor::with_states, seat::WaylandFocus, shell::wlr_layer::Layer as WlrLayer},
 };
@@ -90,8 +90,15 @@ fn shaders(state: &mut Orbit, renderer: &mut GlesRenderer) -> Option<Shaders> {
 
 /// Everything on `output`, topmost first. `pointer` is drawn when the core
 /// owns the screen. Locked, the pointer and the greet are all there is.
-pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRenderer, pointer: bool) -> Vec<OutputElement> {
-    let Some(geo) = state.space.output_geometry(output) else { return Vec::new() };
+pub fn output_elements(
+    state: &mut Orbit,
+    output: &Output,
+    renderer: &mut GlesRenderer,
+    pointer: bool,
+) -> Vec<OutputElement> {
+    let Some(geo) = state.space.output_geometry(output) else {
+        return Vec::new();
+    };
     let scale = Scale::from(output.current_scale().fractional_scale());
     let mut elements: Vec<OutputElement> = Vec::new();
 
@@ -106,7 +113,11 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
         }
         let hotspot = match &state.cursor_status {
             CursorImageStatus::Surface(surface) => with_states(surface, |states| {
-                states.data_map.get::<CursorImageSurfaceData>().map(|d| d.lock().unwrap().hotspot).unwrap_or_default()
+                states
+                    .data_map
+                    .get::<CursorImageSurfaceData>()
+                    .map(|d| d.lock().unwrap().hotspot)
+                    .unwrap_or_default()
             })
             .to_physical(1),
             _ => Point::default(),
@@ -116,13 +127,22 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
             _ => CursorIcon::Default,
         };
         let (buffer, theme_hotspot) = state.cursor.buffer(shape, state.start_time.elapsed());
-        let hotspot = if matches!(state.cursor_status, CursorImageStatus::Named(_)) { theme_hotspot } else { hotspot };
+        let hotspot = if matches!(state.cursor_status, CursorImageStatus::Named(_)) {
+            theme_hotspot
+        } else {
+            hotspot
+        };
         let at: Point<i32, Physical> = (location - geo.loc.to_f64()).to_physical(scale).to_i32_round() - hotspot;
-        let element = PointerElement { status: state.cursor_status.clone(), buffer: Some(buffer) };
+        let element = PointerElement {
+            status: state.cursor_status.clone(),
+            buffer: Some(buffer),
+        };
         elements.extend(
-            AsRenderElements::<GlesRenderer>::render_elements::<PointerRenderElement<GlesRenderer>>(&element, renderer, at, scale, 1.0)
-                .into_iter()
-                .map(OutputElement::Pointer),
+            AsRenderElements::<GlesRenderer>::render_elements::<PointerRenderElement<GlesRenderer>>(
+                &element, renderer, at, scale, 1.0,
+            )
+            .into_iter()
+            .map(OutputElement::Pointer),
         );
     }
     state.step_eyes();
@@ -139,7 +159,10 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
     }
     // The window cards (Mod+Tab) over the blurred screen.
     if let Some(shaders) = shaders.as_ref()
-        && state.switcher.as_ref().is_some_and(|s| s.mode == crate::switcher::Mode::Cards)
+        && state
+            .switcher
+            .as_ref()
+            .is_some_and(|s| s.mode == crate::switcher::Mode::Cards)
         && state.cards_output().as_ref() == Some(output)
     {
         state.card_elements(output, renderer, scale, shaders, &mut elements);
@@ -156,7 +179,17 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
         let mut session = Vec::new();
         session_elements(state, output, renderer, scale, Some(shaders), false, &mut session);
         let mut cache = std::mem::take(&mut state.backdrop_cache);
-        crate::eyes::backdrop(renderer, &mut cache, shaders, output, geo.size, scale, &session, 0.7, &mut elements);
+        crate::eyes::backdrop(
+            renderer,
+            &mut cache,
+            shaders,
+            output,
+            geo.size,
+            scale,
+            &session,
+            0.7,
+            &mut elements,
+        );
         state.backdrop_cache = cache;
         return elements;
     }
@@ -169,14 +202,25 @@ pub fn output_elements(state: &mut Orbit, output: &Output, renderer: &mut GlesRe
 /// it (its namespace is one of `blur_layers`).
 fn blurs_behind(state: &Orbit, output: &Output) -> bool {
     let map = layer_map_for_output(output);
-    map.layers_on(WlrLayer::Overlay).any(|l| state.config.blur_layers.iter().any(|n| *n == l.namespace()))
+    map.layers_on(WlrLayer::Overlay)
+        .any(|l| state.config.blur_layers.iter().any(|n| *n == l.namespace()))
 }
 
 /// The session on `output` — layers (the overlay one only `with_overlay`)
 /// and windows — topmost first.
-pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: Option<&Shaders>, with_overlay: bool, elements: &mut Vec<OutputElement>) {
+pub fn session_elements(
+    state: &Orbit,
+    output: &Output,
+    renderer: &mut GlesRenderer,
+    scale: Scale<f64>,
+    shaders: Option<&Shaders>,
+    with_overlay: bool,
+    elements: &mut Vec<OutputElement>,
+) {
     let overlay: &[WlrLayer] = if with_overlay { &[WlrLayer::Overlay] } else { &[] };
-    let Some(geo) = state.space.output_geometry(output) else { return };
+    let Some(geo) = state.space.output_geometry(output) else {
+        return;
+    };
     // A fullscreen window hides the rest, but for the overlay, the top
     // layer's menus and X menus (`fullscreen`).
     if let Some(full) = state.fullscreen_on(output) {
@@ -186,11 +230,18 @@ pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRende
         let above = crate::fullscreen::top_above(output);
         let map = layer_map_for_output(output);
         for surface in &above {
-            let Some(at) = map.layer_geometry(surface).map(|g| g.loc.to_physical_precise_round(scale)) else { continue };
+            let Some(at) = map
+                .layer_geometry(surface)
+                .map(|g| g.loc.to_physical_precise_round(scale))
+            else {
+                continue;
+            };
             elements.extend(
-                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(surface, renderer, at, scale, 1.0)
-                    .into_iter()
-                    .map(OutputElement::Surface),
+                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
+                    surface, renderer, at, scale, 1.0,
+                )
+                .into_iter()
+                .map(OutputElement::Surface),
             );
         }
         drop(map);
@@ -226,25 +277,48 @@ pub fn session_elements(state: &Orbit, output: &Output, renderer: &mut GlesRende
         .space
         .elements_for_output(output)
         .filter(|w| !w.x11_surface().is_some_and(|x| x.is_override_redirect()))
-        .filter(|w| !state.all_windows().any(|m| m == *w) || state.dragging.as_ref() == Some(*w) || state.workspace_of(w) == shown)
+        .filter(|w| {
+            !state.all_windows().any(|m| m == *w)
+                || state.dragging.as_ref() == Some(*w)
+                || state.workspace_of(w) == shown
+        })
         .cloned()
         .collect();
     for window in windows.iter().rev() {
         window_elements(state, window, geo, renderer, scale, shaders, elements);
     }
-    layer_elements(output, renderer, scale, &[WlrLayer::Bottom, WlrLayer::Background], elements);
+    layer_elements(
+        output,
+        renderer,
+        scale,
+        &[WlrLayer::Bottom, WlrLayer::Background],
+        elements,
+    );
 }
 
 /// The layer surfaces of `layers` on `output`, topmost first.
-fn layer_elements(output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, layers: &[WlrLayer], elements: &mut Vec<OutputElement>) {
+fn layer_elements(
+    output: &Output,
+    renderer: &mut GlesRenderer,
+    scale: Scale<f64>,
+    layers: &[WlrLayer],
+    elements: &mut Vec<OutputElement>,
+) {
     let map = layer_map_for_output(output);
     for layer in layers {
         for surface in map.layers_on(*layer).rev() {
-            let Some(at) = map.layer_geometry(surface).map(|g| g.loc.to_physical_precise_round(scale)) else { continue };
+            let Some(at) = map
+                .layer_geometry(surface)
+                .map(|g| g.loc.to_physical_precise_round(scale))
+            else {
+                continue;
+            };
             elements.extend(
-                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(surface, renderer, at, scale, 1.0)
-                    .into_iter()
-                    .map(OutputElement::Surface),
+                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
+                    surface, renderer, at, scale, 1.0,
+                )
+                .into_iter()
+                .map(OutputElement::Surface),
             );
         }
     }
@@ -252,11 +326,21 @@ fn layer_elements(output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64
 
 /// A window on the output at `out`: its menus, its surfaces (rounded) and
 /// its border.
-fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>, renderer: &mut GlesRenderer, scale: Scale<f64>, shaders: Option<&Shaders>, elements: &mut Vec<OutputElement>) {
+fn window_elements(
+    state: &Orbit,
+    window: &Window,
+    out: Rectangle<i32, Logical>,
+    renderer: &mut GlesRenderer,
+    scale: Scale<f64>,
+    shaders: Option<&Shaders>,
+    elements: &mut Vec<OutputElement>,
+) {
     // An X window has its surface once XWayland gives it one.
     let Some(surface) = window.wl_surface() else { return };
     let surface: &WlSurface = &surface;
-    let Some(mut rect) = state.space.element_geometry(window) else { return };
+    let Some(mut rect) = state.space.element_geometry(window) else {
+        return;
+    };
     rect.loc -= out.loc;
     let geometry = window.geometry();
     let at = (rect.loc - geometry.loc).to_physical_precise_round(scale);
@@ -264,9 +348,16 @@ fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>,
     // An X menu or tooltip is drawn as it is: no corners, no border.
     if window.x11_surface().is_some_and(|x| x.is_override_redirect()) {
         elements.extend(
-            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, surface, at, scale, 1.0, Kind::Unspecified)
-                .into_iter()
-                .map(OutputElement::Surface),
+            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
+                renderer,
+                surface,
+                at,
+                scale,
+                1.0,
+                Kind::Unspecified,
+            )
+            .into_iter()
+            .map(OutputElement::Surface),
         );
         return;
     }
@@ -274,30 +365,64 @@ fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>,
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (geometry.loc + offset - popup.geometry().loc).to_physical_precise_round(scale);
         elements.extend(
-            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, popup.wl_surface(), at + offset, scale, 1.0, Kind::Unspecified)
-                .into_iter()
-                .map(OutputElement::Surface),
+            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
+                renderer,
+                popup.wl_surface(),
+                at + offset,
+                scale,
+                1.0,
+                Kind::Unspecified,
+            )
+            .into_iter()
+            .map(OutputElement::Surface),
         );
     }
 
     // Fullscreen: square corners, no border.
     let fullscreen = crate::fullscreen::is_fullscreen(window);
-    let radius = if fullscreen { 0 } else { state.config.corner_radius.max(0) };
+    let radius = if fullscreen {
+        0
+    } else {
+        state.config.corner_radius.max(0)
+    };
     let physical = rect.to_physical_precise_round(scale);
     let physical_radius = (radius as f64 * scale.x).round() as i32;
-    for element in render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, surface, at, scale, 1.0, Kind::Unspecified) {
+    for element in render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
+        renderer,
+        surface,
+        at,
+        scale,
+        1.0,
+        Kind::Unspecified,
+    ) {
         match shaders {
-            Some(s) if physical_radius > 0 && RoundedElement::needs_clip(&element, physical, physical_radius, scale) => {
-                elements.push(OutputElement::Rounded(RoundedElement::new(element, s.clip.clone(), physical, physical_radius as f32)));
+            Some(s)
+                if physical_radius > 0 && RoundedElement::needs_clip(&element, physical, physical_radius, scale) =>
+            {
+                elements.push(OutputElement::Rounded(RoundedElement::new(
+                    element,
+                    s.clip.clone(),
+                    physical,
+                    physical_radius as f32,
+                )));
             }
             _ => elements.push(OutputElement::Surface(element)),
         }
     }
 
     let width = state.config.border;
-    let Some(shaders) = shaders.filter(|_| width > 0 && !fullscreen) else { return };
-    let colour = if state.focused_window().as_ref() == Some(window) { color(&state.config.focused_color) } else { color(&state.config.unfocused_color) };
-    let area = Rectangle::new(rect.loc - Point::from((width, width)), (rect.size.w + 2 * width, rect.size.h + 2 * width).into());
+    let Some(shaders) = shaders.filter(|_| width > 0 && !fullscreen) else {
+        return;
+    };
+    let colour = if state.focused_window().as_ref() == Some(window) {
+        color(&state.config.focused_color)
+    } else {
+        color(&state.config.unfocused_color)
+    };
+    let area = Rectangle::new(
+        rect.loc - Point::from((width, width)),
+        (rect.size.w + 2 * width, rect.size.h + 2 * width).into(),
+    );
     let border = border_of(window);
     let mut border = border.borrow_mut();
     match &mut border.0 {
@@ -309,7 +434,14 @@ fn window_elements(state: &Orbit, window: &Window, out: Rectangle<i32, Logical>,
             }
         }
         None => {
-            let element = PixelShaderElement::new(shaders.border.clone(), area, None, 1.0, border_uniforms(colour, radius as f32, width as f32), Kind::Unspecified);
+            let element = PixelShaderElement::new(
+                shaders.border.clone(),
+                area,
+                None,
+                1.0,
+                border_uniforms(colour, radius as f32, width as f32),
+                Kind::Unspecified,
+            );
             border.0 = Some((element, (colour, radius, width)));
         }
     }

@@ -101,7 +101,11 @@ impl Orbit {
     pub fn switch(&mut self, mode: Mode, back: bool) {
         if let Some(switcher) = self.switcher.as_mut().filter(|s| s.mode == mode) {
             let n = switcher.list.len();
-            switcher.index = if back { (switcher.index + n - 1) % n } else { (switcher.index + 1) % n };
+            switcher.index = if back {
+                (switcher.index + n - 1) % n
+            } else {
+                (switcher.index + 1) % n
+            };
             switcher.stepped = Some((Instant::now(), back));
             let window = switcher.list[switcher.index].clone();
             self.reach(mode, &window);
@@ -119,7 +123,13 @@ impl Orbit {
             _ => 1,
         };
         let window = list[index].clone();
-        self.switcher = Some(Switcher { mode, list, index, stepped: None, cache: Default::default() });
+        self.switcher = Some(Switcher {
+            mode,
+            list,
+            index,
+            stepped: None,
+            cache: Default::default(),
+        });
         self.reach(mode, &window);
     }
 
@@ -146,7 +156,11 @@ impl Orbit {
     pub fn switch_cancel(&mut self) {
         let Some(switcher) = self.switcher.take() else { return };
         if switcher.mode != Mode::Cards
-            && let Some(first) = switcher.list.first().filter(|w| self.all_windows().any(|x| x == *w)).cloned()
+            && let Some(first) = switcher
+                .list
+                .first()
+                .filter(|w| self.all_windows().any(|x| x == *w))
+                .cloned()
         {
             self.focus_anywhere(&first);
         }
@@ -157,7 +171,9 @@ impl Orbit {
     pub fn switch_forget(&mut self, window: &Window) {
         self.mru.retain(|w| w != window);
         let Some(switcher) = self.switcher.as_mut() else { return };
-        let Some(i) = switcher.list.iter().position(|w| w == window) else { return };
+        let Some(i) = switcher.list.iter().position(|w| w == window) else {
+            return;
+        };
         switcher.list.remove(i);
         if switcher.list.is_empty() {
             self.switcher = None;

@@ -40,10 +40,7 @@ pub fn offer(png: Vec<u8>, done: async_channel::Sender<()>) -> anyhow::Result<()
     std::thread::Builder::new()
         .name("orbit-blink-clipboard".into())
         .spawn(move || {
-            let mut state = State {
-                png,
-                cancelled: false,
-            };
+            let mut state = State { png, cancelled: false };
             while !state.cancelled {
                 if let Err(err) = queue.blocking_dispatch(&mut state) {
                     log::warn!("clipboard: {err}");
@@ -113,11 +110,7 @@ macro_rules! ignore {
         }
     )*};
 }
-ignore!(
-    wl_seat::WlSeat,
-    ZwlrDataControlManagerV1,
-    ZwlrDataControlOfferV1
-);
+ignore!(wl_seat::WlSeat, ZwlrDataControlManagerV1, ZwlrDataControlOfferV1);
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     fn event(

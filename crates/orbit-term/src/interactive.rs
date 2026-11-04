@@ -20,13 +20,59 @@ use gtk::{gdk, gio, glib};
 use vte4::prelude::*;
 
 const ALWAYS: &[&str] = &[
-    "vi", "vim", "nvim", "nano", "emacs", "micro", "hx", "mc", "ranger", "yazi", "lf", "nnn", "htop", "btop", "top", "atop",
-    "iotop", "nvtop", "less", "more", "most", "man", "info", "ssh", "mosh", "telnet", "ftp", "sftp", "sudo", "su", "passwd",
-    "watch", "tmux", "screen", "ncdu", "nmtui", "alsamixer", "pulsemixer", "fzf", "crontab", "visudo", "vipw", "psql",
-    "mysql", "mariadb", "sqlite3", "tig", "lazygit",
+    "vi",
+    "vim",
+    "nvim",
+    "nano",
+    "emacs",
+    "micro",
+    "hx",
+    "mc",
+    "ranger",
+    "yazi",
+    "lf",
+    "nnn",
+    "htop",
+    "btop",
+    "top",
+    "atop",
+    "iotop",
+    "nvtop",
+    "less",
+    "more",
+    "most",
+    "man",
+    "info",
+    "ssh",
+    "mosh",
+    "telnet",
+    "ftp",
+    "sftp",
+    "sudo",
+    "su",
+    "passwd",
+    "watch",
+    "tmux",
+    "screen",
+    "ncdu",
+    "nmtui",
+    "alsamixer",
+    "pulsemixer",
+    "fzf",
+    "crontab",
+    "visudo",
+    "vipw",
+    "psql",
+    "mysql",
+    "mariadb",
+    "sqlite3",
+    "tig",
+    "lazygit",
 ];
 /// Interactive when run with no arguments.
-const BARE: &[&str] = &["bash", "sh", "zsh", "fish", "python", "python3", "ipython", "node", "irb", "bc", "lua", "ghci"];
+const BARE: &[&str] = &[
+    "bash", "sh", "zsh", "fish", "python", "python3", "ipython", "node", "irb", "bc", "lua", "ghci",
+];
 /// Words that run the next one.
 const PREFIXES: &[&str] = &["time", "nice", "env", "command", "exec", "nohup"];
 
@@ -51,9 +97,18 @@ pub fn wanted(line: &str, extra: &[String]) -> bool {
 fn git_asks(args: &[&str]) -> bool {
     let has = |flag: &str| args.iter().any(|a| *a == flag || a.starts_with(&format!("{flag}=")));
     match args.first().copied() {
-        Some("commit") => !(has("-m") || has("--message") || has("-F") || has("--file") || has("--no-edit") || args.iter().any(|a| a.starts_with("-m"))),
+        Some("commit") => {
+            !(has("-m")
+                || has("--message")
+                || has("-F")
+                || has("--file")
+                || has("--no-edit")
+                || args.iter().any(|a| a.starts_with("-m")))
+        }
         Some("rebase") => has("-i") || has("--interactive"),
-        Some("add" | "checkout" | "reset" | "restore" | "stash") => has("-p") || has("--patch") || has("-i") || has("--interactive"),
+        Some("add" | "checkout" | "reset" | "restore" | "stash") => {
+            has("-p") || has("--patch") || has("-i") || has("--interactive")
+        }
         Some("tag") => has("-a") && !has("-m"),
         Some("merge") => has("--edit") || has("-e"),
         _ => false,
@@ -76,9 +131,16 @@ pub fn spawn(terminal: &vte4::Terminal, command: &str, cwd: &Path, env_file: Opt
     terminal.reset(true, true);
     let mut script = String::from(crate::session::INIT);
     if let Some(env) = env_file {
-        script.push_str(&format!(". {} 2>/dev/null\n", crate::session::quote(&env.to_string_lossy())));
+        script.push_str(&format!(
+            ". {} 2>/dev/null\n",
+            crate::session::quote(&env.to_string_lossy())
+        ));
     }
-    script.push_str(&format!("cd {} 2>/dev/null\neval {}\n", crate::session::quote(&cwd.to_string_lossy()), crate::session::quote(command)));
+    script.push_str(&format!(
+        "cd {} 2>/dev/null\neval {}\n",
+        crate::session::quote(&cwd.to_string_lossy()),
+        crate::session::quote(command)
+    ));
     let cwd = cwd.to_string_lossy().into_owned();
     let weak = terminal.downgrade();
     terminal.spawn_async(
@@ -112,7 +174,13 @@ mod tests {
         let w = |l: &str| wanted(l, &["myrepl".to_string()]);
         assert!(w("vim notes.txt") && w("sudo apt update") && w("ls | less") && w("FOO=1 htop") && w("time ssh host"));
         assert!(w("python") && !w("python3 script.py") && !w("bash -c 'echo hi'"));
-        assert!(w("git commit") && !w("git commit -m 'x'") && !w("git commit -mfix") && w("git rebase -i HEAD~3") && !w("git log"));
+        assert!(
+            w("git commit")
+                && !w("git commit -m 'x'")
+                && !w("git commit -mfix")
+                && w("git rebase -i HEAD~3")
+                && !w("git log")
+        );
         assert!(w("/usr/bin/nano x") && w("myrepl") && !w("ls -la") && !w("echo vim"));
     }
 }

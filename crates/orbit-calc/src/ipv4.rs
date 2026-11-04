@@ -218,10 +218,7 @@ mod tests {
         assert_eq!(s.hosts, 2);
 
         let s = Subnet::new(ip("8.8.8.8"), 32);
-        assert_eq!(
-            (s.first, s.last, s.hosts),
-            (ip("8.8.8.8"), ip("8.8.8.8"), 1)
-        );
+        assert_eq!((s.first, s.last, s.hosts), (ip("8.8.8.8"), ip("8.8.8.8"), 1));
         assert_eq!(s.kind, Kind::Public);
 
         let s = Subnet::new(ip("1.2.3.4"), 0);
@@ -233,14 +230,8 @@ mod tests {
     #[test]
     fn parsing() {
         assert_eq!(parse("10.0.0.199/24"), Ok((ip("10.0.0.199"), Some(24))));
-        assert_eq!(
-            parse(" 10.0.0.199/255.255.252.0 "),
-            Ok((ip("10.0.0.199"), Some(22)))
-        );
-        assert_eq!(
-            parse("10.0.0.199 255.255.255.128"),
-            Ok((ip("10.0.0.199"), Some(25)))
-        );
+        assert_eq!(parse(" 10.0.0.199/255.255.252.0 "), Ok((ip("10.0.0.199"), Some(22))));
+        assert_eq!(parse("10.0.0.199 255.255.255.128"), Ok((ip("10.0.0.199"), Some(25))));
         assert_eq!(parse("10.0.0.199"), Ok((ip("10.0.0.199"), None)));
         assert_eq!(parse("10.0.0/24"), Err(ParseError::Address));
         assert_eq!(parse("10.0.0.1/33"), Err(ParseError::Mask));
@@ -270,17 +261,8 @@ mod tests {
 
     #[test]
     fn binary_form() {
-        assert_eq!(
-            binary(ip("10.0.0.199"), 24),
-            "00001010.00000000.00000000.│11000111"
-        );
-        assert_eq!(
-            binary(ip("172.16.5.130"), 26),
-            "10101100.00010000.00000101.10│000010"
-        );
-        assert_eq!(
-            binary(ip("1.1.1.1"), 32),
-            "00000001.00000001.00000001.00000001"
-        );
+        assert_eq!(binary(ip("10.0.0.199"), 24), "00001010.00000000.00000000.│11000111");
+        assert_eq!(binary(ip("172.16.5.130"), 26), "10101100.00010000.00000101.10│000010");
+        assert_eq!(binary(ip("1.1.1.1"), 32), "00000001.00000001.00000001.00000001");
     }
 }

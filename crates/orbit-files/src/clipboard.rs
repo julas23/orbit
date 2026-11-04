@@ -15,11 +15,21 @@ pub fn put(widget: &impl IsA<gtk::Widget>, paths: &[PathBuf], cut: bool) {
     let gnome = format!("{}\n{}", if cut { "cut" } else { "copy" }, uris.join("\n"));
     let providers = [
         gdk::ContentProvider::for_bytes(GNOME, &glib::Bytes::from_owned(gnome.into_bytes())),
-        gdk::ContentProvider::for_bytes("text/uri-list", &glib::Bytes::from_owned(format!("{}\r\n", uris.join("\r\n")).into_bytes())),
+        gdk::ContentProvider::for_bytes(
+            "text/uri-list",
+            &glib::Bytes::from_owned(format!("{}\r\n", uris.join("\r\n")).into_bytes()),
+        ),
         gdk::ContentProvider::for_value(&gdk::FileList::from_array(&files).to_value()),
         gdk::ContentProvider::for_bytes(
             "text/plain;charset=utf-8",
-            &glib::Bytes::from_owned(paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n").into_bytes()),
+            &glib::Bytes::from_owned(
+                paths
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .into_bytes(),
+            ),
         ),
     ];
     let union = gdk::ContentProvider::new_union(&providers);
@@ -38,11 +48,15 @@ pub async fn take(widget: &impl IsA<gtk::Widget>) -> Option<(Vec<PathBuf>, bool)
         let text = read_all(&stream).await?;
         let mut lines = text.lines();
         let cut = lines.next().is_some_and(|l| l.trim() == "cut");
-        let paths = lines.filter_map(|u| gio::File::for_uri(u.trim()).path()).collect::<Vec<_>>();
+        let paths = lines
+            .filter_map(|u| gio::File::for_uri(u.trim()).path())
+            .collect::<Vec<_>>();
         return (!paths.is_empty()).then_some((paths, cut));
     }
     if formats.contains_type(gdk::FileList::static_type())
-        && let Ok(value) = clipboard.read_value_future(gdk::FileList::static_type(), glib::Priority::DEFAULT).await
+        && let Ok(value) = clipboard
+            .read_value_future(gdk::FileList::static_type(), glib::Priority::DEFAULT)
+            .await
         && let Ok(list) = value.get::<gdk::FileList>()
     {
         let paths: Vec<PathBuf> = list.files().iter().filter_map(|f| f.path()).collect();
@@ -54,7 +68,10 @@ pub async fn take(widget: &impl IsA<gtk::Widget>) -> Option<(Vec<PathBuf>, bool)
 async fn read_all(stream: &gio::InputStream) -> Option<String> {
     let mut bytes = Vec::new();
     loop {
-        let chunk = stream.read_bytes_future(64 * 1024, glib::Priority::DEFAULT).await.ok()?;
+        let chunk = stream
+            .read_bytes_future(64 * 1024, glib::Priority::DEFAULT)
+            .await
+            .ok()?;
         if chunk.is_empty() {
             break;
         }

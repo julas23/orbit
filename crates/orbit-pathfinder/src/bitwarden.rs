@@ -60,7 +60,11 @@ fn run(args: &[&str], session: Option<&str>, env: &[(&str, &str)]) -> Result<Str
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_owned();
-        Err(if err.is_empty() { String::from_utf8_lossy(&out.stdout).trim().to_owned() } else { err })
+        Err(if err.is_empty() {
+            String::from_utf8_lossy(&out.stdout).trim().to_owned()
+        } else {
+            err
+        })
     }
 }
 
@@ -69,7 +73,9 @@ pub fn status() -> Status {
         return Status::Missing;
     }
     let text = run(&["status"], None, &[]).unwrap_or_default();
-    let status = serde_json::from_str::<Value>(&text).ok().and_then(|v| v.get("status").and_then(|s| s.as_str()).map(str::to_owned));
+    let status = serde_json::from_str::<Value>(&text)
+        .ok()
+        .and_then(|v| v.get("status").and_then(|s| s.as_str()).map(str::to_owned));
     match status.as_deref() {
         Some("unlocked") | Some("locked") => Status::Locked,
         _ => Status::LoggedOut,
@@ -80,20 +86,31 @@ pub fn status() -> Status {
 pub fn unlock(master: &str) -> Result<String, String> {
     // The password goes in the environment of that one call, never on its
     // command line (which other users can read).
-    let key = run(&["unlock", "--raw", "--passwordenv", "ORBIT_BW_PASSWORD"], None, &[("ORBIT_BW_PASSWORD", master)])?;
+    let key = run(
+        &["unlock", "--raw", "--passwordenv", "ORBIT_BW_PASSWORD"],
+        None,
+        &[("ORBIT_BW_PASSWORD", master)],
+    )?;
     let key = key.trim().to_owned();
-    if key.is_empty() { Err("senha mestra recusada".into()) } else { Ok(key) }
+    if key.is_empty() {
+        Err("senha mestra recusada".into())
+    } else {
+        Ok(key)
+    }
 }
 
 /// What makes two logins the same: site, user and password.
 fn same(url: &str, username: &str, password: &str) -> (String, String, String) {
-    let site = privacy::host(url).map(|h| privacy::site(&h)).unwrap_or_else(|| url.to_owned());
+    let site = privacy::host(url)
+        .map(|h| privacy::site(&h))
+        .unwrap_or_else(|| url.to_owned());
     (site, username.to_owned(), password.to_owned())
 }
 
 /// The logins already in the vault.
 fn existing(session: &str) -> Result<HashSet<(String, String, String)>, String> {
-    let items: Value = serde_json::from_str(&run(&["list", "items"], Some(session), &[])?).map_err(|e| e.to_string())?;
+    let items: Value =
+        serde_json::from_str(&run(&["list", "items"], Some(session), &[])?).map_err(|e| e.to_string())?;
     let mut set = HashSet::new();
     for item in items.as_array().into_iter().flatten() {
         let Some(login) = item.get("login") else { continue };
@@ -137,7 +154,9 @@ pub fn import(session: &str, logins: &[import::Login]) -> Result<Imported, Strin
                 id
             }
         };
-        let name = privacy::host(&login.url).map(|h| h.trim_start_matches("www.").to_owned()).unwrap_or_else(|| login.url.clone());
+        let name = privacy::host(&login.url)
+            .map(|h| h.trim_start_matches("www.").to_owned())
+            .unwrap_or_else(|| login.url.clone());
         items.push(json!({
             "type": 1,
             "name": name,
@@ -161,9 +180,17 @@ pub fn import(session: &str, logins: &[import::Login]) -> Result<Imported, Strin
         "folders": folders.iter().map(|(s, id)| json!({ "id": id, "name": format!("Importado do {}", s.label()) })).collect::<Vec<_>>(),
         "items": items,
     });
-    let file = import::private_dir().map_err(|e| e.to_string())?.join(format!("bw-{}.json", glib::uuid_string_random()));
+    let file = import::private_dir()
+        .map_err(|e| e.to_string())?
+        .join(format!("bw-{}.json", glib::uuid_string_random()));
     let written = write_private(&file, &doc.to_string());
-    let outcome = written.and_then(|()| run(&["import", "bitwardenjson", &file.to_string_lossy()], Some(session), &[]));
+    let outcome = written.and_then(|()| {
+        run(
+            &["import", "bitwardenjson", &file.to_string_lossy()],
+            Some(session),
+            &[],
+        )
+    });
     let _ = std::fs::remove_file(&file);
     outcome?;
     let _ = run(&["sync"], Some(session), &[]);
@@ -172,13 +199,19 @@ pub fn import(session: &str, logins: &[import::Login]) -> Result<Imported, Strin
 
 fn write_private(file: &std::path::Path, text: &str) -> Result<(), String> {
     use std::{io::Write, os::unix::fs::OpenOptionsExt};
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(file).map_err(|e| e.to_string())?;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(file)
+        .map_err(|e| e.to_string())?;
     f.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// The vault's logins for `url`.
 pub fn find(session: &str, url: &str) -> Result<Vec<Credential>, String> {
-    let items: Value = serde_json::from_str(&run(&["list", "items", "--url", url], Some(session), &[])?).map_err(|e| e.to_string())?;
+    let items: Value =
+        serde_json::from_str(&run(&["list", "items", "--url", url], Some(session), &[])?).map_err(|e| e.to_string())?;
     Ok(items
         .as_array()
         .into_iter()
@@ -187,7 +220,11 @@ pub fn find(session: &str, url: &str) -> Result<Vec<Credential>, String> {
             let login = item.get("login")?;
             Some(Credential {
                 name: item.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
-                username: login.get("username").and_then(Value::as_str).unwrap_or_default().to_owned(),
+                username: login
+                    .get("username")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
                 password: login.get("password").and_then(Value::as_str)?.to_owned(),
             })
         })

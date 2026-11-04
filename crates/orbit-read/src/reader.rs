@@ -98,7 +98,12 @@ impl Reader {
         let zoom_in = button("zoom-in-symbolic", "read-zoom-in", "Ctrl++");
         let fit = button("zoom-fit-best-symbolic", "read-fit", "Ctrl+0");
         let zoom_box = gtk::Box::builder().css_classes(["group"]).build();
-        for w in [zoom_out.upcast_ref::<gtk::Widget>(), zoom.upcast_ref(), zoom_in.upcast_ref(), fit.upcast_ref()] {
+        for w in [
+            zoom_out.upcast_ref::<gtk::Widget>(),
+            zoom.upcast_ref(),
+            zoom_in.upcast_ref(),
+            fit.upcast_ref(),
+        ] {
             zoom_box.append(w);
         }
         let find = toggle("system-search-symbolic", "read-search", "Ctrl+F");
@@ -400,7 +405,11 @@ impl Reader {
             }
             Err(err) if err.matches(poppler::Error::Encrypted) => {
                 self.set_message(&tr_args(
-                    if password.is_some() { "read-wrong-password" } else { "read-encrypted" },
+                    if password.is_some() {
+                        "read-wrong-password"
+                    } else {
+                        "read-encrypted"
+                    },
                     &[("name", text(file_name(path)))],
                 ));
                 self.password.set_text("");

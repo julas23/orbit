@@ -232,7 +232,13 @@ fn draw_bars(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gd
         cr.arc(x + width - r, top + r, r, -std::f64::consts::PI / 2.0, 0.0);
         cr.line_to(x + width, bottom);
         cr.line_to(x, bottom);
-        cr.arc(x + r, top + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+        cr.arc(
+            x + r,
+            top + r,
+            r,
+            std::f64::consts::PI,
+            3.0 * std::f64::consts::PI / 2.0,
+        );
         cr.close_path();
     }
     cr.fill()
@@ -290,19 +296,30 @@ mod tests {
         let start = std::time::Instant::now();
         let stop = pulse::record_monitor(RATE, 1024, |samples| {
             if n < 20 * 1024 {
-                eprintln!("{:>6.1} ms: {} samples", start.elapsed().as_secs_f64() * 1000.0, samples.len());
+                eprintln!(
+                    "{:>6.1} ms: {} samples",
+                    start.elapsed().as_secs_f64() * 1000.0,
+                    samples.len()
+                );
             }
             n += samples.len();
             peak = samples.iter().fold(peak, |p, s| p.max(s.abs()));
             a.push(samples);
             if n / (RATE as usize / 30) > frames {
                 frames += 1;
-                let bars: String = a.frame().iter().map(|v| [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'][(v * 8.0) as usize]).collect();
+                let bars: String = a
+                    .frame()
+                    .iter()
+                    .map(|v| [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'][(v * 8.0) as usize])
+                    .collect();
                 eprintln!("|{bars}|");
             }
             n < RATE as usize
         });
-        eprintln!("{n} samples, peak {peak}, stopped: {}", matches!(stop, Ok(pulse::Stop::Done)));
+        eprintln!(
+            "{n} samples, peak {peak}, stopped: {}",
+            matches!(stop, Ok(pulse::Stop::Done))
+        );
         assert!(n >= RATE as usize);
     }
 
@@ -311,11 +328,22 @@ mod tests {
     #[test]
     #[ignore]
     fn draws_the_three_sizes() {
-        let Ok(path) = std::env::var("ORBIT_SPECTRUM_PPM") else { return };
+        let Ok(path) = std::env::var("ORBIT_SPECTRUM_PPM") else {
+            return;
+        };
         // Something like music: a kick, a bass line, chords, a hi-hat.
         let signal = |t: usize| {
             let x = t as f32 / RATE as f32;
-            let tones = [(55.0, 0.5), (110.0, 0.3), (330.0, 0.15), (440.0, 0.12), (660.0, 0.08), (1320.0, 0.04), (2640.0, 0.02), (5280.0, 0.01)];
+            let tones = [
+                (55.0, 0.5),
+                (110.0, 0.3),
+                (330.0, 0.15),
+                (440.0, 0.12),
+                (660.0, 0.08),
+                (1320.0, 0.04),
+                (2640.0, 0.02),
+                (5280.0, 0.01),
+            ];
             let mut v: f32 = tones.iter().map(|(f, a)| a * (2.0 * PI * f * x).sin()).sum();
             // Cheap noise for the cymbals.
             v += 0.01 * (((t as u32).wrapping_mul(2654435761) >> 16) as f32 / 32768.0 - 1.0);
@@ -323,9 +351,13 @@ mod tests {
         };
         // Or real sound: mono f32 at 44.1 kHz in `$ORBIT_SPECTRUM_RAW`
         // (`ffmpeg -i song.mp3 -f f32le -ac 1 -ar 44100 song.raw`).
-        let raw: Option<Vec<f32>> = std::env::var("ORBIT_SPECTRUM_RAW")
-            .ok()
-            .map(|p| std::fs::read(p).unwrap().chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect());
+        let raw: Option<Vec<f32>> = std::env::var("ORBIT_SPECTRUM_RAW").ok().map(|p| {
+            std::fs::read(p)
+                .unwrap()
+                .chunks_exact(4)
+                .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                .collect()
+        });
         let frames = |bands| {
             let mut a = Analyzer::new(RATE, bands, 50.0, 10_000.0, 0.77, 30);
             let per = RATE as usize / 30;
@@ -341,9 +373,18 @@ mod tests {
             frame
         };
         let (scale, gap) = (4.0, 10.0);
-        let sizes = [(Form::Mini, 70.0, 30.0, LINE_POINTS), (Form::Normal, 150.0, 70.0, NORMAL_BARS), (Form::Full, 150.0, 70.0, FULL_BARS)];
+        let sizes = [
+            (Form::Mini, 70.0, 30.0, LINE_POINTS),
+            (Form::Normal, 150.0, 70.0, NORMAL_BARS),
+            (Form::Full, 150.0, 70.0, FULL_BARS),
+        ];
         let width = sizes.iter().map(|s| s.1).sum::<f64>() + gap * 4.0;
-        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, (width * scale) as i32, ((70.0 + 2.0 * gap) * scale) as i32).unwrap();
+        let mut surface = cairo::ImageSurface::create(
+            cairo::Format::ARgb32,
+            (width * scale) as i32,
+            ((70.0 + 2.0 * gap) * scale) as i32,
+        )
+        .unwrap();
         let cr = cairo::Context::new(&surface).unwrap();
         cr.scale(scale, scale);
         cr.set_source_rgb(0.08, 0.09, 0.11);
@@ -370,7 +411,11 @@ mod tests {
         // A binary PPM (cairo here is built without PNG).
         drop(cr);
         surface.flush();
-        let (w, h, stride) = (surface.width() as usize, surface.height() as usize, surface.stride() as usize);
+        let (w, h, stride) = (
+            surface.width() as usize,
+            surface.height() as usize,
+            surface.stride() as usize,
+        );
         let data = surface.data().unwrap();
         let mut ppm = format!("P6 {w} {h} 255\n").into_bytes();
         for y in 0..h {

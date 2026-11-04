@@ -11,7 +11,9 @@ use gst::prelude::*;
 /// The playing chain behind `webrtcbin`'s new sound `pad`.
 pub fn play(pipeline: &gst::Pipeline, pad: &gst::Pad) -> anyhow::Result<()> {
     let depay = gst::ElementFactory::make("rtpopusdepay").build()?;
-    let decoder = gst::ElementFactory::make("opusdec").build().context("no opusdec (gstreamer1.0-plugins-base)")?;
+    let decoder = gst::ElementFactory::make("opusdec")
+        .build()
+        .context("no opusdec (gstreamer1.0-plugins-base)")?;
     let convert = gst::ElementFactory::make("audioconvert").build()?;
     let resample = gst::ElementFactory::make("audioresample").build()?;
     let sink = gst::ElementFactory::make("pulsesink")

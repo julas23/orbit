@@ -86,12 +86,7 @@ async fn run(path: PathBuf, tx: Sender<Event>) {
     let info = Info {
         format: image.format_name(),
         mime: image.mime_type().as_str().to_owned(),
-        exif: image
-            .info()
-            .details
-            .exif
-            .as_ref()
-            .and_then(|data| data.get_full().ok()),
+        exif: image.info().details.exif.as_ref().and_then(|data| data.get_full().ok()),
     };
     if tx.send(Event::Opened(info)).await.is_err() {
         return;
@@ -106,11 +101,7 @@ async fn run(path: PathBuf, tx: Sender<Event>) {
             }
         };
         let delay = frame.delay();
-        if delay.is_some()
-            && frame.details().n_frame == Some(0)
-            && kept > 0
-            && kept <= ANIMATION_CACHE
-        {
+        if delay.is_some() && frame.details().n_frame == Some(0) && kept > 0 && kept <= ANIMATION_CACHE {
             let _ = tx.send(Event::Looped).await;
             return;
         }
@@ -140,9 +131,7 @@ async fn run(path: PathBuf, tx: Sender<Event>) {
 
 fn failure(err: &glycin::ErrorCtx) -> Failure {
     match err.error() {
-        glycin::Error::UnknownImageFormat(..) | glycin::Error::UnknownContentType(..) => {
-            Failure::UnknownFormat
-        }
+        glycin::Error::UnknownImageFormat(..) | glycin::Error::UnknownContentType(..) => Failure::UnknownFormat,
         // The first line: some errors go on with a dump of the config.
         other => Failure::Other(other.to_string().lines().next().unwrap_or("").to_owned()),
     }

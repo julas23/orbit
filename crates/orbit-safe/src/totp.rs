@@ -177,7 +177,10 @@ fn unescape(text: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
-            b'%' if i + 2 < bytes.len() => match std::str::from_utf8(&bytes[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+            b'%' if i + 2 < bytes.len() => match std::str::from_utf8(&bytes[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+            {
                 Some(b) => {
                     out.push(b);
                     i += 3;
@@ -199,14 +202,24 @@ mod tests {
 
     /// RFC 6238, appendix B: the 20-, 32- and 64-byte keys, 8 digits.
     fn rfc(algorithm: Algorithm, key: &[u8]) -> Totp {
-        Totp { key: key.to_vec(), digits: 8, period: 30, algorithm, issuer: String::new(), account: String::new() }
+        Totp {
+            key: key.to_vec(),
+            digits: 8,
+            period: 30,
+            algorithm,
+            issuer: String::new(),
+            account: String::new(),
+        }
     }
 
     #[test]
     fn matches_rfc_6238() {
         let sha1 = rfc(Algorithm::Sha1, b"12345678901234567890");
         let sha256 = rfc(Algorithm::Sha256, b"12345678901234567890123456789012");
-        let sha512 = rfc(Algorithm::Sha512, b"1234567890123456789012345678901234567890123456789012345678901234");
+        let sha512 = rfc(
+            Algorithm::Sha512,
+            b"1234567890123456789012345678901234567890123456789012345678901234",
+        );
         for (time, one, two, five) in [
             (59, "94287082", "46119246", "90693936"),
             (1111111109, "07081804", "68084774", "25091201"),
@@ -238,6 +251,9 @@ mod tests {
         assert_eq!((totp.digits, totp.period), (6, 30));
         assert!(Totp::from_uri("otpauth://hotp/x?secret=GEZDGNBV&counter=1").is_none());
         assert!(Totp::from_uri("otpauth://totp/x?issuer=nokey").is_none());
-        assert_eq!(Totp::from_uri("otpauth://totp/plain?secret=GEZDGNBV").unwrap().account, "plain");
+        assert_eq!(
+            Totp::from_uri("otpauth://totp/plain?secret=GEZDGNBV").unwrap().account,
+            "plain"
+        );
     }
 }

@@ -51,7 +51,8 @@ struct PamHandle {
 
 #[link(name = "libpam.so.0", kind = "dylib", modifiers = "+verbatim")]
 unsafe extern "C" {
-    fn pam_start(service: *const c_char, user: *const c_char, conv: *const PamConv, pamh: *mut *mut PamHandle) -> c_int;
+    fn pam_start(service: *const c_char, user: *const c_char, conv: *const PamConv, pamh: *mut *mut PamHandle)
+    -> c_int;
     fn pam_authenticate(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_acct_mgmt(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_end(pamh: *mut PamHandle, status: c_int) -> c_int;
@@ -95,7 +96,11 @@ extern "C" fn converse(n: c_int, msg: *mut *const PamMessage, resp: *mut *mut Pa
         }
         for i in 0..n as usize {
             let m = &**msg.add(i);
-            let text = if m.msg.is_null() { String::new() } else { CStr::from_ptr(m.msg).to_string_lossy().trim().to_owned() };
+            let text = if m.msg.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(m.msg).to_string_lossy().trim().to_owned()
+            };
             match m.msg_style {
                 PAM_PROMPT_ECHO_OFF | PAM_PROMPT_ECHO_ON => {
                     let echo = m.msg_style == PAM_PROMPT_ECHO_ON;
@@ -113,7 +118,10 @@ extern "C" fn converse(n: c_int, msg: *mut *const PamMessage, resp: *mut *mut Pa
                     wipe(answer);
                 }
                 PAM_ERROR_MSG | PAM_TEXT_INFO if !text.is_empty() => {
-                    let _ = conv.events.send_blocking(Event::Say { text, error: m.msg_style == PAM_ERROR_MSG });
+                    let _ = conv.events.send_blocking(Event::Say {
+                        text,
+                        error: m.msg_style == PAM_ERROR_MSG,
+                    });
                 }
                 _ => {}
             }
@@ -148,7 +156,13 @@ pub fn start() -> (async_channel::Receiver<Event>, mpsc::Sender<String>) {
     let thread = std::thread::Builder::new().name("pam".into()).spawn({
         let events = events.clone();
         move || {
-            let done = authenticate(&user, Conversation { events: events.clone(), answers });
+            let done = authenticate(
+                &user,
+                Conversation {
+                    events: events.clone(),
+                    answers,
+                },
+            );
             let _ = events.send_blocking(Event::Done(done));
         }
     });
@@ -163,7 +177,10 @@ pub fn start() -> (async_channel::Receiver<Event>, mpsc::Sender<String>) {
 fn authenticate(user: &str, conv: Conversation) -> Result<(), String> {
     let user = CString::new(user).map_err(|_| "bad user name".to_owned())?;
     let conv = Box::new(conv);
-    let pam_conv = PamConv { conv: converse, appdata_ptr: &*conv as *const Conversation as *mut c_void };
+    let pam_conv = PamConv {
+        conv: converse,
+        appdata_ptr: &*conv as *const Conversation as *mut c_void,
+    };
     let mut handle: *mut PamHandle = std::ptr::null_mut();
     // Safety: every pointer outlives the PAM transaction, which ends here.
     unsafe {
@@ -177,7 +194,11 @@ fn authenticate(user: &str, conv: Conversation) -> Result<(), String> {
         }
         let error = (rc != PAM_SUCCESS).then(|| {
             let text = pam_strerror(handle, rc);
-            if text.is_null() { format!("PAM error {rc}") } else { CStr::from_ptr(text).to_string_lossy().into_owned() }
+            if text.is_null() {
+                format!("PAM error {rc}")
+            } else {
+                CStr::from_ptr(text).to_string_lossy().into_owned()
+            }
         });
         pam_end(handle, rc);
         error.map_or(Ok(()), Err)

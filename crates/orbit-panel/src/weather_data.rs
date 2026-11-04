@@ -172,14 +172,12 @@ impl Service {
             }
         });
         let weak = Rc::downgrade(&service);
-        glib::timeout_add_seconds_local(service.source.interval.max(5) * 60, move || {
-            match weak.upgrade() {
-                Some(service) => {
-                    service.fetch();
-                    glib::ControlFlow::Continue
-                }
-                None => glib::ControlFlow::Break,
+        glib::timeout_add_seconds_local(service.source.interval.max(5) * 60, move || match weak.upgrade() {
+            Some(service) => {
+                service.fetch();
+                glib::ControlFlow::Continue
             }
+            None => glib::ControlFlow::Break,
         });
         service
     }
@@ -255,10 +253,7 @@ fn fetch(source: &WeatherConfig) -> Result<Weather, String> {
             (
                 number(&area["latitude"]).ok_or("wttr.in: no latitude")?,
                 number(&area["longitude"]).ok_or("wttr.in: no longitude")?,
-                area["areaName"][0]["value"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string(),
+                area["areaName"][0]["value"].as_str().unwrap_or_default().to_string(),
                 number(&wttr["current_condition"][0]["uvIndex"]),
             )
         }
@@ -358,7 +353,16 @@ pub fn brweather_code(code: i32) -> &'static str {
 /// The colour classes of temperatures, coldest first (style.css gives each
 /// its colour; `temp_class` picks one).
 const TEMP_CLASSES: [&str; 10] = [
-    "temp-bitter", "temp-m30", "temp-m20", "temp-m10", "temp-zero", "temp-0", "temp-10", "temp-20", "temp-30", "temp-40",
+    "temp-bitter",
+    "temp-m30",
+    "temp-m20",
+    "temp-m10",
+    "temp-zero",
+    "temp-0",
+    "temp-10",
+    "temp-20",
+    "temp-30",
+    "temp-40",
 ];
 
 /// The colour class of `celsius` as shown (rounded), on the user's scale:
@@ -425,8 +429,8 @@ pub fn description(code: i32) -> String {
 /// The catalog message for a WMO code: codes that read the same share one.
 fn description_id(code: i32) -> String {
     match code {
-        0 | 1 | 2 | 3 | 45 | 48 | 51 | 53 | 55 | 56 | 61 | 63 | 65 | 66 | 71 | 73 | 75 | 80
-        | 81 | 82 | 85 | 95 | 96 => code.to_string(),
+        0 | 1 | 2 | 3 | 45 | 48 | 51 | 53 | 55 | 56 | 61 | 63 | 65 | 66 | 71 | 73 | 75 | 80 | 81 | 82 | 85 | 95
+        | 96 => code.to_string(),
         57 => "56".into(),
         67 => "66".into(),
         77 => "73".into(),
@@ -445,8 +449,7 @@ fn compass_index(degrees: f64) -> usize {
 /// N NNL NL… in Portuguese, where east is L and west O).
 pub fn compass(degrees: f64) -> String {
     const ENGLISH: [&str; 16] = [
-        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW",
-        "NW", "NNW",
+        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
     ];
     let index = compass_index(degrees);
     let rose = tr("weather-compass");
@@ -506,12 +509,7 @@ fn season_id(month: i32, day: i32, lat: f64) -> &'static str {
         _ => 3,                                // autumn
     };
     let season = if lat < 0.0 { (north + 2) % 4 } else { north };
-    [
-        "season-winter",
-        "season-spring",
-        "season-summer",
-        "season-autumn",
-    ][season]
+    ["season-winter", "season-spring", "season-summer", "season-autumn"][season]
 }
 
 #[cfg(test)]
@@ -521,10 +519,27 @@ mod tests {
     #[test]
     fn temperatures_take_the_scale_colours() {
         let c = |t| temp_class(t);
-        assert_eq!([c(-35.0), c(-30.0), c(-25.0), c(-20.0), c(-15.0), c(-10.0), c(-3.0)], ["temp-bitter", "temp-bitter", "temp-m30", "temp-m30", "temp-m20", "temp-m20", "temp-m10"]);
+        assert_eq!(
+            [c(-35.0), c(-30.0), c(-25.0), c(-20.0), c(-15.0), c(-10.0), c(-3.0)],
+            [
+                "temp-bitter",
+                "temp-bitter",
+                "temp-m30",
+                "temp-m30",
+                "temp-m20",
+                "temp-m20",
+                "temp-m10"
+            ]
+        );
         // As shown, rounded: −0.4 and 0.3 are 0°.
-        assert_eq!([c(-0.4), c(0.3), c(0.6), c(9.4), c(10.0)], ["temp-zero", "temp-zero", "temp-0", "temp-0", "temp-10"]);
-        assert_eq!([c(19.6), c(25.0), c(30.0), c(39.4), c(39.6), c(45.0)], ["temp-20", "temp-20", "temp-30", "temp-30", "temp-40", "temp-40"]);
+        assert_eq!(
+            [c(-0.4), c(0.3), c(0.6), c(9.4), c(10.0)],
+            ["temp-zero", "temp-zero", "temp-0", "temp-0", "temp-10"]
+        );
+        assert_eq!(
+            [c(19.6), c(25.0), c(30.0), c(39.4), c(39.6), c(45.0)],
+            ["temp-20", "temp-20", "temp-30", "temp-30", "temp-40", "temp-40"]
+        );
     }
 
     #[test]
@@ -557,8 +572,7 @@ mod tests {
     #[test]
     fn every_weather_code_has_a_message_id() {
         for code in [
-            0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82,
-            85, 86, 95, 96, 99,
+            0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99,
         ] {
             assert_ne!(description_id(code), "unknown", "{code}");
         }

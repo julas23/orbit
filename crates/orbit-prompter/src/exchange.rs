@@ -58,7 +58,11 @@ impl Exchange {
             }
         };
         let public = BigUint::from(2u8).modpow(&private, &prime()).to_bytes_be();
-        Ok(Self { private, public, key: None })
+        Ok(Self {
+            private,
+            public,
+            key: None,
+        })
     }
 
     /// The first message: this side's public key.
@@ -85,7 +89,9 @@ impl Exchange {
         let mut ikm = Zeroizing::new(vec![0u8; PRIME_BYTES - shared.len()]);
         ikm.extend_from_slice(&shared);
         let mut key = Zeroizing::new([0u8; 16]);
-        hkdf::Hkdf::<sha2::Sha256>::new(None, &ikm).expand(&[], &mut key[..]).map_err(|_| "HKDF")?;
+        hkdf::Hkdf::<sha2::Sha256>::new(None, &ikm)
+            .expand(&[], &mut key[..])
+            .map_err(|_| "HKDF")?;
         self.key = Some(key);
         Ok(())
     }
@@ -99,14 +105,21 @@ impl Exchange {
         let mut iv = [0u8; 16];
         getrandom::getrandom(&mut iv).map_err(|_| "no random numbers")?;
         let sealed = Encryptor::new(key.as_ref().into(), &iv.into()).encrypt_padded_vec_mut::<Pkcs7>(secret);
-        text.push_str(&format!("secret={}\niv={}\n", glib::base64_encode(&sealed), glib::base64_encode(&iv)));
+        text.push_str(&format!(
+            "secret={}\niv={}\n",
+            glib::base64_encode(&sealed),
+            glib::base64_encode(&iv)
+        ));
         Ok(text)
     }
 }
 
 /// The `key=value` lines of the `[sx-aes-1]` group.
 fn parse(message: &str) -> Result<Vec<(String, String)>, &'static str> {
-    let mut lines = message.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#'));
+    let mut lines = message
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'));
     if lines.next() != Some(&format!("[{PROTOCOL}]")) {
         return Err("not sx-aes-1");
     }

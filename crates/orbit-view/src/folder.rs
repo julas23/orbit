@@ -19,9 +19,7 @@ pub fn images(dir: &Path, supported: &HashSet<String>, keep: Option<&Path>) -> V
         .map(|e| e.path())
         .filter(|p| {
             Some(p.as_path()) == keep
-                || (!p
-                    .file_name()
-                    .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                || (!p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'))
                     && is_image(p, supported)
                     && p.is_file())
         })

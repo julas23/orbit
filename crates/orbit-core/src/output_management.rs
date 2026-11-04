@@ -110,7 +110,12 @@ pub struct ModeData;
 impl OutputManagement {
     pub fn new(display: &DisplayHandle) -> Self {
         display.create_global::<Orbit, ZwlrOutputManagerV1, ManagerGlobal>(VERSION, ManagerGlobal);
-        Self { display: display.clone(), serial: 0, clients: HashMap::new(), current: HashMap::new() }
+        Self {
+            display: display.clone(),
+            serial: 0,
+            clients: HashMap::new(),
+            current: HashMap::new(),
+        }
     }
 
     /// The monitors as they are now: what changed is told to every client.
@@ -131,7 +136,9 @@ impl OutputManagement {
             }
             changed = true;
             for data in self.clients.values_mut() {
-                let Some((wl_head, modes)) = data.heads.get_mut(name) else { continue };
+                let Some((wl_head, modes)) = data.heads.get_mut(name) else {
+                    continue;
+                };
                 if old.modes != head.modes {
                     // Ends on the shorter list; then the ones added or gone.
                     let common = zip(modes.iter(), &head.modes).len();
@@ -141,7 +148,13 @@ impl OutputManagement {
                     }
                     if let Some(client) = data.manager.client() {
                         for mode in &head.modes[common..] {
-                            let Ok(wl_mode) = client.create_resource::<ZwlrOutputModeV1, _, Orbit>(&self.display, wl_head.version(), ModeData) else { continue };
+                            let Ok(wl_mode) = client.create_resource::<ZwlrOutputModeV1, _, Orbit>(
+                                &self.display,
+                                wl_head.version(),
+                                ModeData,
+                            ) else {
+                                continue;
+                            };
                             wl_head.mode(&wl_mode);
                             wl_mode.size(mode.width, mode.height);
                             wl_mode.refresh(mode.refresh);
@@ -212,7 +225,10 @@ impl Orbit {
                 {
                     modes.push(current);
                 }
-                let position = self.space.output_geometry(output).map_or((0, 0), |g| (g.loc.x, g.loc.y));
+                let position = self
+                    .space
+                    .output_geometry(output)
+                    .map_or((0, 0), |g| (g.loc.x, g.loc.y));
                 let head = Head {
                     make: props.make,
                     model: props.model,
@@ -221,7 +237,12 @@ impl Orbit {
                     current: current.and_then(|c| modes.iter().position(|m| *m == c)),
                     modes: modes
                         .iter()
-                        .map(|m| ModeInfo { width: m.size.w, height: m.size.h, refresh: m.refresh, preferred: Some(*m) == preferred })
+                        .map(|m| ModeInfo {
+                            width: m.size.w,
+                            height: m.size.h,
+                            refresh: m.refresh,
+                            preferred: Some(*m) == preferred,
+                        })
                         .collect(),
                     position,
                     transform: output.current_transform(),
@@ -246,7 +267,9 @@ impl Orbit {
             return false;
         }
         for (name, change) in &changes {
-            let Some(output) = self.output_named(name) else { return false };
+            let Some(output) = self.output_named(name) else {
+                return false;
+            };
             if let Some((w, h, refresh)) = change.mode
                 && !self.set_mode(&output, (w, h), refresh)
             {
@@ -273,7 +296,10 @@ impl Orbit {
     /// Switches `output` to its mode of `size` at `refresh` mHz: the
     /// screen's (DRM), or a virtual monitor's.
     fn set_mode(&mut self, output: &Output, size: (i32, i32), refresh: i32) -> bool {
-        if output.current_mode().is_some_and(|m| m.size == size.into() && m.refresh == refresh) {
+        if output
+            .current_mode()
+            .is_some_and(|m| m.size == size.into() && m.refresh == refresh)
+        {
             return true;
         }
         crate::udev::set_mode(self, output, size, refresh)
@@ -282,7 +308,11 @@ impl Orbit {
 
 /// Sends `head` (called `name`) to a client, with its modes.
 fn send_head(display: &DisplayHandle, client: &Client, data: &mut ClientData, name: &str, head: &Head) {
-    let Ok(wl_head) = client.create_resource::<ZwlrOutputHeadV1, _, Orbit>(display, data.manager.version(), name.to_owned()) else { return };
+    let Ok(wl_head) =
+        client.create_resource::<ZwlrOutputHeadV1, _, Orbit>(display, data.manager.version(), name.to_owned())
+    else {
+        return;
+    };
     data.manager.head(&wl_head);
     wl_head.name(name.to_owned());
     wl_head.description(format!("{} - {} - {name}", head.make, head.model));
@@ -291,7 +321,10 @@ fn send_head(display: &DisplayHandle, client: &Client, data: &mut ClientData, na
     }
     let mut modes = Vec::with_capacity(head.modes.len());
     for (i, mode) in head.modes.iter().enumerate() {
-        let Ok(wl_mode) = client.create_resource::<ZwlrOutputModeV1, _, Orbit>(display, wl_head.version(), ModeData) else { continue };
+        let Ok(wl_mode) = client.create_resource::<ZwlrOutputModeV1, _, Orbit>(display, wl_head.version(), ModeData)
+        else {
+            continue;
+        };
         wl_head.mode(&wl_mode);
         wl_mode.size(mode.width, mode.height);
         wl_mode.refresh(mode.refresh);
@@ -320,7 +353,14 @@ fn send_head(display: &DisplayHandle, client: &Client, data: &mut ClientData, na
 }
 
 impl GlobalDispatch2<ZwlrOutputManagerV1, Orbit> for ManagerGlobal {
-    fn bind(&self, state: &mut Orbit, dh: &DisplayHandle, client: &Client, manager: New<ZwlrOutputManagerV1>, data_init: &mut DataInit<'_, Orbit>) {
+    fn bind(
+        &self,
+        state: &mut Orbit,
+        dh: &DisplayHandle,
+        client: &Client,
+        manager: New<ZwlrOutputManagerV1>,
+        data_init: &mut DataInit<'_, Orbit>,
+    ) {
         let manager = data_init.init(manager, ManagerData);
         // The monitors as they are, the first client finding the list empty.
         let heads = state.heads();
@@ -328,7 +368,11 @@ impl GlobalDispatch2<ZwlrOutputManagerV1, Orbit> for ManagerGlobal {
         if om.current.is_empty() {
             om.current = heads;
         }
-        let mut data = ClientData { heads: HashMap::new(), confs: HashMap::new(), manager: manager.clone() };
+        let mut data = ClientData {
+            heads: HashMap::new(),
+            confs: HashMap::new(),
+            manager: manager.clone(),
+        };
         for (name, head) in &om.current {
             send_head(dh, client, &mut data, name, head);
         }
@@ -338,7 +382,15 @@ impl GlobalDispatch2<ZwlrOutputManagerV1, Orbit> for ManagerGlobal {
 }
 
 impl Dispatch2<ZwlrOutputManagerV1, Orbit> for ManagerData {
-    fn request(&self, state: &mut Orbit, client: &Client, _manager: &ZwlrOutputManagerV1, request: zwlr_output_manager_v1::Request, _dh: &DisplayHandle, data_init: &mut DataInit<'_, Orbit>) {
+    fn request(
+        &self,
+        state: &mut Orbit,
+        client: &Client,
+        _manager: &ZwlrOutputManagerV1,
+        request: zwlr_output_manager_v1::Request,
+        _dh: &DisplayHandle,
+        data_init: &mut DataInit<'_, Orbit>,
+    ) {
         let om = &mut state.output_management;
         match request {
             zwlr_output_manager_v1::Request::CreateConfiguration { id, serial } => {
@@ -365,10 +417,22 @@ impl Dispatch2<ZwlrOutputManagerV1, Orbit> for ManagerData {
 }
 
 impl Dispatch2<ZwlrOutputConfigurationV1, Orbit> for ConfigurationData {
-    fn request(&self, state: &mut Orbit, client: &Client, conf: &ZwlrOutputConfigurationV1, request: zwlr_output_configuration_v1::Request, _dh: &DisplayHandle, data_init: &mut DataInit<'_, Orbit>) {
+    fn request(
+        &self,
+        state: &mut Orbit,
+        client: &Client,
+        conf: &ZwlrOutputConfigurationV1,
+        request: zwlr_output_configuration_v1::Request,
+        _dh: &DisplayHandle,
+        data_init: &mut DataInit<'_, Orbit>,
+    ) {
         let om = &mut state.output_management;
         let outdated = self.serial != om.serial;
-        let known = |om: &OutputManagement, head: &ZwlrOutputHeadV1| head.data::<String>().filter(|name| om.current.contains_key(*name)).cloned();
+        let known = |om: &OutputManagement, head: &ZwlrOutputHeadV1| {
+            head.data::<String>()
+                .filter(|name| om.current.contains_key(*name))
+                .cloned()
+        };
         match request {
             zwlr_output_configuration_v1::Request::EnableHead { id, head } => {
                 let name = known(om, &head);
@@ -380,7 +444,10 @@ impl Dispatch2<ZwlrOutputConfigurationV1, Orbit> for ConfigurationData {
                 match changes.entry(name.clone()) {
                     Entry::Occupied(_) => {
                         data_init.init(id, ConfigurationHead::Cancelled);
-                        conf.post_error(zwlr_output_configuration_v1::Error::AlreadyConfiguredHead, "head has been already configured");
+                        conf.post_error(
+                            zwlr_output_configuration_v1::Error::AlreadyConfiguredHead,
+                            "head has been already configured",
+                        );
                     }
                     Entry::Vacant(entry) => {
                         entry.insert(Change::default());
@@ -391,11 +458,19 @@ impl Dispatch2<ZwlrOutputConfigurationV1, Orbit> for ConfigurationData {
             zwlr_output_configuration_v1::Request::DisableHead { head } => {
                 let name = known(om, &head);
                 let ongoing = om.clients.get_mut(&client.id()).and_then(|d| d.confs.get_mut(conf));
-                let (Some(name), Some(Configuring::Ongoing(changes)), false) = (name, ongoing, outdated) else { return };
+                let (Some(name), Some(Configuring::Ongoing(changes)), false) = (name, ongoing, outdated) else {
+                    return;
+                };
                 match changes.entry(name) {
-                    Entry::Occupied(_) => conf.post_error(zwlr_output_configuration_v1::Error::AlreadyConfiguredHead, "head has been already configured"),
+                    Entry::Occupied(_) => conf.post_error(
+                        zwlr_output_configuration_v1::Error::AlreadyConfiguredHead,
+                        "head has been already configured",
+                    ),
                     Entry::Vacant(entry) => {
-                        entry.insert(Change { off: true, ..Change::default() });
+                        entry.insert(Change {
+                            off: true,
+                            ..Change::default()
+                        });
                     }
                 }
             }
@@ -405,9 +480,14 @@ impl Dispatch2<ZwlrOutputConfigurationV1, Orbit> for ConfigurationData {
                     conf.cancelled();
                     return;
                 }
-                let Some(slot) = om.clients.get_mut(&client.id()).and_then(|d| d.confs.get_mut(conf)) else { return };
+                let Some(slot) = om.clients.get_mut(&client.id()).and_then(|d| d.confs.get_mut(conf)) else {
+                    return;
+                };
                 let Configuring::Ongoing(changes) = mem::replace(slot, Configuring::Finished) else {
-                    conf.post_error(zwlr_output_configuration_v1::Error::AlreadyUsed, "configuration had already been used");
+                    conf.post_error(
+                        zwlr_output_configuration_v1::Error::AlreadyUsed,
+                        "configuration had already been used",
+                    );
                     return;
                 };
                 // A test only checks; an apply must also take effect.
@@ -429,21 +509,40 @@ impl Dispatch2<ZwlrOutputConfigurationV1, Orbit> for ConfigurationData {
 }
 
 impl Dispatch2<ZwlrOutputConfigurationHeadV1, Orbit> for ConfigurationHead {
-    fn request(&self, state: &mut Orbit, client: &Client, conf_head: &ZwlrOutputConfigurationHeadV1, request: zwlr_output_configuration_head_v1::Request, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Orbit>) {
-        let ConfigurationHead::Ok(name, conf) = self else { return };
+    fn request(
+        &self,
+        state: &mut Orbit,
+        client: &Client,
+        conf_head: &ZwlrOutputConfigurationHeadV1,
+        request: zwlr_output_configuration_head_v1::Request,
+        _dh: &DisplayHandle,
+        _data_init: &mut DataInit<'_, Orbit>,
+    ) {
+        let ConfigurationHead::Ok(name, conf) = self else {
+            return;
+        };
         let om = &mut state.output_management;
         if conf.data::<ConfigurationData>().is_none_or(|d| d.serial != om.serial) {
             return;
         }
         let current = om.current.get(name).cloned();
-        let Some(data) = om.clients.get_mut(&client.id()) else { return };
-        let mode_index = |mode: &ZwlrOutputModeV1| data.heads.get(name).and_then(|(_, modes)| modes.iter().position(|m| m.id() == mode.id()));
+        let Some(data) = om.clients.get_mut(&client.id()) else {
+            return;
+        };
+        let mode_index = |mode: &ZwlrOutputModeV1| {
+            data.heads
+                .get(name)
+                .and_then(|(_, modes)| modes.iter().position(|m| m.id() == mode.id()))
+        };
         let picked = match &request {
             zwlr_output_configuration_head_v1::Request::SetMode { mode } => Some(mode_index(mode)),
             _ => None,
         };
         let Some(Configuring::Ongoing(changes)) = data.confs.get_mut(conf) else {
-            conf.post_error(zwlr_output_configuration_v1::Error::AlreadyUsed, "configuration had already been used");
+            conf.post_error(
+                zwlr_output_configuration_v1::Error::AlreadyUsed,
+                "configuration had already been used",
+            );
             return;
         };
         let Some(change) = changes.get_mut(name) else { return };
@@ -452,23 +551,34 @@ impl Dispatch2<ZwlrOutputConfigurationHeadV1, Orbit> for ConfigurationHead {
                 let mode = picked.flatten().and_then(|i| current.as_ref()?.modes.get(i).copied());
                 match mode {
                     Some(mode) => change.mode = Some((mode.width, mode.height, mode.refresh)),
-                    None => conf_head.post_error(zwlr_output_configuration_head_v1::Error::InvalidMode, "failed to find requested mode"),
+                    None => conf_head.post_error(
+                        zwlr_output_configuration_head_v1::Error::InvalidMode,
+                        "failed to find requested mode",
+                    ),
                 }
             }
             // A rate of 0: any; the fastest the monitor has at that size.
-            zwlr_output_configuration_head_v1::Request::SetCustomMode { width, height, refresh } if width > 0 && height > 0 => {
+            zwlr_output_configuration_head_v1::Request::SetCustomMode { width, height, refresh }
+                if width > 0 && height > 0 =>
+            {
                 change.mode = Some((width, height, refresh));
             }
             zwlr_output_configuration_head_v1::Request::SetPosition { x, y } => change.position = Some((x, y)),
             zwlr_output_configuration_head_v1::Request::SetTransform { transform } => match transform {
                 WEnum::Value(t) => change.transform = Some(from_wl(t)),
-                WEnum::Unknown(_) => conf_head.post_error(zwlr_output_configuration_head_v1::Error::InvalidTransform, "unknown transform value"),
+                WEnum::Unknown(_) => conf_head.post_error(
+                    zwlr_output_configuration_head_v1::Error::InvalidTransform,
+                    "unknown transform value",
+                ),
             },
             zwlr_output_configuration_head_v1::Request::SetScale { scale } => {
                 if scale > 0.0 {
                     change.scale = Some(scale);
                 } else {
-                    conf_head.post_error(zwlr_output_configuration_head_v1::Error::InvalidScale, "scale is negative or zero");
+                    conf_head.post_error(
+                        zwlr_output_configuration_head_v1::Error::InvalidScale,
+                        "scale is negative or zero",
+                    );
                 }
             }
             _ => {}
@@ -477,7 +587,16 @@ impl Dispatch2<ZwlrOutputConfigurationHeadV1, Orbit> for ConfigurationHead {
 }
 
 impl Dispatch2<ZwlrOutputHeadV1, Orbit> for String {
-    fn request(&self, _state: &mut Orbit, _client: &Client, _head: &ZwlrOutputHeadV1, _request: zwlr_output_head_v1::Request, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Orbit>) {}
+    fn request(
+        &self,
+        _state: &mut Orbit,
+        _client: &Client,
+        _head: &ZwlrOutputHeadV1,
+        _request: zwlr_output_head_v1::Request,
+        _dh: &DisplayHandle,
+        _data_init: &mut DataInit<'_, Orbit>,
+    ) {
+    }
 
     fn destroyed(&self, state: &mut Orbit, client: ClientId, _head: &ZwlrOutputHeadV1) {
         if let Some(data) = state.output_management.clients.get_mut(&client) {
@@ -487,7 +606,16 @@ impl Dispatch2<ZwlrOutputHeadV1, Orbit> for String {
 }
 
 impl Dispatch2<ZwlrOutputModeV1, Orbit> for ModeData {
-    fn request(&self, _state: &mut Orbit, _client: &Client, _mode: &ZwlrOutputModeV1, _request: zwlr_output_mode_v1::Request, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Orbit>) {}
+    fn request(
+        &self,
+        _state: &mut Orbit,
+        _client: &Client,
+        _mode: &ZwlrOutputModeV1,
+        _request: zwlr_output_mode_v1::Request,
+        _dh: &DisplayHandle,
+        _data_init: &mut DataInit<'_, Orbit>,
+    ) {
+    }
 }
 
 fn from_wl(transform: WlTransform) -> Transform {

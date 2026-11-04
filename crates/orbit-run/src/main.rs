@@ -30,7 +30,9 @@ fn main() -> glib::ExitCode {
         }
     };
     // Unique: started again while open (Mod+R twice), it closes.
-    let app = gtk::Application::builder().application_id("io.github.julas23.Orbit.Run").build();
+    let app = gtk::Application::builder()
+        .application_id("io.github.julas23.Orbit.Run")
+        .build();
     let keep = Rc::new(RefCell::new(None));
     app.connect_activate(move |app| {
         if let Some(window) = app.active_window() {
@@ -52,7 +54,11 @@ fn main() -> glib::ExitCode {
 }
 
 fn show(app: &gtk::Application) {
-    let window = gtk::Window::builder().application(app).title(tr("run-title")).css_classes(["orbit-run"]).build();
+    let window = gtk::Window::builder()
+        .application(app)
+        .title(tr("run-title"))
+        .css_classes(["orbit-run"])
+        .build();
     if gtk4_layer_shell::is_supported() {
         window.init_layer_shell();
         window.set_namespace(Some("orbit-run"));
@@ -66,8 +72,16 @@ fn show(app: &gtk::Application) {
         window.set_resizable(false);
     }
 
-    let icon = gtk::Image::builder().icon_name("system-run-symbolic").pixel_size(20).css_classes(["icon"]).build();
-    let entry = gtk::Entry::builder().placeholder_text(tr("run-placeholder")).hexpand(true).css_classes(["command"]).build();
+    let icon = gtk::Image::builder()
+        .icon_name("system-run-symbolic")
+        .pixel_size(20)
+        .css_classes(["icon"])
+        .build();
+    let entry = gtk::Entry::builder()
+        .placeholder_text(tr("run-placeholder"))
+        .hexpand(true)
+        .css_classes(["command"])
+        .build();
     let field = gtk::Box::builder().spacing(10).css_classes(["field"]).build();
     field.append(&icon);
     field.append(&entry);
@@ -113,7 +127,10 @@ fn show(app: &gtk::Application) {
             let text = entry.text().trim().to_owned();
             let Some(program) = line::program(&text) else { return };
             if !line::exists(program, &programs) {
-                say(&tr_args("run-not-found", &[("program", program.to_owned().into())]), true);
+                say(
+                    &tr_args("run-not-found", &[("program", program.to_owned().into())]),
+                    true,
+                );
                 return;
             }
             match run(&text) {
@@ -168,7 +185,9 @@ fn show(app: &gtk::Application) {
     click.connect_pressed({
         let (window, card) = (window.clone(), card.clone());
         move |_, _, x, y| {
-            let inside = card.compute_bounds(&window).is_some_and(|b| b.contains_point(&gtk::graphene::Point::new(x as f32, y as f32)));
+            let inside = card
+                .compute_bounds(&window)
+                .is_some_and(|b| b.contains_point(&gtk::graphene::Point::new(x as f32, y as f32)));
             if !inside {
                 window.close();
             }

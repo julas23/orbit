@@ -71,20 +71,36 @@ enum Event {
         reply: UnixStream,
     },
     /// The agent's answer to request `id`.
-    Answered { id: u64, answer: anyhow::Result<agent::Answer> },
+    Answered {
+        id: u64,
+        answer: anyhow::Result<agent::Answer>,
+    },
     /// The speaker said all of `id`.
-    Spoken { id: u64 },
+    Spoken {
+        id: u64,
+    },
     /// The session locked (or unlocked).
     Locked(bool),
     /// The local voice is up, or gone.
     Voice(Option<Arc<voice::Local>>),
     /// What request `id` is.
-    Routed { id: u64, route: voice::Route },
+    Routed {
+        id: u64,
+        route: voice::Route,
+    },
     /// A sentence of the voice's answer to request `id`; the last one may
     /// be empty.
-    Phrase { id: u64, text: String, last: bool },
+    Phrase {
+        id: u64,
+        text: String,
+        last: bool,
+    },
     /// The voice's turn for request `id`, to keep in its conversation.
-    Talked { id: u64, turn: voice::Turn, answer: String },
+    Talked {
+        id: u64,
+        turn: voice::Turn,
+        answer: String,
+    },
 }
 
 fn main() {
@@ -103,7 +119,9 @@ fn main() {
 fn client(args: &[String]) -> i32 {
     let command = match args {
         [one] if one == "approve" => return approve::serve(),
-        [voice, request @ ..] if voice == "voice" && !request.is_empty() => return voice::try_alone(&request.join(" ")),
+        [voice, request @ ..] if voice == "voice" && !request.is_empty() => {
+            return voice::try_alone(&request.join(" "));
+        }
         [one] => match one.as_str() {
             "toggle" => Command::Toggle,
             "listen" => Command::Listen,
@@ -121,7 +139,10 @@ fn client(args: &[String]) -> i32 {
     match orbit_aigent::send(&command) {
         Ok(()) => 0,
         Err(err) => {
-            eprintln!("orbit-aigent: {}: {err} (is the daemon running?)", orbit_aigent::socket_path().display());
+            eprintln!(
+                "orbit-aigent: {}: {err} (is the daemon running?)",
+                orbit_aigent::socket_path().display()
+            );
             1
         }
     }
@@ -195,7 +216,9 @@ fn daemon() -> anyhow::Result<()> {
     }
     {
         let events = events.clone();
-        std::thread::Builder::new().name("lock".into()).spawn(move || follow_lock(&events))?;
+        std::thread::Builder::new()
+            .name("lock".into())
+            .spawn(move || follow_lock(&events))?;
     }
     // The local voice's server lives as long as this thread, which waits on it.
     if let Some(voice) = config.voice.clone() {
@@ -222,10 +245,12 @@ fn daemon() -> anyhow::Result<()> {
 
 /// There while turned off: `$XDG_STATE_HOME/orbit/aigent-off`.
 fn off_path() -> std::path::PathBuf {
-    let state = std::env::var_os("XDG_STATE_HOME").map(std::path::PathBuf::from).unwrap_or_else(|| {
-        let home = std::env::var_os("HOME").unwrap_or_default();
-        std::path::Path::new(&home).join(".local/state")
-    });
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            let home = std::env::var_os("HOME").unwrap_or_default();
+            std::path::Path::new(&home).join(".local/state")
+        });
     state.join("orbit/aigent-off")
 }
 
@@ -233,11 +258,15 @@ fn off_path() -> std::path::PathBuf {
 /// `lock` event, sent once at once on subscribing). Under sway, or without
 /// a compositor, nothing is said, and the engine takes it as unlocked.
 fn follow_lock(events: &mpsc::Sender<Event>) {
-    let Ok(mut ipc) = orbit_ipc::Connection::open() else { return };
+    let Ok(mut ipc) = orbit_ipc::Connection::open() else {
+        return;
+    };
     if ipc.request(orbit_ipc::SUBSCRIBE, r#"["lock"]"#).is_err() {
         return;
     }
-    let Some(lock) = orbit_ipc::event_type("lock") else { return };
+    let Some(lock) = orbit_ipc::event_type("lock") else {
+        return;
+    };
     while let Ok((kind, body)) = ipc.receive() {
         if kind != lock {
             continue;
@@ -276,7 +305,9 @@ fn serve(listener: &UnixListener, events: &mpsc::Sender<Event>) {
                 }
                 match serde_json::from_str::<Command>(&line) {
                     Ok(Command::Approve { tool, input }) => {
-                        let Ok(reply) = reply.as_ref().map(UnixStream::try_clone) else { break };
+                        let Ok(reply) = reply.as_ref().map(UnixStream::try_clone) else {
+                            break;
+                        };
                         let Ok(reply) = reply else { break };
                         if events.send(Event::Approve { tool, input, reply }).is_err() {
                             break;
@@ -293,7 +324,6 @@ fn serve(listener: &UnixListener, events: &mpsc::Sender<Event>) {
         });
     }
 }
-
 
 /// What Whisper is asked to hear.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -321,7 +351,11 @@ fn whisper(config: &Config, jobs: &mpsc::Receiver<(u64, Job, Vec<f32>)>, events:
             .ok()
     };
     let mut wake = load(&config.wake_model);
-    let mut request = if config.model == config.wake_model { None } else { load(&config.model) };
+    let mut request = if config.model == config.wake_model {
+        None
+    } else {
+        load(&config.model)
+    };
     let prompt = stt::prompt(&config.wake);
     for (id, job, audio) in jobs {
         let stt = match job {
@@ -394,7 +428,11 @@ fn chime() {
             return log::warn!("aigent: the chime: {err}");
         }
     }
-    match std::process::Command::new("pw-play").arg("--media-role=Assistant").arg(&path).spawn() {
+    match std::process::Command::new("pw-play")
+        .arg("--media-role=Assistant")
+        .arg(&path)
+        .spawn()
+    {
         Ok(mut child) => {
             std::thread::spawn(move || child.wait());
         }
@@ -533,7 +571,12 @@ const LONGEST_WAKE: usize = 10 * mic::RATE as usize;
 const BEFORE: usize = 3 * mic::RATE as usize / 10;
 
 impl Engine {
-    fn new(config: &Config, jobs: mpsc::Sender<(u64, Job, Vec<f32>)>, events: mpsc::Sender<Event>, speaker: Speaker) -> Self {
+    fn new(
+        config: &Config,
+        jobs: mpsc::Sender<(u64, Job, Vec<f32>)>,
+        events: mpsc::Sender<Event>,
+        speaker: Speaker,
+    ) -> Self {
         let agents = config.usable();
         let agent = if agents.contains(&config.agent) {
             config.agent.clone()
@@ -613,7 +656,10 @@ impl Engine {
                     }
                 }
                 Ok(Event::Locked(locked)) => {
-                    log::info!("aigent: the session is {}", if locked { "locked: deaf" } else { "unlocked" });
+                    log::info!(
+                        "aigent: the session is {}",
+                        if locked { "locked: deaf" } else { "unlocked" }
+                    );
                     if locked {
                         self.cancel();
                     }
@@ -769,9 +815,17 @@ impl Engine {
         log::info!("aigent: turned {}", if off { "off" } else { "on" });
         let path = off_path();
         let kept = if off {
-            path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, ""))
+            path.parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::write(&path, ""))
         } else {
-            std::fs::remove_file(&path).or_else(|err| if err.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(err) })
+            std::fs::remove_file(&path).or_else(|err| {
+                if err.kind() == std::io::ErrorKind::NotFound {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            })
         };
         if let Err(err) = kept {
             log::warn!("aigent: {}: {err}", path.display());
@@ -805,7 +859,11 @@ impl Engine {
         }
         let event = self.vad.push(block);
         if let Some(event) = event {
-            log::debug!("aigent: speech {event:?} ({:?}, {:.0} dB)", self.state, vad::level(block));
+            log::debug!(
+                "aigent: speech {event:?} ({:?}, {:.0} dB)",
+                self.state,
+                vad::level(block)
+            );
         }
         if let Some(recording) = &mut self.recording {
             recording.extend_from_slice(block);
@@ -881,7 +939,11 @@ impl Engine {
     fn heard_all(&mut self) {
         let audio = self.recording.take().unwrap_or_default();
         log::info!("aigent: heard {:.1} s", audio.len() as f32 / mic::RATE as f32);
-        let job = if self.state == State::Confirm { Job::Reply } else { Job::Request };
+        let job = if self.state == State::Confirm {
+            Job::Reply
+        } else {
+            Job::Request
+        };
         self.enter(State::Thinking);
         if self.demo == Demo::Off {
             self.ask(job, audio);
@@ -988,7 +1050,11 @@ impl Engine {
                 Some(yes) => self.decide(yes),
                 None if !self.retried => {
                     self.retried = true;
-                    let again = if self.language == "en" { "Yes or no?" } else { "Sim ou não?" };
+                    let again = if self.language == "en" {
+                        "Yes or no?"
+                    } else {
+                        "Sim ou não?"
+                    };
                     self.say(again, Then::Confirm);
                 }
                 None => self.decide(false),
@@ -1056,8 +1122,17 @@ impl Engine {
         match route {
             voice::Route::Task => {
                 if self.start_agent() {
-                    let name = self.config.agents.get(&self.agent).and_then(|a| a.kind(&self.agent)).map_or("agente", |k| k.said());
-                    let told = if self.language == "en" { format!("Okay, I'll ask {name}.") } else { format!("Certo, vou pedir ao {name}.") };
+                    let name = self
+                        .config
+                        .agents
+                        .get(&self.agent)
+                        .and_then(|a| a.kind(&self.agent))
+                        .map_or("agente", |k| k.said());
+                    let told = if self.language == "en" {
+                        format!("Okay, I'll ask {name}.")
+                    } else {
+                        format!("Certo, vou pedir ao {name}.")
+                    };
                     self.say(&told, Then::Think);
                 }
             }
@@ -1083,17 +1158,31 @@ impl Engine {
             let start = Instant::now();
             match local.answer(&before, &request, &language, &mut phrase) {
                 Ok((turn, answer)) => {
-                    log::info!("aigent: the voice said, in {:.1} s: {answer:?}", start.elapsed().as_secs_f32());
+                    log::info!(
+                        "aigent: the voice said, in {:.1} s: {answer:?}",
+                        start.elapsed().as_secs_f32()
+                    );
                     let _ = events.send(Event::Talked { id, turn, answer });
-                    let _ = events.send(Event::Phrase { id, text: String::new(), last: true });
+                    let _ = events.send(Event::Phrase {
+                        id,
+                        text: String::new(),
+                        last: true,
+                    });
                 }
                 Err(err) => {
                     log::warn!("aigent: the voice: {err:#}");
                     // The agent answers what the voice could not.
                     let _ = if said {
-                        events.send(Event::Phrase { id, text: String::new(), last: true })
+                        events.send(Event::Phrase {
+                            id,
+                            text: String::new(),
+                            last: true,
+                        })
                     } else {
-                        events.send(Event::Routed { id, route: voice::Route::Task })
+                        events.send(Event::Routed {
+                            id,
+                            route: voice::Route::Task,
+                        })
                     };
                 }
             }
@@ -1137,7 +1226,12 @@ impl Engine {
             }
             self.dirty = true;
         }
-        let order = tts::Order::Say { id: speech, text, language: self.language.to_owned(), more: !last };
+        let order = tts::Order::Say {
+            id: speech,
+            text,
+            language: self.language.to_owned(),
+            more: !last,
+        };
         if self.speaker.say.send(order).is_err() {
             log::error!("aigent: the speaker is gone");
         }
@@ -1156,7 +1250,12 @@ impl Engine {
             return false;
         };
         self.enter(State::Thinking);
-        let (id, name, session, request) = (self.request_id, self.agent.clone(), self.session.clone(), self.request.clone());
+        let (id, name, session, request) = (
+            self.request_id,
+            self.agent.clone(),
+            self.session.clone(),
+            self.request.clone(),
+        );
         let (running, events) = (self.running.clone(), self.events.clone());
         let spawned = std::thread::Builder::new().name("agent".into()).spawn(move || {
             let answer = agent::ask(&name, &agent, &request, session.as_deref(), &running);
@@ -1183,7 +1282,11 @@ impl Engine {
                 self.text = answer.text.clone();
                 // The voice knows what the agent said, for what is asked next.
                 if self.local.is_some() {
-                    voice::keep(&mut self.talk, voice::asked(&self.request, self.language), answer.text.clone());
+                    voice::keep(
+                        &mut self.talk,
+                        voice::asked(&self.request, self.language),
+                        answer.text.clone(),
+                    );
                 }
                 self.say(&answer.text, Then::Wait);
             }
@@ -1299,13 +1402,20 @@ impl Engine {
         let elapsed = self.since.elapsed();
         match self.state {
             State::Listening | State::Confirm => {
-                let patience = if self.state == State::Confirm { NO_ANSWER } else { NO_SPEECH };
+                let patience = if self.state == State::Confirm {
+                    NO_ANSWER
+                } else {
+                    NO_SPEECH
+                };
                 if (!self.heard && elapsed >= patience) || elapsed >= LONGEST {
                     if self.heard {
                         self.heard_all();
                     } else if self.state == State::Confirm {
                         let heard = self.recording.as_deref().unwrap_or_default();
-                        let loudest = heard.chunks(mic::BLOCK).map(vad::level).fold(f32::NEG_INFINITY, f32::max);
+                        let loudest = heard
+                            .chunks(mic::BLOCK)
+                            .map(vad::level)
+                            .fold(f32::NEG_INFINITY, f32::max);
                         log::info!("aigent: no answer (the loudest 30 ms at {loudest:.0} dB)");
                         self.decide(false);
                     } else {
@@ -1372,7 +1482,12 @@ fn name_end(audio: &[f32], text: &str, taken: usize) -> usize {
         return 0;
     };
     let (start, stop) = (first.0, last.1);
-    let letters = |words: &[&str]| words.iter().map(|w| w.chars().filter(|c| c.is_alphanumeric()).count()).sum::<usize>();
+    let letters = |words: &[&str]| {
+        words
+            .iter()
+            .map(|w| w.chars().filter(|c| c.is_alphanumeric()).count())
+            .sum::<usize>()
+    };
     let words: Vec<&str> = text.split_whitespace().collect();
     let share = letters(&words[..taken.min(words.len())]) as f32 / letters(&words).max(1) as f32;
     let guess = start + ((stop - start) as f32 * share) as usize;
@@ -1382,7 +1497,9 @@ fn name_end(audio: &[f32], text: &str, taken: usize) -> usize {
         .min_by_key(|middle| middle.abs_diff(guess));
     let frame = pause.unwrap_or_else(|| {
         let (from, to) = (guess.saturating_sub(25).max(start), (guess + 25).min(stop));
-        (from..=to).min_by(|a, b| levels[*a].total_cmp(&levels[*b])).unwrap_or(guess)
+        (from..=to)
+            .min_by(|a, b| levels[*a].total_cmp(&levels[*b]))
+            .unwrap_or(guess)
     });
     (frame * FRAME).min(audio.len())
 }
@@ -1425,7 +1542,11 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
             let programs = programs(command);
             let and = if en { " and " } else { " e " };
             if let Some(actions) = desktop_actions(command, en) {
-                let said = if en { format!("May I {}?", actions.join(and)) } else { format!("Posso {}?", actions.join(and)) };
+                let said = if en {
+                    format!("May I {}?", actions.join(and))
+                } else {
+                    format!("Posso {}?", actions.join(and))
+                };
                 return (said, format!("$ {command}"));
             }
             let said = match (programs.is_empty(), en) {
@@ -1438,11 +1559,19 @@ fn question(tool: &str, input: &serde_json::Value, language: &str) -> (String, S
         }
         "Write" | "Edit" | "MultiEdit" | "NotebookEdit" => {
             let name = file();
-            let said = if en { format!("May I change the file {name}?") } else { format!("Posso alterar o arquivo {name}?") };
+            let said = if en {
+                format!("May I change the file {name}?")
+            } else {
+                format!("Posso alterar o arquivo {name}?")
+            };
             (said, format!("{tool} {}", input["file_path"].as_str().unwrap_or(&name)))
         }
         _ => {
-            let said = if en { format!("May I use {tool}?") } else { format!("Posso usar {tool}?") };
+            let said = if en {
+                format!("May I use {tool}?")
+            } else {
+                format!("Posso usar {tool}?")
+            };
             (said, format!("{tool} {input}"))
         }
     }
@@ -1468,7 +1597,9 @@ fn desktop_actions(command: &str, en: bool) -> Option<Vec<String>> {
 fn desktop_command(command: &str, en: bool) -> Option<Vec<String>> {
     let words = shell_words(command);
     let (program, rest) = words.split_first()?;
-    if !matches!(program.rsplit('/').next(), Some("orbitctl" | "swaymsg")) || rest.first().is_some_and(|w| w.starts_with('-')) {
+    if !matches!(program.rsplit('/').next(), Some("orbitctl" | "swaymsg"))
+        || rest.first().is_some_and(|w| w.starts_with('-'))
+    {
         return None;
     }
     let mut out = Vec::new();
@@ -1566,7 +1697,13 @@ fn programs(command: &str) -> Vec<String> {
         let program = part
             .split_whitespace()
             .find(|w| *w != "sudo" && !w.contains('=') && !w.starts_with('('))
-            .map(|w| w.rsplit('/').next().unwrap_or(w).trim_matches(['"', '\'', '`', ')']).to_owned());
+            .map(|w| {
+                w.rsplit('/')
+                    .next()
+                    .unwrap_or(w)
+                    .trim_matches(['"', '\'', '`', ')'])
+                    .to_owned()
+            });
         if let Some(program) = program
             && !program.is_empty()
             && !out.contains(&program)
@@ -1594,10 +1731,25 @@ fn wants(tool: &str, input: &serde_json::Value) -> Vec<String> {
 /// silences the voice and goes no further.
 fn is_stop(request: &str) -> bool {
     // Said around the word that stops it, and left out.
-    const AROUND: [&str; 14] = ["por", "favor", "please", "ok", "a", "com", "isso", "boca", "agora", "now", "up", "it", "jarvis", "orbit"];
+    const AROUND: [&str; 14] = [
+        "por", "favor", "please", "ok", "a", "com", "isso", "boca", "agora", "now", "up", "it", "jarvis", "orbit",
+    ];
     const STOP: [&str; 15] = [
-        "para", "pare", "parar", "chega", "cancela", "cancelar", "silêncio", "silencio", "quieto", "cala", "stop", "cancel", "enough",
-        "quiet", "shut",
+        "para",
+        "pare",
+        "parar",
+        "chega",
+        "cancela",
+        "cancelar",
+        "silêncio",
+        "silencio",
+        "quieto",
+        "cala",
+        "stop",
+        "cancel",
+        "enough",
+        "quiet",
+        "shut",
     ];
     let words: Vec<String> = request
         .split(|c: char| !c.is_alphanumeric())
@@ -1616,7 +1768,10 @@ fn is_stop(request: &str) -> bool {
 /// canceller takes most of it out, not always all.
 fn echo(heard: &str, saying: &str) -> bool {
     let words = |text: &str| -> Vec<String> {
-        text.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_lowercase).collect()
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect()
     };
     let (heard, saying) = (words(heard), words(saying));
     let common = heard.iter().filter(|w| saying.contains(w)).count();
@@ -1632,11 +1787,16 @@ fn yes_or_no(text: &str) -> Option<bool> {
         .collect();
     let has = |list: &[&str]| words.iter().any(|w| list.contains(&w.as_str()));
     // "Não pode" is no: the no words first.
-    if has(&["não", "nao", "no", "nope", "cancela", "cancelar", "negativo", "pare", "don't", "stop"]) {
+    if has(&[
+        "não", "nao", "no", "nope", "cancela", "cancelar", "negativo", "pare", "don't", "stop",
+    ]) {
         return Some(false);
     }
     // Also as Whisper sometimes writes them, heard alone.
-    if has(&["sim", "sem", "si", "pode", "podge", "pod", "claro", "ok", "okay", "confirmo", "confirma", "manda", "vai", "faz", "faça", "yes", "yeah", "yep", "sure", "go"]) {
+    if has(&[
+        "sim", "sem", "si", "pode", "podge", "pod", "claro", "ok", "okay", "confirmo", "confirma", "manda", "vai",
+        "faz", "faça", "yes", "yeah", "yep", "sure", "go",
+    ]) {
         return Some(true);
     }
     None
@@ -1689,10 +1849,23 @@ mod tests {
 
     #[test]
     fn stop_requests_are_told_apart() {
-        for stop in ["Para.", "Chega!", "Cancela, por favor.", "Stop.", "Cala a boca.", "Para com isso.", "Para. Para. Para. Para."] {
+        for stop in [
+            "Para.",
+            "Chega!",
+            "Cancela, por favor.",
+            "Stop.",
+            "Cala a boca.",
+            "Para com isso.",
+            "Para. Para. Para. Para.",
+        ] {
             assert!(is_stop(stop), "{stop}");
         }
-        for request in ["Para onde vai o arquivo?", "Abre o terminal.", "Stop the music player.", "Isso"] {
+        for request in [
+            "Para onde vai o arquivo?",
+            "Abre o terminal.",
+            "Stop the music player.",
+            "Isso",
+        ] {
             assert!(!is_stop(request), "{request}");
         }
     }
@@ -1717,13 +1890,19 @@ mod tests {
     #[test]
     fn a_desktop_command_is_said_as_what_it_does() {
         let ask = |command: &str| question("Bash", &serde_json::json!({ "command": command }), "pt").0;
-        assert_eq!(ask("orbitctl 'focus output HDMI-A-1; exec kitty'"), "Posso abrir o kitty?");
+        assert_eq!(
+            ask("orbitctl 'focus output HDMI-A-1; exec kitty'"),
+            "Posso abrir o kitty?"
+        );
         assert_eq!(
             ask("orbitctl '[app_id=\"kitty\"] move container to output HDMI-A-1, focus'"),
             "Posso mover a janela para o monitor HDMI-A-1?"
         );
         assert_eq!(ask("swaymsg -t get_tree"), "Posso executar swaymsg?");
-        assert_eq!(ask("orbitctl workspace 11 && orbitctl exec iptvnator"), "Posso ir para a área 11 e abrir o iptvnator?");
+        assert_eq!(
+            ask("orbitctl workspace 11 && orbitctl exec iptvnator"),
+            "Posso ir para a área 11 e abrir o iptvnator?"
+        );
     }
 
     #[test]
@@ -1735,7 +1914,15 @@ mod tests {
     #[test]
     fn the_name_is_cut_in_the_pause_after_it() {
         // A breath, "Jarvis", a pause, "que horas são", as the K66 gave it.
-        let audio = sound(&[(-66.0, 10), (-45.0, 30), (-58.0, 50), (-30.0, 60), (-62.0, 35), (-35.0, 50), (-65.0, 80)]);
+        let audio = sound(&[
+            (-66.0, 10),
+            (-45.0, 30),
+            (-58.0, 50),
+            (-30.0, 60),
+            (-62.0, 35),
+            (-35.0, 50),
+            (-65.0, 80),
+        ]);
         let cut = name_end(&audio, "Jarvis, que a ração.", 1) as f32 / mic::RATE as f32;
         assert!((1.5..1.85).contains(&cut), "{cut}");
     }

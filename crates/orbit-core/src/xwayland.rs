@@ -22,11 +22,12 @@ use smithay::{
         selection::{
             SelectionTarget,
             data_device::{
-                clear_data_device_selection, current_data_device_selection_userdata, request_data_device_client_selection,
-                set_data_device_selection,
+                clear_data_device_selection, current_data_device_selection_userdata,
+                request_data_device_client_selection, set_data_device_selection,
             },
             primary_selection::{
-                clear_primary_selection, current_primary_selection_userdata, request_primary_client_selection, set_primary_selection,
+                clear_primary_selection, current_primary_selection_userdata, request_primary_client_selection,
+                set_primary_selection,
             },
         },
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
@@ -62,30 +63,35 @@ impl Orbit {
         self.xdisplay = Some(xwayland.display_number());
         tracing::info!("XWayland on DISPLAY=:{}", xwayland.display_number());
         let dh = self.display_handle.clone();
-        let inserted = self.loop_handle.insert_source(xwayland, move |event, _, state| match event {
-            XWaylandEvent::Ready { x11_socket, display_number } => {
-                match X11Wm::start_wm(state.loop_handle.clone(), &dh, x11_socket, client.clone()) {
-                    Ok(mut wm) => {
-                        // The root window's pointer: the theme's arrow.
-                        let image = state.cursor.image();
-                        if let Err(err) = wm.set_cursor(
-                            &image.pixels_rgba,
-                            (image.width as u16, image.height as u16).into(),
-                            (image.xhot as u16, image.yhot as u16).into(),
-                        ) {
-                            tracing::warn!("XWayland cursor: {err}");
+        let inserted = self
+            .loop_handle
+            .insert_source(xwayland, move |event, _, state| match event {
+                XWaylandEvent::Ready {
+                    x11_socket,
+                    display_number,
+                } => {
+                    match X11Wm::start_wm(state.loop_handle.clone(), &dh, x11_socket, client.clone()) {
+                        Ok(mut wm) => {
+                            // The root window's pointer: the theme's arrow.
+                            let image = state.cursor.image();
+                            if let Err(err) = wm.set_cursor(
+                                &image.pixels_rgba,
+                                (image.width as u16, image.height as u16).into(),
+                                (image.xhot as u16, image.yhot as u16).into(),
+                            ) {
+                                tracing::warn!("XWayland cursor: {err}");
+                            }
+                            state.xwm = Some(wm);
+                            tracing::info!("XWayland ready on :{display_number}");
                         }
-                        state.xwm = Some(wm);
-                        tracing::info!("XWayland ready on :{display_number}");
+                        Err(err) => tracing::error!("X window manager: {err}"),
                     }
-                    Err(err) => tracing::error!("X window manager: {err}"),
                 }
-            }
-            XWaylandEvent::Error => {
-                tracing::error!("XWayland exited while starting");
-                state.xdisplay = None;
-            }
-        });
+                XWaylandEvent::Error => {
+                    tracing::error!("XWayland exited while starting");
+                    state.xdisplay = None;
+                }
+            });
         if let Err(err) = inserted {
             tracing::error!("XWayland in the event loop: {err}");
             self.xdisplay = None;
@@ -100,7 +106,10 @@ impl Orbit {
 
     /// The menu or tooltip (override-redirect) of an X window, on screen.
     fn x11_overlay(&self, surface: &X11Surface) -> Option<Window> {
-        self.space.elements().find(|w| w.x11_surface() == Some(surface)).cloned()
+        self.space
+            .elements()
+            .find(|w| w.x11_surface() == Some(surface))
+            .cloned()
     }
 
     /// The window was closed or hidden by its program.
@@ -211,7 +220,13 @@ impl XwmHandler for Orbit {
     }
 
     /// A menu or tooltip moved.
-    fn configure_notify(&mut self, _xwm: XwmId, surface: X11Surface, geometry: Rectangle<i32, Logical>, _above: Option<u32>) {
+    fn configure_notify(
+        &mut self,
+        _xwm: XwmId,
+        surface: X11Surface,
+        geometry: Rectangle<i32, Logical>,
+        _above: Option<u32>,
+    ) {
         if !surface.is_override_redirect() {
             return;
         }
@@ -283,9 +298,16 @@ impl XwmHandler for Orbit {
         if self.locked() {
             return;
         }
-        let Some(window) = self.x11_window(&surface) else { return };
+        let Some(window) = self.x11_window(&surface) else {
+            return;
+        };
         let Some(start) = pointer.grab_start_data() else { return };
-        self.start_resize(window, smithay::utils::SERIAL_COUNTER.next_serial(), Some(start), Some(edges.into()));
+        self.start_resize(
+            window,
+            smithay::utils::SERIAL_COUNTER.next_serial(),
+            Some(start),
+            Some(edges.into()),
+        );
     }
 
     /// Its own title bar dragged: moved as with Mod+drag.
@@ -294,7 +316,9 @@ impl XwmHandler for Orbit {
         if self.locked() {
             return;
         }
-        let Some(window) = self.x11_window(&surface) else { return };
+        let Some(window) = self.x11_window(&surface) else {
+            return;
+        };
         let Some(start) = pointer.grab_start_data() else { return };
         self.start_move(window, smithay::utils::SERIAL_COUNTER.next_serial(), Some(start));
     }
@@ -310,8 +334,12 @@ impl XwmHandler for Orbit {
 
     fn send_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_type: String, fd: OwnedFd) {
         let sent = match selection {
-            SelectionTarget::Clipboard => request_data_device_client_selection(&self.seat, mime_type, fd).map_err(|e| e.to_string()),
-            SelectionTarget::Primary => request_primary_client_selection(&self.seat, mime_type, fd).map_err(|e| e.to_string()),
+            SelectionTarget::Clipboard => {
+                request_data_device_client_selection(&self.seat, mime_type, fd).map_err(|e| e.to_string())
+            }
+            SelectionTarget::Primary => {
+                request_primary_client_selection(&self.seat, mime_type, fd).map_err(|e| e.to_string())
+            }
         };
         if let Err(err) = sent {
             tracing::warn!("the Wayland {selection:?} for X: {err}");

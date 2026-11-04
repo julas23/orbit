@@ -41,18 +41,31 @@ pub fn new(_config: &NotificationsConfig, form: Form) -> gtk::Widget {
     let conn = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
         .inspect_err(|err| log::error!("notifications: no session bus: {err}"))
         .ok();
-    let module = Rc::new(Module { row: row.clone(), conn, dnd: Cell::new(false), keep: RefCell::default() });
+    let module = Rc::new(Module {
+        row: row.clone(),
+        conn,
+        dnd: Cell::new(false),
+        keep: RefCell::default(),
+    });
     module.show(None);
 
     if let Some(conn) = &module.conn {
         let weak = Rc::downgrade(&module);
-        let sub = conn.subscribe_to_signal(Some(NAME), Some(NAME), Some("Changed"), Some(PATH), None, gio::DBusSignalFlags::NONE, move |s| {
-            if let Some(m) = weak.upgrade() {
-                let unread = s.parameters.child_value(0).get::<u32>().unwrap_or(0);
-                let dnd = s.parameters.child_value(1).get::<bool>().unwrap_or(false);
-                m.show(Some((unread, dnd)));
-            }
-        });
+        let sub = conn.subscribe_to_signal(
+            Some(NAME),
+            Some(NAME),
+            Some("Changed"),
+            Some(PATH),
+            None,
+            gio::DBusSignalFlags::NONE,
+            move |s| {
+                if let Some(m) = weak.upgrade() {
+                    let unread = s.parameters.child_value(0).get::<u32>().unwrap_or(0);
+                    let dnd = s.parameters.child_value(1).get::<bool>().unwrap_or(false);
+                    m.show(Some((unread, dnd)));
+                }
+            },
+        );
         module.keep.borrow_mut().push(Box::new(sub));
         let (appeared, vanished) = (Rc::downgrade(&module), Rc::downgrade(&module));
         let watch = gio::bus_watch_name_on_connection(
@@ -84,11 +97,16 @@ impl Module {
         let tooltip = tr("notifications-tooltip");
         let Some((unread, dnd)) = state else {
             self.row.root.remove_css_class("unread");
-            self.row.show("󰂜", &[&tr("notifications-none"), &tr("notifications-off")], &tooltip);
+            self.row
+                .show("󰂜", &[&tr("notifications-none"), &tr("notifications-off")], &tooltip);
             return;
         };
         self.dnd.set(dnd);
-        let first = if unread == 0 { tr("notifications-none") } else { tr_args("notifications-new", &[("count", number(unread))]) };
+        let first = if unread == 0 {
+            tr("notifications-none")
+        } else {
+            tr_args("notifications-new", &[("count", number(unread))])
+        };
         let (glyph, second) = match (dnd, unread) {
             (true, _) => ("󰂛", tr("notifications-dnd")),
             (false, 0) => ("󰂜", tr("notifications-on")),

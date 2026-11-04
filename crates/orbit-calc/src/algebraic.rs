@@ -307,10 +307,8 @@ impl Calc {
             }
         };
         if let Some(done) = entry.done() {
-            self.history.set_label(&format!(
-                "{} =",
-                format::expression(&done.expression, self.sep)
-            ));
+            self.history
+                .set_label(&format!("{} =", format::expression(&done.expression, self.sep)));
             self.main.set_label(&format::number(done.value, self.sep));
             set_preview("", None);
             return;
@@ -362,9 +360,7 @@ impl Calc {
             .clipboard()
             .read_text_async(None::<&gtk::gio::Cancellable>, move |text| {
                 if let Ok(Some(text)) = text {
-                    calc.entry
-                        .borrow_mut()
-                        .set_text(&format::internal(&text, calc.sep));
+                    calc.entry.borrow_mut().set_text(&format::internal(&text, calc.sep));
                     calc.refresh();
                 }
             });

@@ -278,7 +278,9 @@ impl Editor {
     fn drop_item(&self, id: u64, to: Drop) {
         {
             let mut items = self.items.borrow_mut();
-            let Some(from) = items.iter().position(|item| item.id == id) else { return };
+            let Some(from) = items.iter().position(|item| item.id == id) else {
+                return;
+            };
             match to {
                 Drop::Off => {
                     items.remove(from);
@@ -377,7 +379,11 @@ fn regroup(list: &[Option<DockApp>]) -> Vec<DockApp> {
             }
         }
         // The most common; on a tie, the first.
-        let best = counts.iter().rev().max_by_key(|(_, n)| *n).and_then(|(g, _)| g.cloned());
+        let best = counts
+            .iter()
+            .rev()
+            .max_by_key(|(_, n)| *n)
+            .and_then(|(g, _)| g.cloned());
         let mut group = best.clone();
         let mut n = 2;
         while used.contains(&group) {
@@ -385,7 +391,10 @@ fn regroup(list: &[Option<DockApp>]) -> Vec<DockApp> {
             n += 1;
         }
         used.push(group.clone());
-        out.extend(run.into_iter().map(|app| DockApp { group: group.clone(), ..app.clone() }));
+        out.extend(run.into_iter().map(|app| DockApp {
+            group: group.clone(),
+            ..app.clone()
+        }));
     }
     out
 }
@@ -419,7 +428,9 @@ fn gestures(editor: &Rc<Editor>) {
     let weak = Rc::downgrade(editor);
     files.connect_drop(move |_, value, x, y| {
         let Some(editor) = weak.upgrade() else { return false };
-        let Ok(list) = value.get::<gdk::FileList>() else { return false };
+        let Ok(list) = value.get::<gdk::FileList>() else {
+            return false;
+        };
         let paths: Vec<PathBuf> = list
             .files()
             .iter()
@@ -455,7 +466,9 @@ fn gestures(editor: &Rc<Editor>) {
     let weak = Rc::downgrade(editor);
     drag.connect_drag_update(move |_, dx, dy| {
         let Some(editor) = weak.upgrade() else { return };
-        let Some((id, x, y)) = editor.dragging.get() else { return };
+        let Some((id, x, y)) = editor.dragging.get() else {
+            return;
+        };
         let mark = if dx.hypot(dy) < DRAG_MIN {
             None
         } else {
@@ -466,7 +479,9 @@ fn gestures(editor: &Rc<Editor>) {
     let weak = Rc::downgrade(editor);
     drag.connect_drag_end(move |_, dx, dy| {
         let Some(editor) = weak.upgrade() else { return };
-        let Some((id, x, y)) = editor.dragging.take() else { return };
+        let Some((id, x, y)) = editor.dragging.take() else {
+            return;
+        };
         editor.set_mark(None);
         editor.set_dragged(id, false);
         if dx.hypot(dy) >= DRAG_MIN {
@@ -479,7 +494,11 @@ fn gestures(editor: &Rc<Editor>) {
 impl Editor {
     fn set_dragged(&self, id: u64, on: bool) {
         let items = self.items.borrow();
-        if let Some(widget) = items.iter().find(|item| item.id == id).and_then(|item| item.widget.as_ref()) {
+        if let Some(widget) = items
+            .iter()
+            .find(|item| item.id == id)
+            .and_then(|item| item.widget.as_ref())
+        {
             if on {
                 widget.add_css_class("dragged");
             } else {
@@ -581,14 +600,15 @@ fn pick_appimage(editor: &Rc<Editor>, x: f64, y: f64) {
 /// field; the one picked goes after the item under (`x`, `y`).
 fn chooser(editor: &Rc<Editor>, x: f64, y: f64) {
     let at = editor.place_after(x, y);
-    let search = gtk::SearchEntry::builder()
-        .placeholder_text(tr("dock-search"))
-        .build();
+    let search = gtk::SearchEntry::builder().placeholder_text(tr("dock-search")).build();
     let list = gtk::ListBox::builder()
         .selection_mode(gtk::SelectionMode::Browse)
         .activate_on_single_click(true)
         .build();
-    let mut apps: Vec<gio::AppInfo> = gio::AppInfo::all().into_iter().filter(|app| app.should_show()).collect();
+    let mut apps: Vec<gio::AppInfo> = gio::AppInfo::all()
+        .into_iter()
+        .filter(|app| app.should_show())
+        .collect();
     apps.sort_by_key(|app| app.display_name().to_lowercase());
     for app in &apps {
         let row = gtk::Box::builder().spacing(8).css_classes(["choice"]).build();
@@ -597,7 +617,12 @@ fn chooser(editor: &Rc<Editor>, x: f64, y: f64) {
             image.set_from_gicon(&icon);
         }
         row.append(&image);
-        row.append(&gtk::Label::builder().label(app.display_name().as_str()).xalign(0.0).build());
+        row.append(
+            &gtk::Label::builder()
+                .label(app.display_name().as_str())
+                .xalign(0.0)
+                .build(),
+        );
         let row = gtk::ListBoxRow::builder().child(&row).build();
         row.set_widget_name(app.id().as_deref().unwrap_or_default());
         row.set_tooltip_text(Some(app.display_name().as_str()));
@@ -693,15 +718,28 @@ mod tests {
     #[test]
     fn separators_become_groups() {
         // As loaded: unchanged.
-        let list = [app("a", Some("web")), None, app("b", Some("dev")), app("c", Some("dev"))];
-        assert_eq!(groups(&list), [Some("web".into()), Some("dev".into()), Some("dev".into())]);
+        let list = [
+            app("a", Some("web")),
+            None,
+            app("b", Some("dev")),
+            app("c", Some("dev")),
+        ];
+        assert_eq!(
+            groups(&list),
+            [Some("web".into()), Some("dev".into()), Some("dev".into())]
+        );
         // A separator added inside a group splits it; the second half is
         // numbered.
         let list = [app("a", Some("dev")), None, app("b", Some("dev"))];
         assert_eq!(groups(&list), [Some("dev".into()), Some("dev-2".into())]);
         // A separator removed joins two groups under the larger one; a new
         // launcher (no group) takes its run's.
-        let list = [app("a", Some("web")), app("b", Some("dev")), app("c", Some("dev")), app("d", None)];
+        let list = [
+            app("a", Some("web")),
+            app("b", Some("dev")),
+            app("c", Some("dev")),
+            app("d", None),
+        ];
         assert_eq!(groups(&list), vec![Some("dev".to_string()); 4]);
         // Separators at the ends or side by side change nothing.
         let list = [None, app("a", None), None, None, app("b", None), None];

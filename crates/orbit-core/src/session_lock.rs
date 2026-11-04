@@ -17,12 +17,19 @@
 
 use std::time::Duration;
 
+use smithay::reexports::wayland_protocols::ext::session_lock::v1::server::ext_session_lock_v1::ExtSessionLockV1;
 use smithay::{
     backend::renderer::{
-        element::{Kind, surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree}},
+        element::{
+            Kind,
+            surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
+        },
         gles::GlesRenderer,
     },
-    desktop::{WindowSurfaceType, utils::{send_frames_surface_tree, under_from_surface_tree}},
+    desktop::{
+        WindowSurfaceType,
+        utils::{send_frames_surface_tree, under_from_surface_tree},
+    },
     output::Output,
     reexports::wayland_server::{
         Resource,
@@ -31,7 +38,6 @@ use smithay::{
     utils::{Logical, Point, SERIAL_COUNTER, Scale},
     wayland::session_lock::{LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker},
 };
-use smithay::reexports::wayland_protocols::ext::session_lock::v1::server::ext_session_lock_v1::ExtSessionLockV1;
 
 use crate::{
     focus::KeyboardFocus,
@@ -65,7 +71,11 @@ impl SessionLockHandler for Orbit {
         }
         tracing::info!("session locked by a client");
         let lock = confirmation.ext_session_lock().clone();
-        self.locker = Some(Locker { lock, pending: Some(confirmation), surfaces: Vec::new() });
+        self.locker = Some(Locker {
+            lock,
+            pending: Some(confirmation),
+            surfaces: Vec::new(),
+        });
         // The core's own lock (`lock`), not this trait's.
         Orbit::lock(self);
     }
@@ -84,8 +94,12 @@ impl SessionLockHandler for Orbit {
         if surface.ext_session_lock() != &locker.lock {
             return;
         }
-        let Some(output) = Output::from_resource(&wl_output) else { return };
-        let Some(geo) = self.space.output_geometry(&output) else { return };
+        let Some(output) = Output::from_resource(&wl_output) else {
+            return;
+        };
+        let Some(geo) = self.space.output_geometry(&output) else {
+            return;
+        };
         // Smithay sends the configure after this.
         surface.with_pending_state(|state| state.size = Some((geo.size.w as u32, geo.size.h as u32).into()));
         locker.surfaces.retain(|(_, s)| s.alive());
@@ -102,12 +116,18 @@ impl Orbit {
     /// The locker's surface on the monitor named `output`.
     fn lock_surface(&self, output: &str) -> Option<WlSurface> {
         let locker = self.locker.as_ref()?;
-        locker.surfaces.iter().find(|(name, s)| name == output && s.alive()).map(|(_, s)| s.wl_surface().clone())
+        locker
+            .surfaces
+            .iter()
+            .find(|(name, s)| name == output && s.alive())
+            .map(|(_, s)| s.wl_surface().clone())
     }
 
     /// Whether `surface` is one of the locker's.
     fn is_lock_surface(&self, surface: &WlSurface) -> bool {
-        self.locker.as_ref().is_some_and(|l| l.surfaces.iter().any(|(_, s)| s.wl_surface() == surface))
+        self.locker
+            .as_ref()
+            .is_some_and(|l| l.surfaces.iter().any(|(_, s)| s.wl_surface() == surface))
     }
 
     /// Whether `surface` is the lock's face: the greet's or the locker's.
@@ -132,7 +152,9 @@ impl Orbit {
             self.greet_follow(output);
             return;
         }
-        let Some(surface) = self.lock_surface(&output.name()) else { return };
+        let Some(surface) = self.lock_surface(&output.name()) else {
+            return;
+        };
         let has = matches!(self.seat.get_keyboard().and_then(|k| k.current_focus()), Some(KeyboardFocus::Surface(s)) if s == surface);
         if !has {
             self.focus_face();
@@ -147,12 +169,21 @@ impl Orbit {
             return;
         }
         let pointer = self.pointer_output().map(|o| o.name());
-        let surface = pointer
-            .and_then(|name| self.lock_surface(&name))
-            .or_else(|| self.locker.as_ref()?.surfaces.iter().find(|(_, s)| s.alive()).map(|(_, s)| s.wl_surface().clone()));
+        let surface = pointer.and_then(|name| self.lock_surface(&name)).or_else(|| {
+            self.locker
+                .as_ref()?
+                .surfaces
+                .iter()
+                .find(|(_, s)| s.alive())
+                .map(|(_, s)| s.wl_surface().clone())
+        });
         let Some(surface) = surface else { return };
         if let Some(keyboard) = self.seat.get_keyboard() {
-            keyboard.set_focus(self, Some(KeyboardFocus::Surface(surface)), SERIAL_COUNTER.next_serial());
+            keyboard.set_focus(
+                self,
+                Some(KeyboardFocus::Surface(surface)),
+                SERIAL_COUNTER.next_serial(),
+            );
         }
     }
 
@@ -171,7 +202,9 @@ impl Orbit {
             return;
         }
         if let Some(surface) = self.lock_surface(&output.name()) {
-            send_frames_surface_tree(&surface, output, time, Some(Duration::ZERO), |_, _| Some(output.clone()));
+            send_frames_surface_tree(&surface, output, time, Some(Duration::ZERO), |_, _| {
+                Some(output.clone())
+            });
         }
     }
 
@@ -213,15 +246,31 @@ impl Orbit {
 }
 
 /// The face on `output`, at `alpha` (fading with the eyes).
-pub fn face_elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, alpha: f32, elements: &mut Vec<OutputElement>) {
+pub fn face_elements(
+    state: &Orbit,
+    output: &Output,
+    renderer: &mut GlesRenderer,
+    scale: Scale<f64>,
+    alpha: f32,
+    elements: &mut Vec<OutputElement>,
+) {
     if state.locker.is_none() {
         crate::greet::elements(state, output, renderer, scale, alpha, elements);
         return;
     }
-    let Some(surface) = state.lock_surface(&output.name()) else { return };
+    let Some(surface) = state.lock_surface(&output.name()) else {
+        return;
+    };
     elements.extend(
-        render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, &surface, (0, 0), scale, alpha, Kind::Unspecified)
-            .into_iter()
-            .map(OutputElement::Surface),
+        render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
+            renderer,
+            &surface,
+            (0, 0),
+            scale,
+            alpha,
+            Kind::Unspecified,
+        )
+        .into_iter()
+        .map(OutputElement::Surface),
     );
 }

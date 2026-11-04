@@ -132,7 +132,14 @@ impl Agent {
                 return;
             }
         };
-        log::info!("registering for session {}", subject.1.get("session-id").and_then(|v| v.get::<String>()).unwrap_or_default());
+        log::info!(
+            "registering for session {}",
+            subject
+                .1
+                .get("session-id")
+                .and_then(|v| v.get::<String>())
+                .unwrap_or_default()
+        );
         let params = (subject, locale(), AGENT_PATH).to_variant();
         let app = self.app.clone();
         self.conn.call(
@@ -169,17 +176,31 @@ impl Agent {
             invocation.return_dbus_error(FAILED, "no identity to authenticate as");
             return;
         }
-        log::info!("{action}: asked, as {}", users.iter().map(|u| u.name.as_str()).collect::<Vec<_>>().join(", "));
+        log::info!(
+            "{action}: asked, as {}",
+            users.iter().map(|u| u.name.as_str()).collect::<Vec<_>>().join(", ")
+        );
         let mut details: Vec<(String, String)> = details.into_iter().collect();
         details.sort();
-        self.waiting.borrow_mut().push_back(Request { action, message, icon, details, cookie, users, invocation });
+        self.waiting.borrow_mut().push_back(Request {
+            action,
+            message,
+            icon,
+            details,
+            cookie,
+            users,
+            invocation,
+        });
         self.next();
     }
 
     fn cancel(self: &Rc<Self>, cookie: &str) {
         let waiting = {
             let mut waiting = self.waiting.borrow_mut();
-            waiting.iter().position(|r| r.cookie == cookie).and_then(|i| waiting.remove(i))
+            waiting
+                .iter()
+                .position(|r| r.cookie == cookie)
+                .and_then(|i| waiting.remove(i))
         };
         if let Some(request) = waiting {
             log::info!("{}: cancelled by polkitd before it was shown", request.action);
@@ -198,7 +219,9 @@ impl Agent {
         if self.shown.borrow().is_some() {
             return;
         }
-        let Some(request) = self.waiting.borrow_mut().pop_front() else { return };
+        let Some(request) = self.waiting.borrow_mut().pop_front() else {
+            return;
+        };
         let weak = Rc::downgrade(self);
         let dialog = Dialog::show(&self.app, request, move || {
             if let Some(agent) = weak.upgrade() {
@@ -218,15 +241,42 @@ fn subject(conn: &gio::DBusConnection) -> anyhow::Result<(String, HashMap<String
         Ok(id) if !id.is_empty() => id,
         _ => {
             let login = |path: &str, iface: &str, method: &str, args: glib::Variant| {
-                conn.call_sync(Some("org.freedesktop.login1"), path, iface, method, Some(&args), None, gio::DBusCallFlags::NONE, -1, gio::Cancellable::NONE)
+                conn.call_sync(
+                    Some("org.freedesktop.login1"),
+                    path,
+                    iface,
+                    method,
+                    Some(&args),
+                    None,
+                    gio::DBusCallFlags::NONE,
+                    -1,
+                    gio::Cancellable::NONE,
+                )
             };
-            let reply = login("/org/freedesktop/login1", "org.freedesktop.login1.Manager", "GetSessionByPID", (std::process::id(),).to_variant())?;
+            let reply = login(
+                "/org/freedesktop/login1",
+                "org.freedesktop.login1.Manager",
+                "GetSessionByPID",
+                (std::process::id(),).to_variant(),
+            )?;
             let path = reply.child_value(0).str().unwrap_or_default().to_owned();
-            let reply = login(&path, "org.freedesktop.DBus.Properties", "Get", ("org.freedesktop.login1.Session", "Id").to_variant())?;
-            reply.child_value(0).as_variant().and_then(|v| v.get::<String>()).ok_or_else(|| anyhow::anyhow!("logind gave no session id"))?
+            let reply = login(
+                &path,
+                "org.freedesktop.DBus.Properties",
+                "Get",
+                ("org.freedesktop.login1.Session", "Id").to_variant(),
+            )?;
+            reply
+                .child_value(0)
+                .as_variant()
+                .and_then(|v| v.get::<String>())
+                .ok_or_else(|| anyhow::anyhow!("logind gave no session id"))?
         }
     };
-    Ok(("unix-session".into(), HashMap::from([("session-id".to_owned(), id.to_variant())])))
+    Ok((
+        "unix-session".into(),
+        HashMap::from([("session-id".to_owned(), id.to_variant())]),
+    ))
 }
 
 /// The language polkitd writes its messages in.

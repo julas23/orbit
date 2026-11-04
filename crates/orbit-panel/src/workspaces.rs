@@ -121,9 +121,7 @@ impl Module {
     /// Re-reads the workspaces and updates the buttons.
     fn refresh(self: &Rc<Self>) {
         let stride = self.config.stride.max(1);
-        let workspaces: Vec<sway::Workspace> = self
-            .with_conn(|c| c.query(sway::GET_WORKSPACES))
-            .unwrap_or_default();
+        let workspaces: Vec<sway::Workspace> = self.with_conn(|c| c.query(sway::GET_WORKSPACES)).unwrap_or_default();
         let areas: Vec<(i32, bool)> = workspaces
             .iter()
             .filter(|w| w.num > 0)
@@ -185,14 +183,9 @@ impl Module {
 
     /// Takes every monitor to `area`, keeping the focus on the current one.
     fn go(&self, area: i32) {
-        let outputs: Vec<sway::Output> = self
-            .with_conn(|c| c.query(sway::GET_OUTPUTS))
-            .unwrap_or_default();
+        let outputs: Vec<sway::Output> = self.with_conn(|c| c.query(sway::GET_OUTPUTS)).unwrap_or_default();
         let command = switch_command(&outputs, area, self.config.stride.max(1));
-        if self
-            .with_conn(|c| c.request(sway::RUN_COMMAND, &command))
-            .is_none()
-        {
+        if self.with_conn(|c| c.request(sway::RUN_COMMAND, &command)).is_none() {
             log::error!("workspaces: could not reach sway");
         }
     }

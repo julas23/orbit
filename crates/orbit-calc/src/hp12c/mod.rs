@@ -338,13 +338,7 @@ impl Hp12c {
             }
             Pad::DeltaPct => {
                 self.finish();
-                self.percent(|y, x| {
-                    if y == 0.0 {
-                        Err(0)
-                    } else {
-                        Ok(100.0 * (x - y) / y)
-                    }
-                });
+                self.percent(|y, x| if y == 0.0 { Err(0) } else { Ok(100.0 * (x - y) / y) });
             }
             Pad::PctT => {
                 self.finish();
@@ -363,10 +357,7 @@ impl Hp12c {
             }
             Pad::Sto => {
                 self.finish();
-                self.pending = Some(Pending::Sto {
-                    op: None,
-                    dot: false,
-                });
+                self.pending = Some(Pending::Sto { op: None, dot: false });
             }
             Pad::Rcl => {
                 self.finish();
@@ -601,13 +592,7 @@ impl Hp12c {
                 let r = usize::from(d) + if dot { 10 } else { 0 };
                 self.put(self.regs[r]);
             }
-            (
-                Pending::Sto {
-                    op: None,
-                    dot: false,
-                },
-                k @ (Pad::N | Pad::I | Pad::Pv | Pad::Pmt | Pad::Fv),
-            ) => {
+            (Pending::Sto { op: None, dot: false }, k @ (Pad::N | Pad::I | Pad::Pv | Pad::Pmt | Pad::Fv)) => {
                 let x = self.stack[0];
                 self.store_fin(k, x);
             }
@@ -713,10 +698,8 @@ impl Hp12c {
     fn bond(&mut self, key: Pad) {
         self.finish();
         let [x, y, ..] = self.stack;
-        let (Some(settlement), Some(maturity)) = (
-            Date::from_number(y, self.dmy),
-            Date::from_number(x, self.dmy),
-        ) else {
+        let (Some(settlement), Some(maturity)) = (Date::from_number(y, self.dmy), Date::from_number(x, self.dmy))
+        else {
             self.error = Some(8);
             return;
         };
@@ -766,18 +749,10 @@ impl Hp12c {
     /// ΔDYS: days between the dates in Y and X; actual in X, 30/360 in Y.
     fn delta_days(&mut self) {
         let [x, y, z, _] = self.stack;
-        match (
-            Date::from_number(y, self.dmy),
-            Date::from_number(x, self.dmy),
-        ) {
+        match (Date::from_number(y, self.dmy), Date::from_number(x, self.dmy)) {
             (Some(a), Some(b)) => {
                 self.last_x = x;
-                self.stack = [
-                    dates::actual_days(a, b) as f64,
-                    dates::days_360(a, b) as f64,
-                    z,
-                    z,
-                ];
+                self.stack = [dates::actual_days(a, b) as f64, dates::days_360(a, b) as f64, z, z];
                 self.lift = true;
             }
             _ => self.error = Some(8),
@@ -918,12 +893,7 @@ impl Hp12c {
             let s = format!("{x:.6e}");
             let (m, e) = s.split_once('e').unwrap_or((&s, "0"));
             let e: i32 = e.parse().unwrap_or(0);
-            format!(
-                "{} {}{:02}",
-                localize(m),
-                if e < 0 { "−" } else { "" },
-                e.abs()
-            )
+            format!("{} {}{:02}", localize(m), if e < 0 { "−" } else { "" }, e.abs())
         };
         if x == 0.0 {
             return localize(&format!("{:.*}", usize::from(self.fix), 0.0));
@@ -937,16 +907,8 @@ impl Hp12c {
         // Rounded half away from zero first, as the 12c does (format! would
         // round 2.5 to even, 2).
         let text = format!("{:.decimals$}", fin::round_to(x, decimals as u8));
-        if text
-            .trim_start_matches('-')
-            .trim_matches(['0', '.'])
-            .is_empty()
-            || text
-                .trim_start_matches('-')
-                .split('.')
-                .next()
-                .map_or(0, str::len)
-                > 10
+        if text.trim_start_matches('-').trim_matches(['0', '.']).is_empty()
+            || text.trim_start_matches('-').split('.').next().map_or(0, str::len) > 10
         {
             // Rounds to zero in this format, or grew past ten digits.
             return sci(x);
@@ -1137,10 +1099,7 @@ mod tests {
         assert!(c.annunciators().begin);
         assert!(near(c.x(), 328.85, 0.005), "{}", c.x());
         // No solution.
-        assert_eq!(
-            run("10[n] 0[i] 100[PV] 10[PMT] 100[FV] [i]").error(),
-            Some(5)
-        );
+        assert_eq!(run("10[n] 0[i] 100[PV] 10[PMT] 100[FV] [i]").error(), Some(5));
         // f CLEAR FIN.
         let c = run("36[n] f[x<>y] [RCL][n]");
         assert_eq!(c.x(), 0.0);

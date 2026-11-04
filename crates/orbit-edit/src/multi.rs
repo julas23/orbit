@@ -113,9 +113,7 @@ impl Cursors {
             }
             let selection = buffer.selection_bounds();
             let edit = match selection {
-                Some((s, e)) if s.offset() == start.offset() && e.offset() == end.offset() => {
-                    Edit::DeleteSelection
-                }
+                Some((s, e)) if s.offset() == start.offset() && e.offset() == end.offset() => Edit::DeleteSelection,
                 _ => {
                     let cursor = buffer.iter_at_mark(&buffer.get_insert()).offset();
                     Edit::Delete(start.offset() - cursor, end.offset() - cursor)
@@ -162,9 +160,7 @@ impl Cursors {
                 }
                 _ if !c.has_extra() => {}
                 Key::Escape => c.clear(),
-                Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End if !ctrl => {
-                    c.move_all(key, shift)
-                }
+                Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End if !ctrl => c.move_all(key, shift),
                 Key::c | Key::C if ctrl => {
                     c.copy();
                     return glib::Propagation::Stop;
@@ -255,9 +251,15 @@ impl Cursors {
         let r = redraw.clone();
         self.buffer.connect_mark_set(move |_, _, _| r());
         let r = redraw.clone();
-        self.view.vadjustment().expect("scrollable").connect_value_changed(move |_| r());
+        self.view
+            .vadjustment()
+            .expect("scrollable")
+            .connect_value_changed(move |_| r());
         let r = redraw;
-        self.view.hadjustment().expect("scrollable").connect_value_changed(move |_| r());
+        self.view
+            .hadjustment()
+            .expect("scrollable")
+            .connect_value_changed(move |_| r());
     }
 
     /// The text position under (x, y), in the view's coordinates.
@@ -396,11 +398,17 @@ impl Cursors {
             return;
         };
         let (first, last) = (a.line().min(b.line()), a.line().max(b.line()));
-        let (bx1, _) = self.view.window_to_buffer_coords(gtk::TextWindowType::Widget, x1 as i32, 0);
-        let (bx2, _) = self.view.window_to_buffer_coords(gtk::TextWindowType::Widget, x2 as i32, 0);
+        let (bx1, _) = self
+            .view
+            .window_to_buffer_coords(gtk::TextWindowType::Widget, x1 as i32, 0);
+        let (bx2, _) = self
+            .view
+            .window_to_buffer_coords(gtk::TextWindowType::Widget, x2 as i32, 0);
         let mut primary = None;
         for line in first..=last {
-            let Some(line_start) = self.buffer.iter_at_line(line) else { continue };
+            let Some(line_start) = self.buffer.iter_at_line(line) else {
+                continue;
+            };
             let (y, _) = self.view.line_yrange(&line_start);
             let at = |bx: i32| {
                 self.view
@@ -459,14 +467,21 @@ impl Cursors {
         let clipboard = self.view.clipboard();
         let weak = Rc::downgrade(self);
         clipboard.read_text_async(gtk::gio::Cancellable::NONE, move |result| {
-            let (Some(c), Ok(Some(text))) = (weak.upgrade(), result) else { return };
+            let (Some(c), Ok(Some(text))) = (weak.upgrade(), result) else {
+                return;
+            };
             let carets = c.extra.borrow().len() + 1;
             let lines: Vec<&str> = text.split('\n').collect();
             let per_cursor = lines.len() == carets;
             let marks: Vec<(gtk::TextMark, gtk::TextMark)> = c
                 .selections()
                 .iter()
-                .map(|(s, e)| (c.buffer.create_mark(None, s, true), c.buffer.create_mark(None, e, false)))
+                .map(|(s, e)| {
+                    (
+                        c.buffer.create_mark(None, s, true),
+                        c.buffer.create_mark(None, e, false),
+                    )
+                })
                 .collect();
             c.replaying.set(true);
             c.buffer.begin_user_action();
@@ -493,9 +508,7 @@ impl Cursors {
 
     fn draw(&self, area: &gtk::DrawingArea, cr: &gtk::cairo::Context) {
         let to_layer = |bx: i32, by: i32| {
-            let (wx, wy) = self
-                .view
-                .buffer_to_window_coords(gtk::TextWindowType::Widget, bx, by);
+            let (wx, wy) = self.view.buffer_to_window_coords(gtk::TextWindowType::Widget, bx, by);
             self.view
                 .compute_point(area, &gtk::graphene::Point::new(wx as f32, wy as f32))
                 .map(|p| (f64::from(p.x()), f64::from(p.y())))
@@ -511,7 +524,10 @@ impl Cursors {
         let accent = orbit_app::theme::accent();
         let (r, g, b) = (accent.red().into(), accent.green().into(), accent.blue().into());
         for caret in self.extra.borrow().iter() {
-            let (a, z) = (self.buffer.iter_at_mark(&caret.insert), self.buffer.iter_at_mark(&caret.bound));
+            let (a, z) = (
+                self.buffer.iter_at_mark(&caret.insert),
+                self.buffer.iter_at_mark(&caret.bound),
+            );
             let (mut s, e) = if a.offset() <= z.offset() { (a, z) } else { (z, a) };
             // The selection, line by line.
             cr.set_source_rgba(r, g, b, 0.3);
@@ -556,19 +572,16 @@ impl Cursors {
             n if n > 0 => n,
             _ => tab,
         };
-        let space = self
-            .view
-            .create_pango_layout(Some(" "))
-            .pixel_size()
-            .0
-            .max(1);
+        let space = self.view.create_pango_layout(Some(" ")).pixel_size().0.max(1);
         cr.set_source_rgba(0.5, 0.5, 0.5, 0.25);
         cr.set_line_width(1.0);
         // Blank lines take the deeper of the lines around them, so the
         // guides run through them.
         let levels = levels(&self.buffer, top.line(), bottom.line(), tab, indent);
         for (line, level) in levels {
-            let Some(start) = self.buffer.iter_at_line(line) else { continue };
+            let Some(start) = self.buffer.iter_at_line(line) else {
+                continue;
+            };
             let place = self.view.iter_location(&start);
             for k in 0..level {
                 let bx = place.x() + k * indent * space;
@@ -615,8 +628,7 @@ fn levels(buffer: &gtk::TextBuffer, first: i32, last: i32, tab: i32, indent: i32
     };
     (first..=last)
         .map(|line| {
-            let columns = indentation(buffer, line, tab)
-                .unwrap_or_else(|| nearest(line, -1).min(nearest(line, 1)));
+            let columns = indentation(buffer, line, tab).unwrap_or_else(|| nearest(line, -1).min(nearest(line, 1)));
             (line, columns / indent)
         })
         .collect()

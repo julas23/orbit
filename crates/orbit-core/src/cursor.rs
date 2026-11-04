@@ -51,9 +51,24 @@ impl Cursor {
         let cursors = CursorTheme::load(theme);
         let default = load_icon(&cursors, CursorIcon::Default).unwrap_or_else(|err| {
             tracing::warn!("cursor theme {theme}: {err}; using the built-in arrow");
-            vec![Image { size: 32, width: 64, height: 64, xhot: 1, yhot: 1, delay: 1, pixels_rgba: FALLBACK.to_vec(), pixels_argb: Vec::new() }]
+            vec![Image {
+                size: 32,
+                width: 64,
+                height: 64,
+                xhot: 1,
+                yhot: 1,
+                delay: 1,
+                pixels_rgba: FALLBACK.to_vec(),
+                pixels_argb: Vec::new(),
+            }]
         });
-        Self { theme: cursors, default, shapes: HashMap::new(), size, buffer: None }
+        Self {
+            theme: cursors,
+            default,
+            shapes: HashMap::new(),
+            size,
+            buffer: None,
+        }
     }
 
     /// The default arrow at its start, for XWayland's root window.
@@ -90,15 +105,27 @@ impl Cursor {
         {
             return (buffer.clone(), hotspot);
         }
-        let buffer = MemoryRenderBuffer::from_slice(&image.pixels_rgba, Fourcc::Argb8888, (image.width as i32, image.height as i32), 1, Transform::Normal, None);
+        let buffer = MemoryRenderBuffer::from_slice(
+            &image.pixels_rgba,
+            Fourcc::Argb8888,
+            (image.width as i32, image.height as i32),
+            1,
+            Transform::Normal,
+            None,
+        );
         self.buffer = Some((image, buffer.clone()));
         (buffer, hotspot)
     }
 }
 
 fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
-    let nearest = images.iter().min_by_key(|image| (size as i32 - image.size as i32).abs()).expect("at least one image");
-    images.iter().filter(move |image| image.width == nearest.width && image.height == nearest.height)
+    let nearest = images
+        .iter()
+        .min_by_key(|image| (size as i32 - image.size as i32).abs())
+        .expect("at least one image");
+    images
+        .iter()
+        .filter(move |image| image.width == nearest.width && image.height == nearest.height)
 }
 
 fn frame(mut millis: u32, size: u32, images: &[Image]) -> Image {
@@ -123,7 +150,9 @@ fn load_icon(theme: &CursorTheme, shape: CursorIcon) -> Result<Vec<Image>, Strin
         .find_map(|name| theme.load_icon(name))
         .ok_or("not in the theme")?;
     let mut data = Vec::new();
-    std::fs::File::open(path).and_then(|mut f| f.read_to_end(&mut data)).map_err(|e| e.to_string())?;
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_to_end(&mut data))
+        .map_err(|e| e.to_string())?;
     parse_xcursor(&data).ok_or_else(|| "not an xcursor file".into())
 }
 
@@ -145,7 +174,13 @@ where
 {
     type RenderElement = PointerRenderElement<R>;
 
-    fn render_elements<E>(&self, renderer: &mut R, location: Point<i32, Physical>, scale: Scale<f64>, alpha: f32) -> Vec<E>
+    fn render_elements<E>(
+        &self,
+        renderer: &mut R,
+        location: Point<i32, Physical>,
+        scale: Scale<f64>,
+        alpha: f32,
+    ) -> Vec<E>
     where
         E: From<PointerRenderElement<R>>,
     {
@@ -154,11 +189,23 @@ where
             CursorImageStatus::Named(_) => self
                 .buffer
                 .as_ref()
-                .and_then(|buffer| MemoryRenderBufferRenderElement::from_buffer(renderer, location.to_f64(), buffer, None, None, None, Kind::Cursor).ok())
+                .and_then(|buffer| {
+                    MemoryRenderBufferRenderElement::from_buffer(
+                        renderer,
+                        location.to_f64(),
+                        buffer,
+                        None,
+                        None,
+                        None,
+                        Kind::Cursor,
+                    )
+                    .ok()
+                })
                 .map(|e| vec![E::from(PointerRenderElement::from(e))])
                 .unwrap_or_default(),
             CursorImageStatus::Surface(surface) => {
-                let elements: Vec<PointerRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, alpha, Kind::Cursor);
+                let elements: Vec<PointerRenderElement<R>> =
+                    render_elements_from_surface_tree(renderer, surface, location, scale, alpha, Kind::Cursor);
                 elements.into_iter().map(E::from).collect()
             }
         }

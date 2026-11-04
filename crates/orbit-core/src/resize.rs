@@ -40,14 +40,24 @@ impl Edges {
     fn nearest((x, y, w, h): Rect, at: Point<f64, Logical>) -> Self {
         let right = at.x >= x as f64 + w as f64 / 2.0;
         let bottom = at.y >= y as f64 + h as f64 / 2.0;
-        Self { left: !right, right, top: !bottom, bottom }
+        Self {
+            left: !right,
+            right,
+            top: !bottom,
+            bottom,
+        }
     }
 }
 
 impl From<xdg_toplevel::ResizeEdge> for Edges {
     fn from(edge: xdg_toplevel::ResizeEdge) -> Self {
         let bits = u32::from(edge);
-        Self { top: bits & 1 != 0, bottom: bits & 2 != 0, left: bits & 4 != 0, right: bits & 8 != 0 }
+        Self {
+            top: bits & 1 != 0,
+            bottom: bits & 2 != 0,
+            left: bits & 4 != 0,
+            right: bits & 8 != 0,
+        }
     }
 }
 
@@ -68,7 +78,12 @@ enum Kind {
     Floating { from: Rect, edges: Edges },
     /// The column on the other side of the line that moves (on the left
     /// or not), both widths and weights when the grab began.
-    Tiled { other: Window, on_left: bool, widths: (i32, i32), weights: (f64, f64) },
+    Tiled {
+        other: Window,
+        on_left: bool,
+        widths: (i32, i32),
+        weights: (f64, f64),
+    },
 }
 
 pub struct ResizeGrab {
@@ -93,7 +108,13 @@ fn set_resizing(window: &Window, on: bool) {
 impl Orbit {
     /// Starts resizing `window` with the pointer, by `edges` (`None`: the
     /// corner nearest the pointer).
-    pub fn start_resize(&mut self, window: Window, serial: Serial, start_data: Option<GrabStartData<Orbit>>, edges: Option<Edges>) {
+    pub fn start_resize(
+        &mut self,
+        window: Window,
+        serial: Serial,
+        start_data: Option<GrabStartData<Orbit>>,
+        edges: Option<Edges>,
+    ) {
         if crate::fullscreen::is_fullscreen(&window) || crate::fullscreen::is_maximized(&window) {
             return;
         }
@@ -109,16 +130,34 @@ impl Orbit {
                     info.float_size = Some((rect.2, rect.3));
                 }
             }
-            Kind::Floating { from: rect, edges: edges.unwrap_or_else(|| Edges::nearest(rect, location)) }
+            Kind::Floating {
+                from: rect,
+                edges: edges.unwrap_or_else(|| Edges::nearest(rect, location)),
+            }
         } else {
-            let Some(kind) = self.tiled_kind(&window, rect, location, edges) else { return };
+            let Some(kind) = self.tiled_kind(&window, rect, location, edges) else {
+                return;
+            };
             kind
         };
-        let start_data = start_data.unwrap_or(GrabStartData { focus: None, button: BTN_RIGHT, location });
+        let start_data = start_data.unwrap_or(GrabStartData {
+            focus: None,
+            button: BTN_RIGHT,
+            location,
+        });
         self.space.raise_element(&window, true);
         self.focus_window(Some(window.clone()));
         set_resizing(&window, true);
-        pointer.set_grab(self, ResizeGrab { start_data, window, kind }, serial, Focus::Clear);
+        pointer.set_grab(
+            self,
+            ResizeGrab {
+                start_data,
+                window,
+                kind,
+            },
+            serial,
+            Focus::Clear,
+        );
     }
 
     /// A tiled window's line to move: on the side of `edges`, or the one
@@ -127,7 +166,11 @@ impl Orbit {
         let tiled: Vec<Window> = self
             .windows_of(self.workspace_of(window)?)
             .into_iter()
-            .filter(|w| !crate::floating::floats(w) && !crate::fullscreen::is_fullscreen(w) && !crate::fullscreen::is_maximized(w))
+            .filter(|w| {
+                !crate::floating::floats(w)
+                    && !crate::fullscreen::is_fullscreen(w)
+                    && !crate::fullscreen::is_maximized(w)
+            })
             .collect();
         let i = tiled.iter().position(|w| w == window)?;
         let left = (i > 0).then(|| tiled[i - 1].clone());
@@ -142,12 +185,23 @@ impl Orbit {
         let (a, b) = (info(window).borrow(), info(&other).borrow());
         let (widths, weights) = ((a.rect.2, b.rect.2), (a.weight, b.weight));
         drop((a, b));
-        Some(Kind::Tiled { other, on_left, widths, weights })
+        Some(Kind::Tiled {
+            other,
+            on_left,
+            widths,
+            weights,
+        })
     }
 }
 
 impl PointerGrab<Orbit> for ResizeGrab {
-    fn motion(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, _focus: Option<(WlSurface, Point<f64, Logical>)>, event: &MotionEvent) {
+    fn motion(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        _focus: Option<(WlSurface, Point<f64, Logical>)>,
+        event: &MotionEvent,
+    ) {
         // While the grab is active, no client has pointer focus.
         handle.motion(data, None, event);
         let delta = event.location - self.start_data.location;
@@ -171,7 +225,12 @@ impl PointerGrab<Orbit> for ResizeGrab {
                 info.float_at = Some((x, y));
                 info.float_size = Some((w, h));
             }
-            Kind::Tiled { other, on_left, widths: (a, b), weights: (ka, kb) } => {
+            Kind::Tiled {
+                other,
+                on_left,
+                widths: (a, b),
+                weights: (ka, kb),
+            } => {
                 let both = a + b;
                 if both < 2 * MIN {
                     return;
@@ -187,7 +246,13 @@ impl PointerGrab<Orbit> for ResizeGrab {
         data.arrange();
     }
 
-    fn relative_motion(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, focus: Option<(WlSurface, Point<f64, Logical>)>, event: &RelativeMotionEvent) {
+    fn relative_motion(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        focus: Option<(WlSurface, Point<f64, Logical>)>,
+        event: &RelativeMotionEvent,
+    ) {
         handle.relative_motion(data, focus, event);
     }
 
@@ -206,35 +271,75 @@ impl PointerGrab<Orbit> for ResizeGrab {
         handle.frame(data);
     }
 
-    fn gesture_swipe_begin(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureSwipeBeginEvent) {
+    fn gesture_swipe_begin(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureSwipeBeginEvent,
+    ) {
         handle.gesture_swipe_begin(data, event)
     }
 
-    fn gesture_swipe_update(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureSwipeUpdateEvent) {
+    fn gesture_swipe_update(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureSwipeUpdateEvent,
+    ) {
         handle.gesture_swipe_update(data, event)
     }
 
-    fn gesture_swipe_end(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureSwipeEndEvent) {
+    fn gesture_swipe_end(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureSwipeEndEvent,
+    ) {
         handle.gesture_swipe_end(data, event)
     }
 
-    fn gesture_pinch_begin(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GesturePinchBeginEvent) {
+    fn gesture_pinch_begin(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GesturePinchBeginEvent,
+    ) {
         handle.gesture_pinch_begin(data, event)
     }
 
-    fn gesture_pinch_update(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GesturePinchUpdateEvent) {
+    fn gesture_pinch_update(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GesturePinchUpdateEvent,
+    ) {
         handle.gesture_pinch_update(data, event)
     }
 
-    fn gesture_pinch_end(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GesturePinchEndEvent) {
+    fn gesture_pinch_end(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GesturePinchEndEvent,
+    ) {
         handle.gesture_pinch_end(data, event)
     }
 
-    fn gesture_hold_begin(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureHoldBeginEvent) {
+    fn gesture_hold_begin(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureHoldBeginEvent,
+    ) {
         handle.gesture_hold_begin(data, event)
     }
 
-    fn gesture_hold_end(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureHoldEndEvent) {
+    fn gesture_hold_end(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureHoldEndEvent,
+    ) {
         handle.gesture_hold_end(data, event)
     }
 
@@ -255,13 +360,45 @@ mod tests {
     #[test]
     fn nearest_corner() {
         let rect = (100, 100, 200, 100);
-        assert_eq!(Edges::nearest(rect, (120.0, 110.0).into()), Edges { left: true, right: false, top: true, bottom: false });
-        assert_eq!(Edges::nearest(rect, (280.0, 190.0).into()), Edges { left: false, right: true, top: false, bottom: true });
+        assert_eq!(
+            Edges::nearest(rect, (120.0, 110.0).into()),
+            Edges {
+                left: true,
+                right: false,
+                top: true,
+                bottom: false
+            }
+        );
+        assert_eq!(
+            Edges::nearest(rect, (280.0, 190.0).into()),
+            Edges {
+                left: false,
+                right: true,
+                top: false,
+                bottom: true
+            }
+        );
     }
 
     #[test]
     fn client_edges() {
-        assert_eq!(Edges::from(xdg_toplevel::ResizeEdge::TopRight), Edges { left: false, right: true, top: true, bottom: false });
-        assert_eq!(Edges::from(xwm::ResizeEdge::BottomLeft), Edges { left: true, right: false, top: false, bottom: true });
+        assert_eq!(
+            Edges::from(xdg_toplevel::ResizeEdge::TopRight),
+            Edges {
+                left: false,
+                right: true,
+                top: true,
+                bottom: false
+            }
+        );
+        assert_eq!(
+            Edges::from(xwm::ResizeEdge::BottomLeft),
+            Edges {
+                left: true,
+                right: false,
+                top: false,
+                bottom: true
+            }
+        );
     }
 }

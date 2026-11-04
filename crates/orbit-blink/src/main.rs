@@ -69,9 +69,7 @@ fn parse_args() -> anyhow::Result<Args> {
                 delay = Duration::from_secs_f64(s.clamp(0.0, 60.0));
             }
             "-c" | "--config" => {
-                config = Some(PathBuf::from(
-                    args.next().context("--config needs a directory")?,
-                ));
+                config = Some(PathBuf::from(args.next().context("--config needs a directory")?));
             }
             "-h" | "--help" => {
                 println!(
@@ -86,11 +84,7 @@ fn parse_args() -> anyhow::Result<Args> {
     }
     Ok(Args {
         config: config.unwrap_or_else(ConfigDir::default_path),
-        request: mode.map(|mode| Request {
-            mode,
-            delay,
-            cursor,
-        }),
+        request: mode.map(|mode| Request { mode, delay, cursor }),
     })
 }
 

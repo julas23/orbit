@@ -43,12 +43,7 @@ pub fn outline(document: &poppler::Document) -> Vec<Entry> {
     entries
 }
 
-unsafe fn walk(
-    document: &poppler::Document,
-    iter: *mut ffi::PopplerIndexIter,
-    depth: usize,
-    entries: &mut Vec<Entry>,
-) {
+unsafe fn walk(document: &poppler::Document, iter: *mut ffi::PopplerIndexIter, depth: usize, entries: &mut Vec<Entry>) {
     // Deep outlines are rare; past this, the rest is left out.
     if depth > 16 {
         return;

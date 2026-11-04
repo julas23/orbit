@@ -35,10 +35,7 @@ pub fn show(
     };
     // Lets the application refresh the menu before it is read.
     let _ = call("AboutToShow", (0i32,).to_variant());
-    let layout = match call(
-        "GetLayout",
-        (0i32, -1i32, Vec::<String>::new()).to_variant(),
-    ) {
+    let layout = match call("GetLayout", (0i32, -1i32, Vec::<String>::new()).to_variant()) {
         Ok(reply) => reply.child_value(1),
         Err(err) => {
             log::warn!("tray: menu of {bus}{path}: {err}");
@@ -69,12 +66,7 @@ pub fn show(
 /// Appends the children of `node` — `(i id, a{sv} props, av children)` — to
 /// `menu`, one section per run between separators. Choosing an entry calls
 /// `clicked` with its id.
-fn build(
-    node: &glib::Variant,
-    menu: &gio::Menu,
-    group: &gio::SimpleActionGroup,
-    clicked: &Rc<dyn Fn(i32)>,
-) {
+fn build(node: &glib::Variant, menu: &gio::Menu, group: &gio::SimpleActionGroup, clicked: &Rc<dyn Fn(i32)>) {
     let mut section = gio::Menu::new();
     let children = node.child_value(2);
     for i in 0..children.n_children() {
@@ -83,15 +75,8 @@ fn build(
         };
         let id = child.child_value(0).get::<i32>().unwrap_or_default();
         let props = glib::VariantDict::new(Some(&child.child_value(1)));
-        let get_bool =
-            |key: &str, default: bool| props.lookup::<bool>(key).ok().flatten().unwrap_or(default);
-        let get_str = |key: &str| {
-            props
-                .lookup::<String>(key)
-                .ok()
-                .flatten()
-                .unwrap_or_default()
-        };
+        let get_bool = |key: &str, default: bool| props.lookup::<bool>(key).ok().flatten().unwrap_or(default);
+        let get_str = |key: &str| props.lookup::<String>(key).ok().flatten().unwrap_or_default();
 
         if !get_bool("visible", true) {
             continue;
@@ -225,11 +210,7 @@ mod tests {
     fn states_and_clicks() {
         let (_, group, last) = convert(LAYOUT);
         assert!(!group.is_action_enabled("i1"), "disabled stays disabled");
-        assert_eq!(
-            group.action_state("i7"),
-            Some(true.to_variant()),
-            "checkmark on"
-        );
+        assert_eq!(group.action_state("i7"), Some(true.to_variant()), "checkmark on");
         group.activate_action("i2", None);
         assert_eq!(last.get(), 2, "choosing an entry sends its id");
     }
@@ -244,10 +225,6 @@ mod tests {
         let text = std::fs::read_to_string(path).expect("readable dump");
         let (out, _, _) = convert(text.trim());
         assert!(!out.is_empty());
-        eprintln!(
-            "{} entries, first: {:?}",
-            out.len(),
-            &out[..out.len().min(8)]
-        );
+        eprintln!("{} entries, first: {:?}", out.len(), &out[..out.len().min(8)]);
     }
 }

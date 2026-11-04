@@ -50,10 +50,19 @@ impl Orbit {
         }
         let output = Output::new(
             name.to_owned(),
-            PhysicalProperties { size: (0, 0).into(), subpixel: Subpixel::Unknown, make: "Orbit".into(), model: "Virtual".into(), serial_number: String::new() },
+            PhysicalProperties {
+                size: (0, 0).into(),
+                subpixel: Subpixel::Unknown,
+                make: "Orbit".into(),
+                model: "Virtual".into(),
+                serial_number: String::new(),
+            },
         );
         let global = output.create_global::<Orbit>(&self.display_handle);
-        let mode = Mode { size: (i32::from(width), i32::from(height)).into(), refresh: (rate * 1000.0).round() as i32 };
+        let mode = Mode {
+            size: (i32::from(width), i32::from(height)).into(),
+            refresh: (rate * 1000.0).round() as i32,
+        };
         output.set_preferred(mode);
         output.change_current_state(Some(mode), Some(Transform::Normal), None, Some((0, 0).into()));
         let period = Duration::from_secs_f64(1.0 / rate);
@@ -67,7 +76,11 @@ impl Orbit {
             })
             .map_err(|err| format!("output {name}: {err}"))?;
         tracing::info!("{name}: a virtual monitor, {width}x{height}@{rate}");
-        self.virtuals.push(Virtual { output: output.clone(), global, ticks });
+        self.virtuals.push(Virtual {
+            output: output.clone(),
+            global,
+            ticks,
+        });
         self.add_output(&output);
         self.request_render();
         Ok(())
@@ -84,10 +97,12 @@ impl Orbit {
         self.remove_output(&gone.output);
         // Removed for good once clients had time to see it disabled.
         let (handle, global) = (self.display_handle.clone(), gone.global);
-        let _ = self.loop_handle.insert_source(Timer::from_duration(Duration::from_secs(5)), move |_, _, _| {
-            handle.remove_global::<Orbit>(global.clone());
-            TimeoutAction::Drop
-        });
+        let _ = self
+            .loop_handle
+            .insert_source(Timer::from_duration(Duration::from_secs(5)), move |_, _, _| {
+                handle.remove_global::<Orbit>(global.clone());
+                TimeoutAction::Drop
+            });
         tracing::info!("{name}: the virtual monitor is gone");
         self.request_render();
         Ok(())

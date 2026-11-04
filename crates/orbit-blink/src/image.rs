@@ -109,9 +109,7 @@ impl Image {
 
     /// PNG-encoded.
     pub fn png(&self) -> anyhow::Result<Vec<u8>> {
-        self.pixbuf()
-            .save_to_bufferv("png", &[])
-            .context("encoding the PNG")
+        self.pixbuf().save_to_bufferv("png", &[]).context("encoding the PNG")
     }
 }
 

@@ -64,7 +64,10 @@ pub struct TermConfig {
 
 impl Default for TermConfig {
     fn default() -> Self {
-        Self { font: "Monospace 11".into(), interactive: Vec::new() }
+        Self {
+            font: "Monospace 11".into(),
+            interactive: Vec::new(),
+        }
     }
 }
 
@@ -172,13 +175,20 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
     let line = gtk::Box::builder().spacing(8).build();
     line.append(&arrow);
     line.append(&entry);
-    let prompt = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["prompt"]).spacing(6).build();
+    let prompt = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["prompt"])
+        .spacing(6)
+        .build();
     prompt.append(&parts);
     prompt.append(&line);
 
     // The completions, listed under the command line; the keyboard stays
     // in the prompt.
-    let choice_list = gtk::ListBox::builder().css_classes(["choices"]).selection_mode(gtk::SelectionMode::Single).build();
+    let choice_list = gtk::ListBox::builder()
+        .css_classes(["choices"])
+        .selection_mode(gtk::SelectionMode::Single)
+        .build();
     let choices = gtk::Popover::builder()
         .child(
             &gtk::ScrolledWindow::builder()
@@ -221,16 +231,32 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
     stack.add_named(&scroller, Some("text"));
     stack.add_named(&terminal, Some("terminal"));
 
-    let status = gtk::Label::builder().xalign(0.0).css_classes(["status"]).ellipsize(gtk::pango::EllipsizeMode::End).build();
+    let status = gtk::Label::builder()
+        .xalign(0.0)
+        .css_classes(["status"])
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .build();
     let left = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
     left.append(&prompt);
     left.append(&stack);
     left.append(&status);
 
     // The history.
-    let list = gtk::ListBox::builder().css_classes(["history"]).selection_mode(gtk::SelectionMode::Single).build();
-    let right = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["side"]).build();
-    right.append(&gtk::Label::builder().label(tr("term-history")).xalign(0.0).css_classes(["title"]).build());
+    let list = gtk::ListBox::builder()
+        .css_classes(["history"])
+        .selection_mode(gtk::SelectionMode::Single)
+        .build();
+    let right = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["side"])
+        .build();
+    right.append(
+        &gtk::Label::builder()
+            .label(tr("term-history"))
+            .xalign(0.0)
+            .css_classes(["title"])
+            .build(),
+    );
     right.append(
         &gtk::ScrolledWindow::builder()
             .child(&list)
@@ -254,7 +280,11 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
         ".orbit-term .output, .orbit-term .prompt entry, .orbit-term .arrow, .orbit-term .choices {{ font: {}; }}",
         font_css(&font)
     ));
-    gtk::style_context_add_provider_for_display(&gtk::prelude::WidgetExt::display(&window), &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    gtk::style_context_add_provider_for_display(
+        &gtk::prelude::WidgetExt::display(&window),
+        &css,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()));
     let term = Rc::new(Term {
@@ -370,7 +400,10 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
 /// A font description as a CSS `font` value.
 fn font_css(font: &gtk::pango::FontDescription) -> String {
     let size = f64::from(font.size()) / f64::from(gtk::pango::SCALE);
-    let family = font.family().map(|f| f.to_string()).unwrap_or_else(|| "monospace".into());
+    let family = font
+        .family()
+        .map(|f| f.to_string())
+        .unwrap_or_else(|| "monospace".into());
     format!("{}pt \"{family}\"", if size > 0.0 { size } else { 11.0 })
 }
 
@@ -421,14 +454,18 @@ impl Term {
                 if let Some(run) = self.running.borrow_mut().as_mut() {
                     run.stdout.extend_from_slice(&bytes);
                 }
-                self.writer.borrow_mut().write(&mut self.out_reader.borrow_mut(), &bytes, false);
+                self.writer
+                    .borrow_mut()
+                    .write(&mut self.out_reader.borrow_mut(), &bytes, false);
                 self.follow();
             }
             Event::Err(bytes) => {
                 if let Some(run) = self.running.borrow_mut().as_mut() {
                     run.wrote_errors |= !bytes.is_empty();
                 }
-                self.writer.borrow_mut().write(&mut self.err_reader.borrow_mut(), &bytes, true);
+                self.writer
+                    .borrow_mut()
+                    .write(&mut self.err_reader.borrow_mut(), &bytes, true);
                 self.follow();
             }
             Event::Done { code, cwd } => {
@@ -508,7 +545,11 @@ impl Term {
 
     /// The command is over once both streams have ended.
     fn maybe_finish(self: &Rc<Self>) {
-        let ready = self.running.borrow().as_ref().is_some_and(|r| r.done.is_some() && r.errors_done);
+        let ready = self
+            .running
+            .borrow()
+            .as_ref()
+            .is_some_and(|r| r.done.is_some() && r.errors_done);
         if !ready {
             return;
         }
@@ -538,7 +579,11 @@ impl Term {
     }
 
     fn summary(&self, command: &str, code: i32, wrote_errors: bool, seconds: f64) -> String {
-        let mut parts = vec![command.to_string(), tr_args("term-exit", &[("code", text(code.to_string()))]), format!("{seconds:.2} s")];
+        let mut parts = vec![
+            command.to_string(),
+            tr_args("term-exit", &[("code", text(code.to_string()))]),
+            format!("{seconds:.2} s"),
+        ];
         if wrote_errors {
             parts.push(tr("term-stderr"));
         }
@@ -550,7 +595,10 @@ impl Term {
         self.list.unselect_all();
         let env_file = self.session.borrow().as_ref().map(|s| s.env_file.clone());
         interactive::spawn(&self.terminal, &command, &self.cwd.borrow(), env_file.as_deref());
-        self.set_status(&tr_args("term-interactive", &[("command", text(command.clone()))]), false);
+        self.set_status(
+            &tr_args("term-interactive", &[("command", text(command.clone()))]),
+            false,
+        );
         self.in_terminal.replace(Some((command, Instant::now())));
         self.entry.add_css_class("busy");
         // The keyboard goes to the program.
@@ -559,12 +607,21 @@ impl Term {
 
     /// The interactive program ended (`status` as from waitpid).
     fn terminal_done(self: &Rc<Self>, status: i32) {
-        let Some((command, started)) = self.in_terminal.take() else { return };
-        let code = if status & 0x7f == 0 { (status >> 8) & 0xff } else { 128 + (status & 0x7f) };
+        let Some((command, started)) = self.in_terminal.take() else {
+            return;
+        };
+        let code = if status & 0x7f == 0 {
+            (status >> 8) & 0xff
+        } else {
+            128 + (status & 0x7f)
+        };
         self.show_exit(code);
         self.refresh_git();
         self.entry.remove_css_class("busy");
-        self.set_status(&self.summary(&command, code, false, started.elapsed().as_secs_f64()), code != 0);
+        self.set_status(
+            &self.summary(&command, code, false, started.elapsed().as_secs_f64()),
+            code != 0,
+        );
         // What it left on screen stays until the next command.
         self.entry.grab_focus();
     }
@@ -585,7 +642,9 @@ impl Term {
         let layout = self.view.create_pango_layout(Some("MMMMMMMMMM"));
         let (w, h) = layout.pixel_size();
         let (cw, ch) = ((f64::from(w) / 10.0).max(1.0), f64::from(h).max(1.0));
-        let cols = ((f64::from(self.scroller.width()) - 20.0) / cw).floor().clamp(20.0, 1000.0);
+        let cols = ((f64::from(self.scroller.width()) - 20.0) / cw)
+            .floor()
+            .clamp(20.0, 1000.0);
         let rows = (f64::from(self.scroller.height()) / ch).floor().clamp(5.0, 500.0);
         (cols as u16, rows as u16)
     }
@@ -600,7 +659,10 @@ impl Term {
 
     /// The date and time part, as bash's `\d \t`.
     fn tick(&self) {
-        if let Some(now) = glib::DateTime::now_local().ok().and_then(|t| t.format("%a %b %d %H:%M:%S").ok()) {
+        if let Some(now) = glib::DateTime::now_local()
+            .ok()
+            .and_then(|t| t.format("%a %b %d %H:%M:%S").ok())
+        {
             self.clock.set_label(&now);
         }
     }
@@ -620,7 +682,9 @@ impl Term {
         let cwd = self.cwd.borrow().clone();
         let weak = Rc::downgrade(self);
         glib::spawn_future_local(async move {
-            let git = gtk::gio::spawn_blocking(move || prompt::git(&cwd)).await.unwrap_or_default();
+            let git = gtk::gio::spawn_blocking(move || prompt::git(&cwd))
+                .await
+                .unwrap_or_default();
             let Some(term) = weak.upgrade() else { return };
             term.git.set_label(&format!("<<{git}>>"));
             term.git.set_visible(!git.is_empty());
@@ -696,11 +760,16 @@ impl Term {
             }
             self.choice_list.append(&label);
         }
-        self.listed.replace(Some(Listed { start, candidates, at: None }));
+        self.listed.replace(Some(Listed {
+            start,
+            candidates,
+            at: None,
+        }));
         // Under the word being completed.
         let before: String = self.entry.text().chars().take(start as usize).collect();
         let x = self.entry.create_pango_layout(Some(&before)).pixel_size().0;
-        self.choices.set_pointing_to(Some(&gdk::Rectangle::new(x, self.entry.height(), 1, 1)));
+        self.choices
+            .set_pointing_to(Some(&gdk::Rectangle::new(x, self.entry.height(), 1, 1)));
         self.choices.popup();
     }
 
@@ -738,7 +807,11 @@ impl Term {
     /// Enter with the list open: keeps the completion chosen, with the space
     /// a file takes after it.
     fn accept_choice(&self) {
-        let chosen = self.listed.borrow().as_ref().and_then(|l| l.at.and_then(|i| l.candidates.get(i).cloned()));
+        let chosen = self
+            .listed
+            .borrow()
+            .as_ref()
+            .and_then(|l| l.at.and_then(|i| l.candidates.get(i).cloned()));
         self.close_choices();
         if let Some(c) = chosen
             && !c.dir
@@ -778,7 +851,10 @@ impl Term {
             self.list.remove(&row);
         }
         for output in &self.history.borrow().outputs {
-            let row = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["entry"]).build();
+            let row = gtk::Box::builder()
+                .orientation(gtk::Orientation::Vertical)
+                .css_classes(["entry"])
+                .build();
             row.append(
                 &gtk::Label::builder()
                     .label(&output.command)
@@ -805,7 +881,9 @@ impl Term {
         if self.busy() {
             return;
         }
-        let Some(output) = self.history.borrow().outputs.get(i).cloned() else { return };
+        let Some(output) = self.history.borrow().outputs.get(i).cloned() else {
+            return;
+        };
         self.stack.set_visible_child_name("text");
         let mut writer = self.writer.borrow_mut();
         writer.clear();
@@ -816,7 +894,11 @@ impl Term {
         self.set_status(
             &tr_args(
                 "term-from-history",
-                &[("command", text(output.command)), ("time", text(output.time)), ("cwd", text(output.cwd))],
+                &[
+                    ("command", text(output.command)),
+                    ("time", text(output.time)),
+                    ("cwd", text(output.cwd)),
+                ],
             ),
             false,
         );
@@ -855,7 +937,9 @@ fn keys(term: &Rc<Term>) {
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let weak = Rc::downgrade(term);
     keys.connect_key_pressed(move |_, key, _, mods| {
-        let Some(term) = weak.upgrade() else { return glib::Propagation::Proceed };
+        let Some(term) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
         let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
         let listing = term.listed.borrow().is_some();
         match key {
@@ -914,7 +998,12 @@ mod tests {
         let snapshot = gtk::Snapshot::new();
         paintable.snapshot(&snapshot, f64::from(window.width()), f64::from(window.height()));
         match snapshot.to_node() {
-            Some(node) => window.renderer().unwrap().render_texture(&node, None).save_to_png(path).unwrap(),
+            Some(node) => window
+                .renderer()
+                .unwrap()
+                .render_texture(&node, None)
+                .save_to_png(path)
+                .unwrap(),
             None => eprintln!("{path}: nothing drawn"),
         }
     }
@@ -928,19 +1017,30 @@ mod tests {
     #[test]
     #[ignore]
     fn look() {
-        let Ok(base) = std::env::var("ORBIT_TERM_LOOK") else { return };
-        assert!(std::env::var_os("XDG_STATE_HOME").is_some(), "give the test a state directory of its own");
+        let Ok(base) = std::env::var("ORBIT_TERM_LOOK") else {
+            return;
+        };
+        assert!(
+            std::env::var_os("XDG_STATE_HOME").is_some(),
+            "give the test a state directory of its own"
+        );
         gtk::init().unwrap();
         let display = gdk::Display::default().unwrap();
         let _theme = orbit_app::theme::install(&display);
         let css = gtk::CssProvider::new();
-        css.load_from_string(&format!("{}\n{}", include_str!("../../../data/style.css"), include_str!("../../../data/term.css")));
+        css.load_from_string(&format!(
+            "{}\n{}",
+            include_str!("../../../data/style.css"),
+            include_str!("../../../data/term.css")
+        ));
         gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
         let app = gtk::Application::new(None::<&str>, Default::default());
         let window = build(&app, &ConfigDir::new(Path::new("/nonexistent"))).unwrap();
         window.present();
         pump(1500);
-        let entry = gtk::prelude::GtkWindowExt::focus(&window).and_then(|w| w.downcast::<gtk::Text>().ok()).map(|t| t.parent().unwrap().downcast::<gtk::Entry>().unwrap());
+        let entry = gtk::prelude::GtkWindowExt::focus(&window)
+            .and_then(|w| w.downcast::<gtk::Text>().ok())
+            .map(|t| t.parent().unwrap().downcast::<gtk::Entry>().unwrap());
         let entry = entry.expect("the prompt has the keyboard");
         let mut n = 0;
         let mut run = |cmd: &str, wait: u64| {
@@ -970,7 +1070,12 @@ mod tests {
                 let snapshot = gtk::Snapshot::new();
                 paintable.snapshot(&snapshot, f64::from(popover.width()), f64::from(popover.height()));
                 if let Some(node) = snapshot.to_node() {
-                    window.renderer().unwrap().render_texture(&node, None).save_to_png(format!("{base}-choices.png")).unwrap();
+                    window
+                        .renderer()
+                        .unwrap()
+                        .render_texture(&node, None)
+                        .save_to_png(format!("{base}-choices.png"))
+                        .unwrap();
                 }
             }
             child = widget.next_sibling();

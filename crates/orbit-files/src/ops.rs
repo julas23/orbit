@@ -55,7 +55,11 @@ enum Answer {
 }
 
 enum Report {
-    Progress { done: u64, total: u64, name: String },
+    Progress {
+        done: u64,
+        total: u64,
+        name: String,
+    },
     Conflict(PathBuf, async_channel::Sender<Answer>),
     /// The errors, and what to remember for Ctrl+Z.
     Finished(Vec<String>, Option<Step>),
@@ -129,17 +133,27 @@ impl Jobs {
             },
             &[("n", number(sources.len() as f64))],
         );
-        self.launch(what, Box::new(move |tx, cancel| run(kind, &sources, target.as_deref(), tx, cancel)));
+        self.launch(
+            what,
+            Box::new(move |tx, cancel| run(kind, &sources, target.as_deref(), tx, cancel)),
+        );
     }
 
     /// Ctrl+Z: undoes `step`, as a job.
     pub fn undo(self: &Rc<Self>, step: Step) {
-        self.launch(tr("files-job-undo"), Box::new(move |tx, cancel| (undo_step(step, tx, cancel), None)));
+        self.launch(
+            tr("files-job-undo"),
+            Box::new(move |tx, cancel| (undo_step(step, tx, cancel), None)),
+        );
     }
 
     /// Runs `work` on a thread, with a row in the bar while it does.
     fn launch(self: &Rc<Self>, what: String, work: Work) {
-        let label = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).hexpand(true).build();
+        let label = gtk::Label::builder()
+            .xalign(0.0)
+            .ellipsize(gtk::pango::EllipsizeMode::Middle)
+            .hexpand(true)
+            .build();
         let bar = gtk::ProgressBar::builder().hexpand(true).build();
         let stop = gtk::Button::builder()
             .icon_name("process-stop-symbolic")
@@ -147,7 +161,10 @@ impl Jobs {
             .css_classes(["flat"])
             .build();
         let row = gtk::Box::builder().spacing(10).css_classes(["job"]).build();
-        let texts = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).build();
+        let texts = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .hexpand(true)
+            .build();
         texts.append(&label);
         texts.append(&bar);
         row.append(&texts);
@@ -211,15 +228,24 @@ impl Jobs {
     /// Runs an outside program (an archiver) as a job: `what` while it
     /// runs, its error output if it fails.
     pub fn command(self: &Rc<Self>, what: String, argv: Vec<String>, dir: PathBuf) {
-        let label = gtk::Label::builder().label(&what).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).hexpand(true).build();
+        let label = gtk::Label::builder()
+            .label(&what)
+            .xalign(0.0)
+            .ellipsize(gtk::pango::EllipsizeMode::Middle)
+            .hexpand(true)
+            .build();
         let bar = gtk::ProgressBar::builder().hexpand(true).build();
-        let row = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["job"]).build();
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["job"])
+            .build();
         row.append(&label);
         row.append(&bar);
         self.widget.append(&row);
         self.widget.set_visible(true);
         let hold = self.window.upgrade().and_then(|w| w.application()).map(|a| a.hold());
-        let launcher = gio::SubprocessLauncher::new(gio::SubprocessFlags::STDERR_PIPE | gio::SubprocessFlags::STDOUT_SILENCE);
+        let launcher =
+            gio::SubprocessLauncher::new(gio::SubprocessFlags::STDERR_PIPE | gio::SubprocessFlags::STDOUT_SILENCE);
         launcher.set_cwd(&dir);
         let args: Vec<&std::ffi::OsStr> = argv.iter().map(std::ffi::OsStr::new).collect();
         let jobs = Rc::downgrade(self);
@@ -251,14 +277,21 @@ impl Jobs {
             j.widget.remove(&row);
             j.widget.set_visible(j.widget.first_child().is_some());
             if !process.is_successful() {
-                let detail = output.ok().and_then(|(_, err)| err).map(|e| e.to_string()).unwrap_or_default();
+                let detail = output
+                    .ok()
+                    .and_then(|(_, err)| err)
+                    .map(|e| e.to_string())
+                    .unwrap_or_default();
                 j.error(&[format!("{what}\n{detail}")]);
             }
         });
     }
 
     async fn ask(&self, path: &Path) -> Answer {
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let dialog = gtk::AlertDialog::builder()
             .modal(true)
             .message(tr_args("files-conflict", &[("name", text(name))]))
@@ -346,7 +379,9 @@ fn run(
             None
         }
         Kind::Copy | Kind::Move => {
-            let Some(target) = target else { return (ctx.errors, None) };
+            let Some(target) = target else {
+                return (ctx.errors, None);
+            };
             // What was done, for Ctrl+Z.
             let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
             let mut copied: Vec<PathBuf> = Vec::new();
@@ -360,7 +395,10 @@ fn run(
                 let Some(name) = src.file_name() else { continue };
                 // Into itself: refused, as every file manager does.
                 if target.starts_with(src) {
-                    ctx.errors.push(tr_args("files-into-itself", &[("name", text(src.display().to_string()))]));
+                    ctx.errors.push(tr_args(
+                        "files-into-itself",
+                        &[("name", text(src.display().to_string()))],
+                    ));
                     continue;
                 }
                 let mut dest = target.join(name);
@@ -416,7 +454,11 @@ fn run(
                     copied.push(dest);
                 }
             }
-            Some(if kind == Kind::Move { Step::Moved(moved) } else { Step::Copied(copied) })
+            Some(if kind == Kind::Move {
+                Step::Moved(moved)
+            } else {
+                Step::Copied(copied)
+            })
         }
     };
     (ctx.errors, step)
@@ -445,7 +487,8 @@ fn undo_step(step: Step, tx: &async_channel::Sender<Report>, cancel: &AtomicBool
                 ctx.report(&from);
                 ctx.done += 1;
                 if from.symlink_metadata().is_ok() {
-                    ctx.errors.push(format!("{}: {}", from.display(), tr("files-undo-exists")));
+                    ctx.errors
+                        .push(format!("{}: {}", from.display(), tr("files-undo-exists")));
                     continue;
                 }
                 if std::fs::rename(&to, &from).is_ok() {
@@ -511,12 +554,17 @@ impl Ctx<'_> {
         };
         let mut newest: std::collections::HashMap<PathBuf, (gio::File, String)> = Default::default();
         while let Ok(Some(info)) = children.next_file(gio::Cancellable::NONE) {
-            let Some(orig) = info.attribute_byte_string("trash::orig-path") else { continue };
+            let Some(orig) = info.attribute_byte_string("trash::orig-path") else {
+                continue;
+            };
             let orig = PathBuf::from(orig.as_str());
             if !paths.contains(&orig) {
                 continue;
             }
-            let date = info.attribute_string("trash::deletion-date").map(|d| d.to_string()).unwrap_or_default();
+            let date = info
+                .attribute_string("trash::deletion-date")
+                .map(|d| d.to_string())
+                .unwrap_or_default();
             if newest.get(&orig).is_none_or(|(_, d)| *d < date) {
                 newest.insert(orig, (children.child(&info), date));
             }
@@ -529,14 +577,21 @@ impl Ctx<'_> {
             self.report(path);
             self.done += 1;
             let Some((item, _)) = newest.remove(path) else {
-                self.errors.push(format!("{}: {}", path.display(), tr("files-undo-not-in-trash")));
+                self.errors
+                    .push(format!("{}: {}", path.display(), tr("files-undo-not-in-trash")));
                 continue;
             };
             if path.symlink_metadata().is_ok() {
-                self.errors.push(format!("{}: {}", path.display(), tr("files-undo-exists")));
+                self.errors
+                    .push(format!("{}: {}", path.display(), tr("files-undo-exists")));
                 continue;
             }
-            if let Err(err) = item.move_(&gio::File::for_path(path), gio::FileCopyFlags::NONE, gio::Cancellable::NONE, None) {
+            if let Err(err) = item.move_(
+                &gio::File::for_path(path),
+                gio::FileCopyFlags::NONE,
+                gio::Cancellable::NONE,
+                None,
+            ) {
                 self.errors.push(format!("{}: {}", path.display(), err.message()));
             }
         }
@@ -550,7 +605,10 @@ impl Ctx<'_> {
         let _ = self.tx.send_blocking(Report::Progress {
             done: self.done,
             total: self.total,
-            name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
         });
     }
 
@@ -559,7 +617,11 @@ impl Ctx<'_> {
             return standing;
         }
         let (reply, answer) = async_channel::bounded(1);
-        if self.tx.send_blocking(Report::Conflict(dest.to_path_buf(), reply)).is_err() {
+        if self
+            .tx
+            .send_blocking(Report::Conflict(dest.to_path_buf(), reply))
+            .is_err()
+        {
             return Answer::Skip;
         }
         let a = answer.recv_blocking().unwrap_or(Answer::Skip);
@@ -646,7 +708,10 @@ fn size_of(path: &Path) -> u64 {
 /// `name (2).ext`, `name (3).ext`… — the first free.
 pub fn unique(path: &Path) -> PathBuf {
     let parent = path.parent().unwrap_or(Path::new("."));
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 && !path.is_dir() => (name[..i].to_owned(), name[i..].to_owned()),
         _ => (name.clone(), String::new()),
@@ -675,7 +740,10 @@ mod tests {
         let (errors, _) = run(Kind::Copy, std::slice::from_ref(&src), Some(&dest), &tx, &cancel);
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(std::fs::read(dest.join("src/a.txt")).unwrap(), b"hello");
-        assert_eq!(std::fs::metadata(dest.join("src/sub/b.txt")).unwrap().len(), 3 * CHUNK + 5);
+        assert_eq!(
+            std::fs::metadata(dest.join("src/sub/b.txt")).unwrap().len(),
+            3 * CHUNK + 5
+        );
         assert!(rx.try_recv().is_ok());
         // Into the same folder: a second copy beside it.
         let (errors, _) = run(Kind::Copy, &[src.join("a.txt")], Some(&src), &tx, &cancel);
@@ -685,7 +753,10 @@ mod tests {
         let (errors, step) = run(Kind::Move, &[src.join("a (2).txt")], Some(&dest), &tx, &cancel);
         assert!(errors.is_empty());
         assert!(dest.join("a (2).txt").is_file() && !src.join("a (2).txt").exists());
-        assert_eq!(step, Some(Step::Moved(vec![(src.join("a (2).txt"), dest.join("a (2).txt"))])));
+        assert_eq!(
+            step,
+            Some(Step::Moved(vec![(src.join("a (2).txt"), dest.join("a (2).txt"))]))
+        );
         assert!(undo_step(step.unwrap(), &tx, &cancel).is_empty());
         assert!(src.join("a (2).txt").is_file() && !dest.join("a (2).txt").exists());
         std::fs::remove_dir_all(&root).unwrap();

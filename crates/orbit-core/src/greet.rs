@@ -27,7 +27,10 @@ use std::{
 use orbit_protocols::server::orbit_greet_v1::{self, OrbitGreetV1};
 use smithay::{
     backend::renderer::{
-        element::{Kind, surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree}},
+        element::{
+            Kind,
+            surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
+        },
         gles::GlesRenderer,
     },
     desktop::{PopupManager, Window, WindowSurfaceType},
@@ -45,7 +48,7 @@ use smithay::{
             protocol::wl_surface::WlSurface,
         },
     },
-    utils::{Logical, Point, Scale, SERIAL_COUNTER},
+    utils::{Logical, Point, SERIAL_COUNTER, Scale},
     wayland::{
         Dispatch2, GlobalDispatch2,
         compositor::with_states,
@@ -100,7 +103,14 @@ fn is_greet_client(client: &Client) -> bool {
 }
 
 impl GlobalDispatch2<OrbitGreetV1, Orbit> for GreetGlobal {
-    fn bind(&self, state: &mut Orbit, _handle: &DisplayHandle, _client: &Client, resource: New<OrbitGreetV1>, data_init: &mut DataInit<'_, Orbit>) {
+    fn bind(
+        &self,
+        state: &mut Orbit,
+        _handle: &DisplayHandle,
+        _client: &Client,
+        resource: New<OrbitGreetV1>,
+        data_init: &mut DataInit<'_, Orbit>,
+    ) {
         let resource = data_init.init(resource, GreetData);
         if state.greet_locked() {
             resource.locked();
@@ -116,7 +126,15 @@ impl GlobalDispatch2<OrbitGreetV1, Orbit> for GreetGlobal {
 }
 
 impl Dispatch2<OrbitGreetV1, Orbit> for GreetData {
-    fn request(&self, state: &mut Orbit, client: &Client, resource: &OrbitGreetV1, request: orbit_greet_v1::Request, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Orbit>) {
+    fn request(
+        &self,
+        state: &mut Orbit,
+        client: &Client,
+        resource: &OrbitGreetV1,
+        request: orbit_greet_v1::Request,
+        _dh: &DisplayHandle,
+        _data_init: &mut DataInit<'_, Orbit>,
+    ) {
         match request {
             // The global is the greet's alone; checked again all the same.
             orbit_greet_v1::Request::Unlock if is_greet_client(client) => state.unlock(),
@@ -153,7 +171,9 @@ impl Orbit {
                 return;
             }
         };
-        let gone = self.loop_handle.insert_source(source, |(), &mut (), state| state.greet_gone());
+        let gone = self
+            .loop_handle
+            .insert_source(source, |(), &mut (), state| state.greet_gone());
         let gone = match gone {
             Ok(token) => token,
             Err(err) => {
@@ -161,7 +181,10 @@ impl Orbit {
                 return;
             }
         };
-        let data = ClientState { greet: Some(ping), ..Default::default() };
+        let data = ClientState {
+            greet: Some(ping),
+            ..Default::default()
+        };
         let client = match self.display_handle.insert_client(ours, Arc::new(data)) {
             Ok(c) => c,
             Err(err) => {
@@ -190,7 +213,10 @@ impl Orbit {
         // screen; never the outer sway's.
         match &self.ipc.path {
             Some(path) => child.env("ORBIT_SOCK", path).env("SWAYSOCK", path).env("I3SOCK", path),
-            None => child.env_remove("ORBIT_SOCK").env_remove("SWAYSOCK").env_remove("I3SOCK"),
+            None => child
+                .env_remove("ORBIT_SOCK")
+                .env_remove("SWAYSOCK")
+                .env_remove("I3SOCK"),
         };
         // Safety: only clears close-on-exec of a descriptor the child
         // inherits; nothing is allocated between fork and exec.
@@ -209,7 +235,9 @@ impl Orbit {
             Err(err) => {
                 tracing::error!("greet {command}: {err}");
                 // Its connection goes, and with it comes the next try.
-                self.display_handle.backend_handle().kill_client(client.id(), DisconnectReason::ConnectionClosed);
+                self.display_handle
+                    .backend_handle()
+                    .kill_client(client.id(), DisconnectReason::ConnectionClosed);
             }
         }
         // The greet's end lives on in the child only.
@@ -234,15 +262,21 @@ impl Orbit {
         }
         // Nothing of it may linger on the black screen.
         self.request_render();
-        let wait = if self.greet.failures == 0 { Duration::ZERO } else { MAX_WAIT.min(Duration::from_secs(1 << self.greet.failures.min(5))) };
+        let wait = if self.greet.failures == 0 {
+            Duration::ZERO
+        } else {
+            MAX_WAIT.min(Duration::from_secs(1 << self.greet.failures.min(5)))
+        };
         tracing::warn!("greet died while locked; launching it again in {wait:?}");
-        let token = self.loop_handle.insert_source(Timer::from_duration(wait), |_, _, state| {
-            state.greet.waiting = None;
-            if state.locked() {
-                state.launch_greet();
-            }
-            TimeoutAction::Drop
-        });
+        let token = self
+            .loop_handle
+            .insert_source(Timer::from_duration(wait), |_, _, state| {
+                state.greet.waiting = None;
+                if state.locked() {
+                    state.launch_greet();
+                }
+                TimeoutAction::Drop
+            });
         match token {
             Ok(token) => self.greet.waiting = Some(token),
             Err(err) => tracing::error!("greet: {err}"),
@@ -251,12 +285,17 @@ impl Orbit {
 
     /// Whether `surface` belongs to the greet.
     pub fn is_greet(&self, surface: &WlSurface) -> bool {
-        self.display_handle.get_client(surface.id()).is_ok_and(|c| is_greet_client(&c))
+        self.display_handle
+            .get_client(surface.id())
+            .is_ok_and(|c| is_greet_client(&c))
     }
 
     /// The greet's window, if its main surface is `surface`.
     pub fn greet_window(&self, surface: &WlSurface) -> Option<Window> {
-        self.greet.window.clone().filter(|w| w.wl_surface().as_deref() == Some(surface))
+        self.greet
+            .window
+            .clone()
+            .filter(|w| w.wl_surface().as_deref() == Some(surface))
     }
 
     /// A toplevel of the greet: its window, never tiled.
@@ -278,14 +317,23 @@ impl Orbit {
 
     /// Fills the monitor with the pointer with the greet's window.
     pub fn place_greet(&mut self) {
-        let Some(window) = self.greet.window.clone() else { return };
+        let Some(window) = self.greet.window.clone() else {
+            return;
+        };
         let Some(toplevel) = window.toplevel() else { return };
-        let Some(output) = self.pointer_output().or_else(|| self.output()) else { return };
-        let Some(geo) = self.space.output_geometry(&output) else { return };
+        let Some(output) = self.pointer_output().or_else(|| self.output()) else {
+            return;
+        };
+        let Some(geo) = self.space.output_geometry(&output) else {
+            return;
+        };
         self.greet.output = Some(output.name());
         toplevel.with_pending_state(|state| state.size = Some(geo.size));
         let sent = with_states(toplevel.wl_surface(), |states| {
-            states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .is_some_and(|d| d.lock().unwrap().initial_configure_sent)
         });
         if sent {
             toplevel.send_pending_configure();
@@ -302,9 +350,21 @@ impl Orbit {
 
     /// Gives the greet the keyboard and the pointer.
     pub fn focus_greet(&mut self) {
-        let Some(surface) = self.greet.window.as_ref().and_then(|w| w.wl_surface()).map(|s| s.into_owned()) else { return };
+        let Some(surface) = self
+            .greet
+            .window
+            .as_ref()
+            .and_then(|w| w.wl_surface())
+            .map(|s| s.into_owned())
+        else {
+            return;
+        };
         if let Some(keyboard) = self.seat.get_keyboard() {
-            keyboard.set_focus(self, Some(KeyboardFocus::Surface(surface)), SERIAL_COUNTER.next_serial());
+            keyboard.set_focus(
+                self,
+                Some(KeyboardFocus::Surface(surface)),
+                SERIAL_COUNTER.next_serial(),
+            );
         }
         self.refresh_pointer();
     }
@@ -323,7 +383,9 @@ impl Orbit {
             return None;
         }
         let origin = out.loc - window.geometry().loc;
-        window.surface_under(pos - origin.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + origin).to_f64()))
+        window
+            .surface_under(pos - origin.to_f64(), WindowSurfaceType::ALL)
+            .map(|(s, p)| (s, (p + origin).to_f64()))
     }
 
     /// Tells the greet the session's state.
@@ -350,7 +412,14 @@ impl Orbit {
 
 /// The greet's window and its menus, when it is shown on `output`, at
 /// `alpha` (fading with the eyes).
-pub fn elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, alpha: f32, elements: &mut Vec<OutputElement>) {
+pub fn elements(
+    state: &Orbit,
+    output: &Output,
+    renderer: &mut GlesRenderer,
+    scale: Scale<f64>,
+    alpha: f32,
+    elements: &mut Vec<OutputElement>,
+) {
     if state.greet.output.as_deref() != Some(&*output.name()) {
         return;
     }
@@ -361,14 +430,28 @@ pub fn elements(state: &Orbit, output: &Output, renderer: &mut GlesRenderer, sca
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
         let offset = (geometry.loc + offset - popup.geometry().loc).to_physical_precise_round(scale);
         elements.extend(
-            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, popup.wl_surface(), at + offset, scale, alpha, Kind::Unspecified)
-                .into_iter()
-                .map(OutputElement::Surface),
+            render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
+                renderer,
+                popup.wl_surface(),
+                at + offset,
+                scale,
+                alpha,
+                Kind::Unspecified,
+            )
+            .into_iter()
+            .map(OutputElement::Surface),
         );
     }
     elements.extend(
-        render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(renderer, &surface, at, scale, alpha, Kind::Unspecified)
-            .into_iter()
-            .map(OutputElement::Surface),
+        render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
+            renderer,
+            &surface,
+            at,
+            scale,
+            alpha,
+            Kind::Unspecified,
+        )
+        .into_iter()
+        .map(OutputElement::Surface),
     );
 }

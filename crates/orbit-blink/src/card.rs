@@ -17,13 +17,7 @@ use crate::image::Image;
 const SHOWN_FOR: Duration = Duration::from_secs(8);
 
 /// Shows the card for the capture saved at `path`, whose bytes are `png`.
-pub fn saved(
-    app: &gtk::Application,
-    monitor: Option<&gdk::Monitor>,
-    image: &Image,
-    path: PathBuf,
-    png: Vec<u8>,
-) {
+pub fn saved(app: &gtk::Application, monitor: Option<&gdk::Monitor>, image: &Image, path: PathBuf, png: Vec<u8>) {
     let window = new_window(app, monitor);
     let title = gtk::Label::builder()
         .label(tr("blink-saved"))
@@ -111,21 +105,17 @@ pub fn saved(
                 .build();
             let window = window.clone();
             let source = path.clone();
-            dialog.save(
-                None::<&gtk::Window>,
-                None::<&gio::Cancellable>,
-                move |result| {
-                    // Onto itself, a copy would empty the file: nothing to do.
-                    if let Ok(target) = result
-                        && let Some(target) = target.path()
-                        && !same_file(&source, &target)
-                        && let Err(err) = std::fs::copy(&source, &target)
-                    {
-                        log::warn!("saving {}: {err}", target.display());
-                    }
-                    window.destroy();
-                },
-            );
+            dialog.save(None::<&gtk::Window>, None::<&gio::Cancellable>, move |result| {
+                // Onto itself, a copy would empty the file: nothing to do.
+                if let Ok(target) = result
+                    && let Some(target) = target.path()
+                    && !same_file(&source, &target)
+                    && let Err(err) = std::fs::copy(&source, &target)
+                {
+                    log::warn!("saving {}: {err}", target.display());
+                }
+                window.destroy();
+            });
         });
     }
     window.present();

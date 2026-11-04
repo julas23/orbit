@@ -44,7 +44,13 @@ impl Computer {
             monitor: gio::VolumeMonitor::get(),
             go: RefCell::default(),
         });
-        for signal in ["mount-added", "mount-removed", "mount-changed", "volume-added", "volume-removed"] {
+        for signal in [
+            "mount-added",
+            "mount-removed",
+            "mount-changed",
+            "volume-added",
+            "volume-removed",
+        ] {
             let weak = Rc::downgrade(&computer);
             computer.monitor.connect_local(signal, false, move |_| {
                 if let Some(c) = weak.upgrade().filter(|c| c.widget.is_mapped()) {
@@ -70,12 +76,25 @@ impl Computer {
             self.flow.remove(&child);
         }
         let root = Path::new("/");
-        self.card(&gio::ThemedIcon::new("drive-harddisk").upcast(), &tr("files-filesystem"), Some(gio::File::for_path(root)));
+        self.card(
+            &gio::ThemedIcon::new("drive-harddisk").upcast(),
+            &tr("files-filesystem"),
+            Some(gio::File::for_path(root)),
+        );
         let home = glib::home_dir();
         if !same_device(&home, root) {
-            self.card(&gio::ThemedIcon::new("user-home").upcast(), &tr("files-home"), Some(gio::File::for_path(&home)));
+            self.card(
+                &gio::ThemedIcon::new("user-home").upcast(),
+                &tr("files-home"),
+                Some(gio::File::for_path(&home)),
+            );
         }
-        for mount in self.monitor.mounts().into_iter().filter(|m| !m.is_shadowed() && places::is_volume(m)) {
+        for mount in self
+            .monitor
+            .mounts()
+            .into_iter()
+            .filter(|m| !m.is_shadowed() && places::is_volume(m))
+        {
             let root_file = mount.root();
             if root_file.path().is_some_and(|p| p == root || p == home) {
                 continue;
@@ -95,14 +114,19 @@ impl Computer {
                 let go = go.clone();
                 let v = volume.clone();
                 let op = gtk::MountOperation::new(b.root().and_downcast_ref::<gtk::Window>());
-                volume.mount(gio::MountMountFlags::NONE, Some(&op), gio::Cancellable::NONE, move |r| match r {
-                    Ok(()) => {
-                        if let Some(m) = v.get_mount() {
-                            go(Location::of(&m.root()));
+                volume.mount(
+                    gio::MountMountFlags::NONE,
+                    Some(&op),
+                    gio::Cancellable::NONE,
+                    move |r| match r {
+                        Ok(()) => {
+                            if let Some(m) = v.get_mount() {
+                                go(Location::of(&m.root()));
+                            }
                         }
-                    }
-                    Err(e) => log::warn!("mount: {e}"),
-                });
+                        Err(e) => log::warn!("mount: {e}"),
+                    },
+                );
             });
         }
     }
@@ -110,11 +134,27 @@ impl Computer {
     /// A card; with `root`, a mounted one: its space, and a click goes
     /// there.
     fn card(&self, icon: &gio::Icon, name: &str, root: Option<gio::File>) -> gtk::Button {
-        let texts = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(5).hexpand(true).valign(gtk::Align::Center).build();
-        texts.append(&gtk::Label::builder().label(name).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["computer-name"]).build());
+        let texts = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(5)
+            .hexpand(true)
+            .valign(gtk::Align::Center)
+            .build();
+        texts.append(
+            &gtk::Label::builder()
+                .label(name)
+                .xalign(0.0)
+                .ellipsize(gtk::pango::EllipsizeMode::End)
+                .css_classes(["computer-name"])
+                .build(),
+        );
         let bar = gtk::LevelBar::builder().min_value(0.0).max_value(1.0).build();
         // Only "full" past nine tenths; the theme's other marks say little.
-        for offset in [gtk::LEVEL_BAR_OFFSET_LOW, gtk::LEVEL_BAR_OFFSET_HIGH, gtk::LEVEL_BAR_OFFSET_FULL] {
+        for offset in [
+            gtk::LEVEL_BAR_OFFSET_LOW,
+            gtk::LEVEL_BAR_OFFSET_HIGH,
+            gtk::LEVEL_BAR_OFFSET_FULL,
+        ] {
             bar.remove_offset_value(Some(offset));
         }
         bar.add_offset_value("ok", 0.9);
@@ -125,7 +165,10 @@ impl Computer {
         let content = gtk::Box::builder().spacing(10).build();
         content.append(&gtk::Image::builder().gicon(icon).pixel_size(48).build());
         content.append(&texts);
-        let button = gtk::Button::builder().child(&content).css_classes(["computer-card"]).build();
+        let button = gtk::Button::builder()
+            .child(&content)
+            .css_classes(["computer-card"])
+            .build();
         self.flow.append(&button);
         match root {
             Some(root) => {

@@ -50,7 +50,11 @@ impl Props {
         for (name, value) in changed {
             // Read from `a{sv}` the value is the inner one; a variant
             // left inside is opened.
-            let value = if value.is_type(glib::VariantTy::VARIANT) { value.as_variant().unwrap_or_else(|| value.clone()) } else { value.clone() };
+            let value = if value.is_type(glib::VariantTy::VARIANT) {
+                value.as_variant().unwrap_or_else(|| value.clone())
+            } else {
+                value.clone()
+            };
             let text = || value.get::<String>().unwrap_or_default();
             let flag = || value.get::<bool>().unwrap_or_default();
             match name.as_str() {
@@ -88,7 +92,10 @@ pub struct Dialog {
 impl Dialog {
     /// The card, empty until `ask`; `answer` gets each answer.
     pub fn show(app: &gtk::Application, answer: impl Fn(Answer) + 'static) -> Rc<Self> {
-        let window = gtk::Window::builder().application(app).css_classes(["orbit-prompter"]).build();
+        let window = gtk::Window::builder()
+            .application(app)
+            .css_classes(["orbit-prompter"])
+            .build();
         if gtk4_layer_shell::is_supported() {
             window.init_layer_shell();
             window.set_namespace(Some("orbit-prompter"));
@@ -103,20 +110,59 @@ impl Dialog {
             window.set_resizable(false);
         }
 
-        let icon = gtk::Image::builder().icon_name("dialog-password-symbolic").pixel_size(50).css_classes(["icon"]).build();
-        let title = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).max_width_chars(40).css_classes(["title"]).build();
-        let what = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).max_width_chars(40).css_classes(["what"]).build();
-        let password = gtk::PasswordEntry::builder().placeholder_text(tr("greet-password")).show_peek_icon(true).css_classes(["password"]).build();
-        let again = gtk::PasswordEntry::builder().placeholder_text(tr("prompter-again")).show_peek_icon(true).css_classes(["password", "again"]).build();
+        let icon = gtk::Image::builder()
+            .icon_name("dialog-password-symbolic")
+            .pixel_size(50)
+            .css_classes(["icon"])
+            .build();
+        let title = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .max_width_chars(40)
+            .css_classes(["title"])
+            .build();
+        let what = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .max_width_chars(40)
+            .css_classes(["what"])
+            .build();
+        let password = gtk::PasswordEntry::builder()
+            .placeholder_text(tr("greet-password"))
+            .show_peek_icon(true)
+            .css_classes(["password"])
+            .build();
+        let again = gtk::PasswordEntry::builder()
+            .placeholder_text(tr("prompter-again"))
+            .show_peek_icon(true)
+            .css_classes(["password", "again"])
+            .build();
         let choice = gtk::CheckButton::builder().css_classes(["choice"]).build();
-        let message = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).max_width_chars(40).css_classes(["message"]).build();
+        let message = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .max_width_chars(40)
+            .css_classes(["message"])
+            .build();
         let cancel = gtk::Button::builder().hexpand(true).build();
-        let ok = gtk::Button::builder().hexpand(true).css_classes(["suggested-action"]).build();
-        let buttons = gtk::Box::builder().spacing(10).css_classes(["buttons"]).homogeneous(true).build();
+        let ok = gtk::Button::builder()
+            .hexpand(true)
+            .css_classes(["suggested-action"])
+            .build();
+        let buttons = gtk::Box::builder()
+            .spacing(10)
+            .css_classes(["buttons"])
+            .homogeneous(true)
+            .build();
         buttons.append(&cancel);
         buttons.append(&ok);
 
-        let card = gtk::Box::builder().orientation(gtk::Orientation::Vertical).halign(gtk::Align::Center).valign(gtk::Align::Center).css_classes(["card"]).build();
+        let card = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .css_classes(["card"])
+            .build();
         for widget in [
             icon.upcast_ref::<gtk::Widget>(),
             title.upcast_ref(),
@@ -203,7 +249,14 @@ impl Dialog {
         self.kind.set(kind);
         let or = |text: &str, default: &str| if text.is_empty() { tr(default) } else { text.to_owned() };
         self.window.set_title(Some(&or(&props.title, "prompter-title")));
-        self.title.set_text(&or(if props.message.is_empty() { &props.title } else { &props.message }, "prompter-title"));
+        self.title.set_text(&or(
+            if props.message.is_empty() {
+                &props.title
+            } else {
+                &props.message
+            },
+            "prompter-title",
+        ));
         self.what.set_text(&props.description);
         self.what.set_visible(!props.description.is_empty());
         let password = kind == Kind::Password;
@@ -236,7 +289,12 @@ impl Dialog {
     }
 
     fn set_sensitive(&self, on: bool) {
-        for widget in [self.password.upcast_ref::<gtk::Widget>(), self.again.upcast_ref(), self.choice.upcast_ref(), self.ok.upcast_ref()] {
+        for widget in [
+            self.password.upcast_ref::<gtk::Widget>(),
+            self.again.upcast_ref(),
+            self.choice.upcast_ref(),
+            self.ok.upcast_ref(),
+        ] {
             widget.set_sensitive(on);
         }
     }
@@ -294,7 +352,11 @@ mod tests {
 
     #[test]
     fn properties_come_from_a_dbus_dictionary() {
-        let sent = glib::Variant::parse(None, "{'message': <'Autenticação necessária'>, 'password-new': <true>, 'choice-chosen': <true>, 'other': <1>}").unwrap();
+        let sent = glib::Variant::parse(
+            None,
+            "{'message': <'Autenticação necessária'>, 'password-new': <true>, 'choice-chosen': <true>, 'other': <1>}",
+        )
+        .unwrap();
         let changed: HashMap<String, glib::Variant> = sent.get().unwrap();
         let mut props = Props::default();
         props.update(&changed);

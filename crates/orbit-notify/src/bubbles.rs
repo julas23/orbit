@@ -35,11 +35,18 @@ pub struct Bubbles {
 
 impl Bubbles {
     pub fn new(config: &Config, monitor: Option<&gdk::Monitor>) -> Bubbles {
-        let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(10).build();
+        let column = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
+            .build();
         column.set_size_request(config.width, -1);
         // Not an application window: the centre must stay the app's first
         // window, the one a second launch shows or hides.
-        let window = gtk::Window::builder().css_classes(["orbit", "orbit-notify-bubbles"]).decorated(false).child(&column).build();
+        let window = gtk::Window::builder()
+            .css_classes(["orbit", "orbit-notify-bubbles"])
+            .decorated(false)
+            .child(&column)
+            .build();
         window.init_layer_shell();
         window.set_namespace(Some("orbit-notify"));
         window.set_layer(Layer::Overlay);
@@ -49,7 +56,13 @@ impl Bubbles {
         window.set_margin(Edge::Top, config.margin);
         window.set_margin(Edge::Right, config.margin);
         window.set_keyboard_mode(KeyboardMode::None);
-        Bubbles { window, column, shown: RefCell::default(), max: config.max_popups.max(1), hidden: Cell::new(false) }
+        Bubbles {
+            window,
+            column,
+            shown: RefCell::default(),
+            max: config.max_popups.max(1),
+            hidden: Cell::new(false),
+        }
     }
 
     pub fn is_full(&self) -> bool {
@@ -76,7 +89,11 @@ impl Bubbles {
                 old.gone = gone.clone();
             } else {
                 self.column.prepend(&widget);
-                shown.push(Shown { id, widget: widget.clone(), gone: gone.clone() });
+                shown.push(Shown {
+                    id,
+                    widget: widget.clone(),
+                    gone: gone.clone(),
+                });
             }
         }
         self.window.set_visible(!self.hidden.get());
@@ -106,7 +123,13 @@ impl Bubbles {
 
     /// Takes every bubble down (do not disturb turned on).
     pub fn clear(&self, keep: impl Fn(u32) -> bool) {
-        let ids: Vec<u32> = self.shown.borrow().iter().map(|s| s.id).filter(|id| !keep(*id)).collect();
+        let ids: Vec<u32> = self
+            .shown
+            .borrow()
+            .iter()
+            .map(|s| s.id)
+            .filter(|id| !keep(*id))
+            .collect();
         for id in ids {
             self.remove(id);
         }

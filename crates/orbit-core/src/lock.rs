@@ -189,7 +189,11 @@ impl Orbit {
             Some(layer) => self.focus_layer(&layer),
             None => {
                 let ws = self.current_ws();
-                let focus = ws.last_focus.clone().filter(|w| ws.windows.contains(w)).or_else(|| ws.windows.last().cloned());
+                let focus = ws
+                    .last_focus
+                    .clone()
+                    .filter(|w| ws.windows.contains(w))
+                    .or_else(|| ws.windows.last().cloned());
                 self.focus_window(focus);
             }
         }
@@ -214,10 +218,18 @@ impl Orbit {
     pub fn refresh_pointer(&mut self) {
         let Some(pointer) = self.seat.get_pointer() else { return };
         let location = pointer.current_location();
-        let under = if self.locked() { self.face_surface_under(location) } else { self.surface_under(location) };
+        let under = if self.locked() {
+            self.face_surface_under(location)
+        } else {
+            self.surface_under(location)
+        };
         let serial = SERIAL_COUNTER.next_serial();
         let time = smithay::backend::input::InputTime::now();
-        pointer.motion(self, under, &smithay::input::pointer::MotionEvent { location, serial, time });
+        pointer.motion(
+            self,
+            under,
+            &smithay::input::pointer::MotionEvent { location, serial, time },
+        );
         pointer.frame(self);
     }
 }

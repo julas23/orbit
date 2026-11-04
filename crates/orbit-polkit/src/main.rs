@@ -27,7 +27,9 @@ fn main() -> glib::ExitCode {
         }
     };
     // Unique: a second one started hands over to the first and quits.
-    let app = gtk::Application::builder().application_id("io.github.julas23.Orbit.Polkit").build();
+    let app = gtk::Application::builder()
+        .application_id("io.github.julas23.Orbit.Polkit")
+        .build();
     let keep = Rc::new(std::cell::RefCell::new(None));
     app.connect_activate(move |app| {
         if keep.borrow().is_some() {
@@ -67,4 +69,3 @@ fn config_dir() -> Result<PathBuf, String> {
     }
     Ok(dir)
 }
-

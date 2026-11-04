@@ -32,7 +32,12 @@ pub enum Order {
     /// Say `text` in `language` (`pt`, `en`), then tell the engine with
     /// `id`; unless `more` of the same comes (an answer said as it is
     /// written), told after the last.
-    Say { id: u64, text: String, language: String, more: bool },
+    Say {
+        id: u64,
+        text: String,
+        language: String,
+        more: bool,
+    },
 }
 
 /// One Piper, one voice.
@@ -108,7 +113,13 @@ pub fn speak(
     let out = std::env::temp_dir().join(format!("orbit-aigent-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&out);
     let mut running: HashMap<String, Voice> = HashMap::new();
-    for Order::Say { id, text, language, more } in orders {
+    for Order::Say {
+        id,
+        text,
+        language,
+        more,
+    } in orders
+    {
         stop.store(false, Ordering::SeqCst);
         let Some(model) = voices.get(&language).or_else(|| voices.get("pt")) else {
             log::error!("aigent: no voice for {language}");
@@ -186,7 +197,10 @@ fn play(wav: &Path, now: &Now, stop: &std::sync::atomic::AtomicBool) {
 /// A 16-bit PCM WAV file's samples (the first channel) and rate.
 fn read_wav(path: &Path) -> anyhow::Result<(Vec<f32>, u32)> {
     let bytes = std::fs::read(path)?;
-    anyhow::ensure!(bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE", "not a WAV file");
+    anyhow::ensure!(
+        bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE",
+        "not a WAV file"
+    );
     let (mut rate, mut channels, mut at) = (0u32, 1usize, 12);
     while at + 8 <= bytes.len() {
         let id = &bytes[at..at + 4];
@@ -221,7 +235,9 @@ fn spoken(text: &str) -> String {
             out.push_str(word);
         }
     }
-    out.chars().filter(|c| !matches!(c, '*' | '#' | '`' | '_' | '|' | '>')).collect()
+    out.chars()
+        .filter(|c| !matches!(c, '*' | '#' | '`' | '_' | '|' | '>'))
+        .collect()
 }
 
 /// `text` cut into sentences, so the first is heard while the next is
@@ -267,6 +283,9 @@ mod tests {
 
     #[test]
     fn marks_and_links_are_not_said() {
-        assert_eq!(spoken("**Pronto**: veja `ls` em https://x.y/z."), "Pronto: veja ls em link ");
+        assert_eq!(
+            spoken("**Pronto**: veja `ls` em https://x.y/z."),
+            "Pronto: veja ls em link "
+        );
     }
 }

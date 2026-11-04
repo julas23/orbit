@@ -114,7 +114,11 @@ pub fn discover() -> Vec<Found> {
         (Source::Chromium, config.join("chromium")),
     ] {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        let mut profiles: Vec<PathBuf> = entries.filter_map(Result::ok).map(|e| e.path().join("Login Data")).filter(|p| p.is_file()).collect();
+        let mut profiles: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.path().join("Login Data"))
+            .filter(|p| p.is_file())
+            .collect();
         profiles.sort();
         for path in profiles {
             match chromium_count(&path) {
@@ -126,12 +130,22 @@ pub fn discover() -> Vec<Found> {
     }
     let firefox = glib::home_dir().join(".mozilla").join("firefox");
     if let Ok(entries) = std::fs::read_dir(&firefox) {
-        let mut profiles: Vec<PathBuf> = entries.filter_map(Result::ok).map(|e| e.path()).filter(|p| p.join("logins.json").is_file()).collect();
+        let mut profiles: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.join("logins.json").is_file())
+            .collect();
         profiles.sort();
         for path in profiles {
-            let count = firefox_logins(&path).map(|l| l.iter().filter(|l| !l.password.is_empty()).count()).unwrap_or(0);
+            let count = firefox_logins(&path)
+                .map(|l| l.iter().filter(|l| !l.password.is_empty()).count())
+                .unwrap_or(0);
             if count > 0 {
-                found.push(Found { source: Source::Firefox, path, count });
+                found.push(Found {
+                    source: Source::Firefox,
+                    path,
+                    count,
+                });
             }
         }
     }
@@ -159,7 +173,10 @@ impl Copy {
     fn of(db: &Path) -> Result<Self, Error> {
         let dir = private_dir()?.join(format!("import-{}", glib::uuid_string_random()));
         std::fs::create_dir(&dir).map_err(other)?;
-        let copy = Copy { db: dir.join("db"), dir };
+        let copy = Copy {
+            db: dir.join("db"),
+            dir,
+        };
         std::fs::copy(db, &copy.db).map_err(other)?;
         let wal = PathBuf::from(format!("{}-wal", db.display()));
         if wal.is_file() {
@@ -191,7 +208,9 @@ const SAVED: &str = "SELECT origin_url, username_value, password_value FROM logi
 fn chromium_count(path: &Path) -> Result<usize, Error> {
     let copy = Copy::of(path)?;
     let db = rusqlite::Connection::open(&copy.db).map_err(other)?;
-    let n: i64 = db.query_row(&format!("SELECT count(*) FROM ({SAVED})"), [], |r| r.get(0)).map_err(other)?;
+    let n: i64 = db
+        .query_row(&format!("SELECT count(*) FROM ({SAVED})"), [], |r| r.get(0))
+        .map_err(other)?;
     Ok(n as usize)
 }
 
@@ -216,14 +235,21 @@ fn read_chromium(source: Source, path: &Path) -> Result<Vec<Login>, Error> {
     let mut failed = 0;
     for (url, username, blob) in rows {
         match chromium_decrypt(&blob, &v10, v11.as_ref()) {
-            Some(password) => logins.push(Login { source, url, username, password }),
+            Some(password) => logins.push(Login {
+                source,
+                url,
+                username,
+                password,
+            }),
             None => failed += 1,
         }
     }
     if failed > 0 {
         log::warn!("{}: {failed} passwords could not be decrypted", path.display());
         if logins.is_empty() {
-            return Err(Error::Other(format!("{failed} senhas não decifradas (chaveiro trancado?)")));
+            return Err(Error::Other(format!(
+                "{failed} senhas não decifradas (chaveiro trancado?)"
+            )));
         }
     }
     Ok(logins)
@@ -277,12 +303,27 @@ fn keyring_secret(app: &str) -> Option<Vec<u8>> {
         "(vo)",
     )?;
     let session: ObjectPath = opened.child_value(1).get()?;
-    for schema in ["chrome_libsecret_os_crypt_password_v2", "chrome_libsecret_os_crypt_password"] {
+    for schema in [
+        "chrome_libsecret_os_crypt_password_v2",
+        "chrome_libsecret_os_crypt_password",
+    ] {
         let attrs: HashMap<&str, &str> = HashMap::from([("xdg:schema", schema), ("application", app)]);
-        let found = call("/org/freedesktop/secrets", "org.freedesktop.Secret.Service", "SearchItems", (attrs,).to_variant(), "(aoao)")?;
+        let found = call(
+            "/org/freedesktop/secrets",
+            "org.freedesktop.Secret.Service",
+            "SearchItems",
+            (attrs,).to_variant(),
+            "(aoao)",
+        )?;
         let unlocked: Vec<ObjectPath> = found.child_value(0).get()?;
         if let Some(item) = unlocked.first() {
-            let secret = call(item.as_str(), "org.freedesktop.Secret.Item", "GetSecret", (session.clone(),).to_variant(), "((oayays))")?;
+            let secret = call(
+                item.as_str(),
+                "org.freedesktop.Secret.Item",
+                "GetSecret",
+                (session.clone(),).to_variant(),
+                "((oayays))",
+            )?;
             let (_, _, value, _): (ObjectPath, Vec<u8>, Vec<u8>, String) = secret.child_value(0).get()?;
             return Some(value);
         }
@@ -310,7 +351,9 @@ fn firefox_logins(profile: &Path) -> Result<Vec<FirefoxLogin>, Error> {
             logins
                 .iter()
                 .map(|l| FirefoxLogin {
-                    url: Some(field(l, "hostname")).filter(|h| !h.is_empty()).unwrap_or_else(|| field(l, "formSubmitURL")),
+                    url: Some(field(l, "hostname"))
+                        .filter(|h| !h.is_empty())
+                        .unwrap_or_else(|| field(l, "formSubmitURL")),
                     username: field(l, "encryptedUsername"),
                     password: field(l, "encryptedPassword"),
                 })
@@ -337,16 +380,21 @@ impl Nss {
         // with the signatures nss/pk11pub.h and secitem.h give them.
         unsafe {
             let lib = libloading::Library::new("libnss3.so").map_err(other)?;
-            let init: libloading::Symbol<unsafe extern "C" fn(*const c_char) -> i32> = lib.get(b"NSS_Init").map_err(other)?;
+            let init: libloading::Symbol<unsafe extern "C" fn(*const c_char) -> i32> =
+                lib.get(b"NSS_Init").map_err(other)?;
             let dir = CString::new(format!("sql:{}", profile.display())).map_err(other)?;
             if init(dir.as_ptr()) != 0 {
                 return Err(Error::Other("NSS_Init falhou".into()));
             }
             let nss = Nss { lib };
-            let slot_fn: libloading::Symbol<unsafe extern "C" fn() -> *mut c_void> = nss.lib.get(b"PK11_GetInternalKeySlot").map_err(other)?;
-            let need: libloading::Symbol<unsafe extern "C" fn(*mut c_void) -> i32> = nss.lib.get(b"PK11_NeedLogin").map_err(other)?;
-            let check: libloading::Symbol<unsafe extern "C" fn(*mut c_void, *const c_char) -> i32> = nss.lib.get(b"PK11_CheckUserPassword").map_err(other)?;
-            let free: libloading::Symbol<unsafe extern "C" fn(*mut c_void)> = nss.lib.get(b"PK11_FreeSlot").map_err(other)?;
+            let slot_fn: libloading::Symbol<unsafe extern "C" fn() -> *mut c_void> =
+                nss.lib.get(b"PK11_GetInternalKeySlot").map_err(other)?;
+            let need: libloading::Symbol<unsafe extern "C" fn(*mut c_void) -> i32> =
+                nss.lib.get(b"PK11_NeedLogin").map_err(other)?;
+            let check: libloading::Symbol<unsafe extern "C" fn(*mut c_void, *const c_char) -> i32> =
+                nss.lib.get(b"PK11_CheckUserPassword").map_err(other)?;
+            let free: libloading::Symbol<unsafe extern "C" fn(*mut c_void)> =
+                nss.lib.get(b"PK11_FreeSlot").map_err(other)?;
             let slot = slot_fn();
             if slot.is_null() {
                 return Err(Error::Other("NSS sem slot".into()));
@@ -372,10 +420,20 @@ impl Nss {
         let mut data = glib::base64_decode(base64);
         // SAFETY: see `open`; `out` is filled by NSS and freed by it.
         unsafe {
-            let sdr: libloading::Symbol<unsafe extern "C" fn(*mut SecItem, *mut SecItem, *mut c_void) -> i32> = self.lib.get(b"PK11SDR_Decrypt").ok()?;
-            let zfree: libloading::Symbol<unsafe extern "C" fn(*mut SecItem, i32)> = self.lib.get(b"SECITEM_ZfreeItem").ok()?;
-            let mut input = SecItem { kind: 0, data: data.as_mut_ptr(), len: data.len() as u32 };
-            let mut out = SecItem { kind: 0, data: std::ptr::null_mut(), len: 0 };
+            let sdr: libloading::Symbol<unsafe extern "C" fn(*mut SecItem, *mut SecItem, *mut c_void) -> i32> =
+                self.lib.get(b"PK11SDR_Decrypt").ok()?;
+            let zfree: libloading::Symbol<unsafe extern "C" fn(*mut SecItem, i32)> =
+                self.lib.get(b"SECITEM_ZfreeItem").ok()?;
+            let mut input = SecItem {
+                kind: 0,
+                data: data.as_mut_ptr(),
+                len: data.len() as u32,
+            };
+            let mut out = SecItem {
+                kind: 0,
+                data: std::ptr::null_mut(),
+                len: 0,
+            };
             if sdr(&mut input, &mut out, std::ptr::null_mut()) != 0 {
                 return None;
             }
@@ -417,9 +475,16 @@ struct HelperReply {
 fn read_firefox(profile: &Path, password: Option<&str>) -> Result<Vec<Login>, Error> {
     use std::io::Write;
     // Tests run from target/*/deps; the program is one folder up.
-    let exe = std::env::var_os("ORBIT_PATHFINDER_EXE").map(PathBuf::from).or_else(|| std::env::current_exe().ok()).ok_or_else(|| other("no executable"))?;
+    let exe = std::env::var_os("ORBIT_PATHFINDER_EXE")
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+        .ok_or_else(|| other("no executable"))?;
     let mut command = std::process::Command::new(exe);
-    command.arg(FIREFOX_HELPER).arg(profile).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped());
+    command
+        .arg(FIREFOX_HELPER)
+        .arg(profile)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped());
     if Path::new(FIREFOX_LIBS).join("libnss3.so").is_file() {
         let path = match std::env::var("LD_LIBRARY_PATH") {
             Ok(old) if !old.is_empty() => format!("{FIREFOX_LIBS}:{old}"),
@@ -442,7 +507,12 @@ fn read_firefox(profile: &Path, password: Option<&str>) -> Result<Vec<Login>, Er
     Ok(reply
         .logins
         .into_iter()
-        .map(|(url, username, password)| Login { source: Source::Firefox, url, username, password })
+        .map(|(url, username, password)| Login {
+            source: Source::Firefox,
+            url,
+            username,
+            password,
+        })
         .collect())
 }
 
@@ -456,9 +526,21 @@ pub fn firefox_helper() -> glib::ExitCode {
     let _ = std::io::stdin().read_to_string(&mut password);
     let password = Some(password.as_str()).filter(|p| !p.is_empty());
     let reply = match decrypt_firefox(&profile, password) {
-        Ok(logins) => HelperReply { password_needed: false, error: None, logins },
-        Err(Error::FirefoxPassword) => HelperReply { password_needed: true, error: None, logins: Vec::new() },
-        Err(Error::Other(e)) => HelperReply { password_needed: false, error: Some(e), logins: Vec::new() },
+        Ok(logins) => HelperReply {
+            password_needed: false,
+            error: None,
+            logins,
+        },
+        Err(Error::FirefoxPassword) => HelperReply {
+            password_needed: true,
+            error: None,
+            logins: Vec::new(),
+        },
+        Err(Error::Other(e)) => HelperReply {
+            password_needed: false,
+            error: Some(e),
+            logins: Vec::new(),
+        },
     };
     match serde_json::to_writer(std::io::stdout(), &reply) {
         Ok(()) => glib::ExitCode::SUCCESS,
@@ -508,7 +590,13 @@ mod tests {
     #[ignore]
     fn real_profiles() {
         // The program built next to this test binary runs the helper.
-        let exe = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("orbit-pathfinder");
+        let exe = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("orbit-pathfinder");
         // SAFETY: set before any thread of this test starts.
         unsafe { std::env::set_var("ORBIT_PATHFINDER_EXE", exe) };
         for found in discover() {

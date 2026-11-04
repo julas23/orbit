@@ -97,7 +97,11 @@ pub fn session(user: &str, vt: u32, command: &str) -> i32 {
                 libc::dup2(null, 0);
                 libc::dup2(null, 1);
             }
-            if libc::initgroups(name.as_ptr(), account.gid) != 0 || libc::setgid(account.gid) != 0 || libc::setuid(account.uid) != 0 || libc::getuid() != account.uid {
+            if libc::initgroups(name.as_ptr(), account.gid) != 0
+                || libc::setgid(account.gid) != 0
+                || libc::setuid(account.uid) != 0
+                || libc::getuid() != account.uid
+            {
                 libc::_exit(126);
             }
             if libc::chdir(home.as_ptr()) != 0 {
@@ -108,7 +112,10 @@ pub fn session(user: &str, vt: u32, command: &str) -> i32 {
         }
     }
 
-    log::info!("{user}: session {} on tty{vt}, {command:?} as pid {pid}", id.as_deref().unwrap_or("?"));
+    log::info!(
+        "{user}: session {} on tty{vt}, {command:?} as pid {pid}",
+        id.as_deref().unwrap_or("?")
+    );
     let mut out = std::io::stdout();
     let _ = writeln!(out, "ready {} {pid}", id.as_deref().unwrap_or("-"));
     let _ = out.flush();
@@ -121,7 +128,11 @@ pub fn session(user: &str, vt: u32, command: &str) -> i32 {
             break;
         }
     }
-    let code = if libc::WIFEXITED(status) { libc::WEXITSTATUS(status) } else { 128 + libc::WTERMSIG(status) };
+    let code = if libc::WIFEXITED(status) {
+        libc::WEXITSTATUS(status)
+    } else {
+        128 + libc::WTERMSIG(status)
+    };
     log::info!("{user}: the session ended ({code})");
     drop(pam);
     code

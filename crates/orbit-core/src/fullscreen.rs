@@ -38,7 +38,12 @@ pub fn above_fullscreen(layer: &LayerSurface) -> bool {
 /// The top-layer surfaces of `output` that stay above a fullscreen
 /// window, topmost first.
 pub fn top_above(output: &Output) -> Vec<LayerSurface> {
-    layer_map_for_output(output).layers_on(WlrLayer::Top).rev().filter(|l| above_fullscreen(l)).cloned().collect()
+    layer_map_for_output(output)
+        .layers_on(WlrLayer::Top)
+        .rev()
+        .filter(|l| above_fullscreen(l))
+        .cloned()
+        .collect()
 }
 
 impl Orbit {
@@ -124,13 +129,20 @@ impl Orbit {
     /// its workspace that is not it leaves that state.
     pub fn yield_fullscreen(&mut self, window: &Window) {
         let Some(num) = self.workspace_of(window) else { return };
-        if let Some(full) = self.windows_of(num).into_iter().find(|w| w != window && is_fullscreen(w)) {
+        if let Some(full) = self
+            .windows_of(num)
+            .into_iter()
+            .find(|w| w != window && is_fullscreen(w))
+        {
             self.set_fullscreen(&full, false);
         }
         // A floating window (a dialog) is drawn over a maximized one: it
         // stays maximized.
         if !crate::floating::floats(window)
-            && let Some(max) = self.windows_of(num).into_iter().find(|w| w != window && is_maximized(w))
+            && let Some(max) = self
+                .windows_of(num)
+                .into_iter()
+                .find(|w| w != window && is_maximized(w))
         {
             self.set_maximized(&max, false);
         }

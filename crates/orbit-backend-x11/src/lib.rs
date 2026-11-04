@@ -44,11 +44,7 @@ impl X11Backend {
         let (conn, screen) = x11rb::connect(None).context("connecting to the X server")?;
         let atoms = Atoms::new(&conn)?.reply()?;
         Ok(Self {
-            inner: Rc::new(Inner {
-                conn,
-                screen,
-                atoms,
-            }),
+            inner: Rc::new(Inner { conn, screen, atoms }),
         })
     }
 }
@@ -101,13 +97,7 @@ fn xid(window: &gtk::Window) -> Option<u32> {
 }
 
 impl Inner {
-    fn dock(
-        &self,
-        xid: u32,
-        placement: &Placement,
-        rect: gdk::Rectangle,
-        scale: i32,
-    ) -> anyhow::Result<()> {
+    fn dock(&self, xid: u32, placement: &Placement, rect: gdk::Rectangle, scale: i32) -> anyhow::Result<()> {
         let a = &self.atoms;
         let c = &self.conn;
         c.change_property32(
@@ -126,13 +116,7 @@ impl Inner {
                 AtomEnum::CARDINAL,
                 &strut,
             )?;
-            c.change_property32(
-                PropMode::REPLACE,
-                xid,
-                a._NET_WM_STRUT,
-                AtomEnum::CARDINAL,
-                &strut[..4],
-            )?;
+            c.change_property32(PropMode::REPLACE, xid, a._NET_WM_STRUT, AtomEnum::CARDINAL, &strut[..4])?;
         }
 
         self.move_to(xid, rect, scale)
@@ -171,10 +155,5 @@ impl Inner {
 
 /// Logical (GDK) pixels to X11 device pixels.
 fn device(r: gdk::Rectangle, scale: i32) -> gdk::Rectangle {
-    gdk::Rectangle::new(
-        r.x() * scale,
-        r.y() * scale,
-        r.width() * scale,
-        r.height() * scale,
-    )
+    gdk::Rectangle::new(r.x() * scale, r.y() * scale, r.width() * scale, r.height() * scale)
 }

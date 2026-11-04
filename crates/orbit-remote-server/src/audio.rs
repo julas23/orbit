@@ -26,7 +26,10 @@ pub fn attach(pipeline: &gst::Pipeline, webrtc: &gst::Element) -> anyhow::Result
         .context("no pulsesrc (gstreamer1.0-plugins-good)")?;
     let convert = gst::ElementFactory::make("audioconvert").build()?;
     let resample = gst::ElementFactory::make("audioresample").build()?;
-    let raw = gst::Caps::builder("audio/x-raw").field("rate", 48_000i32).field("channels", 2i32).build();
+    let raw = gst::Caps::builder("audio/x-raw")
+        .field("rate", 48_000i32)
+        .field("channels", 2i32)
+        .build();
     let raw = gst::ElementFactory::make("capsfilter").property("caps", &raw).build()?;
     let encoder = gst::ElementFactory::make("opusenc")
         .property("bitrate", 128_000i32)

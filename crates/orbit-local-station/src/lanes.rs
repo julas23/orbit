@@ -54,7 +54,9 @@ impl Channels {
     pub fn attach(&self, webrtc: &gst::Element) {
         let channels = self.clone();
         webrtc.connect("on-data-channel", false, move |values| {
-            let channel = values[1].get::<gst_webrtc::WebRTCDataChannel>().expect("a data channel");
+            let channel = values[1]
+                .get::<gst_webrtc::WebRTCDataChannel>()
+                .expect("a data channel");
             let label = channel.label().unwrap_or_default();
             let slot = match label.as_str() {
                 "input" => &channels.input,
@@ -66,7 +68,9 @@ impl Channels {
             };
             let trips = channels.trips.clone();
             channel.connect_on_message_string(move |_, text| {
-                let Some(message) = text.and_then(|t| serde_json::from_str::<Value>(t).ok()) else { return };
+                let Some(message) = text.and_then(|t| serde_json::from_str::<Value>(t).ok()) else {
+                    return;
+                };
                 if message["type"] == "pong"
                     && let Some(sent) = message["t"].as_f64()
                 {
@@ -82,7 +86,10 @@ impl Channels {
 
     /// The channel in `slot`, if it is open.
     fn open(slot: &Mutex<Option<gst_webrtc::WebRTCDataChannel>>) -> Option<gst_webrtc::WebRTCDataChannel> {
-        slot.lock().unwrap().clone().filter(|c| c.ready_state() == gst_webrtc::WebRTCDataChannelState::Open)
+        slot.lock()
+            .unwrap()
+            .clone()
+            .filter(|c| c.ready_state() == gst_webrtc::WebRTCDataChannelState::Open)
     }
 }
 
@@ -107,7 +114,12 @@ pub struct Lanes {
 
 impl Lanes {
     pub fn new(channels: Channels) -> Self {
-        Self { channels, streams: HashMap::new(), pinged: None, pings: 0 }
+        Self {
+            channels,
+            streams: HashMap::new(),
+            pinged: None,
+            pings: 0,
+        }
     }
 
     /// Sends `message` on its channel; if that is not open yet, gives it
@@ -145,13 +157,21 @@ impl Lanes {
             }
             _ => {}
         }
-        let channel = if fast { Channels::open(&self.channels.motion).or_else(|| Channels::open(&self.channels.input)) } else { Channels::open(&self.channels.input) };
+        let channel = if fast {
+            Channels::open(&self.channels.motion).or_else(|| Channels::open(&self.channels.input))
+        } else {
+            Channels::open(&self.channels.input)
+        };
         let Some(channel) = channel else { return Some(message) };
         if channel.send_string_full(Some(&message.to_string())).is_err() {
             return Some(message);
         }
         if fast && channel.label().as_deref() == Some("motion") {
-            let key = if kind == "move" { "pointer".to_string() } else { format!("pad {}", message["id"]) };
+            let key = if kind == "move" {
+                "pointer".to_string()
+            } else {
+                format!("pad {}", message["id"])
+            };
             if let Some(stream) = self.streams.get_mut(&key) {
                 stream.due = Some(Instant::now() + REST);
             }
@@ -160,7 +180,12 @@ impl Lanes {
     }
 
     fn stream(&mut self, key: String) -> &mut Resting {
-        self.streams.entry(key).or_insert(Resting { seq: 0, due: None, last: None, axes: BTreeMap::new() })
+        self.streams.entry(key).or_insert(Resting {
+            seq: 0,
+            due: None,
+            last: None,
+            axes: BTreeMap::new(),
+        })
     }
 
     /// The positions now still, sent again on `input`; a ping when it is
@@ -177,7 +202,11 @@ impl Lanes {
                     stream.last.clone()
                 } else {
                     let id: u64 = key.trim_start_matches("pad ").parse().unwrap_or(0);
-                    let events: Vec<Value> = stream.axes.iter().map(|(code, value)| json!([EV_ABS, code, value])).collect();
+                    let events: Vec<Value> = stream
+                        .axes
+                        .iter()
+                        .map(|(code, value)| json!([EV_ABS, code, value]))
+                        .collect();
                     Some(json!({ "type": "pad-input", "id": id, "events": events, "seq": stream.seq }))
                 };
                 if let Some(again) = again {
@@ -198,7 +227,9 @@ impl Lanes {
                     let least = trips.iter().copied().fold(f64::INFINITY, f64::min);
                     let mean = trips.iter().sum::<f64>() / trips.len() as f64;
                     let lost = TELL as usize - trips.len().min(TELL as usize);
-                    log::info!("station: to the server and back {mean:.1} ms (least {least:.1}), {lost} of {TELL} pings lost");
+                    log::info!(
+                        "station: to the server and back {mean:.1} ms (least {least:.1}), {lost} of {TELL} pings lost"
+                    );
                 }
             }
         }
@@ -207,7 +238,12 @@ impl Lanes {
     /// How long until `settle` has something to do.
     pub fn wait(&self) -> Option<Duration> {
         let now = Instant::now();
-        let rest = self.streams.values().filter_map(|s| s.due).min().map(|due| due.saturating_duration_since(now));
+        let rest = self
+            .streams
+            .values()
+            .filter_map(|s| s.due)
+            .min()
+            .map(|due| due.saturating_duration_since(now));
         let ping = self.pinged.map(|at| PING.saturating_sub(at.elapsed()));
         [rest, ping].into_iter().flatten().min()
     }

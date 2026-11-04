@@ -9,7 +9,11 @@
 use std::time::Duration;
 
 use orbit_protocols::client::orbit_greet_v1::{self, OrbitGreetV1};
-use wayland_client::{Connection, Dispatch, QueueHandle, globals::{GlobalListContents, registry_queue_init}, protocol::wl_registry};
+use wayland_client::{
+    Connection, Dispatch, QueueHandle,
+    globals::{GlobalListContents, registry_queue_init},
+    protocol::wl_registry,
+};
 
 struct State {
     locked: bool,
@@ -41,7 +45,14 @@ fn main() {
 }
 
 impl Dispatch<OrbitGreetV1, ()> for State {
-    fn event(state: &mut Self, _: &OrbitGreetV1, event: orbit_greet_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        _: &OrbitGreetV1,
+        event: orbit_greet_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         match event {
             orbit_greet_v1::Event::Locked => state.locked = true,
             orbit_greet_v1::Event::Unlocked => eprintln!("greet-unlock: unlocked"),
@@ -51,5 +62,13 @@ impl Dispatch<OrbitGreetV1, ()> for State {
 }
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }

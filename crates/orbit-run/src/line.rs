@@ -14,7 +14,9 @@ pub fn program(line: &str) -> Option<&str> {
 
 fn is_assignment(word: &str) -> bool {
     word.split_once('=').is_some_and(|(name, _)| {
-        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && !name.starts_with(|c: char| c.is_ascii_digit())
+        !name.is_empty()
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && !name.starts_with(|c: char| c.is_ascii_digit())
     })
 }
 
@@ -74,7 +76,9 @@ pub fn complete(line: &str, programs: &[String]) -> (String, Vec<String>) {
     } else {
         files(word)
     };
-    let Some(common) = common_prefix(&matches) else { return (line.to_owned(), Vec::new()) };
+    let Some(common) = common_prefix(&matches) else {
+        return (line.to_owned(), Vec::new());
+    };
     let mut done = format!("{head}{common}");
     if let [one] = matches.as_slice() {
         if first {
@@ -84,7 +88,10 @@ pub fn complete(line: &str, programs: &[String]) -> (String, Vec<String>) {
         }
         return (done, Vec::new());
     }
-    let shown = matches.iter().map(|m| m.rsplit('/').find(|s| !s.is_empty()).unwrap_or(m).to_owned()).collect();
+    let shown = matches
+        .iter()
+        .map(|m| m.rsplit('/').find(|s| !s.is_empty()).unwrap_or(m).to_owned())
+        .collect();
     (done, shown)
 }
 
@@ -95,8 +102,14 @@ fn files(word: &str) -> Vec<String> {
         Some(i) => (&word[..=i], &word[i + 1..]),
         None => ("", word),
     };
-    let read = if dir.is_empty() { PathBuf::from(".") } else { expand(dir) };
-    let Ok(entries) = std::fs::read_dir(read) else { return Vec::new() };
+    let read = if dir.is_empty() {
+        PathBuf::from(".")
+    } else {
+        expand(dir)
+    };
+    let Ok(entries) = std::fs::read_dir(read) else {
+        return Vec::new();
+    };
     let mut found: Vec<String> = entries
         .flatten()
         .filter_map(|e| e.file_name().into_string().ok())
@@ -111,7 +124,13 @@ fn common_prefix(words: &[String]) -> Option<String> {
     let first = words.first()?;
     let mut end = first.len();
     for word in &words[1..] {
-        end = first.char_indices().zip(word.chars()).take_while(|((_, a), b)| a == b).last().map_or(0, |((i, a), _)| i + a.len_utf8()).min(end);
+        end = first
+            .char_indices()
+            .zip(word.chars())
+            .take_while(|((_, a), b)| a == b)
+            .last()
+            .map_or(0, |((i, a), _)| i + a.len_utf8())
+            .min(end);
     }
     Some(first[..end].to_owned())
 }
@@ -133,7 +152,9 @@ impl History {
             .filter(|p| p.is_absolute())
             .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"))
             .join("orbit/run-history");
-        let lines = std::fs::read_to_string(&path).map(|t| t.lines().map(str::to_owned).collect()).unwrap_or_default();
+        let lines = std::fs::read_to_string(&path)
+            .map(|t| t.lines().map(str::to_owned).collect())
+            .unwrap_or_default();
         Self { path, lines }
     }
 
@@ -167,7 +188,10 @@ mod tests {
     #[test]
     fn programs_complete_to_what_they_share() {
         let names: Vec<String> = ["firefox", "firefox-esr", "fish", "kitty"].map(String::from).to_vec();
-        assert_eq!(complete("fir", &names), ("firefox".into(), vec!["firefox".into(), "firefox-esr".into()]));
+        assert_eq!(
+            complete("fir", &names),
+            ("firefox".into(), vec!["firefox".into(), "firefox-esr".into()])
+        );
         assert_eq!(complete("ki", &names), ("kitty ".into(), vec![]));
         assert_eq!(complete("zz", &names), ("zz".into(), vec![]));
         assert_eq!(complete("FOO=1 ki", &names), ("FOO=1 kitty ".into(), vec![]));
@@ -179,8 +203,14 @@ mod tests {
         std::fs::create_dir_all(dir.join("docs")).unwrap();
         std::fs::write(dir.join("dog.txt"), "").unwrap();
         let base = dir.display().to_string();
-        assert_eq!(complete(&format!("ls {base}/doc"), &[]), (format!("ls {base}/docs/"), vec![]));
-        assert_eq!(complete(&format!("ls {base}/do"), &[]), (format!("ls {base}/do"), vec!["docs".into(), "dog.txt".into()]));
+        assert_eq!(
+            complete(&format!("ls {base}/doc"), &[]),
+            (format!("ls {base}/docs/"), vec![])
+        );
+        assert_eq!(
+            complete(&format!("ls {base}/do"), &[]),
+            (format!("ls {base}/do"), vec!["docs".into(), "dog.txt".into()])
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 

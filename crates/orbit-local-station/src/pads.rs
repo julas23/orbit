@@ -90,13 +90,20 @@ struct Pad {
 impl Pad {
     /// The device at `path`, if it is a pad: its description for the server too.
     fn open(path: &PathBuf, id: u64) -> std::io::Result<Option<(Self, Value)>> {
-        let file = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(path)?;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(path)?;
         let types: [u8; 4] = bits(&file, eviocgbit(0, 4));
         let key_bits: [u8; KEY_MAX / 8 + 1] = bits(&file, eviocgbit(EV_KEY, KEY_MAX / 8 + 1));
         let abs_bits: [u8; ABS_MAX / 8 + 1] = bits(&file, eviocgbit(EV_ABS, ABS_MAX / 8 + 1));
         let keys: Vec<usize> = (0..=KEY_MAX).filter(|&k| has(&key_bits, k)).collect();
         let axes: Vec<usize> = (0..=ABS_MAX).filter(|&a| has(&abs_bits, a)).collect();
-        if !has(&types, EV_KEY.into()) || !has(&types, EV_ABS.into()) || axes.is_empty() || !keys.iter().any(|k| PAD_BUTTONS.contains(k)) {
+        if !has(&types, EV_KEY.into())
+            || !has(&types, EV_ABS.into())
+            || axes.is_empty()
+            || !keys.iter().any(|k| PAD_BUTTONS.contains(k))
+        {
             return Ok(None);
         }
         let mut name = [0u8; 128];
@@ -119,14 +126,33 @@ impl Pad {
             "bus": ids[0], "vendor": ids[1], "product": ids[2], "version": ids[3],
             "keys": keys, "axes": axes_described,
         });
-        log::info!("station: {name:?} ({:04x}:{:04x}) at {} goes to the server", ids[1], ids[2], path.display());
-        Ok(Some((Self { file, id, keys, axes, report: Vec::new(), dropped: false }, description)))
+        log::info!(
+            "station: {name:?} ({:04x}:{:04x}) at {} goes to the server",
+            ids[1],
+            ids[2],
+            path.display()
+        );
+        Ok(Some((
+            Self {
+                file,
+                id,
+                keys,
+                axes,
+                report: Vec::new(),
+                dropped: false,
+            },
+            description,
+        )))
     }
 
     /// Every button and axis as it is now: after events were dropped.
     fn state(&self) -> Vec<Value> {
         let held: [u8; KEY_MAX / 8 + 1] = bits(&self.file, eviocgkey(KEY_MAX / 8 + 1));
-        let mut events: Vec<Value> = self.keys.iter().map(|&k| json!([EV_KEY, k, u8::from(has(&held, k))])).collect();
+        let mut events: Vec<Value> = self
+            .keys
+            .iter()
+            .map(|&k| json!([EV_KEY, k, u8::from(has(&held, k))]))
+            .collect();
         for &axis in &self.axes {
             let mut info = [0i32; 6];
             if get(&self.file, eviocgabs(axis), &mut info) {
@@ -158,12 +184,18 @@ impl Pad {
                         self.report.clear();
                     }
                     (EV_SYN, SYN_REPORT) => {
-                        let events = if std::mem::take(&mut self.dropped) { self.state() } else { std::mem::take(&mut self.report) };
+                        let events = if std::mem::take(&mut self.dropped) {
+                            self.state()
+                        } else {
+                            std::mem::take(&mut self.report)
+                        };
                         if !events.is_empty() {
                             out.push(json!({ "type": "pad-input", "id": self.id, "events": events }));
                         }
                     }
-                    (EV_KEY | EV_ABS, code) if !self.dropped => self.report.push(json!([event.type_, code, event.value])),
+                    (EV_KEY | EV_ABS, code) if !self.dropped => {
+                        self.report.push(json!([event.type_, code, event.value]))
+                    }
                     _ => {}
                 }
             }
@@ -182,7 +214,12 @@ pub struct Pads {
 
 impl Pads {
     pub fn new() -> Self {
-        Self { pads: HashMap::new(), others: HashSet::new(), next: 1, scanned: None }
+        Self {
+            pads: HashMap::new(),
+            others: HashSet::new(),
+            next: 1,
+            scanned: None,
+        }
     }
 
     /// Plugged and unplugged pads, if it is time to look; then what they
@@ -209,7 +246,9 @@ impl Pads {
     }
 
     fn scan(&mut self, out: &mut Vec<Value>) {
-        let Ok(entries) = std::fs::read_dir("/dev/input") else { return };
+        let Ok(entries) = std::fs::read_dir("/dev/input") else {
+            return;
+        };
         let now: HashSet<PathBuf> = entries
             .flatten()
             .filter(|e| e.file_name().to_string_lossy().starts_with("event"))

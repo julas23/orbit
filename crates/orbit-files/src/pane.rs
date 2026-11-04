@@ -192,12 +192,14 @@ impl Pane {
             .css_classes(["column-list"])
             .build();
         let parent_store = gio::ListStore::new::<glib::BoxedAnyObject>();
-        let parent_sorted = gtk::SortListModel::new(
-            Some(parent_store.clone()),
-            Some(gtk::CustomSorter::new(by_name)),
-        );
+        let parent_sorted = gtk::SortListModel::new(Some(parent_store.clone()), Some(gtk::CustomSorter::new(by_name)));
         let parent_list = gtk::ListView::builder()
-            .model(&gtk::SingleSelection::builder().model(&parent_sorted).autoselect(false).build())
+            .model(
+                &gtk::SingleSelection::builder()
+                    .model(&parent_sorted)
+                    .autoselect(false)
+                    .build(),
+            )
             .factory(&row_factory())
             .css_classes(["column-list", "parent"])
             .build();
@@ -422,7 +424,9 @@ impl Pane {
                     }
                     return;
                 }
-                let Some(position) = position_under(&widget, x, y) else { return };
+                let Some(position) = position_under(&widget, x, y) else {
+                    return;
+                };
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 if shift {
                     p.select_range_to(position, ctrl);
@@ -509,7 +513,9 @@ impl Pane {
         // not the contents either.
         let weak = Rc::downgrade(self);
         self.search_names.connect_toggled(move |b| {
-            let Some(p) = weak.upgrade().filter(|p| !p.resetting.get()) else { return };
+            let Some(p) = weak.upgrade().filter(|p| !p.resetting.get()) else {
+                return;
+            };
             if !b.is_active() && p.search_contents.is_active() {
                 p.search_contents.set_active(false);
                 return;
@@ -518,7 +524,9 @@ impl Pane {
         });
         let weak = Rc::downgrade(self);
         self.search_contents.connect_toggled(move |b| {
-            let Some(p) = weak.upgrade().filter(|p| !p.resetting.get()) else { return };
+            let Some(p) = weak.upgrade().filter(|p| !p.resetting.get()) else {
+                return;
+            };
             if b.is_active() && !p.search_names.is_active() {
                 p.search_names.set_active(true);
                 return;
@@ -545,7 +553,12 @@ impl Pane {
                 let (Some(p), Some(s)) = (weak.upgrade(), s.downcast_ref::<gtk::ColumnViewSorter>()) else {
                     return;
                 };
-                let key = SortKey::from_id(s.primary_sort_column().and_then(|c| c.id()).as_deref().unwrap_or("name"));
+                let key = SortKey::from_id(
+                    s.primary_sort_column()
+                        .and_then(|c| c.id())
+                        .as_deref()
+                        .unwrap_or("name"),
+                );
                 p.set_sort(key, s.primary_sort_order() == gtk::SortType::Ascending);
             });
         }
@@ -670,7 +683,8 @@ impl Pane {
                     }
                     Listing::Failed(err) => {
                         p.loading.set(false);
-                        p.status.set_label(&tr_args("files-cannot-read", &[("reason", text(err))]));
+                        p.status
+                            .set_label(&tr_args("files-cannot-read", &[("reason", text(err))]));
                     }
                 }
             }
@@ -748,7 +762,13 @@ impl Pane {
             use gio::FileMonitorEvent as E;
             if !matches!(
                 event,
-                E::Created | E::MovedIn | E::Deleted | E::MovedOut | E::Renamed | E::ChangesDoneHint | E::AttributeChanged
+                E::Created
+                    | E::MovedIn
+                    | E::Deleted
+                    | E::MovedOut
+                    | E::Renamed
+                    | E::ChangesDoneHint
+                    | E::AttributeChanged
             ) {
                 return;
             }
@@ -765,7 +785,9 @@ impl Pane {
     /// looked at on a thread — over NFS a look at a file being written
     /// waits for it, and the window must not.
     fn changed_name(self: &Rc<Self>, file: &gio::File) {
-        let Some(name) = file.basename().map(|n| n.to_string_lossy().into_owned()) else { return };
+        let Some(name) = file.basename().map(|n| n.to_string_lossy().into_owned()) else {
+            return;
+        };
         self.changed.borrow_mut().insert(name);
         if self.flush.borrow().is_some() {
             return;
@@ -795,8 +817,13 @@ impl Pane {
                 std::thread::Builder::new()
                     .name("orbit-files-changes".into())
                     .spawn(move || {
-                        let found: Vec<(String, Option<Entry>)> =
-                            names.into_iter().map(|n| { let e = entry::entry_for(&dir.join(&n)); (n, e) }).collect();
+                        let found: Vec<(String, Option<Entry>)> = names
+                            .into_iter()
+                            .map(|n| {
+                                let e = entry::entry_for(&dir.join(&n));
+                                (n, e)
+                            })
+                            .collect();
                         let _ = tx.send_blocking(found);
                     })
                     .ok();
@@ -810,7 +837,9 @@ impl Pane {
         let weak = Rc::downgrade(self);
         glib::spawn_future_local(async move {
             let Ok(found) = rx.recv().await else { return };
-            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else { return };
+            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else {
+                return;
+            };
             let mut positions: std::collections::HashMap<String, u32> = (0..p.store.n_items())
                 .filter_map(|n| p.store.item(n).and_then(|o| entry_of(&o)).map(|e| (e.name, n)))
                 .collect();
@@ -1072,15 +1101,16 @@ impl Pane {
 
     /// The view's page — or Computer's, there, whatever the view.
     fn show_page(&self) {
-        self.stack.set_visible_child_name(if *self.location.borrow() == Location::Computer {
-            "computer"
-        } else {
-            match self.view.get() {
-                View::List => "list",
-                View::Grid => "grid",
-                View::Columns => "columns",
-            }
-        });
+        self.stack
+            .set_visible_child_name(if *self.location.borrow() == Location::Computer {
+                "computer"
+            } else {
+                match self.view.get() {
+                    View::List => "list",
+                    View::Grid => "grid",
+                    View::Columns => "columns",
+                }
+            });
     }
 
     pub fn set_sort(&self, key: SortKey, ascending: bool) {
@@ -1105,7 +1135,11 @@ impl Pane {
                 }
                 self.list.sort_by_column(
                     Some(&c),
-                    if ascending { gtk::SortType::Ascending } else { gtk::SortType::Descending },
+                    if ascending {
+                        gtk::SortType::Ascending
+                    } else {
+                        gtk::SortType::Descending
+                    },
                 );
             }
             None => self.set_sort(key, ascending),
@@ -1115,7 +1149,8 @@ impl Pane {
     // --------------------------------------------------------- zoom
 
     pub fn set_zoom(&self, zoom: (usize, usize)) {
-        self.zoom.set((zoom.0.min(LIST_ZOOM.len() - 1), zoom.1.min(GRID_ZOOM.len() - 1)));
+        self.zoom
+            .set((zoom.0.min(LIST_ZOOM.len() - 1), zoom.1.min(GRID_ZOOM.len() - 1)));
         self.apply_zoom();
     }
 
@@ -1140,7 +1175,11 @@ impl Pane {
             }
             w.add_css_class(&format!("{prefix}{at}"));
         };
-        for w in [self.list.upcast_ref::<gtk::Widget>(), self.current.upcast_ref(), self.parent_list.upcast_ref()] {
+        for w in [
+            self.list.upcast_ref::<gtk::Widget>(),
+            self.current.upcast_ref(),
+            self.parent_list.upcast_ref(),
+        ] {
             set(w, "zoom-list-", list, LIST_ZOOM.len());
         }
         set(self.grid.upcast_ref(), "zoom-grid-", grid, GRID_ZOOM.len());
@@ -1159,7 +1198,9 @@ impl Pane {
         let chosen = self.columns.borrow();
         let columns = self.list.columns();
         for n in 0..columns.n_items() {
-            let Some(c) = columns.item(n).and_downcast::<gtk::ColumnViewColumn>() else { continue };
+            let Some(c) = columns.item(n).and_downcast::<gtk::ColumnViewColumn>() else {
+                continue;
+            };
             let id = c.id().map(|i| i.to_string()).unwrap_or_default();
             c.set_visible(id == "name" || chosen.contains(&id) || (id == "location" && self.searching.get()));
         }
@@ -1221,7 +1262,9 @@ impl Pane {
     /// two letters, the folder again.
     fn run_search(self: &Rc<Self>) {
         let wanted = self.filter_entry.text().trim().to_owned();
-        let Some(dir) = self.location.borrow().path().map(std::path::PathBuf::from) else { return };
+        let Some(dir) = self.location.borrow().path().map(std::path::PathBuf::from) else {
+            return;
+        };
         if wanted.chars().count() < 2 {
             if self.searching.get() {
                 self.reload_folder();
@@ -1244,7 +1287,13 @@ impl Pane {
         self.update_status();
         let stop = Arc::new(AtomicBool::new(false));
         *self.search_stop.borrow_mut() = Some(stop.clone());
-        let rx = entry::search(dir, wanted, self.mode() == Search::Contents, self.show_hidden.get(), stop);
+        let rx = entry::search(
+            dir,
+            wanted,
+            self.mode() == Search::Contents,
+            self.show_hidden.get(),
+            stop,
+        );
         self.fill_from(rx, generation, true);
     }
 
@@ -1296,7 +1345,11 @@ impl Pane {
             };
             // Folders first, always.
             if a.dir != b.dir {
-                return if a.dir { gtk::Ordering::Smaller } else { gtk::Ordering::Larger };
+                return if a.dir {
+                    gtk::Ordering::Smaller
+                } else {
+                    gtk::Ordering::Larger
+                };
             }
             let order = match key {
                 SortKey::Name => std::cmp::Ordering::Equal,
@@ -1316,7 +1369,11 @@ impl Pane {
     fn apply_filter(&self) {
         let hidden = self.show_hidden.get();
         // Searching, the bar holds what was searched for, not a filter.
-        let wanted = if self.mode() == Search::Filter { self.filter_entry.text().to_lowercase() } else { String::new() };
+        let wanted = if self.mode() == Search::Filter {
+            self.filter_entry.text().to_lowercase()
+        } else {
+            String::new()
+        };
         self.filter.set_filter_func(move |o| {
             entry_of(o).is_some_and(|e| {
                 (hidden || !e.hidden) && (wanted.is_empty() || e.name.to_lowercase().contains(&wanted))
@@ -1373,7 +1430,11 @@ impl Pane {
             tr_args("files-status-items", &[("n", number(shown as f64))])
         };
         // Through admin://, everything here is done as root: said.
-        let text = if self.as_admin() { format!("{} · {text}", tr("files-admin-status")) } else { text };
+        let text = if self.as_admin() {
+            format!("{} · {text}", tr("files-admin-status"))
+        } else {
+            text
+        };
         self.status.set_label(&text);
         if self.as_admin() {
             self.widget.add_css_class("admin");
@@ -1485,7 +1546,12 @@ fn row_factory() -> gtk::SignalListItemFactory {
         let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
         let row = gtk::Box::builder().spacing(10).css_classes(["entry-row"]).build();
         row.append(&gtk::Image::builder().css_classes(["entry-icon"]).build());
-        row.append(&gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).build());
+        row.append(
+            &gtk::Label::builder()
+                .xalign(0.0)
+                .ellipsize(gtk::pango::EllipsizeMode::Middle)
+                .build(),
+        );
         item.set_child(Some(&row));
     });
     factory.connect_bind(|_, item| {
@@ -1563,16 +1629,36 @@ fn column_view(selection: &gtk::MultiSelection) -> gtk::ColumnView {
         |e| if e.dir { String::new() } else { entry::size_text(e.size) },
         false,
     ));
-    view.append_column(&text_column("modified", &tr("files-column-modified"), |e| entry::date_text(e.modified), false));
+    view.append_column(&text_column(
+        "modified",
+        &tr("files-column-modified"),
+        |e| entry::date_text(e.modified),
+        false,
+    ));
     view.append_column(&text_column(
         "kind",
         &tr("files-column-kind"),
         |e| gio::content_type_get_description(&e.mime).to_string(),
         false,
     ));
-    view.append_column(&text_column("permissions", &tr("files-column-permissions"), entry::mode_text, false));
-    view.append_column(&text_column("owner", &tr("files-column-owner"), |e| entry::user_name(e.uid), false));
-    view.append_column(&text_column("group", &tr("files-column-group"), |e| entry::group_name(e.gid), false));
+    view.append_column(&text_column(
+        "permissions",
+        &tr("files-column-permissions"),
+        entry::mode_text,
+        false,
+    ));
+    view.append_column(&text_column(
+        "owner",
+        &tr("files-column-owner"),
+        |e| entry::user_name(e.uid),
+        false,
+    ));
+    view.append_column(&text_column(
+        "group",
+        &tr("files-column-group"),
+        |e| entry::group_name(e.gid),
+        false,
+    ));
     // A long path would take the name's room: the end of it, in a column
     // of its own width (which can be dragged wider).
     let location = text_column("location", &tr("files-column-location"), entry::folder_text, false);

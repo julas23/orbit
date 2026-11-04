@@ -43,7 +43,13 @@ impl Places {
         });
         places.fill();
         // Disks come and go.
-        for signal in ["mount-added", "mount-removed", "mount-changed", "volume-added", "volume-removed"] {
+        for signal in [
+            "mount-added",
+            "mount-removed",
+            "mount-changed",
+            "volume-added",
+            "volume-removed",
+        ] {
             let weak = Rc::downgrade(&places);
             places.monitor.connect_local(signal, false, move |_| {
                 if let Some(p) = weak.upgrade() {
@@ -66,7 +72,10 @@ impl Places {
         for dir in [U::Desktop, U::Documents, U::Downloads, U::Music, U::Pictures, U::Videos] {
             if let Some(path) = glib::user_special_dir(dir).filter(|p| p.is_dir() && *p != home) {
                 let icon = entry::special_folder_icon(&path).unwrap_or("folder");
-                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 self.place(icon, &name, Location::Path(path));
             }
         }
@@ -77,7 +86,11 @@ impl Places {
         if !bookmarks.is_empty() {
             self.header(&tr("files-bookmarks"));
             for (file, name) in bookmarks {
-                let label = name.unwrap_or_else(|| file.basename().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+                let label = name.unwrap_or_else(|| {
+                    file.basename()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                });
                 self.place("folder", &label, Location::of(&file));
             }
         }
@@ -89,14 +102,24 @@ impl Places {
             .mounts()
             .into_iter()
             .filter(|m| !m.is_shadowed())
-            .filter(|m| all || is_volume(m) || { hidden += 1; false })
+            .filter(|m| {
+                all || is_volume(m) || {
+                    hidden += 1;
+                    false
+                }
+            })
             .collect();
         let unmounted: Vec<gio::Volume> = self
             .monitor
             .volumes()
             .into_iter()
             .filter(|v| v.get_mount().is_none() && v.can_mount())
-            .filter(|v| all || !is_network(v) || { hidden += 1; false })
+            .filter(|v| {
+                all || !is_network(v) || {
+                    hidden += 1;
+                    false
+                }
+            })
             .collect();
         // No heading over nothing — but over what is hidden, its eye.
         if !mounts.is_empty() || !unmounted.is_empty() || hidden > 0 {
@@ -122,11 +145,16 @@ impl Places {
                             }
                         });
                     } else {
-                        m.unmount_with_operation(gio::MountUnmountFlags::NONE, Some(&op), gio::Cancellable::NONE, |r| {
-                            if let Err(e) = r {
-                                log::warn!("unmount: {e}");
-                            }
-                        });
+                        m.unmount_with_operation(
+                            gio::MountUnmountFlags::NONE,
+                            Some(&op),
+                            gio::Cancellable::NONE,
+                            |r| {
+                                if let Err(e) = r {
+                                    log::warn!("unmount: {e}");
+                                }
+                            },
+                        );
                     }
                 });
                 if let Some(content) = row.child().and_downcast::<gtk::Box>() {
@@ -144,19 +172,27 @@ impl Places {
                 let go = go.clone();
                 let v = volume.clone();
                 let op = gtk::MountOperation::new(None::<&gtk::Window>);
-                volume.mount(gio::MountMountFlags::NONE, Some(&op), gio::Cancellable::NONE, move |r| match r {
-                    Ok(()) => {
-                        if let Some(m) = v.get_mount() {
-                            go(Location::of(&m.root()));
+                volume.mount(
+                    gio::MountMountFlags::NONE,
+                    Some(&op),
+                    gio::Cancellable::NONE,
+                    move |r| match r {
+                        Ok(()) => {
+                            if let Some(m) = v.get_mount() {
+                                go(Location::of(&m.root()));
+                            }
                         }
-                    }
-                    Err(e) => log::warn!("mount: {e}"),
-                });
+                        Err(e) => log::warn!("mount: {e}"),
+                    },
+                );
             });
         }
 
         self.header(&tr("files-network"));
-        let row = self.row_with_icon(&gio::ThemedIcon::new("network-server-symbolic").upcast(), &tr("files-connect"));
+        let row = self.row_with_icon(
+            &gio::ThemedIcon::new("network-server-symbolic").upcast(),
+            &tr("files-connect"),
+        );
         let weak = Rc::downgrade(self);
         self.on_click(&row, move || {
             if let Some(p) = weak.upgrade() {
@@ -169,11 +205,22 @@ impl Places {
     /// mounted into the tree (NFS into home, and the like).
     fn devices_header(self: &Rc<Self>, hidden: usize) {
         let content = gtk::Box::builder().spacing(5).build();
-        content.append(&gtk::Label::builder().label(tr("files-devices")).xalign(0.0).hexpand(true).css_classes(["places-header"]).build());
+        content.append(
+            &gtk::Label::builder()
+                .label(tr("files-devices"))
+                .xalign(0.0)
+                .hexpand(true)
+                .css_classes(["places-header"])
+                .build(),
+        );
         let all = self.all_mounts.get();
         if all || hidden > 0 {
             let eye = gtk::Button::builder()
-                .icon_name(if all { "view-conceal-symbolic" } else { "view-reveal-symbolic" })
+                .icon_name(if all {
+                    "view-conceal-symbolic"
+                } else {
+                    "view-reveal-symbolic"
+                })
                 .tooltip_text(tr(if all { "files-mounts-hide" } else { "files-mounts-show" }))
                 .css_classes(["flat", "eject"])
                 .build();
@@ -187,13 +234,25 @@ impl Places {
             });
             content.append(&eye);
         }
-        let row = gtk::ListBoxRow::builder().child(&content).activatable(false).selectable(false).build();
+        let row = gtk::ListBoxRow::builder()
+            .child(&content)
+            .activatable(false)
+            .selectable(false)
+            .build();
         self.list.append(&row);
     }
 
     fn header(&self, title: &str) {
-        let label = gtk::Label::builder().label(title).xalign(0.0).css_classes(["places-header"]).build();
-        let row = gtk::ListBoxRow::builder().child(&label).activatable(false).selectable(false).build();
+        let label = gtk::Label::builder()
+            .label(title)
+            .xalign(0.0)
+            .css_classes(["places-header"])
+            .build();
+        let row = gtk::ListBoxRow::builder()
+            .child(&label)
+            .activatable(false)
+            .selectable(false)
+            .build();
         self.list.append(&row);
     }
 
@@ -206,8 +265,18 @@ impl Places {
     fn row_with_icon(&self, icon: &gio::Icon, name: &str) -> gtk::ListBoxRow {
         let content = gtk::Box::builder().spacing(10).build();
         content.append(&gtk::Image::builder().gicon(icon).pixel_size(16).build());
-        content.append(&gtk::Label::builder().label(name).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).build());
-        let row = gtk::ListBoxRow::builder().child(&content).css_classes(["place"]).build();
+        content.append(
+            &gtk::Label::builder()
+                .label(name)
+                .xalign(0.0)
+                .hexpand(true)
+                .ellipsize(gtk::pango::EllipsizeMode::End)
+                .build(),
+        );
+        let row = gtk::ListBoxRow::builder()
+            .child(&content)
+            .css_classes(["place"])
+            .build();
         self.list.append(&row);
         row
     }
@@ -245,12 +314,17 @@ impl Places {
             let op = gtk::MountOperation::new(w.transient_for().as_ref());
             let go = go.clone();
             let f = file.clone();
-            file.mount_enclosing_volume(gio::MountMountFlags::NONE, Some(&op), gio::Cancellable::NONE, move |r| match r {
-                Ok(()) => go(Location::of(&f)),
-                // Mounted already: just go.
-                Err(e) if e.matches(gio::IOErrorEnum::AlreadyMounted) => go(Location::of(&f)),
-                Err(e) => log::warn!("connect {uri}: {e}"),
-            });
+            file.mount_enclosing_volume(
+                gio::MountMountFlags::NONE,
+                Some(&op),
+                gio::Cancellable::NONE,
+                move |r| match r {
+                    Ok(()) => go(Location::of(&f)),
+                    // Mounted already: just go.
+                    Err(e) if e.matches(gio::IOErrorEnum::AlreadyMounted) => go(Location::of(&f)),
+                    Err(e) => log::warn!("connect {uri}: {e}"),
+                },
+            );
             w.close();
         });
         window.present();

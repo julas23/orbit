@@ -33,14 +33,20 @@ impl Home {
     /// The crypttab entry `name`, if there is one.
     pub fn find(name: &str) -> Option<Home> {
         let text = std::fs::read_to_string("/etc/crypttab").ok()?;
-        let source = text.lines().map(str::split_whitespace).find_map(|mut f| (f.next() == Some(name)).then(|| f.next()).flatten())?;
+        let source = text
+            .lines()
+            .map(str::split_whitespace)
+            .find_map(|mut f| (f.next() == Some(name)).then(|| f.next()).flatten())?;
         let device = match source.split_once('=') {
             Some(("UUID", v)) => PathBuf::from("/dev/disk/by-uuid").join(v),
             Some(("PARTUUID", v)) => PathBuf::from("/dev/disk/by-partuuid").join(v),
             Some(("LABEL", v)) => PathBuf::from("/dev/disk/by-label").join(v),
             _ => PathBuf::from(source),
         };
-        Some(Home { name: name.to_owned(), device })
+        Some(Home {
+            name: name.to_owned(),
+            device,
+        })
     }
 
     fn mapper(&self) -> PathBuf {
@@ -58,8 +64,20 @@ impl Home {
     pub fn open(&self, password: &str) -> Result<(), String> {
         if !self.mapper().exists() {
             let device = self.device.to_string_lossy();
-            let ok = run_with_input(&["cryptsetup", "open", "--type", "luks", "--disable-keyring", "--key-file=-", &device, &self.name], password.as_bytes())
-                .map_err(|e| format!("cryptsetup: {e}"))?;
+            let ok = run_with_input(
+                &[
+                    "cryptsetup",
+                    "open",
+                    "--type",
+                    "luks",
+                    "--disable-keyring",
+                    "--key-file=-",
+                    &device,
+                    &self.name,
+                ],
+                password.as_bytes(),
+            )
+            .map_err(|e| format!("cryptsetup: {e}"))?;
             if !ok.0 {
                 log::warn!("{}: not opened: {}", self.name, ok.1.trim());
                 return Err("Authentication failure".into());
@@ -67,7 +85,11 @@ impl Home {
             log::info!("{}: opened", self.name);
         }
         if !mounted("/home") {
-            let status = Command::new("mount").arg("/home").stdin(Stdio::null()).status().map_err(|e| format!("mount: {e}"))?;
+            let status = Command::new("mount")
+                .arg("/home")
+                .stdin(Stdio::null())
+                .status()
+                .map_err(|e| format!("mount: {e}"))?;
             if !status.success() {
                 return Err("/home did not mount (the journal says why)".into());
             }
@@ -83,7 +105,11 @@ impl Home {
         let device = self.device.to_string_lossy().into_owned();
         let mut slots = read_keyslots();
         let old = slots.iter().find(|(u, _)| u == user).map(|(_, s)| *s);
-        let (ok, out) = run_with_input(&["cryptsetup", "open", "--test-passphrase", "-v", "--key-file=-", &device], password.as_bytes()).map_err(|e| e.to_string())?;
+        let (ok, out) = run_with_input(
+            &["cryptsetup", "open", "--test-passphrase", "-v", "--key-file=-", &device],
+            password.as_bytes(),
+        )
+        .map_err(|e| e.to_string())?;
         let slot = if ok {
             let slot = slot_in(&out, "unlocked").ok_or("cryptsetup did not say the keyslot")?;
             if old == Some(slot) {
@@ -103,9 +129,16 @@ impl Home {
         if let Some(old) = kill {
             // The new password, in a keyslot that stays, is the proof
             // cryptsetup asks for (on stdin: never the caller's).
-            let (killed, out) = run_with_input(&["cryptsetup", "luksKillSlot", "--key-file=-", &device, &old.to_string()], password.as_bytes()).map_err(|e| e.to_string())?;
+            let (killed, out) = run_with_input(
+                &["cryptsetup", "luksKillSlot", "--key-file=-", &device, &old.to_string()],
+                password.as_bytes(),
+            )
+            .map_err(|e| e.to_string())?;
             if !killed {
-                return Err(format!("keyslot {slot} added, but the old keyslot {old} stays: {}", out.trim()));
+                return Err(format!(
+                    "keyslot {slot} added, but the old keyslot {old} stays: {}",
+                    out.trim()
+                ));
             }
             log::info!("{user}: old keyslot {old} removed");
         }
@@ -115,10 +148,18 @@ impl Home {
     /// A new keyslot for `password`, from the volume key in the mapper's
     /// table (`--disable-keyring` at open put it there).
     fn add(&self, device: &str, password: &str) -> Result<u32, String> {
-        let table = Command::new("dmsetup").args(["table", "--showkeys", &self.name]).stdin(Stdio::null()).output().map_err(|e| format!("dmsetup: {e}"))?;
+        let table = Command::new("dmsetup")
+            .args(["table", "--showkeys", &self.name])
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| format!("dmsetup: {e}"))?;
         let table = String::from_utf8_lossy(&table.stdout).into_owned();
         // start length crypt cipher KEY iv_offset device offset
-        let hex = table.split_whitespace().nth(4).filter(|k| !k.starts_with(':')).ok_or("the volume key is not in the mapper's table (opened without --disable-keyring)")?;
+        let hex = table
+            .split_whitespace()
+            .nth(4)
+            .filter(|k| !k.starts_with(':'))
+            .ok_or("the volume key is not in the mapper's table (opened without --disable-keyring)")?;
         let key = decode_hex(hex).ok_or("the volume key is not hex")?;
         let bits = (key.len() * 8).to_string();
         let file = PathBuf::from("/run/orbit/home.vk");
@@ -135,7 +176,18 @@ impl Home {
         let slot = free_slot(device)?;
         let result = written.map_err(|e| format!("{}: {e}", file.display())).and_then(|()| {
             let vk = file.to_string_lossy();
-            let args = ["cryptsetup", "luksAddKey", "--key-size", &bits, "--volume-key-file", &vk, "--new-key-slot", &slot.to_string(), "--new-keyfile=-", device];
+            let args = [
+                "cryptsetup",
+                "luksAddKey",
+                "--key-size",
+                &bits,
+                "--volume-key-file",
+                &vk,
+                "--new-key-slot",
+                &slot.to_string(),
+                "--new-keyfile=-",
+                device,
+            ];
             run_with_input(&args, password.as_bytes()).map_err(|e| e.to_string())
         });
         if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(&file) {
@@ -155,7 +207,9 @@ impl Home {
 /// stdin. Nothing to do without an encrypted `/home`; with it shut, the
 /// next login catches up.
 pub fn home_key(config_home: Option<&str>) -> i32 {
-    let Some(home) = config_home.and_then(Home::find) else { return 0 };
+    let Some(home) = config_home.and_then(Home::find) else {
+        return 0;
+    };
     // pam_exec (from passwd) gives no PATH: cryptsetup is in /usr/sbin.
     // Safety: one thread yet, nothing else reads the environment.
     unsafe { std::env::set_var("PATH", "/usr/sbin:/usr/bin:/sbin:/bin") };
@@ -173,7 +227,9 @@ pub fn home_key(config_home: Option<&str>) -> i32 {
         return 0;
     }
     if !home.mapper().exists() {
-        journal(&format!("{user}: /home is shut; its keyslot follows the new password at the next login"));
+        journal(&format!(
+            "{user}: /home is shut; its keyslot follows the new password at the next login"
+        ));
         return 0;
     }
     match home.follow(&user, &password) {
@@ -182,7 +238,9 @@ pub fn home_key(config_home: Option<&str>) -> i32 {
             0
         }
         Err(err) => {
-            journal(&format!("{user}: the /home keyslot did not follow the new password: {err}"));
+            journal(&format!(
+                "{user}: the /home keyslot did not follow the new password: {err}"
+            ));
             // Optional in PAM: the password changed anyway.
             1
         }
@@ -192,19 +250,34 @@ pub fn home_key(config_home: Option<&str>) -> i32 {
 /// To the journal: under pam_exec (quiet) stderr goes nowhere.
 fn journal(message: &str) {
     log::info!("{message}");
-    let _ = Command::new("logger").args(["-t", "orbit-login", "--", message]).stdin(Stdio::null()).status();
+    let _ = Command::new("logger")
+        .args(["-t", "orbit-login", "--", message])
+        .stdin(Stdio::null())
+        .status();
 }
 
 /// The lowest keyslot of `device` no key is in (LUKS2 has 32).
 fn free_slot(device: &str) -> Result<u32, String> {
-    let out = Command::new("cryptsetup").args(["luksDump", "--dump-json-metadata", device]).stdin(Stdio::null()).output().map_err(|e| format!("cryptsetup: {e}"))?;
+    let out = Command::new("cryptsetup")
+        .args(["luksDump", "--dump-json-metadata", device])
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("cryptsetup: {e}"))?;
     let json: serde_json::Value = serde_json::from_slice(&out.stdout).map_err(|e| format!("luksDump: {e}"))?;
-    let used: Vec<u32> = json["keyslots"].as_object().ok_or("luksDump: no keyslots")?.keys().filter_map(|k| k.parse().ok()).collect();
-    (0..32).find(|n| !used.contains(n)).ok_or_else(|| "no free keyslot".into())
+    let used: Vec<u32> = json["keyslots"]
+        .as_object()
+        .ok_or("luksDump: no keyslots")?
+        .keys()
+        .filter_map(|k| k.parse().ok())
+        .collect();
+    (0..32)
+        .find(|n| !used.contains(n))
+        .ok_or_else(|| "no free keyslot".into())
 }
 
 fn mounted(path: &str) -> bool {
-    std::fs::read_to_string("/proc/self/mounts").is_ok_and(|m| m.lines().any(|l| l.split_whitespace().nth(1) == Some(path)))
+    std::fs::read_to_string("/proc/self/mounts")
+        .is_ok_and(|m| m.lines().any(|l| l.split_whitespace().nth(1) == Some(path)))
 }
 
 /// Runs `args` with `input` on stdin: whether it succeeded, and what it
@@ -223,7 +296,11 @@ fn run_with_input(args: &[&str], input: &[u8]) -> std::io::Result<(bool, String)
         let _ = stdin.write_all(input);
     }
     let out = child.wait_with_output()?;
-    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     Ok((out.status.success(), said))
 }
 
@@ -238,7 +315,10 @@ fn slot_in(text: &str, word: &str) -> Option<u32> {
 
 fn decode_hex(hex: &str) -> Option<Vec<u8>> {
     hex.len().is_multiple_of(2).then_some(())?;
-    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok()).collect()
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok())
+        .collect()
 }
 
 fn read_keyslots() -> Vec<(String, u32)> {
@@ -254,7 +334,9 @@ fn read_keyslots() -> Vec<(String, u32)> {
 }
 
 fn write_keyslots(slots: &[(String, u32)]) -> Result<(), String> {
-    let mut text = String::from("# The LUKS keyslot of each user's password on the encrypted /home\n# (orbit-login keeps it; docs/PLANO-DISTRO.md §6.4).\n");
+    let mut text = String::from(
+        "# The LUKS keyslot of each user's password on the encrypted /home\n# (orbit-login keeps it; docs/PLANO-DISTRO.md §6.4).\n",
+    );
     for (user, slot) in slots {
         text.push_str(&format!("{user} {slot}\n"));
     }
@@ -270,7 +352,13 @@ mod tests {
 
     #[test]
     fn cryptsetup_says_the_keyslot() {
-        assert_eq!(slot_in("No usable token is available.\nKey slot 2 unlocked.\nCommand successful.\n", "unlocked"), Some(2));
+        assert_eq!(
+            slot_in(
+                "No usable token is available.\nKey slot 2 unlocked.\nCommand successful.\n",
+                "unlocked"
+            ),
+            Some(2)
+        );
         assert_eq!(slot_in("No key available with this passphrase.\n", "unlocked"), None);
     }
 

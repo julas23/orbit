@@ -256,9 +256,7 @@ impl Canvas {
     fn reorient(&self) {
         let shown = {
             let st = self.state.borrow();
-            st.source
-                .as_ref()
-                .map(|t| self.oriented(t, st.turns, st.mirrored))
+            st.source.as_ref().map(|t| self.oriented(t, st.turns, st.mirrored))
         };
         self.picture.set_paintable(shown.as_ref());
         self.state.borrow_mut().shown = shown;
@@ -281,9 +279,7 @@ impl Canvas {
         }
         snapshot.append_texture(texture, &graphene::Rect::new(-w / 2.0, -h / 2.0, w, h));
         match snapshot.to_node() {
-            Some(node) => {
-                renderer.render_texture(node, Some(&graphene::Rect::new(0.0, 0.0, ow, oh)))
-            }
+            Some(node) => renderer.render_texture(node, Some(&graphene::Rect::new(0.0, 0.0, ow, oh))),
             None => texture.clone(),
         }
     }
@@ -369,10 +365,8 @@ impl Canvas {
                 self.picture.set_content_fit(gtk::ContentFit::Fill);
                 self.picture.set_halign(gtk::Align::Center);
                 self.picture.set_valign(gtk::Align::Center);
-                self.picture.set_size_request(
-                    (w * zoom / s).round() as i32,
-                    (h * zoom / s).round() as i32,
-                );
+                self.picture
+                    .set_size_request((w * zoom / s).round() as i32, (h * zoom / s).round() as i32);
                 self.widget
                     .set_policy(gtk::PolicyType::External, gtk::PolicyType::External);
             }
@@ -381,8 +375,7 @@ impl Canvas {
                 self.picture.set_halign(gtk::Align::Fill);
                 self.picture.set_valign(gtk::Align::Fill);
                 self.picture.set_size_request(-1, -1);
-                self.widget
-                    .set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
+                self.widget.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
             }
         }
         self.update_cursor();
@@ -415,9 +408,6 @@ impl Canvas {
     }
 
     fn viewport(&self) -> (f64, f64) {
-        (
-            f64::from(self.widget.width()),
-            f64::from(self.widget.height()),
-        )
+        (f64::from(self.widget.width()), f64::from(self.widget.height()))
     }
 }

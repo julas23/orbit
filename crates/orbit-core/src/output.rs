@@ -20,12 +20,27 @@ use crate::{config::OutputConfig, state::Orbit};
 /// order they came; the answer is in the same order. The virtual ones
 /// (`is_virtual`) go to the right of all the others, side by side, so a
 /// remote client coming or going moves no local monitor.
-pub fn place(outputs: &[(String, (i32, i32))], config: &HashMap<String, OutputConfig>, is_virtual: impl Fn(&str) -> bool) -> Vec<(i32, i32)> {
+pub fn place(
+    outputs: &[(String, (i32, i32))],
+    config: &HashMap<String, OutputConfig>,
+    is_virtual: impl Fn(&str) -> bool,
+) -> Vec<(i32, i32)> {
     let fixed = |name: &str| config.get(name).and_then(|c| c.position).filter(|_| !is_virtual(name));
     // The free ones start below whatever has a fixed place.
-    let mut y = outputs.iter().filter_map(|(name, (_, h))| fixed(name).map(|(_, fy)| fy + h)).max().unwrap_or(0);
-    let widest = outputs.iter().filter(|(name, _)| !is_virtual(name)).map(|(_, (w, _))| *w).max().unwrap_or(0);
-    let mut free: Vec<usize> = (0..outputs.len()).filter(|i| fixed(&outputs[*i].0).is_none() && !is_virtual(&outputs[*i].0)).collect();
+    let mut y = outputs
+        .iter()
+        .filter_map(|(name, (_, h))| fixed(name).map(|(_, fy)| fy + h))
+        .max()
+        .unwrap_or(0);
+    let widest = outputs
+        .iter()
+        .filter(|(name, _)| !is_virtual(name))
+        .map(|(_, (w, _))| *w)
+        .max()
+        .unwrap_or(0);
+    let mut free: Vec<usize> = (0..outputs.len())
+        .filter(|i| fixed(&outputs[*i].0).is_none() && !is_virtual(&outputs[*i].0))
+        .collect();
     free.sort_by_key(|i| (!internal(&outputs[*i].0), outputs[*i].0.clone()));
     let mut places = vec![(0, 0); outputs.len()];
     for (i, (name, _)) in outputs.iter().enumerate() {
@@ -81,7 +96,11 @@ impl Orbit {
 
     /// The monitor under the pointer: new windows open there.
     pub fn pointer_output(&self) -> Option<Output> {
-        let pos = self.seat.get_pointer().map(|p| p.current_location()).unwrap_or_default();
+        let pos = self
+            .seat
+            .get_pointer()
+            .map(|p| p.current_location())
+            .unwrap_or_default();
         self.output_at(pos)
     }
 
@@ -115,7 +134,9 @@ impl Orbit {
         // Turned and scaled first: both change a monitor's logical size.
         for output in &outputs {
             let config = self.config.outputs.get(&output.name());
-            if let Some(transform) = config.and_then(|o| o.transform.as_deref()).and_then(crate::config::parse_transform)
+            if let Some(transform) = config
+                .and_then(|o| o.transform.as_deref())
+                .and_then(crate::config::parse_transform)
                 && output.current_transform() != transform
             {
                 output.change_current_state(None, Some(transform), None, None);
@@ -129,12 +150,18 @@ impl Orbit {
         let sizes: Vec<(String, (i32, i32))> = outputs
             .iter()
             .map(|o| {
-                let size = self.space.output_geometry(o).map(|g| (g.size.w, g.size.h)).unwrap_or_default();
+                let size = self
+                    .space
+                    .output_geometry(o)
+                    .map(|g| (g.size.w, g.size.h))
+                    .unwrap_or_default();
                 (o.name(), size)
             })
             .collect();
         let virtuals = self.virtual_names();
-        for (output, (x, y)) in outputs.iter().zip(place(&sizes, &self.config.outputs, |name| virtuals.iter().any(|v| v == name))) {
+        for (output, (x, y)) in outputs.iter().zip(place(&sizes, &self.config.outputs, |name| {
+            virtuals.iter().any(|v| v == name)
+        })) {
             output.change_current_state(None, None, None, Some((x, y).into()));
             self.space.map_output(output, (x, y));
         }
@@ -182,7 +209,10 @@ impl Orbit {
             .outputs()
             .map(|o| {
                 let loc = self.space.output_geometry(o).map(|g| g.loc).unwrap_or_default();
-                (o.name(), (virtuals.contains(&o.name()), !internal(&o.name()), loc.y, loc.x))
+                (
+                    o.name(),
+                    (virtuals.contains(&o.name()), !internal(&o.name()), loc.y, loc.x),
+                )
             })
             .collect();
         list.sort_by_key(|(_, key)| *key);
@@ -200,27 +230,49 @@ mod tests {
 
     #[test]
     fn the_laptop_on_top_whatever_came_first() {
-        let places = place(&outputs(&[("HDMI-A-1", 1920, 1080), ("eDP-1", 1920, 1080)]), &HashMap::new(), |_| false);
+        let places = place(
+            &outputs(&[("HDMI-A-1", 1920, 1080), ("eDP-1", 1920, 1080)]),
+            &HashMap::new(),
+            |_| false,
+        );
         assert_eq!(places, vec![(0, 1080), (0, 0)]);
     }
 
     #[test]
     fn a_wider_screen_below_is_centred() {
-        let places = place(&outputs(&[("eDP-1", 1920, 1080), ("HDMI-A-4", 3840, 2160)]), &HashMap::new(), |_| false);
+        let places = place(
+            &outputs(&[("eDP-1", 1920, 1080), ("HDMI-A-4", 3840, 2160)]),
+            &HashMap::new(),
+            |_| false,
+        );
         assert_eq!(places, vec![(960, 0), (0, 1080)]);
     }
 
     #[test]
     fn the_config_wins_and_the_rest_go_below() {
         let mut config = HashMap::new();
-        config.insert("HDMI-A-1".to_string(), OutputConfig { position: Some((0, 0)), ..Default::default() });
-        let places = place(&outputs(&[("eDP-1", 1920, 1080), ("HDMI-A-1", 2560, 1440)]), &config, |_| false);
+        config.insert(
+            "HDMI-A-1".to_string(),
+            OutputConfig {
+                position: Some((0, 0)),
+                ..Default::default()
+            },
+        );
+        let places = place(
+            &outputs(&[("eDP-1", 1920, 1080), ("HDMI-A-1", 2560, 1440)]),
+            &config,
+            |_| false,
+        );
         assert_eq!(places, vec![(320, 1440), (0, 0)]);
     }
 
     #[test]
     fn a_virtual_monitor_goes_to_the_right_and_moves_no_other() {
-        let list = outputs(&[("eDP-1", 1920, 1080), ("HDMI-A-1", 2560, 1440), ("REMOTE-1", 3840, 2160)]);
+        let list = outputs(&[
+            ("eDP-1", 1920, 1080),
+            ("HDMI-A-1", 2560, 1440),
+            ("REMOTE-1", 3840, 2160),
+        ]);
         let places = place(&list, &HashMap::new(), |name| name == "REMOTE-1");
         assert_eq!(places, vec![(320, 0), (0, 1080), (2560, 0)]);
     }

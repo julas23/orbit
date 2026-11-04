@@ -18,11 +18,7 @@
 //! its own channel at once, for the client to measure the way there and
 //! back.
 
-use std::{
-    collections::HashMap,
-    sync::mpsc,
-    thread::JoinHandle,
-};
+use std::{collections::HashMap, sync::mpsc, thread::JoinHandle};
 
 use anyhow::Context;
 use gst::prelude::*;
@@ -45,14 +41,18 @@ impl Lanes {
     /// that gives their input to the session on `output`.
     pub fn open(webrtc: &gst::Element, output: String) -> anyhow::Result<Self> {
         let (inbox, messages) = mpsc::channel::<Value>();
-        let thread = std::thread::Builder::new().name("remote-input".into()).spawn(move || steer(&output, &messages))?;
+        let thread = std::thread::Builder::new()
+            .name("remote-input".into())
+            .spawn(move || steer(&output, &messages))?;
         let make = |label: &str, config: Option<gst::Structure>| -> anyhow::Result<gst_webrtc::WebRTCDataChannel> {
             let channel = webrtc
                 .emit_by_name::<Option<gst_webrtc::WebRTCDataChannel>>("create-data-channel", &[&label, &config])
                 .with_context(|| format!("no data channel {label} (gstreamer1.0-plugins-bad's sctp)"))?;
             let inbox = inbox.clone();
             channel.connect_on_message_string(move |channel, text| {
-                let Some(message) = text.and_then(|t| serde_json::from_str::<Value>(t).ok()) else { return };
+                let Some(message) = text.and_then(|t| serde_json::from_str::<Value>(t).ok()) else {
+                    return;
+                };
                 if message["type"] == "ping" {
                     let _ = channel.send_string_full(Some(&json!({ "type": "pong", "t": message["t"] }).to_string()));
                 } else {
@@ -64,8 +64,20 @@ impl Lanes {
             Ok(channel)
         };
         let input = make("input", None)?;
-        let motion = make("motion", Some(gst::Structure::builder("config").field("ordered", false).field("max-retransmits", 0i32).build()))?;
-        Ok(Self { inbox, thread: Some(thread), _channels: [input, motion] })
+        let motion = make(
+            "motion",
+            Some(
+                gst::Structure::builder("config")
+                    .field("ordered", false)
+                    .field("max-retransmits", 0i32)
+                    .build(),
+            ),
+        )?;
+        Ok(Self {
+            inbox,
+            thread: Some(thread),
+            _channels: [input, motion],
+        })
     }
 
     /// A message from the WebSocket: true if it was input, now given on.
@@ -133,7 +145,9 @@ impl Newest {
             }
             _ => return true,
         };
-        let Some(seq) = message["seq"].as_u64() else { return true };
+        let Some(seq) = message["seq"].as_u64() else {
+            return true;
+        };
         let last = self.0.entry(stream).or_insert(0);
         // The same number again is the position sent once more, at rest.
         if seq < *last {

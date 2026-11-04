@@ -18,7 +18,9 @@ pub fn serve() -> i32 {
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
         let Ok(line) = line else { break };
-        let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(message) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         // Notifications have no id and get no answer.
         let Some(id) = message.get("id").cloned() else { continue };
         let reply = match message["method"].as_str() {
@@ -74,7 +76,9 @@ pub fn serve() -> i32 {
 
 /// Asks the daemon; `true` when the user said yes.
 fn ask(tool: &str, input: &Value) -> bool {
-    let Ok(mut sock) = UnixStream::connect(orbit_aigent::socket_path()) else { return false };
+    let Ok(mut sock) = UnixStream::connect(orbit_aigent::socket_path()) else {
+        return false;
+    };
     let command = Command::Approve {
         tool: tool.to_owned(),
         input: input.clone(),

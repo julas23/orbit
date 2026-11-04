@@ -63,11 +63,7 @@ impl Date {
 
     /// Days since 1970-01-01 (proleptic Gregorian; H. Hinnant's algorithm).
     pub fn ordinal(self) -> i64 {
-        let y = if self.month <= 2 {
-            self.year - 1
-        } else {
-            self.year
-        };
+        let y = if self.month <= 2 { self.year - 1 } else { self.year };
         let era = y.div_euclid(400);
         let yoe = y - era * 400;
         let m = i64::from(self.month);
@@ -120,8 +116,7 @@ pub fn actual_days(a: Date, b: Date) -> i64 {
 pub fn days_360(a: Date, b: Date) -> i64 {
     let d1 = if a.day == 31 { 30 } else { a.day };
     let d2 = if b.day == 31 && d1 >= 30 { 30 } else { b.day };
-    (b.year - a.year) * 360 + (i64::from(b.month) - i64::from(a.month)) * 30 + i64::from(d2)
-        - i64::from(d1)
+    (b.year - a.year) * 360 + (i64::from(b.month) - i64::from(a.month)) * 30 + i64::from(d2) - i64::from(d1)
 }
 
 #[cfg(test)]
@@ -145,10 +140,7 @@ mod tests {
     #[test]
     fn arithmetic() {
         assert_eq!(d(1970, 1, 1).ordinal(), 0);
-        assert_eq!(
-            Date::from_ordinal(d(2026, 10, 19).ordinal()),
-            d(2026, 10, 19)
-        );
+        assert_eq!(Date::from_ordinal(d(2026, 10, 19).ordinal()), d(2026, 10, 19));
         assert_eq!(d(2026, 10, 19).weekday(), 1, "a Monday");
         assert_eq!(d(2004, 5, 14).add_days(120), Some(d(2004, 9, 11)));
         assert_eq!(d(2004, 9, 11).weekday(), 6, "a Saturday");

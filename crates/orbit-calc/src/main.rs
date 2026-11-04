@@ -45,10 +45,7 @@ fn build(app: &gtk::Application, _dir: &ConfigDir) -> anyhow::Result<gtk::Applic
         .resizable(false)
         .build();
 
-    let stack = gtk::Stack::builder()
-        .hhomogeneous(false)
-        .vhomogeneous(false)
-        .build();
+    let stack = gtk::Stack::builder().hhomogeneous(false).vhomogeneous(false).build();
     let pages: [gtk::Widget; 4] = [
         algebraic::new(&window, algebraic::Layout::Standard),
         algebraic::new(&window, algebraic::Layout::Scientific),

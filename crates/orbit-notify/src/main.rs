@@ -28,7 +28,10 @@ thread_local! {
 }
 
 fn main() -> glib::ExitCode {
-    if let Some(command) = std::env::args().nth(1).filter(|a| matches!(a.as_str(), "toggle" | "dnd" | "clear")) {
+    if let Some(command) = std::env::args()
+        .nth(1)
+        .filter(|a| matches!(a.as_str(), "toggle" | "dnd" | "clear"))
+    {
         return match tell(&command) {
             Ok(()) => glib::ExitCode::SUCCESS,
             Err(err) => {
@@ -59,7 +62,10 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::Applica
         _ => None,
     };
     let daemon = daemon::Daemon::start(app, config, monitor)?;
-    let window = daemon.centre().map(|c| c.window.clone()).ok_or_else(|| anyhow::anyhow!("no centre"))?;
+    let window = daemon
+        .centre()
+        .map(|c| c.window.clone())
+        .ok_or_else(|| anyhow::anyhow!("no centre"))?;
     app.connect_shutdown(|_| DAEMON.with(|d| d.borrow().as_ref().map(|d| d.save_now())).unwrap_or(()));
     DAEMON.with(|d| *d.borrow_mut() = Some(daemon));
     Ok(window)

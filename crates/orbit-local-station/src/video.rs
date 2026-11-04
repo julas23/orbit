@@ -112,7 +112,11 @@ pub enum Picture {
     /// On the GPU, as the VA-API decoder left it.
     Dmabuf(Dmabuf),
     /// In memory, rows of `stride` bytes (`Frame::pixels`), XRGB or XBGR.
-    Memory { size: (u32, u32), stride: usize, fourcc: Fourcc },
+    Memory {
+        size: (u32, u32),
+        stride: usize,
+        fourcc: Fourcc,
+    },
 }
 
 impl Frame {
@@ -131,7 +135,12 @@ pub struct Video {
 impl Video {
     /// A receiver for a monitor of `size`: frames go to `events`, the
     /// answer and ICE candidates to `out` (with `wake` rung for each).
-    pub fn new(size: (u32, u32), events: channel::Sender<Event>, out: mpsc::Sender<Value>, wake: Wake) -> anyhow::Result<Self> {
+    pub fn new(
+        size: (u32, u32),
+        events: channel::Sender<Event>,
+        out: mpsc::Sender<Value>,
+        wake: Wake,
+    ) -> anyhow::Result<Self> {
         gst::init()?;
         let pipeline = gst::Pipeline::new();
         let webrtc = gst::ElementFactory::make("webrtcbin")
@@ -159,7 +168,9 @@ impl Video {
                 }
                 let Some(pipeline) = pipeline.upgrade() else { return };
                 // The sound comes on its own pad; losing it leaves the video.
-                let media = pad.current_caps().and_then(|caps| caps.structure(0).and_then(|s| s.get::<String>("media").ok()));
+                let media = pad
+                    .current_caps()
+                    .and_then(|caps| caps.structure(0).and_then(|s| s.get::<String>("media").ok()));
                 if media.as_deref() == Some("audio") {
                     if let Err(err) = crate::audio::play(&pipeline, pad) {
                         log::warn!("station: no sound: {err:#}");
@@ -172,28 +183,41 @@ impl Video {
                 }
             });
         }
-        pipeline.set_state(gst::State::Playing).map_err(|e| anyhow!("starting WebRTC: {e}"))?;
-        Ok(Self { pipeline, webrtc, channels })
+        pipeline
+            .set_state(gst::State::Playing)
+            .map_err(|e| anyhow!("starting WebRTC: {e}"))?;
+        Ok(Self {
+            pipeline,
+            webrtc,
+            channels,
+        })
     }
 
     /// The server's offer: answered, the answer sent on `out`.
     pub fn offer(&self, sdp: &str, out: mpsc::Sender<Value>, wake: Wake) -> anyhow::Result<()> {
         let sdp = gst_sdp::SDPMessage::parse_buffer(sdp.as_bytes()).map_err(|_| anyhow!("a bad offer"))?;
         let offer = gst_webrtc::WebRTCSessionDescription::new(gst_webrtc::WebRTCSDPType::Offer, sdp);
-        self.webrtc.emit_by_name::<()>("set-remote-description", &[&offer, &None::<gst::Promise>]);
+        self.webrtc
+            .emit_by_name::<()>("set-remote-description", &[&offer, &None::<gst::Promise>]);
         let webrtc = self.webrtc.clone();
         let promise = gst::Promise::with_change_func(move |reply| {
             let answer = match reply {
-                Ok(Some(reply)) => reply.value("answer").ok().and_then(|v| v.get::<gst_webrtc::WebRTCSessionDescription>().ok()),
+                Ok(Some(reply)) => reply
+                    .value("answer")
+                    .ok()
+                    .and_then(|v| v.get::<gst_webrtc::WebRTCSessionDescription>().ok()),
                 _ => None,
             };
-            let Some(answer) = answer else { return log::error!("station: WebRTC made no answer") };
+            let Some(answer) = answer else {
+                return log::error!("station: WebRTC made no answer");
+            };
             webrtc.emit_by_name::<()>("set-local-description", &[&answer, &None::<gst::Promise>]);
             let sdp = answer.sdp().as_text().unwrap_or_default();
             let _ = out.send(json!({ "type": "answer", "sdp": sdp }));
             wake.ring();
         });
-        self.webrtc.emit_by_name::<()>("create-answer", &[&None::<gst::Structure>, &promise]);
+        self.webrtc
+            .emit_by_name::<()>("create-answer", &[&None::<gst::Structure>, &promise]);
         Ok(())
     }
 
@@ -207,7 +231,8 @@ impl Video {
         let mline = message["sdpMLineIndex"].as_u64().unwrap_or(0) as u32;
         let candidate = message["candidate"].as_str().unwrap_or_default();
         if !candidate.is_empty() {
-            self.webrtc.emit_by_name::<()>("add-ice-candidate", &[&mline, &candidate]);
+            self.webrtc
+                .emit_by_name::<()>("add-ice-candidate", &[&mline, &candidate]);
         }
     }
 
@@ -229,14 +254,21 @@ impl Drop for Video {
 }
 
 /// The decoding chain behind `webrtcbin`'s new `pad`.
-fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32), events: channel::Sender<Event>) -> anyhow::Result<()> {
+fn decode(
+    pipeline: &gst::Pipeline,
+    pad: &gst::Pad,
+    (width, height): (u32, u32),
+    events: channel::Sender<Event>,
+) -> anyhow::Result<()> {
     let depay = gst::ElementFactory::make("rtph264depay").build()?;
     let parse = gst::ElementFactory::make("h264parse").build()?;
     let chosen = decoder();
     let memory = chosen != Decoder::Vaapi;
     let (decoder, post, caps) = if memory {
         let decoder = if chosen == Decoder::V4l2 {
-            gst::ElementFactory::make("v4l2h264dec").build().context("no V4L2 H.264 decoder")?
+            gst::ElementFactory::make("v4l2h264dec")
+                .build()
+                .context("no V4L2 H.264 decoder")?
         } else {
             // Slices, not frames, in threads: frame threads hold pictures back.
             gst::ElementFactory::make("avdec_h264")
@@ -247,15 +279,21 @@ fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32),
         // The Pi's ISP converts for nothing; the CPU where there is none.
         let post = match gst::ElementFactory::make("v4l2convert").build() {
             Ok(post) if chosen == Decoder::V4l2 => post,
-            _ => gst::ElementFactory::make("videoconvert").property("n-threads", 0u32).build()?,
+            _ => gst::ElementFactory::make("videoconvert")
+                .property("n-threads", 0u32)
+                .build()?,
         };
-        let caps = gst::Caps::builder("video/x-raw").field("format", gst::List::new(["BGRx", "RGBx"])).build();
+        let caps = gst::Caps::builder("video/x-raw")
+            .field("format", gst::List::new(["BGRx", "RGBx"]))
+            .build();
         (decoder, post, caps)
     } else {
         let decoder = gst::ElementFactory::make(&va_element("h264dec"))
             .build()
             .context("no VA-API H.264 decoder (gstreamer1.0-plugins-bad, mesa-va-drivers)")?;
-        let post = gst::ElementFactory::make(&va_element("postproc")).property("add-borders", true).build()?;
+        let post = gst::ElementFactory::make(&va_element("postproc"))
+            .property("add-borders", true)
+            .build()?;
         let caps = gst::Caps::builder("video/x-raw")
             .features([gst_allocators::CAPS_FEATURE_MEMORY_DMABUF])
             .field("format", "DMA_DRM")
@@ -266,21 +304,32 @@ fn decode(pipeline: &gst::Pipeline, pad: &gst::Pad, (width, height): (u32, u32),
             .build();
         (decoder, post, caps)
     };
-    let sink = gst_app::AppSink::builder().caps(&caps).sync(false).max_buffers(1).drop(true).build();
+    let sink = gst_app::AppSink::builder()
+        .caps(&caps)
+        .sync(false)
+        .max_buffers(1)
+        .drop(true)
+        .build();
     // A dmabuf's planes are only known from its VideoMeta: said so to
     // `vapostproc`, which will not hand dmabufs out otherwise.
-    sink.static_pad("sink").context("appsink's pad")?.add_probe(gst::PadProbeType::QUERY_DOWNSTREAM, |_, info| {
-        if let Some(gst::QueryViewMut::Allocation(query)) = info.query_mut().map(|q| q.view_mut()) {
-            query.add_allocation_meta::<gst_video::VideoMeta>(None);
-        }
-        gst::PadProbeReturn::Ok
-    });
+    sink.static_pad("sink")
+        .context("appsink's pad")?
+        .add_probe(gst::PadProbeType::QUERY_DOWNSTREAM, |_, info| {
+            if let Some(gst::QueryViewMut::Allocation(query)) = info.query_mut().map(|q| q.view_mut()) {
+                query.add_allocation_meta::<gst_video::VideoMeta>(None);
+            }
+            gst::PadProbeReturn::Ok
+        });
     let decoded = decoder.static_pad("src").context("the decoder's pad")?;
     sink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
                 let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                let frame = if memory { in_memory(sample, &decoded) } else { frame(sample, &decoded) };
+                let frame = if memory {
+                    in_memory(sample, &decoded)
+                } else {
+                    frame(sample, &decoded)
+                };
                 match frame {
                     Ok(frame) => {
                         let _ = events.send(Event::Frame(frame));
@@ -315,11 +364,18 @@ fn frame(sample: gst::Sample, decoded: &gst::Pad) -> anyhow::Result<Frame> {
     let buffer = sample.buffer().context("no buffer")?;
     let meta = buffer.meta::<gst_video::VideoMeta>().context("no VideoMeta")?;
     let fourcc = Fourcc::try_from(info.fourcc()).map_err(|_| anyhow!("an unknown format {:#x}", info.fourcc()))?;
-    let mut builder = Dmabuf::builder((meta.width() as i32, meta.height() as i32), fourcc, Modifier::from(info.modifier()), DmabufFlags::empty());
+    let mut builder = Dmabuf::builder(
+        (meta.width() as i32, meta.height() as i32),
+        fourcc,
+        Modifier::from(info.modifier()),
+        DmabufFlags::empty(),
+    );
     for plane in 0..meta.n_planes() as usize {
         // Planes share a memory unless there are as many as planes.
         let memory = buffer.peek_memory(plane.min(buffer.n_memory() - 1));
-        let memory = memory.downcast_memory_ref::<gst_allocators::DmaBufMemory>().context("not a dmabuf")?;
+        let memory = memory
+            .downcast_memory_ref::<gst_allocators::DmaBufMemory>()
+            .context("not a dmabuf")?;
         // SAFETY: the fd is the memory's, alive while `sample` is.
         let fd = unsafe { BorrowedFd::borrow_raw(memory.fd()) }.try_clone_to_owned()?;
         let offset = meta.offset()[plane] + memory.offset();
@@ -327,7 +383,11 @@ fn frame(sample: gst::Sample, decoded: &gst::Pad) -> anyhow::Result<Frame> {
     }
     let dmabuf = builder.build().context("an empty dmabuf")?;
     let source = source(decoded, (meta.width(), meta.height()));
-    Ok(Frame { picture: Picture::Dmabuf(dmabuf), source, sample })
+    Ok(Frame {
+        picture: Picture::Dmabuf(dmabuf),
+        source,
+        sample,
+    })
 }
 
 /// A sample in memory, its rows as they are in its buffer.
@@ -346,11 +406,18 @@ fn in_memory(sample: gst::Sample, decoded: &gst::Pad) -> anyhow::Result<Frame> {
         None => ((info.width(), info.height()), info.stride()[0] as usize),
     };
     let source = source(decoded, size);
-    Ok(Frame { picture: Picture::Memory { size, stride, fourcc }, source, sample })
+    Ok(Frame {
+        picture: Picture::Memory { size, stride, fourcc },
+        source,
+        sample,
+    })
 }
 
 /// The server's picture size, from the decoder's caps (`fallback` until
 /// they are known).
 fn source(decoded: &gst::Pad, fallback: (u32, u32)) -> (u32, u32) {
-    decoded.current_caps().and_then(|caps| gst_video::VideoInfo::from_caps(&caps).ok()).map_or(fallback, |info| (info.width(), info.height()))
+    decoded
+        .current_caps()
+        .and_then(|caps| gst_video::VideoInfo::from_caps(&caps).ok())
+        .map_or(fallback, |info| (info.width(), info.height()))
 }

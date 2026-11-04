@@ -27,8 +27,8 @@
 
 use std::{
     io::ErrorKind,
-    os::unix::fs::OpenOptionsExt,
     net::{TcpListener, TcpStream},
+    os::unix::fs::OpenOptionsExt,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -78,7 +78,10 @@ struct Shared {
 
 pub fn serve(port: u16, screen: Screen) -> anyhow::Result<()> {
     // Started outside a session, it would share nothing.
-    anyhow::ensure!(std::env::var_os("WAYLAND_DISPLAY").is_some(), "no session to share: WAYLAND_DISPLAY is not set");
+    anyhow::ensure!(
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        "no session to share: WAYLAND_DISPLAY is not set"
+    );
     gst::init()?;
     let listener = TcpListener::bind(("0.0.0.0", port)).with_context(|| format!("listening on port {port}"))?;
     let shared = Arc::new(Shared {
@@ -138,8 +141,12 @@ fn follow_lock(shared: &Shared) {
         log::error!("remote: orbit-core's socket is gone, quitting");
         std::process::exit(1);
     };
-    let Ok(mut ipc) = orbit_ipc::Connection::open() else { return lost() };
-    let Some(lock) = orbit_ipc::event_type("lock") else { return };
+    let Ok(mut ipc) = orbit_ipc::Connection::open() else {
+        return lost();
+    };
+    let Some(lock) = orbit_ipc::event_type("lock") else {
+        return;
+    };
     if ipc.request(orbit_ipc::SUBSCRIBE, r#"["lock"]"#).is_err() {
         return lost();
     }
@@ -150,7 +157,10 @@ fn follow_lock(shared: &Shared) {
         let change: Value = serde_json::from_slice(&body).unwrap_or_default();
         let locked = change["change"] == "locked";
         if shared.locked.swap(locked, Ordering::SeqCst) != locked {
-            log::info!("remote: the session is {}", if locked { "locked: no pairing" } else { "unlocked" });
+            log::info!(
+                "remote: the session is {}",
+                if locked { "locked: no pairing" } else { "unlocked" }
+            );
         }
         if !locked {
             shared.reveal();
@@ -168,7 +178,10 @@ fn tokens_path() -> std::path::PathBuf {
 }
 
 fn hash(token: &str) -> String {
-    Sha256::digest(token.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(token.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// A token given before (by `remember`).
@@ -207,7 +220,12 @@ fn new_code() -> String {
 fn show_code(code: &str) {
     log::info!("remote: the pairing code is {code}");
     let shown = std::process::Command::new("notify-send")
-        .args(["--app-name=Orbit Remote", "--icon=network-server", "Orbit Remote", &format!("Pairing code: {code}")])
+        .args([
+            "--app-name=Orbit Remote",
+            "--icon=network-server",
+            "Orbit Remote",
+            &format!("Pairing code: {code}"),
+        ])
         .status();
     if let Err(err) = shown {
         log::warn!("remote: notify-send: {err}");
@@ -275,7 +293,11 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
         return Ok(());
     }
     *shared.wrong.lock().unwrap() = 0;
-    let token = if first["remember"] == true { Some(remember()?) } else { None };
+    let token = if first["remember"] == true {
+        Some(remember()?)
+    } else {
+        None
+    };
     paired(ws, shared, token, size(&first))
 }
 
@@ -283,8 +305,19 @@ fn session(mut ws: WebSocket<TcpStream>, shared: &Shared) -> anyhow::Result<()> 
 /// gave one.
 fn size(first: &Value) -> Option<(u32, u32, u32)> {
     let screen = &first["screen"];
-    let side = |name: &str| screen[name].as_u64().and_then(|v| u32::try_from(v).ok()).filter(|v| (64..=7680).contains(v));
-    Some((side("width")?, side("height")?, screen["rate"].as_f64().map_or(60, |r| r.round().clamp(24.0, 240.0) as u32)))
+    let side = |name: &str| {
+        screen[name]
+            .as_u64()
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| (64..=7680).contains(v))
+    };
+    Some((
+        side("width")?,
+        side("height")?,
+        screen["rate"]
+            .as_f64()
+            .map_or(60, |r| r.round().clamp(24.0, 240.0) as u32),
+    ))
 }
 
 /// A virtual monitor of `size` in orbit-core, removed when dropped.
@@ -294,7 +327,10 @@ impl Monitor {
     fn create((width, height, rate): (u32, u32, u32)) -> anyhow::Result<Self> {
         let reply = core_command(&format!("output {VIRTUAL} create {width}x{height}@{rate}"))?;
         if reply[0]["success"] != true {
-            anyhow::bail!("orbit-core made no virtual monitor: {}", reply[0]["error"].as_str().unwrap_or("no answer"));
+            anyhow::bail!(
+                "orbit-core made no virtual monitor: {}",
+                reply[0]["error"].as_str().unwrap_or("no answer")
+            );
         }
         log::info!("remote: a virtual monitor of {width}x{height}@{rate} for the client");
         Ok(Self)
@@ -318,7 +354,12 @@ fn core_command(command: &str) -> anyhow::Result<Value> {
 
 /// A client that gave the right code or a known token: told so (with its
 /// new token, if it asked for one), then streamed to.
-fn paired(mut ws: WebSocket<TcpStream>, shared: &Shared, token: Option<String>, screen: Option<(u32, u32, u32)>) -> anyhow::Result<()> {
+fn paired(
+    mut ws: WebSocket<TcpStream>,
+    shared: &Shared,
+    token: Option<String>,
+    screen: Option<(u32, u32, u32)>,
+) -> anyhow::Result<()> {
     let peer = ws.get_ref().peer_addr()?;
     if shared.busy.swap(true, Ordering::SeqCst) {
         ws.send(Message::text(json!({ "type": "busy" }).to_string()))?;
@@ -345,7 +386,8 @@ fn read_json(ws: &mut WebSocket<TcpStream>) -> anyhow::Result<Value> {
             Ok(Message::Text(text)) => return Ok(serde_json::from_str(&text)?),
             Ok(Message::Close(_)) => anyhow::bail!("closed"),
             Ok(_) => {}
-            Err(tungstenite::Error::Io(err)) if err.kind() == ErrorKind::WouldBlock || err.kind() == ErrorKind::TimedOut => {}
+            Err(tungstenite::Error::Io(err))
+                if err.kind() == ErrorKind::WouldBlock || err.kind() == ErrorKind::TimedOut => {}
             Err(err) => return Err(anyhow!("websocket: {err}")),
         }
     }
@@ -383,8 +425,13 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
             let out = out.clone();
             let w = webrtc.clone();
             let promise = gst::Promise::with_change_func(move |reply| {
-                let Ok(Some(reply)) = reply else { return log::error!("remote: no offer") };
-                let Ok(offer) = reply.value("offer").map(|v| v.get::<gst_webrtc::WebRTCSessionDescription>()) else {
+                let Ok(Some(reply)) = reply else {
+                    return log::error!("remote: no offer");
+                };
+                let Ok(offer) = reply
+                    .value("offer")
+                    .map(|v| v.get::<gst_webrtc::WebRTCSessionDescription>())
+                else {
                     return log::error!("remote: no offer in {reply:?}");
                 };
                 let Ok(offer) = offer else { return };
@@ -411,10 +458,17 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
         let connected = connected.clone();
         webrtc.connect_notify(Some("connection-state"), move |webrtc, _| {
             let state = webrtc.property::<gst_webrtc::WebRTCPeerConnectionState>("connection-state");
-            connected.store(state == gst_webrtc::WebRTCPeerConnectionState::Connected, Ordering::SeqCst);
+            connected.store(
+                state == gst_webrtc::WebRTCPeerConnectionState::Connected,
+                Ordering::SeqCst,
+            );
         });
     }
-    let encoder = Encoder::new(&capture.planes, Tail::WebRtc(webrtc.clone()), screen.map(|(w, h, _)| (w, h)))?;
+    let encoder = Encoder::new(
+        &capture.planes,
+        Tail::WebRtc(webrtc.clone()),
+        screen.map(|(w, h, _)| (w, h)),
+    )?;
     // The input's channels, in the offer with the video; gone with the client.
     let lanes = Lanes::open(&webrtc, capture.name.clone())?;
     encoder.play()?;
@@ -448,7 +502,9 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
 
     ws.get_mut().set_read_timeout(Some(Duration::from_millis(20)))?;
     let result = loop {
-        let sent: Result<(), _> = outbox.try_iter().try_for_each(|message| ws.send(Message::text(message.to_string())));
+        let sent: Result<(), _> = outbox
+            .try_iter()
+            .try_for_each(|message| ws.send(Message::text(message.to_string())));
         if let Err(err) = sent {
             break Err(anyhow!("websocket: {err}"));
         }
@@ -461,7 +517,11 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
             Ok(Message::Text(text)) => serde_json::from_str::<Value>(&text)?,
             Ok(Message::Close(_)) => break Ok(()),
             Ok(_) => continue,
-            Err(tungstenite::Error::Io(err)) if err.kind() == ErrorKind::WouldBlock || err.kind() == ErrorKind::TimedOut => continue,
+            Err(tungstenite::Error::Io(err))
+                if err.kind() == ErrorKind::WouldBlock || err.kind() == ErrorKind::TimedOut =>
+            {
+                continue;
+            }
             Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => break Ok(()),
             Err(err) => break Err(anyhow!("websocket: {err}")),
         };

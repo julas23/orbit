@@ -166,33 +166,76 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
 
     let avatar = gtk::Image::builder().pixel_size(120).css_classes(["avatar"]).build();
     show_avatar(&avatar, &user, &glib::home_dir());
-    let name = gtk::Label::builder().label(real_name.as_deref().unwrap_or(&user)).css_classes(["name"]).build();
+    let name = gtk::Label::builder()
+        .label(real_name.as_deref().unwrap_or(&user))
+        .css_classes(["name"])
+        .build();
     let password = gtk::PasswordEntry::builder()
         .placeholder_text(tr("greet-password"))
         .show_peek_icon(true)
         .css_classes(["password"])
         .build();
-    let message = gtk::Label::builder().css_classes(["message"]).wrap(true).justify(gtk::Justification::Center).build();
-    let local = gtk::ToggleButton::builder().label(tr("greet-local")).active(true).can_focus(false).hexpand(true).build();
-    let remote = gtk::ToggleButton::builder().label(tr("greet-remote")).group(&local).can_focus(false).hexpand(true).build();
-    let modes = gtk::Box::builder().homogeneous(true).css_classes(["modes", "linked"]).visible(false).build();
+    let message = gtk::Label::builder()
+        .css_classes(["message"])
+        .wrap(true)
+        .justify(gtk::Justification::Center)
+        .build();
+    let local = gtk::ToggleButton::builder()
+        .label(tr("greet-local"))
+        .active(true)
+        .can_focus(false)
+        .hexpand(true)
+        .build();
+    let remote = gtk::ToggleButton::builder()
+        .label(tr("greet-remote"))
+        .group(&local)
+        .can_focus(false)
+        .hexpand(true)
+        .build();
+    let modes = gtk::Box::builder()
+        .homogeneous(true)
+        .css_classes(["modes", "linked"])
+        .visible(false)
+        .build();
     modes.append(&local);
     modes.append(&remote);
 
     let login = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
-    for widget in [avatar.upcast_ref::<gtk::Widget>(), name.upcast_ref(), modes.upcast_ref(), password.upcast_ref(), message.upcast_ref()] {
+    for widget in [
+        avatar.upcast_ref::<gtk::Widget>(),
+        name.upcast_ref(),
+        modes.upcast_ref(),
+        password.upcast_ref(),
+        message.upcast_ref(),
+    ] {
         login.append(widget);
     }
-    let question = gtk::Label::builder().css_classes(["question"]).wrap(true).justify(gtk::Justification::Center).build();
+    let question = gtk::Label::builder()
+        .css_classes(["question"])
+        .wrap(true)
+        .justify(gtk::Justification::Center)
+        .build();
     let no = gtk::Button::builder().label(tr("session-no")).hexpand(true).build();
-    let yes = gtk::Button::builder().label(tr("session-yes")).hexpand(true).css_classes(["yes"]).build();
+    let yes = gtk::Button::builder()
+        .label(tr("session-yes"))
+        .hexpand(true)
+        .css_classes(["yes"])
+        .build();
     let answers = gtk::Box::builder().spacing(10).homogeneous(true).build();
     answers.append(&no);
     answers.append(&yes);
-    let confirm = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(20).valign(gtk::Align::Center).css_classes(["confirm"]).build();
+    let confirm = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(20)
+        .valign(gtk::Align::Center)
+        .css_classes(["confirm"])
+        .build();
     confirm.append(&question);
     confirm.append(&answers);
-    let pages = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).vhomogeneous(true).build();
+    let pages = gtk::Stack::builder()
+        .transition_type(gtk::StackTransitionType::Crossfade)
+        .vhomogeneous(true)
+        .build();
     pages.add_named(&login, Some("login"));
     pages.add_named(&confirm, Some("confirm"));
 
@@ -202,8 +245,17 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
         .valign(gtk::Align::Center)
         .css_classes(["card"])
         .build();
-    let others = gtk::Box::builder().spacing(10).halign(gtk::Align::Center).css_classes(["others"]).build();
-    for widget in [time.upcast_ref::<gtk::Widget>(), date.upcast_ref(), pages.upcast_ref(), others.upcast_ref()] {
+    let others = gtk::Box::builder()
+        .spacing(10)
+        .halign(gtk::Align::Center)
+        .css_classes(["others"])
+        .build();
+    for widget in [
+        time.upcast_ref::<gtk::Widget>(),
+        date.upcast_ref(),
+        pages.upcast_ref(),
+        others.upcast_ref(),
+    ] {
         card.append(widget);
     }
     let screen = gtk::Overlay::builder().child(&card).build();
@@ -215,12 +267,23 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
     }
     // Someone to switch to only from a lock the core holds, on a seat
     // Orbit-Login runs.
-    let people = if link.is_some() && orbit_login::available() { orbit_login::users() } else { Vec::new() };
+    let people = if link.is_some() && orbit_login::available() {
+        orbit_login::users()
+    } else {
+        Vec::new()
+    };
     // A session of no one who can log in is the greeter's.
     let greeter = !people.is_empty() && !people.iter().any(|p| p.name == user);
-    let people = if greeter || (people.len() > 1 && people.iter().any(|p| p.name == user)) { people } else { Vec::new() };
+    let people = if greeter || (people.len() > 1 && people.iter().any(|p| p.name == user)) {
+        people
+    } else {
+        Vec::new()
+    };
     // The remote session likewise, with the station installed.
-    let can_station = !greeter && link.is_some() && orbit_login::available() && glib::find_program_in_path("orbit-local-station").is_some();
+    let can_station = !greeter
+        && link.is_some()
+        && orbit_login::available()
+        && glib::find_program_in_path("orbit-local-station").is_some();
     modes.set_visible(can_station);
     let greet = Rc::new(Greet {
         chosen: RefCell::new(user.clone()),
@@ -376,7 +439,10 @@ impl Greet {
         });
         let greet = self.clone();
         glib::spawn_future_local(async move {
-            let result = rx.recv().await.unwrap_or_else(|_| Err(pam::Refused("PAM thread died".into())));
+            let result = rx
+                .recv()
+                .await
+                .unwrap_or_else(|_| Err(pam::Refused("PAM thread died".into())));
             greet.checked(result);
         });
     }
@@ -386,14 +452,21 @@ impl Greet {
     /// greeter's goes away instead.
     fn switch(self: &Rc<Self>, user: String, password: String) {
         let (tx, rx) = async_channel::bounded(1);
-        let request = if self.greeter { orbit_login::Request::Login { user, password } } else { orbit_login::Request::Switch { user, password } };
+        let request = if self.greeter {
+            orbit_login::Request::Login { user, password }
+        } else {
+            orbit_login::Request::Switch { user, password }
+        };
         std::thread::spawn(move || {
             let reply = orbit_login::call(&request);
             let _ = tx.send_blocking(reply);
         });
         let greet = self.clone();
         glib::spawn_future_local(async move {
-            let reply = rx.recv().await.unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
+            let reply = rx
+                .recv()
+                .await
+                .unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
             match reply {
                 Ok(orbit_login::Reply::Ok) if greet.greeter => {
                     log::info!("{} logged in", greet.chosen.borrow());
@@ -429,7 +502,10 @@ impl Greet {
         });
         let greet = self.clone();
         glib::spawn_future_local(async move {
-            let reply = rx.recv().await.unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
+            let reply = rx
+                .recv()
+                .await
+                .unwrap_or_else(|_| Err(std::io::Error::other("thread died")));
             match reply {
                 Ok(orbit_login::Reply::Ok) => {
                     log::info!("the remote session is on screen");
@@ -462,7 +538,9 @@ impl Greet {
     /// The card is for `user` now: their picture and name, and the others
     /// below. Their session starts opening behind this one.
     fn choose(self: &Rc<Self>, user: &str) {
-        let Some(person) = self.people.iter().find(|p| p.name == user) else { return };
+        let Some(person) = self.people.iter().find(|p| p.name == user) else {
+            return;
+        };
         *self.chosen.borrow_mut() = user.to_owned();
         // Another person's session is always local.
         self.modes.set_visible(self.can_station && user == self.me);
@@ -476,9 +554,11 @@ impl Greet {
         }
         if user != self.me && !self.greeter {
             let user = user.to_owned();
-            std::thread::spawn(move || match orbit_login::call(&orbit_login::Request::Prepare { user: user.clone() }) {
-                Ok(orbit_login::Reply::Ok) => log::info!("{user}'s session is ready"),
-                reply => log::warn!("preparing {user}: {reply:?}"),
+            std::thread::spawn(move || {
+                match orbit_login::call(&orbit_login::Request::Prepare { user: user.clone() }) {
+                    Ok(orbit_login::Reply::Ok) => log::info!("{user}'s session is ready"),
+                    reply => log::warn!("preparing {user}: {reply:?}"),
+                }
             });
         }
         self.failures.set(0);
@@ -498,12 +578,20 @@ impl Greet {
         let chosen = self.chosen.borrow().clone();
         for person in self.people.iter().filter(|p| p.name != chosen) {
             let picture = gtk::Image::builder().pixel_size(30).css_classes(["avatar"]).build();
-            let home = if person.name == self.me { glib::home_dir() } else { person.home.clone() };
+            let home = if person.name == self.me {
+                glib::home_dir()
+            } else {
+                person.home.clone()
+            };
             show_avatar(&picture, &person.name, &home);
             let row = gtk::Box::builder().spacing(10).build();
             row.append(&picture);
             row.append(&gtk::Label::new(Some(person.shown())));
-            let button = gtk::Button::builder().child(&row).css_classes(["other"]).can_focus(false).build();
+            let button = gtk::Button::builder()
+                .child(&row)
+                .css_classes(["other"])
+                .can_focus(false)
+                .build();
             let (greet, name) = (self.clone(), person.name.clone());
             button.connect_clicked(move |_| {
                 if !greet.busy.get() {
@@ -532,7 +620,10 @@ impl Greet {
                 log::warn!("password refused: {why}");
                 let failures = self.failures.get() + 1;
                 self.failures.set(failures);
-                let wait = failures.checked_sub(FREE_TRIES).map(|n| MAX_WAIT.min(1 << n.min(5))).unwrap_or(0);
+                let wait = failures
+                    .checked_sub(FREE_TRIES)
+                    .map(|n| MAX_WAIT.min(1 << n.min(5)))
+                    .unwrap_or(0);
                 self.refused(&why, wait);
             }
         }
@@ -540,7 +631,11 @@ impl Greet {
 
     /// Says why, and keeps the field off for `wait` seconds, counting down.
     fn refused(self: &Rc<Self>, why: &str, wait: u64) {
-        let text = if why.contains("Authentication failure") { tr("greet-wrong") } else { why.to_owned() };
+        let text = if why.contains("Authentication failure") {
+            tr("greet-wrong")
+        } else {
+            why.to_owned()
+        };
         if wait == 0 {
             self.message.set_text(&text);
             self.busy.set(false);
@@ -551,7 +646,10 @@ impl Greet {
         let left = Cell::new(wait);
         let greet = self.clone();
         let show = move || {
-            greet.message.set_text(&format!("{text}\n{}", tr_args("greet-wait", &[("seconds", number(left.get() as f64))])));
+            greet.message.set_text(&format!(
+                "{text}\n{}",
+                tr_args("greet-wait", &[("seconds", number(left.get() as f64))])
+            ));
             if left.get() == 0 {
                 greet.message.set_text(&text);
                 greet.busy.set(false);
@@ -578,9 +676,12 @@ fn tick(time: &gtk::Label, date: &gtk::Label) {
 /// A user's picture in `image`: their `~/.face` (if this user may read
 /// it), or AccountsService's, or the theme's generic one.
 fn show_avatar(image: &gtk::Image, user: &str, home: &Path) {
-    match [home.join(".face"), PathBuf::from("/var/lib/AccountsService/icons").join(user)]
-        .into_iter()
-        .find(|p| p.is_file() && std::fs::File::open(p).is_ok())
+    match [
+        home.join(".face"),
+        PathBuf::from("/var/lib/AccountsService/icons").join(user),
+    ]
+    .into_iter()
+    .find(|p| p.is_file() && std::fs::File::open(p).is_ok())
     {
         Some(path) => image.set_from_file(Some(&path)),
         None => image.set_icon_name(Some("avatar-default-symbolic")),

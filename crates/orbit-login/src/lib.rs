@@ -110,14 +110,21 @@ pub fn user_by_uid(uid: u32) -> Option<User> {
 /// Any account of `/etc/passwd`, a system one too (the greeter's).
 pub fn account(name: &str) -> Option<User> {
     let text = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
-    text.lines().find(|l| l.split(':').next() == Some(name)).and_then(parse_any)
+    text.lines()
+        .find(|l| l.split(':').next() == Some(name))
+        .and_then(parse_any)
 }
 
 /// The user whose session opens at boot (`user:` of `/etc/orbit/login.yaml`).
 pub fn default_user() -> Option<String> {
     let text = std::fs::read_to_string(CONFIG).ok()?;
     text.lines().find_map(|l| {
-        let value = l.strip_prefix("user:")?.split('#').next()?.trim().trim_matches(['"', '\'']);
+        let value = l
+            .strip_prefix("user:")?
+            .split('#')
+            .next()?
+            .trim()
+            .trim_matches(['"', '\'']);
         (!value.is_empty()).then(|| value.to_owned())
     })
 }
@@ -125,7 +132,11 @@ pub fn default_user() -> Option<String> {
 fn parse(line: &str) -> Option<User> {
     let user = parse_any(line)?;
     let shell = &user.shell;
-    if !(1000..60000).contains(&user.uid) || shell.ends_with("/nologin") || shell.ends_with("/false") || shell.is_empty() {
+    if !(1000..60000).contains(&user.uid)
+        || shell.ends_with("/nologin")
+        || shell.ends_with("/false")
+        || shell.is_empty()
+    {
         return None;
     }
     Some(user)
@@ -133,7 +144,9 @@ fn parse(line: &str) -> Option<User> {
 
 fn parse_any(line: &str) -> Option<User> {
     let fields: Vec<&str> = line.split(':').collect();
-    let [name, _, uid, gid, gecos, home, shell] = fields[..] else { return None };
+    let [name, _, uid, gid, gecos, home, shell] = fields[..] else {
+        return None;
+    };
     let uid: u32 = uid.parse().ok()?;
     let real = gecos.split(',').next().unwrap_or_default().trim();
     Some(User {
@@ -154,7 +167,10 @@ mod tests {
     fn people_are_told_from_system_accounts() {
         let juliano = parse("juliano:x:1000:1000:Juliano Alves dos Santos,,,:/home/juliano:/bin/bash").unwrap();
         assert_eq!(juliano.shown(), "Juliano Alves dos Santos");
-        assert_eq!(parse("merilin:x:1001:1002::/home/merilin:/bin/bash").unwrap().shown(), "merilin");
+        assert_eq!(
+            parse("merilin:x:1001:1002::/home/merilin:/bin/bash").unwrap().shown(),
+            "merilin"
+        );
         assert!(parse("daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin").is_none());
         assert!(parse("nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin").is_none());
         assert!(parse("ghost:x:1002:1002::/home/ghost:/bin/false").is_none());
@@ -162,12 +178,18 @@ mod tests {
 
     #[test]
     fn requests_are_one_json_line() {
-        let request = Request::Switch { user: "merilin".into(), password: "x".into() };
+        let request = Request::Switch {
+            user: "merilin".into(),
+            password: "x".into(),
+        };
         let text = serde_json::to_string(&request).unwrap();
         assert!(!text.contains('\n'));
         assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request);
         assert_eq!(serde_json::to_string(&Reply::Ok).unwrap(), "\"ok\"");
         let station = Request::Station { password: "x".into() };
-        assert_eq!(serde_json::to_string(&station).unwrap(), r#"{"station":{"password":"x"}}"#);
+        assert_eq!(
+            serde_json::to_string(&station).unwrap(),
+            r#"{"station":{"password":"x"}}"#
+        );
     }
 }

@@ -191,10 +191,7 @@ pub fn new(config: &ClockConfig, form: Form) -> gtk::Widget {
 }
 
 fn label(class: &str, halign: gtk::Align) -> gtk::Label {
-    gtk::Label::builder()
-        .css_classes([class])
-        .halign(halign)
-        .build()
+    gtk::Label::builder().css_classes([class]).halign(halign).build()
 }
 
 /// The configured world clocks, at most [`MAX_WORLD_CLOCKS`], skipping
@@ -241,12 +238,7 @@ fn hourglass(time: &gtk::Label, second: Rc<Cell<i32>>) -> gtk::DrawingArea {
         let left = f64::from(59 - second.get().clamp(0, 59)) / 59.0;
 
         let text = time.as_ref().map_or_else(|| area.color(), |t| t.color());
-        cr.set_source_rgba(
-            text.red().into(),
-            text.green().into(),
-            text.blue().into(),
-            TROUGH_ALPHA,
-        );
+        cr.set_source_rgba(text.red().into(), text.green().into(), text.blue().into(), TROUGH_ALPHA);
         cr.rectangle(0.0, top, f64::from(width), span);
         let _ = cr.fill();
 
@@ -288,8 +280,7 @@ impl State {
             return;
         };
         let l = &self.labels;
-        let fmt =
-            |dt: &glib::DateTime, f: &str| dt.format(f).map(|s| s.to_string()).unwrap_or_default();
+        let fmt = |dt: &glib::DateTime, f: &str| dt.format(f).map(|s| s.to_string()).unwrap_or_default();
 
         l.zone
             .set_label(&self.label.clone().unwrap_or_else(|| abbreviation(&now)));
@@ -317,18 +308,10 @@ impl State {
 
     fn tooltip(&self, now: &glib::DateTime, date: &str) -> String {
         let mut lines = vec![glib::markup_escape_text(date).to_string()];
-        let width = self
-            .zones
-            .iter()
-            .map(|z| z.name.chars().count())
-            .max()
-            .unwrap_or(0);
+        let width = self.zones.iter().map(|z| z.name.chars().count()).max().unwrap_or(0);
         for zone in &self.zones {
             if let Ok(there) = now.to_timezone(&zone.tz) {
-                let time = there
-                    .format("%H:%M")
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
+                let time = there.format("%H:%M").map(|s| s.to_string()).unwrap_or_default();
                 lines.push(format!(
                     "<tt>{:width$}  {time}  {}</tt>",
                     glib::markup_escape_text(&zone.name),
@@ -377,15 +360,11 @@ fn abbreviation(now: &glib::DateTime) -> String {
     }
     let brazil = match glib::TimeZone::local().identifier().as_str() {
         "America/Noronha" => Some("FNT"),
-        "America/Sao_Paulo" | "America/Bahia" | "America/Fortaleza" | "America/Recife"
-        | "America/Belem" | "America/Maceio" | "America/Araguaina" | "America/Santarem" => {
-            Some("BRT")
+        "America/Sao_Paulo" | "America/Bahia" | "America/Fortaleza" | "America/Recife" | "America/Belem"
+        | "America/Maceio" | "America/Araguaina" | "America/Santarem" => Some("BRT"),
+        "America/Manaus" | "America/Cuiaba" | "America/Campo_Grande" | "America/Porto_Velho" | "America/Boa_Vista" => {
+            Some("AMT")
         }
-        "America/Manaus"
-        | "America/Cuiaba"
-        | "America/Campo_Grande"
-        | "America/Porto_Velho"
-        | "America/Boa_Vista" => Some("AMT"),
         "America/Rio_Branco" | "America/Eirunepe" => Some("ACT"),
         _ => None,
     };

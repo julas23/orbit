@@ -63,10 +63,7 @@ impl Preview {
         let icon = gtk::Image::builder().pixel_size(128).build();
         let stack = gtk::Stack::builder().vexpand(true).hexpand(true).build();
         stack.add_named(&picture, Some("image"));
-        stack.add_named(
-            &gtk::ScrolledWindow::builder().child(&code).build(),
-            Some("text"),
-        );
+        stack.add_named(&gtk::ScrolledWindow::builder().child(&code).build(), Some("text"));
         stack.add_named(&video, Some("media"));
         stack.add_named(&gtk::ScrolledWindow::builder().child(&folder).build(), Some("folder"));
         stack.add_named(&icon, Some("icon"));
@@ -92,7 +89,9 @@ impl Preview {
                 }
             };
             set(settings.is_gtk_application_prefer_dark_theme());
-            settings.connect_gtk_application_prefer_dark_theme_notify(move |s| set(s.is_gtk_application_prefer_dark_theme()));
+            settings.connect_gtk_application_prefer_dark_theme_notify(move |s| {
+                set(s.is_gtk_application_prefer_dark_theme())
+            });
         }
         Rc::new(Self {
             widget,
@@ -152,12 +151,17 @@ impl Preview {
                         .collect()
                 })
                 .unwrap_or_default();
-            names.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| orbit_common::natural::natural(&a.1.to_lowercase(), &b.1.to_lowercase())));
+            names.sort_by(|a, b| {
+                b.0.cmp(&a.0)
+                    .then_with(|| orbit_common::natural::natural(&a.1.to_lowercase(), &b.1.to_lowercase()))
+            });
             let _ = tx.send_blocking(names);
         });
         glib::spawn_future_local(async move {
             let Ok(names) = rx.recv().await else { return };
-            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else { return };
+            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else {
+                return;
+            };
             let total = names.len();
             let mut lines: Vec<String> = names
                 .into_iter()
@@ -195,13 +199,19 @@ impl Preview {
         });
         glib::spawn_future_local(async move {
             let Ok(pixels) = rx.recv().await else { return };
-            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else { return };
+            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else {
+                return;
+            };
             match pixels {
                 Some(px) => {
                     let texture = gdk::MemoryTexture::new(
                         px.width,
                         px.height,
-                        if px.alpha { gdk::MemoryFormat::R8g8b8a8 } else { gdk::MemoryFormat::R8g8b8 },
+                        if px.alpha {
+                            gdk::MemoryFormat::R8g8b8a8
+                        } else {
+                            gdk::MemoryFormat::R8g8b8
+                        },
                         &glib::Bytes::from_owned(px.data),
                         px.stride,
                     );
@@ -222,7 +232,8 @@ impl Preview {
         };
         let (w, h) = page.size();
         let k = 600.0 / w.max(1.0);
-        let Ok(surface) = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, (w * k) as i32, (h * k) as i32) else {
+        let Ok(surface) = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, (w * k) as i32, (h * k) as i32)
+        else {
             self.icon(e);
             return;
         };
@@ -256,8 +267,7 @@ impl Preview {
         let (tx, rx) = async_channel::bounded(1);
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
-            let read = std::fs::File::open(&path)
-                .and_then(|f| f.take(TEXT_BYTES as u64).read_to_end(&mut bytes));
+            let read = std::fs::File::open(&path).and_then(|f| f.take(TEXT_BYTES as u64).read_to_end(&mut bytes));
             let text = read.ok().map(|_| match std::str::from_utf8(&bytes) {
                 Ok(t) => t.to_owned(),
                 // Cut mid-character, or Latin-1.
@@ -268,8 +278,14 @@ impl Preview {
         });
         glib::spawn_future_local(async move {
             let Ok(Some(text)) = rx.recv().await else { return };
-            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else { return };
-            let buffer = p.code.buffer().downcast::<sourceview5::Buffer>().expect("a source buffer");
+            let Some(p) = weak.upgrade().filter(|p| p.generation.get() == generation) else {
+                return;
+            };
+            let buffer = p
+                .code
+                .buffer()
+                .downcast::<sourceview5::Buffer>()
+                .expect("a source buffer");
             let language = sourceview5::LanguageManager::default().guess_language(Some(&name), Some(&mime));
             buffer.set_language(language.as_ref());
             buffer.set_text(&text);

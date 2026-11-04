@@ -40,11 +40,31 @@ const KEYS: &[(&str, &str)] = &[
 ];
 
 pub fn show(parent: &gtk::Window) {
-    let grid = gtk::Grid::builder().column_spacing(20).row_spacing(5).css_classes(["help-keys"]).build();
+    let grid = gtk::Grid::builder()
+        .column_spacing(20)
+        .row_spacing(5)
+        .css_classes(["help-keys"])
+        .build();
     for (row, (key, message)) in KEYS.iter().enumerate() {
         let row = row as i32;
-        grid.attach(&gtk::Label::builder().label(*key).xalign(0.0).css_classes(["help-key"]).build(), 0, row, 1, 1);
-        grid.attach(&gtk::Label::builder().label(tr(message)).xalign(0.0).build(), 1, row, 1, 1);
+        grid.attach(
+            &gtk::Label::builder()
+                .label(*key)
+                .xalign(0.0)
+                .css_classes(["help-key"])
+                .build(),
+            0,
+            row,
+            1,
+            1,
+        );
+        grid.attach(
+            &gtk::Label::builder().label(tr(message)).xalign(0.0).build(),
+            1,
+            row,
+            1,
+            1,
+        );
     }
     let window = gtk::Window::builder()
         .transient_for(parent)

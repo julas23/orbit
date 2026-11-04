@@ -147,9 +147,7 @@ pub fn screens(cursor: bool) -> anyhow::Result<Vec<Screen>> {
             .enumerate()
             .map(|(index, g)| {
                 state.names.push(String::new());
-                globals
-                    .registry()
-                    .bind(g.name, g.version.min(4), &qh, index)
+                globals.registry().bind(g.name, g.version.min(4), &qh, index)
             })
             .collect()
     });
@@ -162,10 +160,8 @@ pub fn screens(cursor: bool) -> anyhow::Result<Vec<Screen>> {
         let Some(place) = layout.iter().find(|o| o.active && o.name == name) else {
             continue;
         };
-        let image = capture(
-            &conn, &mut queue, &mut state, &shm, &manager, output, cursor,
-        )
-        .with_context(|| format!("capturing {name}"))?;
+        let image = capture(&conn, &mut queue, &mut state, &shm, &manager, output, cursor)
+            .with_context(|| format!("capturing {name}"))?;
         screens.push(Screen {
             name,
             logical: place.rect.into(),
@@ -204,15 +200,7 @@ fn capture(
     let fd: OwnedFd = rustix::fs::memfd_create("orbit-blink", rustix::fs::MemfdFlags::CLOEXEC)?;
     rustix::fs::ftruncate(&fd, size as u64)?;
     let pool = shm.create_pool(fd.as_fd(), size as i32, &qh, ());
-    let buffer = pool.create_buffer(
-        0,
-        width as i32,
-        height as i32,
-        stride as i32,
-        format,
-        &qh,
-        (),
-    );
+    let buffer = pool.create_buffer(0, width as i32, height as i32, stride as i32, format, &qh, ());
     frame.copy(&buffer);
     conn.flush()?;
     while !state.frame.ready && !state.frame.failed {

@@ -39,7 +39,10 @@ pub enum Event {
     Out(Vec<u8>),
     Err(Vec<u8>),
     /// The command ended with `code`, leaving the shell in `cwd`.
-    Done { code: i32, cwd: PathBuf },
+    Done {
+        code: i32,
+        cwd: PathBuf,
+    },
     /// Everything the command wrote to stderr has come.
     ErrDone,
     /// bash itself is gone (`exit`, killed).
@@ -70,7 +73,11 @@ impl Session {
         grantpt(&master)?;
         unlockpt(&master)?;
         let name = ptsname(&master, Vec::new())?;
-        let slave = rustix::fs::open(name.as_c_str(), OFlags::RDWR | OFlags::NOCTTY | OFlags::CLOEXEC, Mode::empty())?;
+        let slave = rustix::fs::open(
+            name.as_c_str(),
+            OFlags::RDWR | OFlags::NOCTTY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?;
         // Lines end in "\n" only, as a pipe's would.
         let mut termios = tcgetattr(&slave)?;
         termios.output_modes.remove(OutputModes::OPOST);
@@ -78,7 +85,13 @@ impl Session {
         set_size(&master, 200, 50);
 
         let (err_read, err_write) = std::io::pipe()?;
-        let token = format!("orbit-{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.subsec_nanos()));
+        let token = format!(
+            "orbit-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| d.subsec_nanos())
+        );
         let env_file = state.join(format!("env-{}", std::process::id()));
         let mut child = Command::new("bash")
             .args(["--noprofile", "--norc"])
@@ -103,15 +116,30 @@ impl Session {
 
         let out = std::fs::File::from(master.try_clone()?);
         spawn_reader(out, token.clone(), events.clone(), true);
-        spawn_reader(std::fs::File::from(OwnedFd::from(err_read)), token.clone(), events, false);
-        Ok(Self { child, stdin, master, token, env_file })
+        spawn_reader(
+            std::fs::File::from(OwnedFd::from(err_read)),
+            token.clone(),
+            events,
+            false,
+        );
+        Ok(Self {
+            child,
+            stdin,
+            master,
+            token,
+            env_file,
+        })
     }
 
     /// Runs `line`, `cols` × `rows` characters being what the output box
     /// shows.
     pub fn run(&mut self, line: &str, cols: u16, rows: u16) -> std::io::Result<()> {
         set_size(&self.master, cols, rows);
-        let script = format!("eval {} </dev/null\n{}", quote(line), epilogue(&self.token, &self.env_file));
+        let script = format!(
+            "eval {} </dev/null\n{}",
+            quote(line),
+            epilogue(&self.token, &self.env_file)
+        );
         self.stdin.write_all(script.as_bytes())?;
         self.stdin.flush()
     }
@@ -153,7 +181,12 @@ pub fn quote(text: &str) -> String {
 }
 
 fn set_size(master: &impl AsFd, cols: u16, rows: u16) {
-    let size = Winsize { ws_row: rows.max(1), ws_col: cols.max(1), ws_xpixel: 0, ws_ypixel: 0 };
+    let size = Winsize {
+        ws_row: rows.max(1),
+        ws_col: cols.max(1),
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
     if let Err(err) = tcsetwinsize(master, size) {
         log::warn!("term: window size: {err}");
     }
@@ -176,7 +209,10 @@ fn spawn_reader(mut stream: std::fs::File, token: String, events: async_channel:
                     Piece::Mark(rest) if stdout => {
                         let rest = String::from_utf8_lossy(&rest).into_owned();
                         let (code, cwd) = rest.split_once(' ').unwrap_or((&rest, ""));
-                        Event::Done { code: code.trim().parse().unwrap_or(-1), cwd: PathBuf::from(cwd) }
+                        Event::Done {
+                            code: code.trim().parse().unwrap_or(-1),
+                            cwd: PathBuf::from(cwd),
+                        }
                     }
                     // The stderr mark only says stderr has caught up.
                     Piece::Mark(_) => Event::ErrDone,
@@ -209,7 +245,10 @@ impl Scanner {
     fn new(token: &str) -> Self {
         let mut start = vec![0x1e];
         start.extend_from_slice(token.as_bytes());
-        Self { start, pending: Vec::new() }
+        Self {
+            start,
+            pending: Vec::new(),
+        }
     }
 
     fn feed(&mut self, chunk: &[u8]) -> Vec<Piece> {
@@ -229,7 +268,10 @@ impl Scanner {
                     if at > 0 {
                         out.push(Piece::Text(self.pending[..at].to_vec()));
                     }
-                    let mark = self.pending[body..body + end].strip_prefix(b" ").unwrap_or(&self.pending[body..body + end]).to_vec();
+                    let mark = self.pending[body..body + end]
+                        .strip_prefix(b" ")
+                        .unwrap_or(&self.pending[body..body + end])
+                        .to_vec();
                     out.push(Piece::Mark(mark));
                     self.pending.drain(..body + end + 1);
                 }
@@ -274,7 +316,10 @@ mod tests {
         assert_eq!(s.feed(b"hello\n"), vec![Piece::Text(b"hello\n".to_vec())]);
         assert_eq!(s.feed(b"ab\x1e"), vec![Piece::Text(b"ab".to_vec())]);
         assert_eq!(s.feed(b"T 0 /h"), vec![]);
-        assert_eq!(s.feed(b"ome\x1enext"), vec![Piece::Mark(b"0 /home".to_vec()), Piece::Text(b"next".to_vec())]);
+        assert_eq!(
+            s.feed(b"ome\x1enext"),
+            vec![Piece::Mark(b"0 /home".to_vec()), Piece::Text(b"next".to_vec())]
+        );
         // A lone \x1e that is not a mark is text.
         assert_eq!(s.feed(b"\x1ex"), vec![Piece::Text(b"\x1ex".to_vec())]);
     }

@@ -25,36 +25,29 @@ use smithay::{
     utils::{Logical, Point, SERIAL_COUNTER},
     wayland::{
         compositor::{CompositorClientState, CompositorState},
+        cursor_shape::CursorShapeManagerState,
+        idle_inhibit::IdleInhibitManagerState,
         output::OutputManagerState,
+        seat::WaylandFocus,
         selection::{
-            data_device::DataDeviceState, primary_selection::PrimarySelectionState,
-            wlr_data_control::DataControlState,
+            data_device::DataDeviceState, primary_selection::PrimarySelectionState, wlr_data_control::DataControlState,
         },
+        session_lock::SessionLockManagerState,
         shell::{
             wlr_layer::{KeyboardInteractivity, Layer as WlrLayer, WlrLayerShellState},
             xdg::{XdgShellState, decoration::XdgDecorationState},
         },
         shm::ShmState,
-        seat::WaylandFocus,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
         virtual_keyboard::VirtualKeyboardManagerState,
         virtual_pointer::VirtualPointerManagerState,
         xwayland_shell::XWaylandShellState,
-        idle_inhibit::IdleInhibitManagerState,
-        cursor_shape::CursorShapeManagerState,
-        session_lock::SessionLockManagerState,
     },
     xwayland::X11Wm,
 };
 
-use crate::{
-    config::Config,
-    focus::KeyboardFocus,
-    ipc::Ipc,
-    tile,
-    workspace::info,
-};
+use crate::{config::Config, focus::KeyboardFocus, ipc::Ipc, tile, workspace::info};
 
 pub struct Orbit {
     pub start_time: Instant,
@@ -100,7 +93,12 @@ pub struct Orbit {
     pub seat: Seat<Self>,
     /// Globals with nothing to ask of the state: held so they stay
     /// advertised.
-    _globals: (XdgDecorationState, OutputManagerState, ViewporterState, smithay::wayland::fractional_scale::FractionalScaleManagerState),
+    _globals: (
+        XdgDecorationState,
+        OutputManagerState,
+        ViewporterState,
+        smithay::wayland::fractional_scale::FractionalScaleManagerState,
+    ),
 
     /// Where frames go: a window of the host session, or the screen.
     pub backend: Backend,
@@ -164,7 +162,12 @@ pub struct Orbit {
 }
 
 impl Orbit {
-    pub fn new(event_loop: &mut EventLoop<'static, Self>, display: Display<Self>, config: Config, config_path: std::path::PathBuf) -> Self {
+    pub fn new(
+        event_loop: &mut EventLoop<'static, Self>,
+        display: Display<Self>,
+        config: Config,
+        config_path: std::path::PathBuf,
+    ) -> Self {
         let dh = display.handle();
 
         let compositor_state = CompositorState::new::<Self>(&dh);
@@ -200,7 +203,8 @@ impl Orbit {
         let kb = &config.keyboard;
         if let Err(err) = seat.add_keyboard(xkb_config(kb), kb.repeat_delay, kb.repeat_rate) {
             tracing::error!("keyboard {}/{}: {err:?}; using us", kb.layout, kb.variant);
-            seat.add_keyboard(XkbConfig::default(), kb.repeat_delay, kb.repeat_rate).expect("the default keymap");
+            seat.add_keyboard(XkbConfig::default(), kb.repeat_delay, kb.repeat_rate)
+                .expect("the default keymap");
         }
         seat.add_pointer();
 
@@ -236,7 +240,12 @@ impl Orbit {
             primary_selection_state,
             data_control_state,
             seat,
-            _globals: (xdg_decoration_state, output_manager_state, viewporter_state, fractional_scale_state),
+            _globals: (
+                xdg_decoration_state,
+                output_manager_state,
+                viewporter_state,
+                fractional_scale_state,
+            ),
             backend: Backend::None,
             cursor_status: smithay::input::pointer::CursorImageStatus::default_named(),
             cursor,
@@ -276,23 +285,31 @@ impl Orbit {
         let handle = event_loop.handle();
         // Any client leaving: was it the locker (`session_lock`)?
         let (left, source) = make_ping().expect("a ping");
-        handle.insert_source(source, |(), &mut (), state| state.client_left()).expect("the ping in the event loop");
+        handle
+            .insert_source(source, |(), &mut (), state| state.client_left())
+            .expect("the ping in the event loop");
         handle
             .insert_source(socket, move |stream, _, state| {
-                let data = ClientState { left: Some(left.clone()), ..Default::default() };
+                let data = ClientState {
+                    left: Some(left.clone()),
+                    ..Default::default()
+                };
                 if let Err(err) = state.display_handle.insert_client(stream, Arc::new(data)) {
                     tracing::warn!("client refused: {err}");
                 }
             })
             .expect("the socket in the event loop");
         handle
-            .insert_source(Generic::new(display, Interest::READ, Mode::Level), |_, display, state| {
-                // Safety: the display is not dropped while the loop runs.
-                unsafe {
-                    display.get_mut().dispatch_clients(state).unwrap();
-                }
-                Ok(PostAction::Continue)
-            })
+            .insert_source(
+                Generic::new(display, Interest::READ, Mode::Level),
+                |_, display, state| {
+                    // Safety: the display is not dropped while the loop runs.
+                    unsafe {
+                        display.get_mut().dispatch_clients(state).unwrap();
+                    }
+                    Ok(PostAction::Continue)
+                },
+            )
             .expect("the display in the event loop");
         name
     }
@@ -320,7 +337,9 @@ impl Orbit {
 
     /// Notes the keyboard's layouts and which is active.
     pub fn read_layouts(&mut self) {
-        let Some(keyboard) = self.seat.get_keyboard() else { return };
+        let Some(keyboard) = self.seat.get_keyboard() else {
+            return;
+        };
         self.layouts = keyboard.with_xkb_state(self, |ctx| {
             let xkb = ctx.xkb().lock().unwrap();
             let names: Vec<String> = xkb.layouts().map(|l| xkb.layout_name(l).to_owned()).collect();
@@ -330,7 +349,8 @@ impl Orbit {
 
     /// The monitor of the focused workspace.
     pub fn output(&self) -> Option<Output> {
-        self.output_named(&self.focused_output_name()).or_else(|| self.space.outputs().next().cloned())
+        self.output_named(&self.focused_output_name())
+            .or_else(|| self.space.outputs().next().cloned())
     }
 
     /// Draw a new frame when the loop is next idle.
@@ -345,7 +365,9 @@ impl Orbit {
 
     /// The window of a toplevel surface (Wayland or X), wherever it is.
     pub fn window_for(&self, surface: &WlSurface) -> Option<Window> {
-        self.all_windows().find(|w| w.wl_surface().as_deref() == Some(surface)).cloned()
+        self.all_windows()
+            .find(|w| w.wl_surface().as_deref() == Some(surface))
+            .cloned()
     }
 
     /// A new window, Wayland or X: on the monitor under the pointer, in
@@ -371,7 +393,10 @@ impl Orbit {
     /// its neighbour if it had it.
     pub fn remove_window(&mut self, window: &Window) {
         let had_focus = self.focused_window().as_ref() == Some(window) || self.focused_window().is_none();
-        let index = self.workspace_of(window).and_then(|n| self.windows_of(n).iter().position(|w| w == window)).unwrap_or(0);
+        let index = self
+            .workspace_of(window)
+            .and_then(|n| self.windows_of(n).iter().position(|w| w == window))
+            .unwrap_or(0);
         if self.dragging.as_ref() == Some(window) {
             self.dragging = None;
         }
@@ -399,7 +424,9 @@ impl Orbit {
     fn keyboard_target(window: &Window) -> Option<KeyboardFocus> {
         match window.x11_surface() {
             Some(x) => Some(KeyboardFocus::X11(x.clone())),
-            None => window.toplevel().map(|t| KeyboardFocus::Surface(t.wl_surface().clone())),
+            None => window
+                .toplevel()
+                .map(|t| KeyboardFocus::Surface(t.wl_surface().clone())),
         }
     }
 
@@ -417,7 +444,11 @@ impl Orbit {
 
     /// The layer surface (panel, dock…) whose main surface is `surface`.
     pub fn layer_for(&self, surface: &WlSurface) -> Option<LayerSurface> {
-        self.space.outputs().find_map(|o| layer_map_for_output(o).layer_for_surface(surface, WindowSurfaceType::TOPLEVEL).cloned())
+        self.space.outputs().find_map(|o| {
+            layer_map_for_output(o)
+                .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                .cloned()
+        })
     }
 
     /// Lays the windows of each monitor out over what its layer surfaces
@@ -425,8 +456,12 @@ impl Orbit {
     pub fn arrange(&mut self) {
         let shown: Vec<(String, i32)> = self.visible.iter().map(|(o, n)| (o.clone(), *n)).collect();
         for (output, num) in shown {
-            let Some(output) = self.output_named(&output) else { continue };
-            let (Some(area), Some(full)) = (self.usable_area(&output), self.space.output_geometry(&output)) else { continue };
+            let Some(output) = self.output_named(&output) else {
+                continue;
+            };
+            let (Some(area), Some(full)) = (self.usable_area(&output), self.space.output_geometry(&output)) else {
+                continue;
+            };
             self.arrange_on(area, (full.loc.x, full.loc.y, full.size.w, full.size.h), num);
         }
         self.request_render();
@@ -443,21 +478,49 @@ impl Orbit {
             crate::floating::floats(w) && !crate::fullscreen::is_fullscreen(w) && !crate::fullscreen::is_maximized(w)
         });
         let weights: Vec<f64> = tiled.iter().map(|w| info(w).borrow().weight).collect();
-        let layout = self.workspaces.iter().find(|w| w.num == num).map_or(self.config.layout, |w| w.layout);
-        let masters = tile::Master { ratio: self.config.master_ratio, count: self.config.master_count };
+        let layout = self
+            .workspaces
+            .iter()
+            .find(|w| w.num == num)
+            .map_or(self.config.layout, |w| w.layout);
+        let masters = tile::Master {
+            ratio: self.config.master_ratio,
+            count: self.config.master_count,
+        };
         let rects = layout.rects(&weights, area, self.config.gaps, self.config.border, masters);
-        let whole = tile::columns(1, area, self.config.gaps, self.config.border).first().copied().unwrap_or(area);
+        let whole = tile::columns(1, area, self.config.gaps, self.config.border)
+            .first()
+            .copied()
+            .unwrap_or(area);
         tracing::debug!(num, ?area, ?rects, "arrange");
         // The space stacks in the order windows are mapped: the tiled,
         // then the maximized and fullscreen, then the floating.
         let mut placed: Vec<(Window, tile::Rect)> = tiled.into_iter().zip(rects).collect();
         // One at a time: the focused one over the others.
-        let top = (layout == tile::Layout::Monocle).then(|| self.workspaces.iter().find(|w| w.num == num).and_then(|w| w.last_focus.clone())).flatten();
-        placed.sort_by_key(|(w, _)| (crate::fullscreen::is_fullscreen(w) || crate::fullscreen::is_maximized(w), Some(w) == top.as_ref()));
+        let top = (layout == tile::Layout::Monocle)
+            .then(|| {
+                self.workspaces
+                    .iter()
+                    .find(|w| w.num == num)
+                    .and_then(|w| w.last_focus.clone())
+            })
+            .flatten();
+        placed.sort_by_key(|(w, _)| {
+            (
+                crate::fullscreen::is_fullscreen(w) || crate::fullscreen::is_maximized(w),
+                Some(w) == top.as_ref(),
+            )
+        });
         for (window, rect) in placed {
             let fullscreen = crate::fullscreen::is_fullscreen(&window);
             let maximized = crate::fullscreen::is_maximized(&window);
-            let (x, y, w, h) = if fullscreen { full } else if maximized { whole } else { rect };
+            let (x, y, w, h) = if fullscreen {
+                full
+            } else if maximized {
+                whole
+            } else {
+                rect
+            };
             let above = fullscreen || maximized || Some(&window) == top.as_ref();
             info(&window).borrow_mut().rect = (x, y, w, h);
             if let Some(surface) = window.x11_surface() {
@@ -516,7 +579,10 @@ impl Orbit {
         if let Some(w) = &window {
             self.yield_fullscreen(w);
             // Floating, or one of a monocle's: it comes over the others.
-            let monocle = self.workspace_of(w).and_then(|n| self.workspaces.iter().find(|ws| ws.num == n)).is_some_and(|ws| ws.layout == tile::Layout::Monocle);
+            let monocle = self
+                .workspace_of(w)
+                .and_then(|n| self.workspaces.iter().find(|ws| ws.num == n))
+                .is_some_and(|ws| ws.layout == tile::Layout::Monocle);
             if crate::floating::floats(w) || monocle {
                 self.space.raise_element(w, false);
             }
@@ -600,9 +666,15 @@ impl Orbit {
         // An X window's client is XWayland: the program is the window's own
         // process (_NET_WM_PID), never XWayland.
         let pid = match window.x11_surface() {
-            Some(x) => x.pid().map(|pid| pid as i32).ok_or_else(|| "the X window gives no pid".to_string()),
+            Some(x) => x
+                .pid()
+                .map(|pid| pid as i32)
+                .ok_or_else(|| "the X window gives no pid".to_string()),
             None => match window.toplevel().and_then(|t| t.wl_surface().client()) {
-                Some(client) => client.get_credentials(&self.display_handle).map(|c| c.pid).map_err(|e| e.to_string()),
+                Some(client) => client
+                    .get_credentials(&self.display_handle)
+                    .map(|c| c.pid)
+                    .map_err(|e| e.to_string()),
                 None => return,
             },
         };
@@ -654,7 +726,8 @@ impl Orbit {
                 let rel = pos - out.loc.to_f64();
                 map.layer_under(WlrLayer::Top, rel).filter(|l| menu(l)).and_then(|l| {
                     let loc = map.layer_geometry(l)?.loc;
-                    l.surface_under(rel - loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + loc + out.loc).to_f64()))
+                    l.surface_under(rel - loc.to_f64(), WindowSurfaceType::ALL)
+                        .map(|(s, p)| (s, (p + loc + out.loc).to_f64()))
                 })
             };
             let window = || {
@@ -663,7 +736,9 @@ impl Orbit {
                     .filter(|(w, _)| **w == full || w.x11_surface().is_some_and(|x| x.is_override_redirect()))
                     .or_else(|| Some((&full, self.space.element_location(&full)?)))
                     .and_then(|(window, location)| {
-                        window.surface_under(pos - location.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + location).to_f64()))
+                        window
+                            .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
+                            .map(|(s, p)| (s, (p + location).to_f64()))
                     })
             };
             return in_layer(WlrLayer::Overlay).or_else(in_top).or_else(window);
@@ -676,7 +751,9 @@ impl Orbit {
                 .filter(|w| w.x11_surface().is_some_and(|x| x.is_override_redirect()))
                 .find_map(|window| {
                     let location = self.space.element_location(window)?;
-                    window.surface_under(pos - location.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + location).to_f64()))
+                    window
+                        .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
+                        .map(|(s, p)| (s, (p + location).to_f64()))
                 })
         };
         in_layer(WlrLayer::Overlay)
@@ -715,7 +792,10 @@ impl Orbit {
                 child.env("ORBIT_SOCK", path).env("SWAYSOCK", path).env("I3SOCK", path);
             }
             None => {
-                child.env_remove("ORBIT_SOCK").env_remove("SWAYSOCK").env_remove("I3SOCK");
+                child
+                    .env_remove("ORBIT_SOCK")
+                    .env_remove("SWAYSOCK")
+                    .env_remove("I3SOCK");
             }
         }
         match child.spawn() {

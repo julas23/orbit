@@ -82,7 +82,9 @@ impl From<KeyboardFocus> for WlSurface {
     fn from(focus: KeyboardFocus) -> Self {
         match focus {
             KeyboardFocus::Surface(s) => s,
-            KeyboardFocus::X11(x) => x.wl_surface().unwrap_or_else(|| unreachable!("menus have Wayland parents")),
+            KeyboardFocus::X11(x) => x
+                .wl_surface()
+                .unwrap_or_else(|| unreachable!("menus have Wayland parents")),
         }
     }
 }
@@ -102,7 +104,15 @@ impl KeyboardTarget<Orbit> for KeyboardFocus {
         }
     }
 
-    fn key(&self, seat: &Seat<Orbit>, data: &mut Orbit, key: KeysymHandle<'_>, state: KeyState, serial: Serial, time: smithay::backend::input::InputTime) {
+    fn key(
+        &self,
+        seat: &Seat<Orbit>,
+        data: &mut Orbit,
+        key: KeysymHandle<'_>,
+        state: KeyState,
+        serial: Serial,
+        time: smithay::backend::input::InputTime,
+    ) {
         match self {
             Self::Surface(s) => KeyboardTarget::key(s, seat, data, key, state, serial, time),
             Self::X11(x) => KeyboardTarget::key(x, seat, data, key, state, serial, time),

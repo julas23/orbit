@@ -12,8 +12,14 @@ use glam::{Affine2, Mat3, Vec2};
 use smithay::{
     backend::renderer::{
         Texture,
-        element::{Element, Id, Kind, RenderElement, UnderlyingStorage, surface::WaylandSurfaceRenderElement, surface::WaylandSurfaceTexture},
-        gles::{GlesError, GlesFrame, GlesPixelProgram, GlesRenderer, GlesTexProgram, Uniform, UniformName, UniformType, UniformValue},
+        element::{
+            Element, Id, Kind, RenderElement, UnderlyingStorage, surface::WaylandSurfaceRenderElement,
+            surface::WaylandSurfaceTexture,
+        },
+        gles::{
+            GlesError, GlesFrame, GlesPixelProgram, GlesRenderer, GlesTexProgram, Uniform, UniformName, UniformType,
+            UniformValue,
+        },
         utils::{CommitCounter, DamageSet, OpaqueRegions},
     },
     utils::{Buffer, Physical, Point, Rectangle, Scale, Size, Transform, user_data::UserDataMap},
@@ -139,7 +145,13 @@ impl Shaders {
         )?;
         let (down, up) = crate::eyes::compile(renderer)?;
         let card = crate::cards::compile(renderer)?;
-        Ok(Self { clip, border, down, up, card })
+        Ok(Self {
+            clip,
+            border,
+            down,
+            up,
+            card,
+        })
     }
 }
 
@@ -164,13 +176,28 @@ pub struct RoundedElement {
 }
 
 impl RoundedElement {
-    pub fn new(inner: WaylandSurfaceRenderElement<GlesRenderer>, program: GlesTexProgram, window: Rectangle<i32, Physical>, radius: f32) -> Self {
-        Self { inner, program, window, radius }
+    pub fn new(
+        inner: WaylandSurfaceRenderElement<GlesRenderer>,
+        program: GlesTexProgram,
+        window: Rectangle<i32, Physical>,
+        radius: f32,
+    ) -> Self {
+        Self {
+            inner,
+            program,
+            window,
+            radius,
+        }
     }
 
     /// Whether the surface reaches into a corner at all; when it does not,
     /// it is drawn as it is.
-    pub fn needs_clip(inner: &WaylandSurfaceRenderElement<GlesRenderer>, window: Rectangle<i32, Physical>, radius: i32, scale: Scale<f64>) -> bool {
+    pub fn needs_clip(
+        inner: &WaylandSurfaceRenderElement<GlesRenderer>,
+        window: Rectangle<i32, Physical>,
+        radius: i32,
+        scale: Scale<f64>,
+    ) -> bool {
         let geo = inner.geometry(scale);
         corners(window, radius).iter().any(|c| c.overlaps(geo))
     }
@@ -225,7 +252,11 @@ impl Element for RoundedElement {
             c.loc -= origin;
             c
         });
-        self.inner.opaque_regions(scale).into_iter().flat_map(|r| r.subtract_rects(cut)).collect()
+        self.inner
+            .opaque_regions(scale)
+            .into_iter()
+            .flat_map(|r| r.subtract_rects(cut))
+            .collect()
     }
 
     fn alpha(&self) -> f32 {
@@ -250,14 +281,29 @@ impl RenderElement<GlesRenderer> for RoundedElement {
         let WaylandSurfaceTexture::Texture(texture) = self.inner.texture() else {
             return self.inner.draw(frame, src, dst, damage, opaque_regions, cache);
         };
-        let Some(to_tex) = texture_mat(src, dst, texture.size(), self.inner.transform(), texture.is_y_inverted()) else {
+        let Some(to_tex) = texture_mat(
+            src,
+            dst,
+            texture.size(),
+            self.inner.transform(),
+            texture.is_y_inverted(),
+        ) else {
             return self.inner.draw(frame, src, dst, damage, opaque_regions, cache);
         };
         // Texture coordinates → pixels in `dst` → pixels in the window.
-        let offset = Vec2::new((dst.loc.x - self.window.loc.x) as f32, (dst.loc.y - self.window.loc.y) as f32);
+        let offset = Vec2::new(
+            (dst.loc.x - self.window.loc.x) as f32,
+            (dst.loc.y - self.window.loc.y) as f32,
+        );
         let input_to_geo = Mat3::from_translation(offset) * to_tex.inverse();
         let uniforms = vec![
-            Uniform::new("input_to_geo", UniformValue::Matrix3x3 { matrices: vec![input_to_geo.to_cols_array()], transpose: false }),
+            Uniform::new(
+                "input_to_geo",
+                UniformValue::Matrix3x3 {
+                    matrices: vec![input_to_geo.to_cols_array()],
+                    transpose: false,
+                },
+            ),
             Uniform::new("geo_size", (self.window.size.w as f32, self.window.size.h as f32)),
             Uniform::new("radius", self.radius),
         ];
@@ -275,7 +321,13 @@ impl RenderElement<GlesRenderer> for RoundedElement {
 /// What the renderer turns a pixel of `dst` (from its corner) into: a
 /// texture coordinate. As Smithay's `build_texture_mat`, plus the flip of
 /// a texture stored upside down.
-fn texture_mat(src: Rectangle<f64, Buffer>, dst: Rectangle<i32, Physical>, texture: Size<i32, Buffer>, transform: Transform, y_inverted: bool) -> Option<Mat3> {
+fn texture_mat(
+    src: Rectangle<f64, Buffer>,
+    dst: Rectangle<i32, Physical>,
+    texture: Size<i32, Buffer>,
+    transform: Transform,
+    y_inverted: bool,
+) -> Option<Mat3> {
     if dst.size.is_empty() || src.size.is_empty() || texture.is_empty() {
         return None;
     }

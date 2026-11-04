@@ -93,7 +93,9 @@ impl Prompter {
             registration: RefCell::default(),
         });
         let node = gio::DBusNodeInfo::for_xml(XML)?;
-        let iface = node.lookup_interface("org.gnome.keyring.internal.Prompter").ok_or_else(|| anyhow::anyhow!("no interface in the description"))?;
+        let iface = node
+            .lookup_interface("org.gnome.keyring.internal.Prompter")
+            .ok_or_else(|| anyhow::anyhow!("no interface in the description"))?;
         let weak = Rc::downgrade(&prompter);
         let id = prompter
             .conn
@@ -102,7 +104,10 @@ impl Prompter {
                 let Some(prompter) = weak.upgrade() else { return };
                 let Some(sender) = sender else { return };
                 let path = params.child_value(0).str().unwrap_or_default().to_owned();
-                let callback = Callback { name: sender.to_owned(), path };
+                let callback = Callback {
+                    name: sender.to_owned(),
+                    path,
+                };
                 match method {
                     "BeginPrompting" => prompter.begin(callback, invocation),
                     "PerformPrompt" => prompter.perform(callback, &params, invocation),
@@ -120,7 +125,8 @@ impl Prompter {
     }
 
     fn known(&self, callback: &Callback) -> bool {
-        self.waiting.borrow().contains(callback) || self.active.borrow().as_ref().is_some_and(|a| &a.callback == callback)
+        self.waiting.borrow().contains(callback)
+            || self.active.borrow().as_ref().is_some_and(|a| &a.callback == callback)
     }
 
     fn begin(self: &Rc<Self>, callback: Callback, invocation: gio::DBusMethodInvocation) {
@@ -131,12 +137,20 @@ impl Prompter {
         log::info!("prompting begun by {} {}", callback.name, callback.path);
         if !self.watches.borrow().contains_key(&callback.name) {
             let weak = Rc::downgrade(self);
-            let watch = gio::bus_watch_name_on_connection(&self.conn, &callback.name, gio::BusNameWatcherFlags::NONE, |_, _, _| {}, move |_, name| {
-                if let Some(prompter) = weak.upgrade() {
-                    prompter.vanished(name);
-                }
-            });
-            self.watches.borrow_mut().insert(callback.name.clone(), Box::new(move || gio::bus_unwatch_name(watch)));
+            let watch = gio::bus_watch_name_on_connection(
+                &self.conn,
+                &callback.name,
+                gio::BusNameWatcherFlags::NONE,
+                |_, _, _| {},
+                move |_, name| {
+                    if let Some(prompter) = weak.upgrade() {
+                        prompter.vanished(name);
+                    }
+                },
+            );
+            self.watches
+                .borrow_mut()
+                .insert(callback.name.clone(), Box::new(move || gio::bus_unwatch_name(watch)));
         }
         self.waiting.borrow_mut().push_back(callback);
         self.hold.borrow_mut().get_or_insert_with(|| self.app.hold());
@@ -163,14 +177,22 @@ impl Prompter {
             }
         };
         let sent = exchange.begin();
-        *self.active.borrow_mut() = Some(Active { callback, exchange, props: Props::default(), ready: false, dialog: None });
+        *self.active.borrow_mut() = Some(Active {
+            callback,
+            exchange,
+            props: Props::default(),
+            ready: false,
+            dialog: None,
+        });
         self.ready("", HashMap::new(), sent);
     }
 
     /// `PromptReady` to the active caller; it may ask again once the call
     /// went through.
     fn ready(self: &Rc<Self>, reply: &str, changed: HashMap<String, glib::Variant>, exchange: String) {
-        let Some(callback) = self.active.borrow().as_ref().map(|a| a.callback.clone()) else { return };
+        let Some(callback) = self.active.borrow().as_ref().map(|a| a.callback.clone()) else {
+            return;
+        };
         let weak = Rc::downgrade(self);
         let delivered = callback.clone();
         self.conn.call(
@@ -187,7 +209,12 @@ impl Prompter {
                 let Some(prompter) = weak.upgrade() else { return };
                 match result {
                     Ok(_) => {
-                        if let Some(active) = prompter.active.borrow_mut().as_mut().filter(|a| a.callback == delivered) {
+                        if let Some(active) = prompter
+                            .active
+                            .borrow_mut()
+                            .as_mut()
+                            .filter(|a| a.callback == delivered)
+                        {
                             active.ready = true;
                         }
                     }
@@ -258,7 +285,10 @@ impl Prompter {
             let (reply, secret) = match &answer {
                 Answer::Password(password) => {
                     if active.props.password_new {
-                        changed.insert("password-strength".to_owned(), i32::from(!password.is_empty()).to_variant());
+                        changed.insert(
+                            "password-strength".to_owned(),
+                            i32::from(!password.is_empty()).to_variant(),
+                        );
                     }
                     ("yes", Some(password.as_bytes()))
                 }
@@ -294,7 +324,18 @@ impl Prompter {
     }
 
     fn done(&self, callback: &Callback) {
-        self.conn.call(Some(&callback.name), &callback.path, CALLBACK, "PromptDone", None, None, gio::DBusCallFlags::NO_AUTO_START, -1, gio::Cancellable::NONE, |_| {});
+        self.conn.call(
+            Some(&callback.name),
+            &callback.path,
+            CALLBACK,
+            "PromptDone",
+            None,
+            None,
+            gio::DBusCallFlags::NO_AUTO_START,
+            -1,
+            gio::Cancellable::NONE,
+            |_| {},
+        );
     }
 
     /// A caller left the bus: its prompts end, unanswered.
@@ -305,7 +346,12 @@ impl Prompter {
             unwatch();
         }
         self.waiting.borrow_mut().retain(|c| c.name != name);
-        let gone = self.active.borrow().as_ref().map(|a| a.callback.clone()).filter(|c| c.name == name);
+        let gone = self
+            .active
+            .borrow()
+            .as_ref()
+            .map(|a| a.callback.clone())
+            .filter(|c| c.name == name);
         if let Some(callback) = gone {
             self.stop(&callback, false);
         }

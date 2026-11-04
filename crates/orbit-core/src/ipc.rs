@@ -10,15 +10,18 @@
 use std::{
     collections::HashMap,
     io::{ErrorKind, Read, Write},
-    os::unix::{fs::MetadataExt, net::{UnixListener, UnixStream}},
+    os::unix::{
+        fs::MetadataExt,
+        net::{UnixListener, UnixStream},
+    },
     path::PathBuf,
 };
 
 use orbit_ipc as proto;
 use serde_json::{Value, json};
 use smithay::{
-    output::Output,
     desktop::Window,
+    output::Output,
     reexports::{
         calloop::{EventLoop, Interest, Mode, PostAction, generic::Generic},
         wayland_server::Resource,
@@ -60,7 +63,9 @@ impl Drop for Ipc {
 
 /// Opens the socket and puts it in the event loop.
 pub fn listen(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> anyhow::Result<()> {
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).ok_or_else(|| anyhow::anyhow!("XDG_RUNTIME_DIR is not set"))?;
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("XDG_RUNTIME_DIR is not set"))?;
     let uid = std::fs::metadata(&runtime)?.uid();
     remove_stale(&runtime, uid);
     let path = runtime.join(format!("orbit-ipc.{uid}.{}.sock", std::process::id()));
@@ -71,19 +76,22 @@ pub fn listen(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> 
     tracing::info!("IPC on {}", path.display());
     event_loop
         .handle()
-        .insert_source(Generic::new(listener, Interest::READ, Mode::Level), |_, listener, state| {
-            loop {
-                match listener.accept() {
-                    Ok((stream, _)) => accept(state, stream),
-                    Err(err) if err.kind() == ErrorKind::WouldBlock => break,
-                    Err(err) => {
-                        tracing::warn!("IPC accept: {err}");
-                        break;
+        .insert_source(
+            Generic::new(listener, Interest::READ, Mode::Level),
+            |_, listener, state| {
+                loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => accept(state, stream),
+                        Err(err) if err.kind() == ErrorKind::WouldBlock => break,
+                        Err(err) => {
+                            tracing::warn!("IPC accept: {err}");
+                            break;
+                        }
                     }
                 }
-            }
-            Ok(PostAction::Continue)
-        })
+                Ok(PostAction::Continue)
+            },
+        )
         .map_err(|e| anyhow::anyhow!("IPC socket in the event loop: {e}"))?;
     Ok(())
 }
@@ -91,10 +99,14 @@ pub fn listen(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> 
 /// Sockets left by cores that were killed (a signal skips the cleanup).
 fn remove_stale(runtime: &std::path::Path, uid: u32) {
     let prefix = format!("orbit-ipc.{uid}.");
-    let Ok(entries) = std::fs::read_dir(runtime) else { return };
+    let Ok(entries) = std::fs::read_dir(runtime) else {
+        return;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        let Some(pid) = name.strip_prefix(&prefix).and_then(|r| r.strip_suffix(".sock")) else { continue };
+        let Some(pid) = name.strip_prefix(&prefix).and_then(|r| r.strip_suffix(".sock")) else {
+            continue;
+        };
         if !std::path::Path::new("/proc").join(pid).exists() {
             let _ = std::fs::remove_file(entry.path());
         }
@@ -102,57 +114,76 @@ fn remove_stale(runtime: &std::path::Path, uid: u32) {
 }
 
 fn accept(state: &mut Orbit, stream: UnixStream) {
-    let (Ok(reader), Ok(())) = (stream.try_clone(), stream.set_nonblocking(true)) else { return };
-    let uid = smithay::reexports::rustix::net::sockopt::socket_peercred(&stream).ok().map(|c| c.uid.as_raw());
+    let (Ok(reader), Ok(())) = (stream.try_clone(), stream.set_nonblocking(true)) else {
+        return;
+    };
+    let uid = smithay::reexports::rustix::net::sockopt::socket_peercred(&stream)
+        .ok()
+        .map(|c| c.uid.as_raw());
     let id = state.ipc.next;
     state.ipc.next += 1;
-    state.ipc.clients.insert(id, Client { stream, input: Vec::new(), output: Vec::new(), events: Vec::new(), uid });
+    state.ipc.clients.insert(
+        id,
+        Client {
+            stream,
+            input: Vec::new(),
+            output: Vec::new(),
+            events: Vec::new(),
+            uid,
+        },
+    );
     let handle = state.loop_handle.clone();
-    let inserted = handle.insert_source(Generic::new(reader, Interest::READ, Mode::Level), move |_, reader, state| {
-        let mut chunk = [0u8; 8192];
-        // Safety: the stream stays open for as long as the source exists.
-        let read = unsafe { reader.get_mut().read(&mut chunk) };
-        match read {
-            Ok(0) => {
-                state.ipc.clients.remove(&id);
-                return Ok(PostAction::Remove);
-            }
-            Ok(n) => {
-                if let Some(client) = state.ipc.clients.get_mut(&id) {
-                    client.input.extend_from_slice(&chunk[..n]);
-                }
-            }
-            Err(err) if err.kind() == ErrorKind::WouldBlock || err.kind() == ErrorKind::Interrupted => return Ok(PostAction::Continue),
-            Err(_) => {
-                state.ipc.clients.remove(&id);
-                return Ok(PostAction::Remove);
-            }
-        }
-        loop {
-            let message = match state.ipc.clients.get_mut(&id).map(|c| proto::decode(&mut c.input)) {
-                Some(Ok(Some(m))) => m,
-                Some(Ok(None)) => break,
-                Some(Err(_)) | None => {
+    let inserted = handle.insert_source(
+        Generic::new(reader, Interest::READ, Mode::Level),
+        move |_, reader, state| {
+            let mut chunk = [0u8; 8192];
+            // Safety: the stream stays open for as long as the source exists.
+            let read = unsafe { reader.get_mut().read(&mut chunk) };
+            match read {
+                Ok(0) => {
                     state.ipc.clients.remove(&id);
                     return Ok(PostAction::Remove);
                 }
-            };
-            let (kind, payload) = message;
-            let reply = state.ipc_request(id, kind, &payload);
-            state.ipc_send(id, kind, &reply);
-            // Orbit's own: the `lock` event, subscribed to, is sent once at
-            // once with the state now, so a client started behind the lock
-            // (orbit-aigent) knows it is there.
-            if kind == proto::SUBSCRIBE
-                && let Some(lock) = proto::event_type("lock")
-                && serde_json::from_slice::<Vec<String>>(&payload).is_ok_and(|names| names.iter().any(|n| n == "lock"))
-            {
-                let change = if state.locked() { "locked" } else { "unlocked" };
-                state.ipc_send(id, lock, &serde_json::json!({ "change": change }));
+                Ok(n) => {
+                    if let Some(client) = state.ipc.clients.get_mut(&id) {
+                        client.input.extend_from_slice(&chunk[..n]);
+                    }
+                }
+                Err(err) if err.kind() == ErrorKind::WouldBlock || err.kind() == ErrorKind::Interrupted => {
+                    return Ok(PostAction::Continue);
+                }
+                Err(_) => {
+                    state.ipc.clients.remove(&id);
+                    return Ok(PostAction::Remove);
+                }
             }
-        }
-        Ok(PostAction::Continue)
-    });
+            loop {
+                let message = match state.ipc.clients.get_mut(&id).map(|c| proto::decode(&mut c.input)) {
+                    Some(Ok(Some(m))) => m,
+                    Some(Ok(None)) => break,
+                    Some(Err(_)) | None => {
+                        state.ipc.clients.remove(&id);
+                        return Ok(PostAction::Remove);
+                    }
+                };
+                let (kind, payload) = message;
+                let reply = state.ipc_request(id, kind, &payload);
+                state.ipc_send(id, kind, &reply);
+                // Orbit's own: the `lock` event, subscribed to, is sent once at
+                // once with the state now, so a client started behind the lock
+                // (orbit-aigent) knows it is there.
+                if kind == proto::SUBSCRIBE
+                    && let Some(lock) = proto::event_type("lock")
+                    && serde_json::from_slice::<Vec<String>>(&payload)
+                        .is_ok_and(|names| names.iter().any(|n| n == "lock"))
+                {
+                    let change = if state.locked() { "locked" } else { "unlocked" };
+                    state.ipc_send(id, lock, &serde_json::json!({ "change": change }));
+                }
+            }
+            Ok(PostAction::Continue)
+        },
+    );
     if inserted.is_err() {
         state.ipc.clients.remove(&id);
     }
@@ -200,7 +231,13 @@ impl Orbit {
     /// built only when someone listens.
     fn emit(&mut self, name: &str, body: impl FnOnce(&Orbit) -> Value) {
         let Some(kind) = proto::event_type(name) else { return };
-        let ids: Vec<u64> = self.ipc.clients.iter().filter(|(_, c)| c.events.contains(&kind)).map(|(id, _)| *id).collect();
+        let ids: Vec<u64> = self
+            .ipc
+            .clients
+            .iter()
+            .filter(|(_, c)| c.events.contains(&kind))
+            .map(|(id, _)| *id)
+            .collect();
         if ids.is_empty() {
             return;
         }
@@ -212,13 +249,19 @@ impl Orbit {
 
     /// A `workspace` event: "init", "focus", "empty"…
     pub fn workspace_event(&mut self, change: &str, num: i32, old: Option<i32>) {
-        self.emit("workspace", |s| json!({ "change": change, "current": s.workspace_json(num), "old": old.map(|o| s.workspace_json(o)) }));
+        self.emit(
+            "workspace",
+            |s| json!({ "change": change, "current": s.workspace_json(num), "old": old.map(|o| s.workspace_json(o)) }),
+        );
     }
 
     /// A `window` event: "new", "close", "focus", "title", "move".
     pub fn window_event(&mut self, change: &str, window: &Window) {
         let window = window.clone();
-        self.emit("window", |s| json!({ "change": change, "container": s.window_json(&window) }));
+        self.emit(
+            "window",
+            |s| json!({ "change": change, "container": s.window_json(&window) }),
+        );
     }
 
     /// An `output` event: a monitor came, went or moved. sway says no more.
@@ -234,7 +277,10 @@ impl Orbit {
     }
 
     pub fn input_event(&mut self) {
-        self.emit("input", |s| json!({ "change": "xkb_layout", "input": s.inputs_json()[0].clone() }));
+        self.emit(
+            "input",
+            |s| json!({ "change": "xkb_layout", "input": s.inputs_json()[0].clone() }),
+        );
     }
 
     /// The reply to a request.
@@ -252,7 +298,15 @@ impl Orbit {
                 json!([{ "success": true }])
             }
             proto::RUN_COMMAND => Value::Array(crate::command::run(self, &text)),
-            proto::GET_WORKSPACES => Value::Array(self.workspaces.iter().map(|w| w.num).collect::<Vec<_>>().into_iter().map(|n| self.workspace_json(n)).collect()),
+            proto::GET_WORKSPACES => Value::Array(
+                self.workspaces
+                    .iter()
+                    .map(|w| w.num)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|n| self.workspace_json(n))
+                    .collect(),
+            ),
             proto::SUBSCRIBE => match serde_json::from_str::<Vec<String>>(&text) {
                 Ok(names) => {
                     let types: Option<Vec<u32>> = names.iter().map(|n| proto::event_type(n)).collect();
@@ -282,14 +336,20 @@ impl Orbit {
             proto::GET_CONFIG => json!({ "config": "" }),
             proto::SEND_TICK => json!({ "success": true }),
             proto::GET_INPUTS => Value::Array(self.inputs_json()),
-            proto::GET_SEATS => json!([{ "name": "seat0", "capabilities": 3, "focus": self.focused_window().map(|w| workspace::id(&w)).unwrap_or(0), "devices": self.inputs_json() }]),
+            proto::GET_SEATS => {
+                json!([{ "name": "seat0", "capabilities": 3, "focus": self.focused_window().map(|w| workspace::id(&w)).unwrap_or(0), "devices": self.inputs_json() }])
+            }
             _ => json!({ "success": false, "error": "unknown message type" }),
         }
     }
 
     /// The rectangle around every monitor.
     fn layout_rect(&self) -> Value {
-        let geos: Vec<_> = self.space.outputs().filter_map(|o| self.space.output_geometry(o)).collect();
+        let geos: Vec<_> = self
+            .space
+            .outputs()
+            .filter_map(|o| self.space.output_geometry(o))
+            .collect();
         let x = geos.iter().map(|g| g.loc.x).min().unwrap_or(0);
         let y = geos.iter().map(|g| g.loc.y).min().unwrap_or(0);
         let right = geos.iter().map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
@@ -299,13 +359,20 @@ impl Orbit {
 
     fn outputs_json(&self, with_nodes: bool) -> Vec<Value> {
         let outputs: Vec<Output> = self.space.outputs().cloned().collect();
-        outputs.iter().enumerate().map(|(i, o)| self.output_json(i, o, with_nodes)).collect()
+        outputs
+            .iter()
+            .enumerate()
+            .map(|(i, o)| self.output_json(i, o, with_nodes))
+            .collect()
     }
 
     fn output_json(&self, index: usize, output: &Output, with_nodes: bool) -> Value {
         let name = output.name();
         let geo = self.space.output_geometry(output).unwrap_or_default();
-        let mode = output.current_mode().map(|m| json!({ "width": m.size.w, "height": m.size.h, "refresh": m.refresh })).unwrap_or(Value::Null);
+        let mode = output
+            .current_mode()
+            .map(|m| json!({ "width": m.size.w, "height": m.size.h, "refresh": m.refresh }))
+            .unwrap_or(Value::Null);
         let props = output.physical_properties();
         let mut value = json!({
             "id": 10 + index as i64,
@@ -329,7 +396,13 @@ impl Orbit {
             "visible": true,
         });
         if with_nodes {
-            value["nodes"] = Value::Array(self.workspaces.iter().filter(|w| w.output == name).map(|w| self.workspace_json(w.num)).collect());
+            value["nodes"] = Value::Array(
+                self.workspaces
+                    .iter()
+                    .filter(|w| w.output == name)
+                    .map(|w| self.workspace_json(w.num))
+                    .collect(),
+            );
             value["floating_nodes"] = json!([]);
         }
         value
@@ -341,7 +414,10 @@ impl Orbit {
         let windows: Vec<Value> = tiled.into_iter().map(|w| self.window_json(w)).collect();
         let floating: Vec<Value> = floating.into_iter().map(|w| self.window_json(w)).collect();
         let output = self.ws_output(num).unwrap_or_else(|| self.focused_output_name());
-        let area = self.output_named(&output).and_then(|o| self.usable_area(&o)).unwrap_or_default();
+        let area = self
+            .output_named(&output)
+            .and_then(|o| self.usable_area(&o))
+            .unwrap_or_default();
         json!({
             "id": 1000 + num as i64,
             "type": "workspace",
@@ -373,11 +449,19 @@ impl Orbit {
                         .get::<XdgToplevelSurfaceData>()
                         .map(|d| {
                             let d = d.lock().unwrap();
-                            (d.title.clone().unwrap_or_default(), d.app_id.clone().unwrap_or_default())
+                            (
+                                d.title.clone().unwrap_or_default(),
+                                d.app_id.clone().unwrap_or_default(),
+                            )
                         })
                         .unwrap_or_default()
                 });
-                let pid = self.display_handle.get_client(surface.id()).ok().and_then(|c| c.get_credentials(&self.display_handle).ok()).map(|c| c.pid);
+                let pid = self
+                    .display_handle
+                    .get_client(surface.id())
+                    .ok()
+                    .and_then(|c| c.get_credentials(&self.display_handle).ok())
+                    .map(|c| c.pid);
                 (title, app_id, pid)
             }
             None => (String::new(), String::new(), None),
@@ -385,7 +469,16 @@ impl Orbit {
         let on = self.workspace_of(window);
         // As sway: an X window has no app_id, but its class and instance.
         if let Some(x) = window.x11_surface() {
-            let mut con = self.con_json(window, info.id, info.rect, on, &x.title(), None, x.pid().map(|p| p as i32), "xwayland");
+            let mut con = self.con_json(
+                window,
+                info.id,
+                info.rect,
+                on,
+                &x.title(),
+                None,
+                x.pid().map(|p| p as i32),
+                "xwayland",
+            );
             con["window"] = json!(x.window_id());
             con["window_properties"] = json!({ "class": x.class(), "instance": x.instance(), "title": x.title() });
             return con;
@@ -395,7 +488,17 @@ impl Orbit {
 
     /// A window's node of the tree.
     #[allow(clippy::too_many_arguments)]
-    fn con_json(&self, window: &Window, id: u64, r: (i32, i32, i32, i32), on: Option<i32>, title: &str, app_id: Option<&str>, pid: Option<i32>, shell: &str) -> Value {
+    fn con_json(
+        &self,
+        window: &Window,
+        id: u64,
+        r: (i32, i32, i32, i32),
+        on: Option<i32>,
+        title: &str,
+        app_id: Option<&str>,
+        pid: Option<i32>,
+        shell: &str,
+    ) -> Value {
         json!({
             "id": id,
             "type": if crate::floating::is_floating(window) { "floating_con" } else { "con" },
@@ -426,15 +529,19 @@ impl Orbit {
     /// The whole tree: root, the scratchpad's hidden output, then the
     /// output with its workspaces and windows.
     fn tree_json(&self) -> Value {
-        let scratch: Vec<Value> = self.scratchpad.iter().map(|w| {
-            let mut con = self.window_json(w);
-            con["type"] = json!("floating_con");
-            // Orbit's own: the workspace it left (the panel's tab colour).
-            if let Some(from) = self.minimized_from.get(w) {
-                con["orbit_workspace"] = json!(from);
-            }
-            con
-        }).collect();
+        let scratch: Vec<Value> = self
+            .scratchpad
+            .iter()
+            .map(|w| {
+                let mut con = self.window_json(w);
+                con["type"] = json!("floating_con");
+                // Orbit's own: the workspace it left (the panel's tab colour).
+                if let Some(from) = self.minimized_from.get(w) {
+                    con["orbit_workspace"] = json!(from);
+                }
+                con
+            })
+            .collect();
         let hidden = json!({
             "id": 3, "type": "output", "name": "__i3", "rect": rect((0, 0, 0, 0)), "floating_nodes": [],
             "nodes": [{ "id": 4, "type": "workspace", "name": "__i3_scratch", "num": -1, "rect": rect((0, 0, 0, 0)), "nodes": [], "floating_nodes": scratch }],

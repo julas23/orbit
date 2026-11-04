@@ -179,12 +179,7 @@ impl Module {
 
     /// Focuses the mixer if it is open (sway), or starts it.
     fn open_mixer(&self) {
-        let program = self
-            .config
-            .mixer
-            .split_whitespace()
-            .next()
-            .unwrap_or_default();
+        let program = self.config.mixer.split_whitespace().next().unwrap_or_default();
         let name = program.rsplit('/').next().unwrap_or(program);
         if sway::available() && !name.is_empty() {
             let command = format!("[app_id=\"(?i){}\"] focus", regex_escape(name));

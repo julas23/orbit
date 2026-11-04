@@ -103,8 +103,16 @@ impl Player {
             .pixel_size(150)
             .css_classes(["cover-icon"])
             .build();
-        let song = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).css_classes(["song"]).build();
-        let artist = gtk::Label::builder().wrap(true).justify(gtk::Justification::Center).css_classes(["artist"]).build();
+        let song = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .css_classes(["song"])
+            .build();
+        let artist = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .css_classes(["artist"])
+            .build();
         let audio_page = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(15)
@@ -130,7 +138,13 @@ impl Player {
             .valign(gtk::Align::Center)
             .halign(gtk::Align::Center)
             .build();
-        message_page.append(&gtk::Image::builder().icon_name("video-x-generic-symbolic").pixel_size(60).css_classes(["message-icon"]).build());
+        message_page.append(
+            &gtk::Image::builder()
+                .icon_name("video-x-generic-symbolic")
+                .pixel_size(60)
+                .css_classes(["message-icon"])
+                .build(),
+        );
         message_page.append(&message);
         message_page.append(&open_button);
         let stack = gtk::Stack::builder()
@@ -257,9 +271,7 @@ impl Player {
 
         // One above the other: the bars take their room from the video.
         stack.set_vexpand(true);
-        let layout = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .build();
+        let layout = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
         layout.append(&top);
         layout.append(&stack);
         layout.append(&bottom);
@@ -375,10 +387,7 @@ impl Player {
                 }
             }
         };
-        let launched = gio::Subprocess::newv(
-            &[program.as_os_str(), path.as_os_str()],
-            gio::SubprocessFlags::NONE,
-        );
+        let launched = gio::Subprocess::newv(&[program.as_os_str(), path.as_os_str()], gio::SubprocessFlags::NONE);
         match launched {
             Ok(_) => {
                 // Nothing playing here: the window is not needed.
@@ -386,7 +395,10 @@ impl Player {
                     self.window.close();
                 }
             }
-            Err(err) => self.show_message(&tr_args("play-failed", &[("name", text(file_name(path))), ("reason", text(err.message()))])),
+            Err(err) => self.show_message(&tr_args(
+                "play-failed",
+                &[("name", text(file_name(path))), ("reason", text(err.message()))],
+            )),
         }
     }
 
@@ -499,7 +511,10 @@ impl Player {
     }
 
     fn build_speed_menu(self: &Rc<Self>) {
-        let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["menu-list"]).build();
+        let list = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["menu-list"])
+            .build();
         let popover = gtk::Popover::builder().child(&list).build();
         for &rate in SPEEDS {
             let item = gtk::Button::builder()
@@ -525,7 +540,10 @@ impl Player {
         // Audio.
         let streams = info.audio_streams();
         let current = play.current_audio_track().map(|t| track_index(&t));
-        let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["menu-list"]).build();
+        let list = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["menu-list"])
+            .build();
         let popover = gtk::Popover::builder().child(&list).build();
         let mut group: Option<gtk::CheckButton> = None;
         for (n, stream) in streams.iter().enumerate() {
@@ -536,7 +554,10 @@ impl Player {
             if stream.channels() > 0 {
                 label = format!("{label} · {}", channels(stream.channels()));
             }
-            let check = gtk::CheckButton::builder().label(label).active(current == Some(track_index(stream))).build();
+            let check = gtk::CheckButton::builder()
+                .label(label)
+                .active(current == Some(track_index(stream)))
+                .build();
             check.set_group(group.as_ref());
             group.get_or_insert_with(|| check.clone());
             let weak = Rc::downgrade(self);
@@ -557,9 +578,15 @@ impl Player {
         // Subtitles: off, each track, and a file to load.
         let streams = info.subtitle_streams();
         let current = play.current_subtitle_track().map(|t| track_index(&t));
-        let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["menu-list"]).build();
+        let list = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["menu-list"])
+            .build();
         let popover = gtk::Popover::builder().child(&list).build();
-        let off = gtk::CheckButton::builder().label(tr("play-subtitles-off")).active(current.is_none()).build();
+        let off = gtk::CheckButton::builder()
+            .label(tr("play-subtitles-off"))
+            .active(current.is_none())
+            .build();
         let weak = Rc::downgrade(self);
         off.connect_toggled(move |c| {
             if c.is_active()
@@ -574,7 +601,10 @@ impl Player {
                 .language()
                 .map(|l| language_name(&l))
                 .unwrap_or_else(|| tr_args("play-track", &[("n", number((n + 1) as f64))]));
-            let check = gtk::CheckButton::builder().label(label).active(current == Some(track_index(stream))).build();
+            let check = gtk::CheckButton::builder()
+                .label(label)
+                .active(current == Some(track_index(stream)))
+                .build();
             check.set_group(Some(&off));
             let weak = Rc::downgrade(self);
             let index = track_index(stream);
@@ -590,7 +620,10 @@ impl Player {
             });
             list.append(&check);
         }
-        let load = gtk::Button::builder().label(tr("play-subtitles-load")).css_classes(["flat"]).build();
+        let load = gtk::Button::builder()
+            .label(tr("play-subtitles-load"))
+            .css_classes(["flat"])
+            .build();
         let weak = Rc::downgrade(self);
         let pop = popover.clone();
         load.connect_clicked(move |_| {
@@ -620,7 +653,9 @@ impl Player {
             .build();
         let weak = Rc::downgrade(self);
         dialog.open(Some(&self.window), gio::Cancellable::NONE, move |result| {
-            let (Some(p), Ok(file)) = (weak.upgrade(), result) else { return };
+            let (Some(p), Ok(file)) = (weak.upgrade(), result) else {
+                return;
+            };
             // A new subtitle file takes effect from the start: carry on
             // from where it was.
             let play = &p.engine.play;
@@ -743,8 +778,7 @@ impl Player {
 
     fn media_info(self: &Rc<Self>, info: &gst_play::PlayMediaInfo) {
         let current = self.index.get().and_then(|i| self.files.borrow().get(i).cloned());
-        let video = info.number_of_video_streams() > 0
-            && !current.as_deref().is_some_and(media::is_audio);
+        let video = info.number_of_video_streams() > 0 && !current.as_deref().is_some_and(media::is_audio);
         if video != self.has_video.get() || self.stack.visible_child_name().as_deref() == Some("message") {
             self.has_video.set(video);
             self.stack.set_visible_child_name(if video { "video" } else { "audio" });
@@ -761,7 +795,10 @@ impl Player {
             )
             .collect();
         let tag = |f: fn(&gst::TagList) -> Option<String>| tags.iter().find_map(f);
-        let title = info.title().map(|t| t.to_string()).or_else(|| tag(|t| t.get::<gst::tags::Title>().map(|v| v.get().to_owned())));
+        let title = info
+            .title()
+            .map(|t| t.to_string())
+            .or_else(|| tag(|t| t.get::<gst::tags::Title>().map(|v| v.get().to_owned())));
         let artist = tag(|t| t.get::<gst::tags::Artist>().map(|v| v.get().to_owned()));
         let album = tag(|t| t.get::<gst::tags::Album>().map(|v| v.get().to_owned()));
         if let Some(title) = title.as_ref().filter(|t| !t.trim().is_empty()) {
@@ -769,8 +806,10 @@ impl Player {
             self.window.set_title(Some(title));
         }
         if !video {
-            self.song.set_label(&title.unwrap_or_else(|| current.as_deref().map(file_name).unwrap_or_default()));
-            self.artist.set_label(&[artist, album].into_iter().flatten().collect::<Vec<_>>().join(" — "));
+            self.song
+                .set_label(&title.unwrap_or_else(|| current.as_deref().map(file_name).unwrap_or_default()));
+            self.artist
+                .set_label(&[artist, album].into_iter().flatten().collect::<Vec<_>>().join(" — "));
             let texture = info
                 .image_sample()
                 .and_then(|s| s.buffer_owned())
@@ -800,7 +839,8 @@ impl Player {
         self.top.set_can_target(shown);
         self.bottom.set_reveal_child(shown);
         self.bottom.set_can_target(shown);
-        self.window.set_cursor_from_name(if shown { None } else { Some("none") });
+        self.window
+            .set_cursor_from_name(if shown { None } else { Some("none") });
     }
 
     fn hide_later(self: &Rc<Self>) {

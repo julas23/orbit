@@ -26,7 +26,10 @@ use gtk::{gio, glib, prelude::*};
 use serde_json::{Value, json};
 
 /// The lists when the config names none.
-pub const DEFAULT_LISTS: &[&str] = &["https://easylist.to/easylist/easylist.txt", "https://easylist.to/easylist/easyprivacy.txt"];
+pub const DEFAULT_LISTS: &[&str] = &[
+    "https://easylist.to/easylist/easylist.txt",
+    "https://easylist.to/easylist/easyprivacy.txt",
+];
 
 /// Bumped when the conversion changes, so the lists compile again.
 const CONVERTER: u32 = 1;
@@ -39,7 +42,17 @@ const LIST_MAX: u64 = 30 * 1024 * 1024;
 
 /// The resource types a rule without any applies to: all but the page
 /// itself (ABP's default), so a pattern never stops a page you opened.
-const DEFAULT_TYPES: &[&str] = &["image", "style-sheet", "script", "font", "raw", "svg-document", "media", "ping", "other"];
+const DEFAULT_TYPES: &[&str] = &[
+    "image",
+    "style-sheet",
+    "script",
+    "font",
+    "raw",
+    "svg-document",
+    "media",
+    "ping",
+    "other",
+];
 
 /// The block lists and the pages they go on.
 pub struct Shield {
@@ -142,7 +155,11 @@ impl Shield {
             .iter()
             .map(|url| {
                 let id = list_id(url);
-                (url.clone(), self.dir.join(format!("{id}.txt")), self.dir.join(format!("{id}.stamp")))
+                (
+                    url.clone(),
+                    self.dir.join(format!("{id}.txt")),
+                    self.dir.join(format!("{id}.stamp")),
+                )
             })
             .collect();
         let dir = self.dir.clone();
@@ -150,7 +167,9 @@ impl Shield {
         crate::ui::background(
             move || {
                 let _ = std::fs::create_dir_all(&dir);
-                jobs.into_iter().filter_map(|(url, text, stamp)| prepare(&url, &text, &stamp).map(|r| (url, stamp, r))).collect::<Vec<_>>()
+                jobs.into_iter()
+                    .filter_map(|(url, text, stamp)| prepare(&url, &text, &stamp).map(|r| (url, stamp, r)))
+                    .collect::<Vec<_>>()
             },
             move |ready: Vec<(String, PathBuf, Rules)>| {
                 let Some(shield) = weak.upgrade() else { return };
@@ -168,22 +187,29 @@ impl Shield {
     fn compile(self: &Rc<Self>, id: String, json: String, stamp: Option<(PathBuf, String)>) {
         let weak = Rc::downgrade(self);
         let bytes = glib::Bytes::from_owned(json.into_bytes());
-        self.store.save(&id.clone(), &bytes, gio::Cancellable::NONE, move |result| match result {
-            Ok(filter) => {
-                if let Some(shield) = weak.upgrade() {
-                    shield.put(filter);
+        self.store.save(
+            &id.clone(),
+            &bytes,
+            gio::Cancellable::NONE,
+            move |result| match result {
+                Ok(filter) => {
+                    if let Some(shield) = weak.upgrade() {
+                        shield.put(filter);
+                    }
+                    if let Some((file, text)) = stamp {
+                        let _ = std::fs::write(file, text);
+                    }
                 }
-                if let Some((file, text)) = stamp {
-                    let _ = std::fs::write(file, text);
-                }
-            }
-            Err(err) => log::warn!("block list {id}: {err}"),
-        });
+                Err(err) => log::warn!("block list {id}: {err}"),
+            },
+        );
     }
 
     /// Puts `filter` on every page, in place of the one of the same name.
     fn put(&self, filter: webkit6::UserContentFilter) {
-        let Some(id) = filter.identifier().map(|s| s.to_string()) else { return };
+        let Some(id) = filter.identifier().map(|s| s.to_string()) else {
+            return;
+        };
         let managers: Vec<_> = self.managers.borrow().iter().filter_map(|m| m.upgrade()).collect();
         for manager in &managers {
             manager.remove_filter_by_id(&id);
@@ -210,12 +236,18 @@ struct Rules {
 /// Fetches the list when it is old or missing and converts it when its text
 /// is not the one last compiled. Nothing to do: `None`.
 fn prepare(url: &str, text_file: &Path, stamp_file: &Path) -> Option<Rules> {
-    let age = std::fs::metadata(text_file).and_then(|m| m.modified()).ok().and_then(|t| SystemTime::now().duration_since(t).ok());
+    let age = std::fs::metadata(text_file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| SystemTime::now().duration_since(t).ok());
     if age.is_none_or(|a| a > STALE) {
         match fetch(url) {
             Ok(text) => {
                 let tmp = text_file.with_extension("tmp");
-                if std::fs::write(&tmp, &text).and_then(|()| std::fs::rename(&tmp, text_file)).is_err() {
+                if std::fs::write(&tmp, &text)
+                    .and_then(|()| std::fs::rename(&tmp, text_file))
+                    .is_err()
+                {
                     log::warn!("{}: not written", text_file.display());
                 }
             }
@@ -231,12 +263,27 @@ fn prepare(url: &str, text_file: &Path, stamp_file: &Path) -> Option<Rules> {
         return None;
     }
     let (block, hide) = convert(&text);
-    Some(Rules { block: block.to_string(), hide: hide.to_string(), stamp })
+    Some(Rules {
+        block: block.to_string(),
+        hide: hide.to_string(),
+        stamp,
+    })
 }
 
 fn fetch(url: &str) -> Result<String, String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(60))).build().into();
-    agent.get(url).call().map_err(|e| e.to_string())?.body_mut().with_config().limit(LIST_MAX).read_to_string().map_err(|e| e.to_string())
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(60)))
+        .build()
+        .into();
+    agent
+        .get(url)
+        .call()
+        .map_err(|e| e.to_string())?
+        .body_mut()
+        .with_config()
+        .limit(LIST_MAX)
+        .read_to_string()
+        .map_err(|e| e.to_string())
 }
 
 /// An Adblock list as WebKit rules: (network rules, element-hiding rules).
@@ -252,7 +299,11 @@ pub fn convert(text: &str) -> (Value, Value) {
     let mut exempt: HashMap<String, Vec<String>> = HashMap::new();
     let mut specific = Vec::new();
 
-    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('!') && !l.starts_with('[')).collect();
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('!') && !l.starts_with('['))
+        .collect();
     // Exceptions to hiding first: they decide how the generic rules go out.
     for line in &lines {
         if let Some((domains, selector)) = line.split_once("#@#")
@@ -282,7 +333,9 @@ pub fn convert(text: &str) -> (Value, Value) {
                 } else if !off.is_empty() {
                     trigger["unless-domain"] = json!(off);
                 }
-                specific.push(json!({ "trigger": trigger, "action": { "type": "css-display-none", "selector": selector } }));
+                specific.push(
+                    json!({ "trigger": trigger, "action": { "type": "css-display-none", "selector": selector } }),
+                );
             }
             continue;
         }
@@ -311,7 +364,9 @@ pub fn convert(text: &str) -> (Value, Value) {
             if !off.is_empty() {
                 trigger["unless-domain"] = json!(off);
             }
-            hide.push(json!({ "trigger": trigger, "action": { "type": "css-display-none", "selector": chunk.join(", ") } }));
+            hide.push(
+                json!({ "trigger": trigger, "action": { "type": "css-display-none", "selector": chunk.join(", ") } }),
+            );
         }
     }
     hide.extend(ignore(generic_off));
@@ -375,10 +430,16 @@ fn network(line: &str) -> Option<Net> {
         };
         match name {
             "third-party" | "3p" => {
-                trigger.insert("load-type".into(), json!([if negated { "first-party" } else { "third-party" }]));
+                trigger.insert(
+                    "load-type".into(),
+                    json!([if negated { "first-party" } else { "third-party" }]),
+                );
             }
             "first-party" | "1p" => {
-                trigger.insert("load-type".into(), json!([if negated { "third-party" } else { "first-party" }]));
+                trigger.insert(
+                    "load-type".into(),
+                    json!([if negated { "third-party" } else { "first-party" }]),
+                );
             }
             "domain" => {
                 let (on, off) = domain_list(value, '|')?;
@@ -420,12 +481,19 @@ fn network(line: &str) -> Option<Net> {
 
     if document || elemhide || generichide {
         // Whole-site exceptions: the sites the pattern names.
-        let site = pattern.trim_start_matches("||").trim_start_matches('|').trim_end_matches('^').trim_end_matches('/');
+        let site = pattern
+            .trim_start_matches("||")
+            .trim_start_matches('|')
+            .trim_end_matches('^')
+            .trim_end_matches('/');
         let mut sites = match trigger.get("if-domain").and_then(Value::as_array) {
             Some(d) => d.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect(),
             None => Vec::new(),
         };
-        if pattern.starts_with("||") && !site.is_empty() && site.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+        if pattern.starts_with("||")
+            && !site.is_empty()
+            && site.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        {
             sites.push(format!("*{}", site.to_ascii_lowercase()));
         }
         if sites.is_empty() {
@@ -443,7 +511,11 @@ fn network(line: &str) -> Option<Net> {
     let types: Vec<&str> = match types {
         Some(t) if t.is_empty() => return None,
         Some(t) => t,
-        None => DEFAULT_TYPES.iter().copied().filter(|t| !not_types.contains(t)).collect(),
+        None => DEFAULT_TYPES
+            .iter()
+            .copied()
+            .filter(|t| !not_types.contains(t))
+            .collect(),
     };
     trigger.insert("url-filter".into(), json!(url_filter(pattern)?));
     trigger.insert("resource-type".into(), json!(types));
@@ -515,10 +587,28 @@ fn domain_list(list: &str, sep: char) -> Option<(Vec<String>, Vec<String>)> {
 /// (`:has-text`, `:-abp-contains`, `:xpath`…) are not.
 fn plain_selector(selector: &str) -> bool {
     const EXTENDED: &[&str] = &[
-        ":-abp-", ":has-text(", ":contains(", ":xpath(", ":style(", ":upward(", ":remove(", ":matches-", ":min-text-length(",
-        ":watch-attr(", ":others(", ":if(", ":if-not(", ":nth-ancestor(", ":remove-attr(", ":remove-class(", ":shadow(",
+        ":-abp-",
+        ":has-text(",
+        ":contains(",
+        ":xpath(",
+        ":style(",
+        ":upward(",
+        ":remove(",
+        ":matches-",
+        ":min-text-length(",
+        ":watch-attr(",
+        ":others(",
+        ":if(",
+        ":if-not(",
+        ":nth-ancestor(",
+        ":remove-attr(",
+        ":remove-class(",
+        ":shadow(",
     ];
-    !selector.is_empty() && selector.is_ascii() && !selector.starts_with('+') && !EXTENDED.iter().any(|e| selector.contains(e))
+    !selector.is_empty()
+        && selector.is_ascii()
+        && !selector.starts_with('+')
+        && !EXTENDED.iter().any(|e| selector.contains(e))
 }
 
 #[cfg(test)]
@@ -534,7 +624,10 @@ mod tests {
 
     #[test]
     fn patterns() {
-        assert_eq!(url_filter("||ads.example.com^").unwrap(), "^[a-z][a-z0-9.+-]*://([^/?#]*\\.)?ads\\.example\\.com([/:?&=].*)?$");
+        assert_eq!(
+            url_filter("||ads.example.com^").unwrap(),
+            "^[a-z][a-z0-9.+-]*://([^/?#]*\\.)?ads\\.example\\.com([/:?&=].*)?$"
+        );
         assert_eq!(url_filter("/banner/*/img^").unwrap(), "/banner/.*/img([/:?&=].*)?$");
         assert_eq!(url_filter("|https://x.org/a.js|").unwrap(), "^https://x\\.org/a\\.js$");
         assert_eq!(url_filter("*").unwrap(), ".*");
@@ -553,13 +646,21 @@ mod tests {
         assert_eq!(r["action"]["type"], "ignore-previous-rules");
         // Everything but images.
         let r = one("/pixel.$~image");
-        assert!(!r["trigger"]["resource-type"].as_array().unwrap().contains(&json!("image")));
+        assert!(
+            !r["trigger"]["resource-type"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("image"))
+        );
         // What WebKit cannot do is dropped.
         assert!(network("||x.com^$redirect=noop.js").is_none());
         assert!(network("/^https?:\\/\\/ad/$script").is_none());
         assert!(network("||frames.com^$subdocument").is_none());
         assert!(matches!(network("@@||bank.com^$document"), Some(Net::Site(s)) if s == ["*bank.com"]));
-        assert_eq!(one("||scam.example^$document")["trigger"]["resource-type"], json!(["document"]));
+        assert_eq!(
+            one("||scam.example^$document")["trigger"]["resource-type"],
+            json!(["document"])
+        );
         assert!(matches!(network("@@||news.com^$generichide"), Some(Net::NoGeneric(_))));
     }
 
@@ -572,8 +673,15 @@ mod tests {
         // .ad-box for all; .banner but on example.com; .promo on site.org.
         assert_eq!(hide.len(), 3);
         assert!(hide.iter().any(|r| r["action"]["selector"] == ".ad-box"));
-        assert!(hide.iter().any(|r| r["action"]["selector"] == ".banner" && r["trigger"]["unless-domain"] == json!(["*example.com"])));
-        assert!(hide.iter().any(|r| r["action"]["selector"] == ".promo" && r["trigger"]["if-domain"] == json!(["*site.org"])));
+        assert!(
+            hide.iter()
+                .any(|r| r["action"]["selector"] == ".banner"
+                    && r["trigger"]["unless-domain"] == json!(["*example.com"]))
+        );
+        assert!(
+            hide.iter()
+                .any(|r| r["action"]["selector"] == ".promo" && r["trigger"]["if-domain"] == json!(["*site.org"]))
+        );
     }
 
     #[test]

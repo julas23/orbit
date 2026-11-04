@@ -196,8 +196,7 @@ impl PdfView {
                 let Some(v) = weak.upgrade() else { return };
                 let (x, y) = v.drag_from.get();
                 let z = v.zoom.get();
-                *v.selection.borrow_mut() =
-                    Some((i, (x / z, y / z, (x + dx) / z, (y + dy) / z)));
+                *v.selection.borrow_mut() = Some((i, (x / z, y / z, (x + dx) / z, (y + dy) / z)));
                 v.pages[i].area.queue_draw();
             });
             let weak = Rc::downgrade(self);
@@ -218,7 +217,9 @@ impl PdfView {
             let motion = gtk::EventControllerMotion::new();
             let weak = Rc::downgrade(self);
             motion.connect_motion(move |m, x, y| {
-                let (Some(v), Some(area)) = (weak.upgrade(), m.widget()) else { return };
+                let (Some(v), Some(area)) = (weak.upgrade(), m.widget()) else {
+                    return;
+                };
                 let over = v.link_at(i, x, y).is_some();
                 area.set_cursor_from_name(Some(if over { "pointer" } else { "text" }));
             });
@@ -333,7 +334,12 @@ impl PdfView {
         if let Some(hits) = search.hits.get(&i) {
             for (n, (x1, y1, x2, y2)) in hits.iter().enumerate() {
                 let current = search.current == Some((i, n));
-                cr.set_source_rgba(1.0, if current { 0.55 } else { 0.85 }, 0.0, if current { 0.5 } else { 0.3 });
+                cr.set_source_rgba(
+                    1.0,
+                    if current { 0.55 } else { 0.85 },
+                    0.0,
+                    if current { 0.5 } else { 0.3 },
+                );
                 cr.rectangle(x1 * zoom, y1 * zoom, (x2 - x1) * zoom, (y2 - y1) * zoom);
                 cr.fill().ok();
             }
@@ -349,20 +355,20 @@ impl PdfView {
             rect.set_y1(y1.min(y2));
             rect.set_x2(x1.max(x2));
             rect.set_y2(y1.max(y2));
-            if let Some(region) =
-                page.page
-                    .selected_region(zoom, poppler::SelectionStyle::Glyph, &mut rect)
+            if let Some(region) = page
+                .page
+                .selected_region(zoom, poppler::SelectionStyle::Glyph, &mut rect)
             {
                 let accent = orbit_app::theme::accent();
-                cr.set_source_rgba(
-                    accent.red().into(),
-                    accent.green().into(),
-                    accent.blue().into(),
-                    0.35,
-                );
+                cr.set_source_rgba(accent.red().into(), accent.green().into(), accent.blue().into(), 0.35);
                 for n in 0..region.num_rectangles() {
                     let r = region.rectangle(n);
-                    cr.rectangle(f64::from(r.x()), f64::from(r.y()), f64::from(r.width()), f64::from(r.height()));
+                    cr.rectangle(
+                        f64::from(r.x()),
+                        f64::from(r.y()),
+                        f64::from(r.width()),
+                        f64::from(r.height()),
+                    );
                 }
                 cr.fill().ok();
             }
@@ -581,7 +587,12 @@ impl PdfView {
                 .spacing(5)
                 .build();
             item.append(&area);
-            item.append(&gtk::Label::builder().label((i + 1).to_string()).css_classes(["number"]).build());
+            item.append(
+                &gtk::Label::builder()
+                    .label((i + 1).to_string())
+                    .css_classes(["number"])
+                    .build(),
+            );
             thumbs.append(&item);
         }
         let weak = Rc::downgrade(self);
@@ -783,7 +794,11 @@ pub fn counter(position: Option<usize>, total: usize, done: bool) -> String {
         (_, 0) if done => tr("read-search-none"),
         (_, 0) => tr("read-search-running"),
         (Some(p), t) => tr_args(
-            if done { "read-search-position" } else { "read-search-position-running" },
+            if done {
+                "read-search-position"
+            } else {
+                "read-search-position-running"
+            },
             &[("position", number(p as f64)), ("total", number(t as f64))],
         ),
         (None, t) => tr_args("read-search-count", &[("total", number(t as f64))]),

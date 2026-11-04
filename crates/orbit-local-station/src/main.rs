@@ -79,7 +79,11 @@ fn read_config(path: &std::path::Path) -> anyhow::Result<Config> {
 fn config() -> anyhow::Result<Config> {
     let system = read_config(std::path::Path::new(SYSTEM_CONFIG))?;
     let user = read_config(&user_config())?;
-    Ok(Config { server: user.server.or(system.server), output: user.output.or(system.output), decoder: user.decoder.or(system.decoder) })
+    Ok(Config {
+        server: user.server.or(system.server),
+        output: user.output.or(system.output),
+        decoder: user.decoder.or(system.decoder),
+    })
 }
 
 /// Keeps `server` in the user's file, with what else is there.
@@ -95,7 +99,11 @@ fn save_server(server: &str) -> anyhow::Result<()> {
 
 /// `host` or `host:port`, as the link wants it.
 fn with_port(server: &str) -> String {
-    if server.contains(':') { server.to_string() } else { format!("{server}:{PORT}") }
+    if server.contains(':') {
+        server.to_string()
+    } else {
+        format!("{server}:{PORT}")
+    }
 }
 
 /// What the keys type into, if anything.
@@ -104,7 +112,10 @@ enum Typing {
     /// The pairing code.
     Code(String),
     /// The server's address; the one before, if any, for Escape.
-    Address { text: String, before: Option<String> },
+    Address {
+        text: String,
+        before: Option<String>,
+    },
 }
 
 pub struct Station {
@@ -217,7 +228,10 @@ impl Station {
         let (width, height) = (f64::from(self.screen.size.0), f64::from(self.screen.size.1));
         let message = match pointer {
             Pointer::By(dx, dy) => {
-                self.at = ((self.at.0 + dx).clamp(0.0, width - 1.0), (self.at.1 + dy).clamp(0.0, height - 1.0));
+                self.at = (
+                    (self.at.0 + dx).clamp(0.0, width - 1.0),
+                    (self.at.1 + dy).clamp(0.0, height - 1.0),
+                );
                 None
             }
             Pointer::To(x, y) => {
@@ -247,7 +261,10 @@ impl Station {
         let (sw, sh) = (f64::from(video.source.0), f64::from(video.source.1));
         let scale = (width / sw).min(height / sh);
         let (left, top) = ((width - sw * scale) / 2.0, (height - sh * scale) / 2.0);
-        (((self.at.0 - left) / (sw * scale)).clamp(0.0, 1.0), ((self.at.1 - top) / (sh * scale)).clamp(0.0, 1.0))
+        (
+            ((self.at.0 - left) / (sw * scale)).clamp(0.0, 1.0),
+            ((self.at.1 - top) / (sh * scale)).clamp(0.0, 1.0),
+        )
     }
 
     pub fn key(&mut self, key: Key) {
@@ -259,7 +276,11 @@ impl Station {
         }
         self.held.insert(key.code);
         let held = |a, b| self.held.contains(&a) || self.held.contains(&b);
-        let (ctrl, alt, shift) = (held(KEY_LEFTCTRL, KEY_RIGHTCTRL), held(KEY_LEFTALT, KEY_RIGHTALT), held(KEY_LEFTSHIFT, KEY_RIGHTSHIFT));
+        let (ctrl, alt, shift) = (
+            held(KEY_LEFTCTRL, KEY_RIGHTCTRL),
+            held(KEY_LEFTALT, KEY_RIGHTALT),
+            held(KEY_LEFTSHIFT, KEY_RIGHTSHIFT),
+        );
         if ctrl && alt {
             if let Some(vt) = console(key.code) {
                 if let Err(err) = smithay::backend::session::Session::change_vt(&mut self.screen.session, vt) {
@@ -356,7 +377,10 @@ impl Station {
         face.set_status("Type the server's address (host or host:port), then Enter".into());
         face.set_problem("".into());
         face.set_address(before.as_deref().unwrap_or_default().into());
-        self.typing = Typing::Address { text: before.clone().unwrap_or_default(), before };
+        self.typing = Typing::Address {
+            text: before.clone().unwrap_or_default(),
+            before,
+        };
     }
 
     /// A server typed: kept, and the link (re)started with it.
@@ -390,7 +414,11 @@ impl Station {
         face.set_asking(true);
         face.set_code("".into());
         face.set_status("Type the code shown on the server's screen".into());
-        face.set_problem(if wrong { "That code was not right".into() } else { "".into() });
+        face.set_problem(if wrong {
+            "That code was not right".into()
+        } else {
+            "".into()
+        });
     }
 
     fn link(&mut self, event: Event) {
@@ -401,7 +429,11 @@ impl Station {
         }
         if let Event::Frame(frame) = event {
             if self.video.is_none() {
-                log::info!("station: the video shows, {}x{} from the server", frame.source.0, frame.source.1);
+                log::info!(
+                    "station: the video shows, {}x{} from the server",
+                    frame.source.0,
+                    frame.source.1
+                );
                 self.at = (f64::from(self.screen.size.0) / 2.0, f64::from(self.screen.size.1) / 2.0);
             }
             self.video = Some(frame);
@@ -455,7 +487,12 @@ impl Station {
 pub fn wait_until_shown() {
     let active = || -> zbus::Result<bool> {
         let connection = zbus::blocking::Connection::system()?;
-        let session = zbus::blocking::Proxy::new(&connection, "org.freedesktop.login1", "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session")?;
+        let session = zbus::blocking::Proxy::new(
+            &connection,
+            "org.freedesktop.login1",
+            "/org/freedesktop/login1/session/auto",
+            "org.freedesktop.login1.Session",
+        )?;
         session.get_property::<bool>("Active")
     };
     loop {
@@ -480,7 +517,11 @@ fn main() {
 
 fn run() -> anyhow::Result<()> {
     let config = config()?;
-    let server = std::env::args().nth(1).or_else(|| std::env::var("ORBIT_STATION_SERVER").ok()).or(config.server).map(|s| with_port(&s));
+    let server = std::env::args()
+        .nth(1)
+        .or_else(|| std::env::var("ORBIT_STATION_SERVER").ok())
+        .or(config.server)
+        .map(|s| with_port(&s));
 
     video::set_decoder(config.decoder.unwrap_or_default());
     let mut event_loop: EventLoop<'static, Station> = EventLoop::try_new()?;
@@ -515,7 +556,11 @@ fn run() -> anyhow::Result<()> {
         Some(server) => {
             station.ui.face.set_server(server.as_str().into());
             station.ui.face.set_status("Connecting…".into());
-            station.commands = Some(link::start(server.clone(), station.screen.size, station.events.clone())?);
+            station.commands = Some(link::start(
+                server.clone(),
+                station.screen.size,
+                station.events.clone(),
+            )?);
             station.server = Some(server);
         }
         None => station.edit_server(),
@@ -541,7 +586,10 @@ mod tests {
 
     #[test]
     fn addresses_are_typed_by_place() {
-        let typed: String = [35, 25, 49, 52, 11, 39].iter().map(|&k| address_char(k, k == 39).unwrap()).collect();
+        let typed: String = [35, 25, 49, 52, 11, 39]
+            .iter()
+            .map(|&k| address_char(k, k == 39).unwrap())
+            .collect();
         assert_eq!(typed, "hpn.0:");
         assert_eq!(address_char(39, false), None);
         assert_eq!(digit(82), Some('0'));

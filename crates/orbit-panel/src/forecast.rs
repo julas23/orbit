@@ -56,18 +56,11 @@ pub fn new(config: &ForecastConfig, weather: &WeatherConfig, vertical: bool) -> 
                     } else {
                         gtk::Orientation::Horizontal
                     })
-                    .css_classes(if vertical {
-                        vec!["card", "day"]
-                    } else {
-                        vec!["day"]
-                    })
+                    .css_classes(if vertical { vec!["card", "day"] } else { vec!["day"] })
                     .build(),
                 name: gtk::Label::builder().css_classes(["name"]).build(),
                 icon: gtk::Image::builder().pixel_size(20).build(),
-                glyph: gtk::Label::builder()
-                    .css_classes(["glyph"])
-                    .visible(false)
-                    .build(),
+                glyph: gtk::Label::builder().css_classes(["glyph"]).visible(false).build(),
                 max: gtk::Label::builder().css_classes(["max"]).build(),
             };
             if vertical {

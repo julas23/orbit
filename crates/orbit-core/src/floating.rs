@@ -62,14 +62,23 @@ pub fn is_dialog(window: &Window) -> bool {
             x.window_type(),
             Some(WmWindowType::Dialog | WmWindowType::Utility | WmWindowType::Splash | WmWindowType::Toolbar)
         );
-        let size = |s: Option<smithay::utils::Size<i32, smithay::utils::Logical>>| s.map(|s| (s.w, s.h)).unwrap_or_default();
-        return typed || x.is_transient_for().is_some() || x.is_modal() || fixed(size(x.min_size()), size(x.max_size()));
+        let size =
+            |s: Option<smithay::utils::Size<i32, smithay::utils::Logical>>| s.map(|s| (s.w, s.h)).unwrap_or_default();
+        return typed
+            || x.is_transient_for().is_some()
+            || x.is_modal()
+            || fixed(size(x.min_size()), size(x.max_size()));
     }
-    let Some(toplevel) = window.toplevel() else { return false };
+    let Some(toplevel) = window.toplevel() else {
+        return false;
+    };
     let (min, max) = with_states(toplevel.wl_surface(), |states| {
         let mut cached = states.cached_state.get::<SurfaceCachedState>();
         let current = cached.current();
-        ((current.min_size.w, current.min_size.h), (current.max_size.w, current.max_size.h))
+        (
+            (current.min_size.w, current.min_size.h),
+            (current.max_size.w, current.max_size.h),
+        )
     });
     toplevel.parent().is_some() || fixed(min, max)
 }
@@ -80,7 +89,10 @@ impl Orbit {
     pub fn parent_of(&self, window: &Window) -> Option<Window> {
         if let Some(x) = window.x11_surface() {
             let id = x.is_transient_for()?;
-            return self.all_windows().find(|w| w.x11_surface().is_some_and(|p| p.window_id() == id)).cloned();
+            return self
+                .all_windows()
+                .find(|w| w.x11_surface().is_some_and(|p| p.window_id() == id))
+                .cloned();
         }
         let parent = window.toplevel()?.parent()?;
         self.window_for(&parent)
@@ -89,7 +101,10 @@ impl Orbit {
     /// The floating windows that belong to `window`: its dialogs, which
     /// stay over it.
     pub fn dialogs_of(&self, window: &Window) -> Vec<Window> {
-        self.all_windows().filter(|w| floats(w) && self.parent_of(w).as_ref() == Some(window)).cloned().collect()
+        self.all_windows()
+            .filter(|w| floats(w) && self.parent_of(w).as_ref() == Some(window))
+            .cloned()
+            .collect()
     }
 
     /// A Wayland window that turned out a dialog (at its first commit, or
@@ -115,7 +130,10 @@ impl Orbit {
             return;
         }
         if on {
-            let output = self.workspace_of(window).and_then(|n| self.ws_output(n)).and_then(|o| self.output_named(&o));
+            let output = self
+                .workspace_of(window)
+                .and_then(|n| self.ws_output(n))
+                .and_then(|o| self.output_named(&o));
             let area = output.and_then(|o| self.usable_area(&o));
             mark_floating(window, area.map(|a| (a.2 * 2 / 3, a.3 * 2 / 3)));
         } else {
@@ -251,4 +269,3 @@ impl Orbit {
         }
     }
 }
-

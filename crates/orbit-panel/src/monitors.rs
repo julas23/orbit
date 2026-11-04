@@ -90,15 +90,8 @@ impl Module {
 
     fn show(&self, monitors: &[Monitor]) {
         let hint = tr("monitors-tooltip");
-        let count = tr_args(
-            "monitors-count",
-            &[("count", number(monitors.len() as u32))],
-        );
-        let glyph = if monitors.len() > 1 {
-            "\u{f037a}"
-        } else {
-            "\u{f0379}"
-        }; // 󰍺 󰍹
+        let count = tr_args("monitors-count", &[("count", number(monitors.len() as u32))]);
+        let glyph = if monitors.len() > 1 { "\u{f037a}" } else { "\u{f0379}" }; // 󰍺 󰍹
         let main = main_index(monitors);
         let places: Vec<String> = monitors
             .iter()
@@ -193,13 +186,7 @@ impl Module {
             let (layout, dragging, view) = (layout.clone(), dragging.clone(), view.clone());
             area.set_draw_func(move |area, cr, w, h| {
                 let v = View::fit(&layout.borrow(), w, h);
-                draw(
-                    area,
-                    cr,
-                    &layout.borrow(),
-                    &v,
-                    dragging.borrow().map(|d| d.0),
-                );
+                draw(area, cr, &layout.borrow(), &v, dragging.borrow().map(|d| d.0));
                 *view.borrow_mut() = v;
             });
         }
@@ -219,12 +206,7 @@ impl Module {
             });
         }
         {
-            let (layout, dragging, view, area) = (
-                layout.clone(),
-                dragging.clone(),
-                view.clone(),
-                area.downgrade(),
-            );
+            let (layout, dragging, view, area) = (layout.clone(), dragging.clone(), view.clone(), area.downgrade());
             drag.connect_drag_update(move |_, dx, dy| {
                 let Some((i, x0, y0)) = *dragging.borrow() else {
                     return;
@@ -349,11 +331,7 @@ fn side_of(m: &Monitor, main: &Monitor) -> String {
         (m.y + m.h / 2) - (main.y + main.h / 2),
     );
     let id = if dy.abs() >= dx.abs() {
-        if dy > 0 {
-            "monitors-below"
-        } else {
-            "monitors-above"
-        }
+        if dy > 0 { "monitors-below" } else { "monitors-above" }
     } else if dx > 0 {
         "monitors-right"
     } else {
@@ -412,10 +390,7 @@ fn snap(layout: &mut [Monitor], i: usize) {
                 if overlaps {
                     continue;
                 }
-                let (dx, dy) = (
-                    i64::from(place.x - dropped.x),
-                    i64::from(place.y - dropped.y),
-                );
+                let (dx, dy) = (i64::from(place.x - dropped.x), i64::from(place.y - dropped.y));
                 let distance = dx * dx + dy * dy;
                 if best.as_ref().is_none_or(|(d, _)| distance < *d) {
                     best = Some((distance, place));
@@ -479,10 +454,7 @@ impl View {
         let y1 = layout.iter().map(|m| m.y + m.h).max().unwrap_or(1);
         // Half a monitor of room on each side.
         let pad = layout.iter().map(|m| m.w.max(m.h)).max().unwrap_or(0) as f64 / 2.0;
-        let (bw, bh) = (
-            f64::from(x1 - x0) + 2.0 * pad,
-            f64::from(y1 - y0) + 2.0 * pad,
-        );
+        let (bw, bh) = (f64::from(x1 - x0) + 2.0 * pad, f64::from(y1 - y0) + 2.0 * pad);
         let scale = (f64::from(w) / bw).min(f64::from(h) / bh);
         Self {
             scale,
@@ -492,43 +464,20 @@ impl View {
     }
 
     fn to_screen(self, x: i32, y: i32) -> (f64, f64) {
-        (
-            f64::from(x) * self.scale + self.dx,
-            f64::from(y) * self.scale + self.dy,
-        )
+        (f64::from(x) * self.scale + self.dx, f64::from(y) * self.scale + self.dy)
     }
 
     fn to_layout(self, x: f64, y: f64) -> (i32, i32) {
-        (
-            ((x - self.dx) / self.scale) as i32,
-            ((y - self.dy) / self.scale) as i32,
-        )
+        (((x - self.dx) / self.scale) as i32, ((y - self.dy) / self.scale) as i32)
     }
 }
 
-fn draw(
-    area: &gtk::DrawingArea,
-    cr: &gtk::cairo::Context,
-    layout: &[Monitor],
-    view: &View,
-    held: Option<usize>,
-) {
+fn draw(area: &gtk::DrawingArea, cr: &gtk::cairo::Context, layout: &[Monitor], view: &View, held: Option<usize>) {
     // The area's CSS colour is the accent; the text takes the popover's.
     let accent = area.color();
     let fg = area.parent().map_or(accent, |p| p.color());
-    let rgba = |c: &gtk::gdk::RGBA, a: f64| {
-        (
-            f64::from(c.red()),
-            f64::from(c.green()),
-            f64::from(c.blue()),
-            a,
-        )
-    };
-    cr.select_font_face(
-        "monospace",
-        gtk::cairo::FontSlant::Normal,
-        gtk::cairo::FontWeight::Bold,
-    );
+    let rgba = |c: &gtk::gdk::RGBA, a: f64| (f64::from(c.red()), f64::from(c.green()), f64::from(c.blue()), a);
+    cr.select_font_face("monospace", gtk::cairo::FontSlant::Normal, gtk::cairo::FontWeight::Bold);
     cr.set_font_size(10.0);
     for (i, m) in layout.iter().enumerate() {
         let (x, y) = view.to_screen(m.x, m.y);
@@ -544,10 +493,7 @@ fn draw(
         let _ = cr.stroke();
         let (r, g, b, a) = rgba(&fg, 1.0);
         cr.set_source_rgba(r, g, b, a);
-        for (k, line) in [m.name.clone(), format!("{}×{}", m.w, m.h)]
-            .iter()
-            .enumerate()
-        {
+        for (k, line) in [m.name.clone(), format!("{}×{}", m.w, m.h)].iter().enumerate() {
             cr.move_to(x + 5.0, y + 14.0 + 12.0 * k as f64);
             let _ = cr.show_text(line);
         }

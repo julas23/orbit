@@ -146,7 +146,8 @@ impl TextDoc {
         motion.connect_motion(move |_, x, y| {
             if let Some(d) = weak.upgrade() {
                 let over = d.link_at(x, y).is_some();
-                d.rendered.set_cursor_from_name(Some(if over { "pointer" } else { "text" }));
+                d.rendered
+                    .set_cursor_from_name(Some(if over { "pointer" } else { "text" }));
             }
         });
         self.rendered.add_controller(motion);
@@ -200,7 +201,9 @@ impl TextDoc {
         }
         if !url.contains("://") && !url.starts_with("mailto:") {
             // A file next to this one: a document opens here.
-            let path = self.base.join(markdown::percent_decode(url.split('#').next().unwrap_or(url)));
+            let path = self
+                .base
+                .join(markdown::percent_decode(url.split('#').next().unwrap_or(url)));
             if crate::kind_of(&path).is_some()
                 && let Some(f) = self.on_open.borrow().as_ref()
             {
@@ -243,9 +246,8 @@ impl TextDoc {
 
     fn apply_scale(&self) {
         let size = BASE_SIZE * self.scale.get();
-        self.css.load_from_string(&format!(
-            "window.orbit-read textview.doc {{ font-size: {size:.1}pt; }}"
-        ));
+        self.css
+            .load_from_string(&format!("window.orbit-read textview.doc {{ font-size: {size:.1}pt; }}"));
     }
 
     fn active(&self) -> &gtk::TextView {
@@ -284,10 +286,7 @@ impl TextDoc {
             Some(&end),
         ) {
             buffer.apply_tag_by_name("match", &s, &e);
-            found.push((
-                buffer.create_mark(None, &s, true),
-                buffer.create_mark(None, &e, false),
-            ));
+            found.push((buffer.create_mark(None, &s, true), buffer.create_mark(None, &e, false)));
             at = e;
         }
         // The first at or below what is on screen.

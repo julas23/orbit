@@ -42,12 +42,7 @@ const ROWS: [[KeySpec; 10]; 4] = [
         (Pad::Eex, "EEX", "", "ΔDYS"),
         (Pad::Digit(4), "4", "", "D.MY"),
         (Pad::Digit(5), "5", "", "M.DY"),
-        (
-            Pad::Digit(6),
-            "6",
-            "",
-            "<span overline=\"single\">x</span>w",
-        ),
+        (Pad::Digit(6), "6", "", "<span overline=\"single\">x</span>w"),
         (Pad::Mul, "×", "", "x²"),
     ],
     [
@@ -89,14 +84,8 @@ pub fn new(window: &gtk::ApplicationWindow) -> gtk::Widget {
     let view = Rc::new(View {
         calc: RefCell::new(Hp12c::default()),
         sep: Separators::from_catalog(),
-        number: gtk::Label::builder()
-            .xalign(1.0)
-            .css_classes(["number"])
-            .build(),
-        indicators: gtk::Label::builder()
-            .xalign(0.0)
-            .css_classes(["indicators"])
-            .build(),
+        number: gtk::Label::builder().xalign(1.0).css_classes(["number"]).build(),
+        indicators: gtk::Label::builder().xalign(0.0).css_classes(["indicators"]).build(),
     });
 
     let lcd = gtk::Box::builder()
@@ -282,8 +271,7 @@ impl View {
         }
         // A space keeps the line's height when it is empty.
         let text = parts.join("   ");
-        self.indicators
-            .set_label(if text.is_empty() { " " } else { &text });
+        self.indicators.set_label(if text.is_empty() { " " } else { &text });
     }
 
     fn copy(&self, window: &gtk::ApplicationWindow) {
@@ -292,9 +280,7 @@ impl View {
             ..self.sep
         };
         let x = self.calc.borrow().x();
-        window
-            .clipboard()
-            .set_text(&format::number(x, plain).replace('−', "-"));
+        window.clipboard().set_text(&format::number(x, plain).replace('−', "-"));
     }
 
     fn paste(self: &Rc<Self>, window: &gtk::ApplicationWindow) {

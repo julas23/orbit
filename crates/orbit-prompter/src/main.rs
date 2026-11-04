@@ -33,7 +33,9 @@ fn main() -> glib::ExitCode {
             return glib::ExitCode::FAILURE;
         }
     };
-    let app = gtk::Application::builder().application_id("io.github.julas23.Orbit.Prompter").build();
+    let app = gtk::Application::builder()
+        .application_id("io.github.julas23.Orbit.Prompter")
+        .build();
     app.set_inactivity_timeout(IDLE.as_millis() as u32);
     let keep = Rc::new(RefCell::new(None));
     app.connect_activate(move |app| {

@@ -87,9 +87,7 @@ pub fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::App
         .css_classes(["orbit-clip"])
         .resizable(false)
         .build();
-    let search = gtk::SearchEntry::builder()
-        .placeholder_text(tr("clip-search"))
-        .build();
+    let search = gtk::SearchEntry::builder().placeholder_text(tr("clip-search")).build();
     let list = gtk::ListBox::builder()
         .selection_mode(gtk::SelectionMode::Browse)
         .css_classes(["items"])
@@ -146,10 +144,7 @@ pub fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::App
                 if !images && matches!(copied.content, Content::Image { .. }) {
                     continue;
                 }
-                let changed = clip
-                    .history
-                    .borrow_mut()
-                    .add(copied.content, copied.primary, now());
+                let changed = clip.history.borrow_mut().add(copied.content, copied.primary, now());
                 if changed {
                     clip.save();
                     clip.rebuild();
@@ -168,10 +163,7 @@ pub fn build(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<gtk::App
     {
         let clip = clip.clone();
         search.connect_activate(move |_| {
-            let row = clip
-                .list
-                .selected_row()
-                .or_else(|| clip.list.row_at_index(0));
+            let row = clip.list.selected_row().or_else(|| clip.list.row_at_index(0));
             if let Some(row) = row {
                 clip.choose(&row);
             }
@@ -275,11 +267,7 @@ fn thumbnail(bytes: &[u8]) -> Option<Thumbnail> {
     loader.close().ok()?;
     let pixbuf = loader.pixbuf()?;
     let (w, h) = size.get();
-    log::debug!(
-        "thumbnail {}x{} of {w}x{h}",
-        pixbuf.width(),
-        pixbuf.height()
-    );
+    log::debug!("thumbnail {}x{} of {w}x{h}", pixbuf.width(), pixbuf.height());
     Some((gdk::Texture::for_pixbuf(&pixbuf), w, h))
 }
 
@@ -327,19 +315,14 @@ impl Clip {
         }
         let total = history.items().len();
         // Thumbnails of items no longer there go.
-        self.thumbnails
-            .borrow_mut()
-            .retain(|id, _| history.get(*id).is_some());
+        self.thumbnails.borrow_mut().retain(|id, _| history.get(*id).is_some());
         if shown == 0 {
             let text = if total == 0 {
                 tr("clip-empty")
             } else {
                 tr("clip-no-match")
             };
-            let placeholder = gtk::Label::builder()
-                .label(text)
-                .css_classes(["placeholder"])
-                .build();
+            let placeholder = gtk::Label::builder().label(text).css_classes(["placeholder"]).build();
             self.list.set_placeholder(Some(&placeholder));
         }
         self.status
@@ -392,10 +375,7 @@ impl Clip {
                             &gtk::Label::builder()
                                 .label(tr_args(
                                     "clip-image",
-                                    &[
-                                        ("width", number(f64::from(w))),
-                                        ("height", number(f64::from(h))),
-                                    ],
+                                    &[("width", number(f64::from(w))), ("height", number(f64::from(h)))],
                                 ))
                                 .xalign(0.0)
                                 .css_classes(["meta"])

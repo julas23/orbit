@@ -103,13 +103,19 @@ impl Orbit {
     /// The area beside the focused one going `dir`, on the `monitor`-th
     /// monitor.
     fn area_beside(&self, dir: Dir, monitor: usize) -> Option<i32> {
-        let area = area_toward(self.area_of(self.current).0, dir, self.config.areas, self.config.area_columns)?;
+        let area = area_toward(
+            self.area_of(self.current).0,
+            dir,
+            self.config.areas,
+            self.config.area_columns,
+        )?;
         Some(self.ws_number(area, monitor))
     }
 
     /// The monitor beside the focused one going `dir`, if any.
     fn output_beside(&self, dir: Dir) -> Option<String> {
-        self.output_toward(dir.name()).filter(|o| *o != self.focused_output_name())
+        self.output_toward(dir.name())
+            .filter(|o| *o != self.focused_output_name())
     }
 
     fn monitor_index(&self, output: &str) -> usize {
@@ -120,7 +126,11 @@ impl Orbit {
     pub fn focus_toward(&mut self, dir: Dir) {
         let Some(from) = self.focus_rect() else { return };
         let focused = self.focused_window();
-        let others: Vec<Window> = self.shown_windows().into_iter().filter(|w| Some(w) != focused.as_ref()).collect();
+        let others: Vec<Window> = self
+            .shown_windows()
+            .into_iter()
+            .filter(|w| Some(w) != focused.as_ref())
+            .collect();
         let rects: Vec<Rect> = others.iter().map(|w| info(w).borrow().rect).collect();
         if let Some(i) = nearest(from, &rects, dir) {
             self.focus_window(Some(others[i].clone()));
@@ -135,10 +145,16 @@ impl Orbit {
     /// the tiled one that way, or goes to the monitor or area beside.
     pub fn move_toward(&mut self, dir: Dir) {
         let Some(window) = self.focused_window() else { return };
-        let Some(from_ws) = self.workspace_of(&window) else { return };
+        let Some(from_ws) = self.workspace_of(&window) else {
+            return;
+        };
         let from = info(&window).borrow().rect;
         if !floats(&window) {
-            let tiled: Vec<Window> = self.shown_windows().into_iter().filter(|w| *w != window && !floats(w)).collect();
+            let tiled: Vec<Window> = self
+                .shown_windows()
+                .into_iter()
+                .filter(|w| *w != window && !floats(w))
+                .collect();
             let rects: Vec<Rect> = tiled.iter().map(|w| info(w).borrow().rect).collect();
             if let Some(i) = nearest(from, &rects, dir) {
                 self.swap_windows(&window, &tiled[i]);
@@ -150,7 +166,9 @@ impl Orbit {
             Some(num) => num,
             None => {
                 let monitor = self.ws_output(from_ws).map(|o| self.monitor_index(&o)).unwrap_or(0);
-                let Some(num) = self.area_beside(dir, monitor) else { return };
+                let Some(num) = self.area_beside(dir, monitor) else {
+                    return;
+                };
                 self.move_to_workspace(&window, num);
                 self.switch_workspace(num);
                 self.focus_window(Some(window));

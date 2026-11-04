@@ -132,11 +132,7 @@ fn shape(entry: &ModuleEntry) -> (Form, i32, i32) {
         Some(&shape) => shape,
         None => {
             if let Some(form) = wanted {
-                log::warn!(
-                    "panel: {} has no {} size, using its default",
-                    entry.name,
-                    form.class()
-                );
+                log::warn!("panel: {} has no {} size, using its default", entry.name, form.class());
             }
             shapes[0]
         }
@@ -151,10 +147,9 @@ fn module(entry: &ModuleEntry, dir: &ConfigDir, edge: Edge, form: Form) -> Optio
     let vertical = edge.is_vertical();
     let built = match name {
         // The menu's power button offers the session module's actions.
-        "menu" => dir.module("menu").and_then(|c| {
-            dir.module("session")
-                .map(|session| menu::new(&c, edge, session))
-        }),
+        "menu" => dir
+            .module("menu")
+            .and_then(|c| dir.module("session").map(|session| menu::new(&c, edge, session))),
         "clock" => dir.module("clock").map(|c| clock::new(&c, form)),
         // The season in its title needs the hemisphere: the weather's place.
         "calendar" => dir.module("calendar").map(|c| {
@@ -183,19 +178,14 @@ fn module(entry: &ModuleEntry, dir: &ConfigDir, edge: Edge, form: Form) -> Optio
             }
             disk::new(&c, form)
         }),
-        "notifications" => dir
-            .module("notifications")
-            .map(|c| notifications::new(&c, form)),
+        "notifications" => dir.module("notifications").map(|c| notifications::new(&c, form)),
         "weather" => dir.module("weather").map(|c| weather::new(&c, form)),
         // The forecast shares the weather module's source and icons.
-        "forecast" => dir.module("forecast").and_then(|f| {
-            dir.module("weather")
-                .map(|w| forecast::new(&f, &w, vertical))
-        }),
+        "forecast" => dir
+            .module("forecast")
+            .and_then(|f| dir.module("weather").map(|w| forecast::new(&f, &w, vertical))),
         "windows" => dir.module("windows").map(|c| windows::new(&c, vertical)),
-        "workspaces" => dir
-            .module("workspaces")
-            .map(|c| workspaces::new(&c, vertical)),
+        "workspaces" => dir.module("workspaces").map(|c| workspaces::new(&c, vertical)),
         other => {
             log::error!("panel: unknown module {other:?}, leaving it out");
             return None;
@@ -218,26 +208,47 @@ mod tests {
     #[test]
     #[ignore]
     fn look() {
-        let Ok(path) = std::env::var("ORBIT_PANEL_LOOK") else { return };
+        let Ok(path) = std::env::var("ORBIT_PANEL_LOOK") else {
+            return;
+        };
         gtk::init().expect("a display");
         let display = gtk::gdk::Display::default().unwrap();
         let _theme = orbit_app::theme::install(&display);
         let css = gtk::CssProvider::new();
-        css.load_from_string(&format!("{}\nwindow {{ background: #1b1f27; }}", include_str!("../../../data/style.css")));
+        css.load_from_string(&format!(
+            "{}\nwindow {{ background: #1b1f27; }}",
+            include_str!("../../../data/style.css")
+        ));
         gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
         let dir = ConfigDir::new(std::path::Path::new("/nonexistent"));
-        let grid = gtk::Grid::builder().row_spacing(10).column_spacing(10).margin_start(10).margin_end(10).margin_top(10).margin_bottom(10).build();
+        let grid = gtk::Grid::builder()
+            .row_spacing(10)
+            .column_spacing(10)
+            .margin_start(10)
+            .margin_end(10)
+            .margin_top(10)
+            .margin_bottom(10)
+            .build();
         for (col, form) in [Form::Mini, Form::Normal, Form::Full].into_iter().enumerate() {
             for (row, name) in ["cpu", "ram", "lan", "gpu", "disk"].into_iter().enumerate() {
                 let &(_, cols, rows) = shapes(name).iter().find(|s| s.0 == form).unwrap();
-                let Some(module) = module(&name.into(), &dir, Edge::Left, form) else { continue };
-                let cell = gtk::Box::builder().css_classes(["panel", "grid"]).valign(gtk::Align::Start).halign(gtk::Align::Start).build();
+                let Some(module) = module(&name.into(), &dir, Edge::Left, form) else {
+                    continue;
+                };
+                let cell = gtk::Box::builder()
+                    .css_classes(["panel", "grid"])
+                    .valign(gtk::Align::Start)
+                    .halign(gtk::Align::Start)
+                    .build();
                 module.set_size_request(board::span(cols), board::span(rows));
                 cell.append(&module);
                 grid.attach(&cell, col as i32, row as i32, 1, 1);
             }
         }
-        let window = gtk::Window::builder().css_classes(["orbit", "orbit-panel"]).child(&grid).build();
+        let window = gtk::Window::builder()
+            .css_classes(["orbit", "orbit-panel"])
+            .child(&grid)
+            .build();
         window.present();
         let until = std::time::Instant::now() + std::time::Duration::from_secs(8);
         while std::time::Instant::now() < until {
@@ -253,4 +264,3 @@ mod tests {
         texture.save_to_png(&path).unwrap();
     }
 }
-

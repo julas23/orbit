@@ -114,12 +114,39 @@ impl Daemon {
         });
 
         let weak = Rc::downgrade(&daemon);
-        let centre = Centre::new(app, &daemon.config, monitor.as_ref(), Actions {
-            dnd: Box::new(glib::clone!(#[strong] weak, move |on| if let Some(d) = weak.upgrade() { d.set_dnd(on) })),
-            clear: Box::new(glib::clone!(#[strong] weak, move || if let Some(d) = weak.upgrade() { d.clear(|_| true) })),
-            clear_group: Rc::new(glib::clone!(#[strong] weak, move |group: String| if let Some(d) = weak.upgrade() { d.clear(|n| n.group() == group) })),
-            card: Rc::new(glib::clone!(#[strong] weak, move |id| handlers(&weak, id))),
-        });
+        let centre = Centre::new(
+            app,
+            &daemon.config,
+            monitor.as_ref(),
+            Actions {
+                dnd: Box::new(glib::clone!(
+                    #[strong]
+                    weak,
+                    move |on| if let Some(d) = weak.upgrade() {
+                        d.set_dnd(on)
+                    }
+                )),
+                clear: Box::new(glib::clone!(
+                    #[strong]
+                    weak,
+                    move || if let Some(d) = weak.upgrade() {
+                        d.clear(|_| true)
+                    }
+                )),
+                clear_group: Rc::new(glib::clone!(
+                    #[strong]
+                    weak,
+                    move |group: String| if let Some(d) = weak.upgrade() {
+                        d.clear(|n| n.group() == group)
+                    }
+                )),
+                card: Rc::new(glib::clone!(
+                    #[strong]
+                    weak,
+                    move |id| handlers(&weak, id)
+                )),
+            },
+        );
         centre.set_dnd(daemon.dnd.get());
         // Opening the centre is reading what is in it.
         centre.window.connect_visible_notify(glib::clone!(
@@ -146,8 +173,12 @@ impl Daemon {
 
     fn register(self: &Rc<Self>) -> anyhow::Result<()> {
         let node = gio::DBusNodeInfo::for_xml(XML)?;
-        let fdo = node.lookup_interface(NAME).ok_or_else(|| anyhow::anyhow!("no {NAME} in the description"))?;
-        let own = node.lookup_interface(OWN).ok_or_else(|| anyhow::anyhow!("no {OWN} in the description"))?;
+        let fdo = node
+            .lookup_interface(NAME)
+            .ok_or_else(|| anyhow::anyhow!("no {NAME} in the description"))?;
+        let own = node
+            .lookup_interface(OWN)
+            .ok_or_else(|| anyhow::anyhow!("no {OWN} in the description"))?;
 
         let weak = Rc::downgrade(self);
         let id = self
@@ -166,11 +197,20 @@ impl Daemon {
                         invocation.return_value(None);
                     }
                     "GetCapabilities" => {
-                        let caps = vec!["body", "body-markup", "body-hyperlinks", "actions", "icon-static", "persistence"];
+                        let caps = vec![
+                            "body",
+                            "body-markup",
+                            "body-hyperlinks",
+                            "actions",
+                            "icon-static",
+                            "persistence",
+                        ];
                         invocation.return_value(Some(&(caps,).to_variant()));
                     }
                     "GetServerInformation" => {
-                        invocation.return_value(Some(&("Orbit-Notify", "Orbit", env!("CARGO_PKG_VERSION"), "1.2").to_variant()));
+                        invocation.return_value(Some(
+                            &("Orbit-Notify", "Orbit", env!("CARGO_PKG_VERSION"), "1.2").to_variant(),
+                        ));
                     }
                     _ => invocation.return_value(None),
                 }
@@ -222,7 +262,9 @@ impl Daemon {
 
     fn notify(self: &Rc<Self>, params: &glib::Variant, sender: Option<&str>) -> u32 {
         let replaces = params.child_value(1).get::<u32>().unwrap_or(0);
-        let known = replaces != 0 && (self.notes.borrow().iter().any(|n| n.id == replaces) || self.passing.borrow().iter().any(|n| n.id == replaces));
+        let known = replaces != 0
+            && (self.notes.borrow().iter().any(|n| n.id == replaces)
+                || self.passing.borrow().iter().any(|n| n.id == replaces));
         let id = if known {
             replaces
         } else {
@@ -293,7 +335,9 @@ impl Daemon {
             self.close(id, Reason::Expired);
         }
         while !self.bubbles.is_full() {
-            let Some(next) = self.waiting.borrow_mut().pop_front() else { break };
+            let Some(next) = self.waiting.borrow_mut().pop_front() else {
+                break;
+            };
             let note = self.find(next);
             if let Some(note) = note {
                 self.bubble(&note);
@@ -302,7 +346,12 @@ impl Daemon {
     }
 
     fn find(&self, id: u32) -> Option<Note> {
-        self.notes.borrow().iter().chain(self.passing.borrow().iter()).find(|n| n.id == id).cloned()
+        self.notes
+            .borrow()
+            .iter()
+            .chain(self.passing.borrow().iter())
+            .find(|n| n.id == id)
+            .cloned()
     }
 
     /// Takes `id` away everywhere and tells its program.
@@ -371,7 +420,8 @@ impl Daemon {
         }
         if on {
             let notes = self.notes.borrow().clone();
-            self.bubbles.clear(|id| notes.iter().any(|n| n.id == id && n.urgency == 2));
+            self.bubbles
+                .clear(|id| notes.iter().any(|n| n.id == id && n.urgency == 2));
             self.waiting.borrow_mut().clear();
         }
         self.changed();
@@ -404,7 +454,11 @@ impl Daemon {
 
     /// Drops the oldest beyond the limit.
     fn trim(self: &Rc<Self>) {
-        let extra = self.notes.borrow().len().saturating_sub(self.config.history_limit.max(1));
+        let extra = self
+            .notes
+            .borrow()
+            .len()
+            .saturating_sub(self.config.history_limit.max(1));
         let old: Vec<u32> = self.notes.borrow().iter().take(extra).map(|n| n.id).collect();
         for id in old {
             self.close(id, Reason::Expired);
@@ -448,7 +502,10 @@ impl Daemon {
 
     pub fn save_now(&self) {
         self.save_queued.set(false);
-        note::save(&Saved { dnd: self.dnd.get(), notes: self.notes.borrow().clone() });
+        note::save(&Saved {
+            dnd: self.dnd.get(),
+            notes: self.notes.borrow().clone(),
+        });
     }
 
     fn emit(&self, iface: &str, path: &str, signal: &str, params: &glib::Variant) {
@@ -465,20 +522,33 @@ impl Daemon {
         }
         let weak = Rc::downgrade(self);
         let name = sender.to_owned();
-        let id = gio::bus_watch_name_on_connection(&self.conn, sender, gio::BusNameWatcherFlags::NONE, |_, _, _| {}, move |_, _| {
-            let Some(d) = weak.upgrade() else { return };
-            for n in d.notes.borrow_mut().iter_mut().filter(|n| n.sender.as_deref() == Some(name.as_str())) {
-                n.sender = None;
-            }
-            if let Some(unwatch) = d.senders.borrow_mut().remove(&name) {
-                // After this callback returns.
-                glib::idle_add_local_once(unwatch);
-            }
-            if d.centre().is_some_and(|c| c.window.is_visible()) {
-                d.redraw();
-            }
-        });
-        self.senders.borrow_mut().insert(sender.to_owned(), Box::new(move || gio::bus_unwatch_name(id)));
+        let id = gio::bus_watch_name_on_connection(
+            &self.conn,
+            sender,
+            gio::BusNameWatcherFlags::NONE,
+            |_, _, _| {},
+            move |_, _| {
+                let Some(d) = weak.upgrade() else { return };
+                for n in d
+                    .notes
+                    .borrow_mut()
+                    .iter_mut()
+                    .filter(|n| n.sender.as_deref() == Some(name.as_str()))
+                {
+                    n.sender = None;
+                }
+                if let Some(unwatch) = d.senders.borrow_mut().remove(&name) {
+                    // After this callback returns.
+                    glib::idle_add_local_once(unwatch);
+                }
+                if d.centre().is_some_and(|c| c.window.is_visible()) {
+                    d.redraw();
+                }
+            },
+        );
+        self.senders
+            .borrow_mut()
+            .insert(sender.to_owned(), Box::new(move || gio::bus_unwatch_name(id)));
     }
 }
 

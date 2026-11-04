@@ -5,7 +5,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use glycin::{Editor, EditOutcome, Operation, Operations};
+use glycin::{EditOutcome, Editor, Operation, Operations};
 use gufo_common::orientation::Rotation;
 
 /// The MIME types glycin can edit.
@@ -63,7 +63,10 @@ async fn run(path: &std::path::Path, turns: u8, mirrored: bool) -> Result<(), St
         .get_full()
         .map_err(|e| e.to_string())?;
     // Into a file beside it, then over it, keeping its permissions.
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let temporary = path.with_file_name(format!(".{name}.orbit-view"));
     std::fs::write(&temporary, &data).map_err(|e| e.to_string())?;
     if let Ok(meta) = std::fs::metadata(path) {

@@ -155,10 +155,7 @@ impl Module {
     }
 
     fn command(&self, command: &str) {
-        if self
-            .with_conn(|c| c.request(sway::RUN_COMMAND, command))
-            .is_none()
-        {
+        if self.with_conn(|c| c.request(sway::RUN_COMMAND, command)).is_none() {
             log::error!("windows: could not reach sway");
         }
     }
@@ -167,9 +164,7 @@ impl Module {
         let Some(tree) = self.with_conn(|c| c.query::<Value>(sway::GET_TREE)) else {
             return;
         };
-        let outputs: Vec<sway::Output> = self
-            .with_conn(|c| c.query(sway::GET_OUTPUTS))
-            .unwrap_or_default();
+        let outputs: Vec<sway::Output> = self.with_conn(|c| c.query(sway::GET_OUTPUTS)).unwrap_or_default();
         let mut windows = collect(&tree, self.config.stride.max(1));
         sort(&mut windows, &outputs);
 
@@ -186,8 +181,7 @@ impl Module {
             let item = items.entry(window.id).or_insert_with(|| self.item(window));
             self.show(item, window);
             // Put the entry in its place, after the previous one.
-            self.list
-                .reorder_child_after(&item.button, previous.as_ref());
+            self.list.reorder_child_after(&item.button, previous.as_ref());
             previous = Some(item.button.clone().upcast());
         }
     }
@@ -291,9 +285,7 @@ impl Module {
 
     /// Sends `window` to `area` on its own monitor, without moving the view.
     fn send(&self, window: &Window, area: i32) {
-        let outputs: Vec<sway::Output> = self
-            .with_conn(|c| c.query(sway::GET_OUTPUTS))
-            .unwrap_or_default();
+        let outputs: Vec<sway::Output> = self.with_conn(|c| c.query(sway::GET_OUTPUTS)).unwrap_or_default();
         let mut active: Vec<&sway::Output> = outputs.iter().filter(|o| o.active).collect();
         // The order of ~/.config/sway/areas.sh: laptop panel first.
         active.sort_by_key(|o| (!o.name.starts_with("eDP"), o.rect.y, o.rect.x));
@@ -391,10 +383,7 @@ fn collect(tree: &Value, stride: i32) -> Vec<Window> {
             "workspace" => {
                 area = match node["name"].as_str() {
                     Some("__i3_scratch") => None,
-                    _ => node["num"]
-                        .as_i64()
-                        .filter(|n| *n > 0)
-                        .map(|n| n as i32 % stride),
+                    _ => node["num"].as_i64().filter(|n| *n > 0).map(|n| n as i32 % stride),
                 }
             }
             "con" | "floating_con" if node["pid"].is_i64() => {
@@ -407,11 +396,7 @@ fn collect(tree: &Value, stride: i32) -> Vec<Window> {
                 let title = node["name"].as_str().unwrap_or_default().trim().to_string();
                 out.push(Window {
                     id: node["id"].as_i64().unwrap_or_default(),
-                    title: if title.is_empty() {
-                        class.clone()
-                    } else {
-                        title
-                    },
+                    title: if title.is_empty() { class.clone() } else { title },
                     class,
                     area,
                     left: node["orbit_workspace"]
@@ -443,21 +428,8 @@ fn collect(tree: &Value, stride: i32) -> Vec<Window> {
 fn sort(windows: &mut [Window], outputs: &[sway::Output]) {
     let mut physical: Vec<&sway::Output> = outputs.iter().collect();
     physical.sort_by_key(|o| (o.rect.y, o.rect.x));
-    let monitor = |name: &str| {
-        physical
-            .iter()
-            .position(|o| o.name == name)
-            .unwrap_or(usize::MAX)
-    };
-    windows.sort_by_key(|w| {
-        (
-            w.area.unwrap_or(i32::MAX),
-            monitor(&w.output),
-            w.y,
-            w.x,
-            w.order,
-        )
-    });
+    let monitor = |name: &str| physical.iter().position(|o| o.name == name).unwrap_or(usize::MAX);
+    windows.sort_by_key(|w| (w.area.unwrap_or(i32::MAX), monitor(&w.output), w.y, w.x, w.order));
 }
 
 /// Names and icons of applications, by window class.
@@ -471,15 +443,11 @@ impl Apps {
         let mut add = |info: &gio_unix::DesktopAppInfo| {
             let name = info.name().to_string();
             let icon = info.icon();
-            let id = info
-                .id()
-                .map(|id| id.trim_end_matches(".desktop").to_string());
+            let id = info.id().map(|id| id.trim_end_matches(".desktop").to_string());
             let keys = [
                 info.startup_wm_class().map(|c| c.to_string()),
                 id.clone(),
-                id.as_deref()
-                    .and_then(|id| id.rsplit('.').next())
-                    .map(str::to_string),
+                id.as_deref().and_then(|id| id.rsplit('.').next()).map(str::to_string),
                 Some(name.clone()),
                 Some(name.chars().filter(|c| c.is_alphanumeric()).collect()),
             ];
@@ -496,10 +464,7 @@ impl Apps {
             };
             let mut paths: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
             paths.sort();
-            for path in paths
-                .iter()
-                .filter(|p| p.extension().is_some_and(|e| e == "desktop"))
-            {
+            for path in paths.iter().filter(|p| p.extension().is_some_and(|e| e == "desktop")) {
                 if let Some(info) = gio_unix::DesktopAppInfo::from_filename(path) {
                     add(&info);
                 }

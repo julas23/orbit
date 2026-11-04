@@ -12,7 +12,16 @@ use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::tr;
 
 /// Folders nobody edits by hand.
-const SKIPPED: &[&str] = &[".git", "node_modules", "target", "__pycache__", ".venv", "venv", "build", "dist"];
+const SKIPPED: &[&str] = &[
+    ".git",
+    "node_modules",
+    "target",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+];
 /// Files Ctrl+P looks through, at most.
 const MOST_FILES: usize = 50_000;
 
@@ -38,7 +47,12 @@ impl Sidebar {
             let item = item.downcast_ref::<gtk::ListItem>().expect("a list item");
             let row = gtk::Box::builder().spacing(5).build();
             row.append(&gtk::Image::new());
-            row.append(&gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).build());
+            row.append(
+                &gtk::Label::builder()
+                    .xalign(0.0)
+                    .ellipsize(gtk::pango::EllipsizeMode::End)
+                    .build(),
+            );
             item.set_child(Some(&gtk::TreeExpander::builder().child(&row).build()));
         });
         factory.connect_bind(|_, item| {
@@ -50,7 +64,9 @@ impl Sidebar {
                 return;
             };
             expander.set_list_row(Some(&row));
-            let Some(info) = row.item().and_downcast::<gio::FileInfo>() else { return };
+            let Some(info) = row.item().and_downcast::<gio::FileInfo>() else {
+                return;
+            };
             let Some(content) = expander.child() else { return };
             if let Some(image) = content.first_child().and_downcast::<gtk::Image>()
                 && let Some(icon) = info.symbolic_icon()
@@ -90,7 +106,9 @@ impl Sidebar {
         sidebar.list.connect_activate(move |list, position| {
             let (Some(s), Some(row)) = (
                 weak.upgrade(),
-                list.model().and_then(|m| m.item(position)).and_downcast::<gtk::TreeListRow>(),
+                list.model()
+                    .and_then(|m| m.item(position))
+                    .and_downcast::<gtk::TreeListRow>(),
             ) else {
                 return;
             };
@@ -138,8 +156,7 @@ impl Sidebar {
                         .flatten()
                         .map(|f| folder(&f))
                 });
-                self.list
-                    .set_model(Some(&gtk::NoSelection::new(Some(tree))));
+                self.list.set_model(Some(&gtk::NoSelection::new(Some(tree))));
             }
             None => {
                 self.title.set_label(&tr("edit-no-folder"));
@@ -157,9 +174,8 @@ fn folder(dir: &gio::File) -> gio::ListModel {
         Some(dir),
     );
     let filter = gtk::CustomFilter::new(|item| {
-        item.downcast_ref::<gio::FileInfo>().is_some_and(|i| {
-            !i.is_hidden() && !SKIPPED.contains(&i.name().to_string_lossy().as_ref())
-        })
+        item.downcast_ref::<gio::FileInfo>()
+            .is_some_and(|i| !i.is_hidden() && !SKIPPED.contains(&i.name().to_string_lossy().as_ref()))
     });
     let sorter = gtk::CustomSorter::new(|a, b| {
         let (Some(a), Some(b)) = (a.downcast_ref::<gio::FileInfo>(), b.downcast_ref::<gio::FileInfo>()) else {
@@ -168,7 +184,9 @@ fn folder(dir: &gio::File) -> gio::ListModel {
         let dir = |i: &gio::FileInfo| i.file_type() != gio::FileType::Directory;
         dir(a)
             .cmp(&dir(b))
-            .then_with(|| orbit_common::natural::natural(&a.display_name().to_lowercase(), &b.display_name().to_lowercase()))
+            .then_with(|| {
+                orbit_common::natural::natural(&a.display_name().to_lowercase(), &b.display_name().to_lowercase())
+            })
             .into()
     });
     let filtered = gtk::FilterListModel::new(Some(list), Some(filter));
@@ -192,7 +210,9 @@ pub fn quick_open(parent: &gtk::Window, root: &Path, open: impl Fn(&Path) + 'sta
         .default_height(400)
         .css_classes(["quick-open"])
         .build();
-    let entry = gtk::SearchEntry::builder().placeholder_text(tr("edit-quick-open")).build();
+    let entry = gtk::SearchEntry::builder()
+        .placeholder_text(tr("edit-quick-open"))
+        .build();
     let list = gtk::ListBox::builder().css_classes(["results"]).build();
     let scroll = gtk::ScrolledWindow::builder().child(&list).vexpand(true).build();
     let content = gtk::Box::builder()

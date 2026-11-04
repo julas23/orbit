@@ -70,7 +70,9 @@ pub enum Command {
     Yes,
     No,
     /// Use another agent from now on.
-    Agent { name: String },
+    Agent {
+        name: String,
+    },
     /// Listen, think and speak with made-up sound, to see the sphere.
     Demo,
     /// Turn it off (the microphone closed) or on again; kept across
@@ -80,7 +82,10 @@ pub enum Command {
     /// The agent wants to use `tool` with `input`: may it? Sent by
     /// `orbit-aigent approve`, which gets `{"approved": true|false}` back
     /// on the same connection once the user has answered.
-    Approve { tool: String, input: serde_json::Value },
+    Approve {
+        tool: String,
+        input: serde_json::Value,
+    },
 }
 
 /// `$XDG_RUNTIME_DIR/orbit-aigent.sock`.

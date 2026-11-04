@@ -46,7 +46,8 @@ struct PamHandle {
 
 #[link(name = "libpam.so.0", kind = "dylib", modifiers = "+verbatim")]
 unsafe extern "C" {
-    fn pam_start(service: *const c_char, user: *const c_char, conv: *const PamConv, pamh: *mut *mut PamHandle) -> c_int;
+    fn pam_start(service: *const c_char, user: *const c_char, conv: *const PamConv, pamh: *mut *mut PamHandle)
+    -> c_int;
     fn pam_authenticate(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_acct_mgmt(pamh: *mut PamHandle, flags: c_int) -> c_int;
     fn pam_end(pamh: *mut PamHandle, status: c_int) -> c_int;
@@ -81,7 +82,11 @@ extern "C" fn converse(n: c_int, msg: *mut *const PamMessage, resp: *mut *mut Pa
         }
         for i in 0..n as usize {
             let m = &**msg.add(i);
-            let text = if m.msg.is_null() { String::new() } else { CStr::from_ptr(m.msg).to_string_lossy().into_owned() };
+            let text = if m.msg.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(m.msg).to_string_lossy().into_owned()
+            };
             match m.msg_style {
                 PAM_PROMPT_ECHO_OFF => (*replies.add(i)).resp = strdup(conv.password.as_ptr()),
                 PAM_PROMPT_ECHO_ON => {
@@ -108,8 +113,14 @@ pub struct Refused(pub String);
 pub fn check(user: &str, password: String) -> Result<(), Refused> {
     let user = CString::new(user).map_err(|_| Refused("bad user name".into()))?;
     let password = CString::new(password).map_err(|_| Refused("bad password".into()))?;
-    let mut conv = Box::new(Conversation { password, said: Vec::new() });
-    let pam_conv = PamConv { conv: converse, appdata_ptr: &mut *conv as *mut Conversation as *mut c_void };
+    let mut conv = Box::new(Conversation {
+        password,
+        said: Vec::new(),
+    });
+    let pam_conv = PamConv {
+        conv: converse,
+        appdata_ptr: &mut *conv as *mut Conversation as *mut c_void,
+    };
     let mut handle: *mut PamHandle = std::ptr::null_mut();
     // Safety: every pointer outlives the PAM transaction, which ends here.
     let result = unsafe {
@@ -128,7 +139,11 @@ pub fn check(user: &str, password: String) -> Result<(), Refused> {
         }
         let error = (rc != PAM_SUCCESS).then(|| {
             let text = pam_strerror(handle, rc);
-            if text.is_null() { format!("PAM error {rc}") } else { CStr::from_ptr(text).to_string_lossy().into_owned() }
+            if text.is_null() {
+                format!("PAM error {rc}")
+            } else {
+                CStr::from_ptr(text).to_string_lossy().into_owned()
+            }
         });
         pam_end(handle, rc);
         error

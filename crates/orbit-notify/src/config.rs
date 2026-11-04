@@ -52,7 +52,11 @@ pub struct Timeouts {
 
 impl Default for Timeouts {
     fn default() -> Self {
-        Self { low: 5, normal: 8, critical: 0 }
+        Self {
+            low: 5,
+            normal: 8,
+            critical: 0,
+        }
     }
 }
 

@@ -19,9 +19,7 @@ impl Engine {
         gstgtk4::plugin_register_static()?;
         let gtk_sink = gst::ElementFactory::make("gtk4paintablesink").build()?;
         let paintable = gtk_sink.property::<gdk::Paintable>("paintable");
-        let has_gl = paintable
-            .property::<Option<gdk::GLContext>>("gl-context")
-            .is_some();
+        let has_gl = paintable.property::<Option<gdk::GLContext>>("gl-context").is_some();
         let sink: gst::Element = if has_gl {
             gst::ElementFactory::make("glsinkbin")
                 .property("sink", &gtk_sink)
@@ -67,11 +65,7 @@ impl Engine {
             .current_video_track()
             .map(|v| v.framerate())
             .filter(|f| f.numer() > 0)
-            .map(|f| {
-                gst::ClockTime::from_nseconds(
-                    1_000_000_000u64 * f.denom() as u64 / f.numer() as u64,
-                )
-            })
+            .map(|f| gst::ClockTime::from_nseconds(1_000_000_000u64 * f.denom() as u64 / f.numer() as u64))
             .unwrap_or(gst::ClockTime::from_mseconds(40));
         if let Some(position) = self.play.position() {
             self.play.seek(position.saturating_sub(frame));

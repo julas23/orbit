@@ -121,12 +121,7 @@ impl Layout {
             let v = px[self.channels[0]];
             return [v, v, v, a];
         }
-        [
-            px[self.channels[0]],
-            px[self.channels[1]],
-            px[self.channels[2]],
-            a,
-        ]
+        [px[self.channels[0]], px[self.channels[1]], px[self.channels[2]], a]
     }
 }
 
@@ -166,12 +161,7 @@ mod tests {
     #[test]
     fn transparent_pixels_lend_no_colour() {
         // Opaque white next to fully transparent black.
-        let f = frame(
-            gdk::MemoryFormat::R8g8b8a8,
-            2,
-            1,
-            vec![255, 255, 255, 255, 0, 0, 0, 0],
-        );
+        let f = frame(gdk::MemoryFormat::R8g8b8a8, 2, 1, vec![255, 255, 255, 255, 0, 0, 0, 0]);
         let (_, _, px) = thumbnail(&f, 1).unwrap();
         assert_eq!(px, vec![255, 255, 255, 127]);
     }

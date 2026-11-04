@@ -13,25 +13,25 @@ mod xdg_shell;
 use smithay::{
     input::{
         Seat, SeatHandler, SeatState,
-        tablet::TabletSeatHandler,
         dnd::{DnDGrab, DndGrabHandler, GrabType, Source},
         pointer::{CursorImageStatus, Focus},
+        tablet::TabletSeatHandler,
     },
     reexports::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{Resource, protocol::wl_surface::WlSurface},
     },
-    wayland::seat::WaylandFocus,
     utils::Serial,
+    wayland::seat::WaylandFocus,
     wayland::{
         output::OutputHandler,
+        pointer_constraints::PointerConstraintsHandler,
         selection::{
             SelectionHandler, SelectionSource, SelectionTarget,
             data_device::{DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler, set_data_device_focus},
             primary_selection::{PrimarySelectionHandler, PrimarySelectionState, set_primary_focus},
             wlr_data_control::{DataControlHandler, DataControlState},
         },
-        pointer_constraints::PointerConstraintsHandler,
         shell::xdg::{ToplevelSurface, decoration::XdgDecorationHandler},
     },
 };
@@ -67,7 +67,9 @@ impl SeatHandler for Orbit {
     /// The clipboard follows the keyboard: the focused client may read it.
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&KeyboardFocus>) {
         let dh = &self.display_handle;
-        let client = focused.and_then(|f| f.wl_surface()).and_then(|s| dh.get_client(s.id()).ok());
+        let client = focused
+            .and_then(|f| f.wl_surface())
+            .and_then(|s| dh.get_client(s.id()).ok());
         set_data_device_focus(dh, seat, client.clone());
         set_primary_focus(dh, seat, client);
     }
@@ -86,7 +88,14 @@ impl SelectionHandler for Orbit {
         }
     }
 
-    fn send_selection(&mut self, ty: SelectionTarget, mime_type: String, fd: std::os::unix::io::OwnedFd, _seat: Seat<Self>, _user_data: &()) {
+    fn send_selection(
+        &mut self,
+        ty: SelectionTarget,
+        mime_type: String,
+        fd: std::os::unix::io::OwnedFd,
+        _seat: Seat<Self>,
+        _user_data: &(),
+    ) {
         if let Some(xwm) = self.xwm.as_mut()
             && let Err(err) = xwm.send_selection(ty, mime_type, fd)
         {
@@ -116,7 +125,14 @@ impl DataControlHandler for Orbit {
 impl DndGrabHandler for Orbit {}
 
 impl WaylandDndGrabHandler for Orbit {
-    fn dnd_requested<S: Source>(&mut self, source: S, _icon: Option<WlSurface>, seat: Seat<Self>, serial: Serial, type_: GrabType) {
+    fn dnd_requested<S: Source>(
+        &mut self,
+        source: S,
+        _icon: Option<WlSurface>,
+        seat: Seat<Self>,
+        serial: Serial,
+        type_: GrabType,
+    ) {
         match type_ {
             GrabType::Pointer => {
                 let pointer = seat.get_pointer().unwrap();

@@ -86,7 +86,13 @@ pub struct Voice {
 
 impl Default for Voice {
     fn default() -> Self {
-        Self { model: "gemma-3-4b-it-Q4_K_M".into(), server: "llama-server".into(), env: BTreeMap::new(), gpu_layers: 99, context: 8192 }
+        Self {
+            model: "gemma-3-4b-it-Q4_K_M".into(),
+            server: "llama-server".into(),
+            env: BTreeMap::new(),
+            gpu_layers: 99,
+            context: 8192,
+        }
     }
 }
 
@@ -94,10 +100,23 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             agent: "claude".into(),
-            agents: Kind::ALL.iter().map(|kind| (kind.name().to_owned(), Agent::default())).collect(),
+            agents: Kind::ALL
+                .iter()
+                .map(|kind| (kind.name().to_owned(), Agent::default()))
+                .collect(),
             wake: vec!["orbit".into(), "jarvis".into()],
-            wake_model: if cfg!(feature = "vulkan") { "small-q5_1" } else { "base-q5_1" }.into(),
-            model: if cfg!(feature = "vulkan") { "large-v3-turbo-q5_0" } else { "small-q5_1" }.into(),
+            wake_model: if cfg!(feature = "vulkan") {
+                "small-q5_1"
+            } else {
+                "base-q5_1"
+            }
+            .into(),
+            model: if cfg!(feature = "vulkan") {
+                "large-v3-turbo-q5_0"
+            } else {
+                "small-q5_1"
+            }
+            .into(),
             microphone: None,
             voices: Default::default(),
             chime: true,
@@ -226,9 +245,14 @@ impl Agent {
             return is_executable(program).then(|| program.clone());
         }
         let path = std::env::var_os("PATH").unwrap_or_default();
-        let home = std::env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute());
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .filter(|home| home.is_absolute());
         std::env::split_paths(&path)
-            .chain(home.iter().flat_map(|home| kind.home_dirs().iter().map(move |dir| home.join(dir))))
+            .chain(
+                home.iter()
+                    .flat_map(|home| kind.home_dirs().iter().map(move |dir| home.join(dir))),
+            )
             .map(|dir| dir.join(kind.name()))
             .find(|candidate| is_executable(candidate))
     }
@@ -236,7 +260,8 @@ impl Agent {
 
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    path.metadata().is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+    path.metadata()
+        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
 /// `~/x` as the home's `x`.

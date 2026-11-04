@@ -28,21 +28,32 @@ struct Sleeping(Option<OwnedFd>);
 
 /// Takes a `delay` inhibitor for sleep.
 fn inhibit(manager: &Proxy<'_>) -> Option<OwnedFd> {
-    let fd: Result<zbus::zvariant::OwnedFd, _> =
-        manager.call("Inhibit", &("sleep", "Orbit", "Lock the screen before sleeping", "delay"));
-    fd.inspect_err(|err| tracing::warn!("no sleep inhibitor: {err}")).ok().map(OwnedFd::from)
+    let fd: Result<zbus::zvariant::OwnedFd, _> = manager.call(
+        "Inhibit",
+        &("sleep", "Orbit", "Lock the screen before sleeping", "delay"),
+    );
+    fd.inspect_err(|err| tracing::warn!("no sleep inhibitor: {err}"))
+        .ok()
+        .map(OwnedFd::from)
 }
 
 /// Listens to logind until the core ends.
 fn listen(events: Sender<Sleeping>) -> zbus::Result<()> {
     let connection = Connection::system()?;
-    let manager = Proxy::new(&connection, "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager")?;
+    let manager = Proxy::new(
+        &connection,
+        "org.freedesktop.login1",
+        "/org/freedesktop/login1",
+        "org.freedesktop.login1.Manager",
+    )?;
     // Listening first: a suspend between the two is not missed.
     let signals = manager.receive_signal("PrepareForSleep")?;
     let mut held = inhibit(&manager);
     tracing::info!("locks before sleeping");
     for signal in signals {
-        let Ok(going) = signal.body().deserialize::<bool>() else { continue };
+        let Ok(going) = signal.body().deserialize::<bool>() else {
+            continue;
+        };
         if going {
             if events.send(Sleeping(held.take())).is_err() {
                 break;
@@ -86,12 +97,14 @@ impl Orbit {
         self.lock_at_once();
         let Some(fd) = fd else { return };
         self.sleep_inhibitor = Some(fd);
-        let timer = self.loop_handle.insert_source(Timer::from_duration(MAX_WAIT), |_, _, state| {
-            if state.sleep_inhibitor.take().is_some() {
-                tracing::warn!("the lock was not drawn in time: sleeping anyway");
-            }
-            TimeoutAction::Drop
-        });
+        let timer = self
+            .loop_handle
+            .insert_source(Timer::from_duration(MAX_WAIT), |_, _, state| {
+                if state.sleep_inhibitor.take().is_some() {
+                    tracing::warn!("the lock was not drawn in time: sleeping anyway");
+                }
+                TimeoutAction::Drop
+            });
         if let Err(err) = timer {
             tracing::error!("sleep timer: {err}");
             self.sleep_inhibitor = None;

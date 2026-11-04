@@ -65,7 +65,9 @@ impl ScreenSaver {
         inhibitors.next = inhibitors.next.wrapping_add(1).max(1);
         let cookie = inhibitors.next;
         tracing::info!("idle inhibited by {application_name} ({sender}): {reason_for_inhibit}");
-        inhibitors.held.insert(cookie, (sender.to_owned().into(), application_name.to_owned()));
+        inhibitors
+            .held
+            .insert(cookie, (sender.to_owned().into(), application_name.to_owned()));
         if inhibitors.held.len() == 1 {
             let _ = self.events.send(Event::Inhibited(true));
         }
@@ -104,7 +106,10 @@ impl Orbit {
     /// Starts the bus thread and listens to it in the event loop.
     pub fn serve_screensaver(&mut self) {
         let (events, channel): (Sender<Event>, Channel<Event>) = channel::channel();
-        let screensaver = ScreenSaver { inhibitors: Default::default(), events };
+        let screensaver = ScreenSaver {
+            inhibitors: Default::default(),
+            events,
+        };
         let inserted = self.loop_handle.insert_source(channel, |event, _, state| {
             if let channel::Event::Msg(event) = event {
                 state.screensaver_event(event);

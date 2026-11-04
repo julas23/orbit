@@ -136,7 +136,10 @@ fn gestures(editor: &Rc<Editor>) {
         let Some(editor) = weak.upgrade() else { return };
         let over = editor.board.at(x, y);
         let right = gesture.current_button() == gtk::gdk::BUTTON_SECONDARY;
-        log::debug!("panel: press {} at {x:.0},{y:.0} over {over:?}", gesture.current_button());
+        log::debug!(
+            "panel: press {} at {x:.0},{y:.0} over {over:?}",
+            gesture.current_button()
+        );
         if editor.editing.get() {
             gesture.set_state(gtk::EventSequenceState::Claimed);
             if right {
@@ -175,7 +178,9 @@ fn gestures(editor: &Rc<Editor>) {
     let weak = Rc::downgrade(editor);
     drag.connect_drag_update(move |_, dx, dy| {
         let Some(editor) = weak.upgrade() else { return };
-        let Some((id, x, y)) = editor.dragging.get() else { return };
+        let Some((id, x, y)) = editor.dragging.get() else {
+            return;
+        };
         let target = (dx.hypot(dy) >= DRAG_MIN)
             .then(|| editor.board.nearest(x + dx, y + dy, Some(id)))
             .flatten();
@@ -184,7 +189,9 @@ fn gestures(editor: &Rc<Editor>) {
     let weak = Rc::downgrade(editor);
     drag.connect_drag_end(move |_, dx, dy| {
         let Some(editor) = weak.upgrade() else { return };
-        let Some((id, x, y)) = editor.dragging.take() else { return };
+        let Some((id, x, y)) = editor.dragging.take() else {
+            return;
+        };
         editor.set_mark(None);
         if let Some(widget) = editor.board.widget(id) {
             widget.remove_css_class("dragged");
@@ -247,12 +254,9 @@ impl Editor {
                 .collect()
         };
         let first = !self.saved.replace(true);
-        let saved = self.dir.save_panel_modules(
-            &list(Part::Start),
-            &list(Part::Center),
-            &list(Part::End),
-            first,
-        );
+        let saved = self
+            .dir
+            .save_panel_modules(&list(Part::Start), &list(Part::Center), &list(Part::End), first);
         match saved {
             Ok(()) => log::info!("panel: layout saved to panel.yaml"),
             Err(err) => log::error!("panel: saving the layout: {err:#}"),
@@ -267,7 +271,9 @@ impl Editor {
     fn move_by(&self, id: u64, target: u64, after: bool) {
         {
             let mut slots = self.slots.borrow_mut();
-            let Some(from) = slots.iter().position(|slot| slot.id == id) else { return };
+            let Some(from) = slots.iter().position(|slot| slot.id == id) else {
+                return;
+            };
             let mut slot = slots.remove(from);
             let Some(to) = slots.iter().position(|slot| slot.id == target) else {
                 slots.insert(from, slot);
@@ -284,7 +290,9 @@ impl Editor {
     fn step(&self, id: u64, by: isize) {
         {
             let mut slots = self.slots.borrow_mut();
-            let Some(i) = slots.iter().position(|slot| slot.id == id) else { return };
+            let Some(i) = slots.iter().position(|slot| slot.id == id) else {
+                return;
+            };
             let j = i as isize + by;
             let same = usize::try_from(j)
                 .ok()
@@ -293,7 +301,9 @@ impl Editor {
                 Some(j) => slots.swap(i, j),
                 None => {
                     let k = PARTS.iter().position(|p| *p == slots[i].part).unwrap_or(0) as isize + by;
-                    let Some(part) = usize::try_from(k).ok().and_then(|k| PARTS.get(k)) else { return };
+                    let Some(part) = usize::try_from(k).ok().and_then(|k| PARTS.get(k)) else {
+                        return;
+                    };
                     slots[i].part = *part;
                     // Last of the part above, first of the part below.
                     let slot = slots.remove(i);
@@ -382,20 +392,31 @@ fn panel_menu(editor: &Rc<Editor>, x: f64, y: f64) {
     if !missing.is_empty() {
         let add = gio::Menu::new();
         for name in &missing {
-            add.append(Some(&tr(&format!("panel-module-{name}"))), Some(&format!("edit.add::{name}")));
+            add.append(
+                Some(&tr(&format!("panel-module-{name}"))),
+                Some(&format!("edit.add::{name}")),
+            );
         }
         model.append_submenu(Some(&tr("panel-add")), &add);
         let action = gio::SimpleAction::new("add", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(editor);
         action.connect_activate(move |_, name| {
             let Some(editor) = weak.upgrade() else { return };
-            let Some(name) = name.and_then(|n| n.str().map(str::to_owned)) else { return };
+            let Some(name) = name.and_then(|n| n.str().map(str::to_owned)) else {
+                return;
+            };
             // After the module nearest to the click, else at the top.
             let near = editor.board.nearest(x, y, None);
             let mut entry = ModuleEntry::from(name.as_str());
             if name == "disk" {
                 // Another disk shows a filesystem none shows yet.
-                let shown: Vec<String> = editor.slots.borrow().iter().filter(|s| s.entry.name == "disk").map(|s| s.entry.path.clone().unwrap_or_else(|| "/".into())).collect();
+                let shown: Vec<String> = editor
+                    .slots
+                    .borrow()
+                    .iter()
+                    .filter(|s| s.entry.name == "disk")
+                    .map(|s| s.entry.path.clone().unwrap_or_else(|| "/".into()))
+                    .collect();
                 entry.path = crate::disk::mounts().into_iter().find(|m| !shown.contains(m));
             }
             let id = editor.push(Part::Start, entry);
@@ -439,11 +460,7 @@ fn module_menu(editor: &Rc<Editor>, id: u64, x: f64, y: f64) {
                 );
             }
         }
-        let action = gio::SimpleAction::new_stateful(
-            "size",
-            Some(glib::VariantTy::STRING),
-            &form.class().to_variant(),
-        );
+        let action = gio::SimpleAction::new_stateful("size", Some(glib::VariantTy::STRING), &form.class().to_variant());
         let weak = Rc::downgrade(editor);
         action.connect_activate(move |_, size| {
             let Some(editor) = weak.upgrade() else { return };
@@ -487,7 +504,10 @@ fn module_menu(editor: &Rc<Editor>, id: u64, x: f64, y: f64) {
 
     let parts = gio::Menu::new();
     for key in ["start", "center", "end"] {
-        parts.append(Some(&tr(&format!("panel-part-{key}"))), Some(&format!("edit.part::{key}")));
+        parts.append(
+            Some(&tr(&format!("panel-part-{key}"))),
+            Some(&format!("edit.part::{key}")),
+        );
     }
     let key = match part {
         Part::Start => "start",
@@ -539,7 +559,12 @@ fn module_menu(editor: &Rc<Editor>, id: u64, x: f64, y: f64) {
             }
         }),
     );
-    simple(&last, &tr("panel-edit-done"), "done", Box::new(|e| e.set_editing(false)));
+    simple(
+        &last,
+        &tr("panel-edit-done"),
+        "done",
+        Box::new(|e| e.set_editing(false)),
+    );
     model.append_section(None, &last);
 
     open(editor, &model, &group, x, y);
@@ -555,7 +580,11 @@ fn open(editor: &Editor, model: &gio::Menu, group: &gio::SimpleActionGroup, x: f
 /// shows it there and keeps it in `panel.yaml`.
 fn filesystems(editor: &Rc<Editor>, id: u64, model: &gio::Menu, group: &gio::SimpleActionGroup) {
     let Some(i) = editor.index(id) else { return };
-    let current = editor.slots.borrow()[i].entry.path.clone().unwrap_or_else(|| "/".into());
+    let current = editor.slots.borrow()[i]
+        .entry
+        .path
+        .clone()
+        .unwrap_or_else(|| "/".into());
     let mut mounts = crate::disk::mounts();
     if !mounts.contains(&current) {
         mounts.insert(0, current.clone());
@@ -570,7 +599,9 @@ fn filesystems(editor: &Rc<Editor>, id: u64, model: &gio::Menu, group: &gio::Sim
     let weak = Rc::downgrade(editor);
     action.connect_activate(move |_, path| {
         let Some(editor) = weak.upgrade() else { return };
-        let Some(path) = path.and_then(|p| p.str().map(str::to_owned)) else { return };
+        let Some(path) = path.and_then(|p| p.str().map(str::to_owned)) else {
+            return;
+        };
         let Some(i) = editor.index(id) else { return };
         editor.slots.borrow_mut()[i].entry.path = Some(path);
         // Built again, showing the new one.

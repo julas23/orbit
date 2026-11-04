@@ -12,13 +12,19 @@ use std::{
 };
 
 /// Where Debian (and most) put it; the first one found is used.
-const HELPERS: [&str; 2] = ["/usr/lib/polkit-1/polkit-agent-helper-1", "/usr/libexec/polkit-agent-helper-1"];
+const HELPERS: [&str; 2] = [
+    "/usr/lib/polkit-1/polkit-agent-helper-1",
+    "/usr/libexec/polkit-agent-helper-1",
+];
 
 /// What the helper says.
 #[derive(Debug)]
 pub enum Said {
     /// PAM asks; the answer is secret unless `echo`.
-    Prompt { text: String, echo: bool },
+    Prompt {
+        text: String,
+        echo: bool,
+    },
     Info(String),
     Error(String),
     /// The end: authenticated or not.
@@ -35,7 +41,10 @@ impl Helper {
     /// helper says arrives through `said`, from a thread; the last thing
     /// is always `Done`.
     pub fn start(user: &str, cookie: &str, said: async_channel::Sender<Said>) -> std::io::Result<Self> {
-        let path = HELPERS.into_iter().find(|p| Path::new(p).exists()).unwrap_or(HELPERS[0]);
+        let path = HELPERS
+            .into_iter()
+            .find(|p| Path::new(p).exists())
+            .unwrap_or(HELPERS[0]);
         let mut child = Command::new(path)
             .arg(user)
             .stdin(Stdio::piped())
@@ -87,8 +96,14 @@ fn parse(line: &str) -> Option<Said> {
     let (word, rest) = line.split_once(' ').unwrap_or((line, ""));
     let text = || unescape(rest.trim_end());
     Some(match word {
-        "PAM_PROMPT_ECHO_OFF" => Said::Prompt { text: text(), echo: false },
-        "PAM_PROMPT_ECHO_ON" => Said::Prompt { text: text(), echo: true },
+        "PAM_PROMPT_ECHO_OFF" => Said::Prompt {
+            text: text(),
+            echo: false,
+        },
+        "PAM_PROMPT_ECHO_ON" => Said::Prompt {
+            text: text(),
+            echo: true,
+        },
         "PAM_TEXT_INFO" => Said::Info(text()),
         "PAM_ERROR_MSG" => Said::Error(text()),
         "SUCCESS" => Said::Done(true),
@@ -133,7 +148,9 @@ mod tests {
 
     #[test]
     fn the_helper_lines_are_read() {
-        assert!(matches!(parse("PAM_PROMPT_ECHO_OFF Senha: "), Some(Said::Prompt { echo: false, text }) if text == "Senha:"));
+        assert!(
+            matches!(parse("PAM_PROMPT_ECHO_OFF Senha: "), Some(Said::Prompt { echo: false, text }) if text == "Senha:")
+        );
         assert!(matches!(parse("PAM_ERROR_MSG a\\nb"), Some(Said::Error(text)) if text == "a\nb"));
         assert!(matches!(parse("SUCCESS"), Some(Said::Done(true))));
         assert!(matches!(parse("FAILURE"), Some(Said::Done(false))));

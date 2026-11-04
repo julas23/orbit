@@ -50,9 +50,7 @@ pub fn run(surface: Surface) -> glib::ExitCode {
         }
     };
 
-    let app = gtk::Application::builder()
-        .application_id(surface.app_id)
-        .build();
+    let app = gtk::Application::builder().application_id(surface.app_id).build();
     // Holds the stylesheet watcher and the theme for the lifetime of the
     // application.
     let style = RefCell::new(None);
@@ -102,14 +100,13 @@ pub struct App {
 pub fn run_app(spec: App) -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let (config_dir, background, files) =
-        match parse_args(spec.name, spec.resident, spec.open.is_some()) {
-            Ok(parsed) => parsed,
-            Err(err) => {
-                eprintln!("{}: {err}", spec.name);
-                return glib::ExitCode::FAILURE;
-            }
-        };
+    let (config_dir, background, files) = match parse_args(spec.name, spec.resident, spec.open.is_some()) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{}: {err}", spec.name);
+            return glib::ExitCode::FAILURE;
+        }
+    };
 
     let mut app = gtk::Application::builder().application_id(spec.app_id);
     if spec.open.is_some() {
@@ -199,11 +196,7 @@ pub fn run_app(spec: App) -> glib::ExitCode {
 
 /// The config directory, whether `--background` was given (when
 /// `background` is accepted) and the files given (when `files` are).
-fn parse_args(
-    name: &str,
-    background: bool,
-    files: bool,
-) -> anyhow::Result<(PathBuf, bool, Vec<String>)> {
+fn parse_args(name: &str, background: bool, files: bool) -> anyhow::Result<(PathBuf, bool, Vec<String>)> {
     let mut args = std::env::args().skip(1);
     let mut config = None;
     let mut hidden = false;
@@ -211,9 +204,7 @@ fn parse_args(
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-c" | "--config" => {
-                config = Some(PathBuf::from(
-                    args.next().context("--config needs a directory")?,
-                ));
+                config = Some(PathBuf::from(args.next().context("--config needs a directory")?));
             }
             "--background" if background => hidden = true,
             "-h" | "--help" => {

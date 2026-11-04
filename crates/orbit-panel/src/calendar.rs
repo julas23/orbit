@@ -219,9 +219,7 @@ impl Month {
         overlay.set_measure_overlay(&grid, true);
 
         let title = gtk::Label::builder().css_classes(["title"]).build();
-        let root = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .build();
+        let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
         root.append(&title);
         root.append(&head);
         root.append(&overlay);
@@ -282,11 +280,8 @@ impl Month {
             label.set_css_classes(&classes);
         }
         self.today.set_label(&day.to_string());
-        self.short.set_label(
-            &now.format("%a %-d %b")
-                .map(|s| s.replace('.', ""))
-                .unwrap_or_default(),
-        );
+        self.short
+            .set_label(&now.format("%a %-d %b").map(|s| s.replace('.', "")).unwrap_or_default());
         // Until the place is known, the year alone.
         self.title.set_label(&match self.latitude.get() {
             Some(lat) => tr_args(
@@ -360,10 +355,7 @@ fn draw_lines(area: &gtk::DrawingArea, cr: &gtk::cairo::Context, cells: &[gtk::L
         color.alpha().into(),
     );
     // A column's left edge, then the right edge of the last column.
-    for x in (0..7)
-        .filter_map(|col| bounds(col).map(|b| b.0))
-        .chain([right])
-    {
+    for x in (0..7).filter_map(|col| bounds(col).map(|b| b.0)).chain([right]) {
         cr.rectangle(x, top, 1.0, bottom - top + 1.0);
     }
     for y in (0..cells.len() / 7)

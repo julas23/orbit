@@ -93,7 +93,9 @@ fn main() {
 fn fill(shm: &wl_shm::WlShm, qh: &QueueHandle<State>, w: u32, h: u32) -> wl_buffer::WlBuffer {
     let size = (w * h * 4) as usize;
     let fd = rustix::fs::memfd_create("session-lock", rustix::fs::MemfdFlags::CLOEXEC).expect("memfd");
-    let pixels: Vec<u8> = std::iter::repeat_n(COLOUR.to_le_bytes(), (w * h) as usize).flatten().collect();
+    let pixels: Vec<u8> = std::iter::repeat_n(COLOUR.to_le_bytes(), (w * h) as usize)
+        .flatten()
+        .collect();
     rustix::io::write(&fd, &pixels).expect("writing the buffer");
     let pool = shm.create_pool(fd.as_fd(), size as i32, qh, ());
     let buffer = pool.create_buffer(0, w as i32, h as i32, (w * 4) as i32, wl_shm::Format::Argb8888, qh, ());
@@ -102,7 +104,14 @@ fn fill(shm: &wl_shm::WlShm, qh: &QueueHandle<State>, w: u32, h: u32) -> wl_buff
 }
 
 impl Dispatch<ExtSessionLockV1, ()> for State {
-    fn event(state: &mut Self, _: &ExtSessionLockV1, event: ext_session_lock_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        _: &ExtSessionLockV1,
+        event: ext_session_lock_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         match event {
             ext_session_lock_v1::Event::Locked => state.locked = true,
             ext_session_lock_v1::Event::Finished => state.finished = true,
@@ -112,7 +121,14 @@ impl Dispatch<ExtSessionLockV1, ()> for State {
 }
 
 impl Dispatch<ExtSessionLockSurfaceV1, wl_surface::WlSurface> for State {
-    fn event(state: &mut Self, lock_surface: &ExtSessionLockSurfaceV1, event: ext_session_lock_surface_v1::Event, surface: &wl_surface::WlSurface, _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        lock_surface: &ExtSessionLockSurfaceV1,
+        event: ext_session_lock_surface_v1::Event,
+        surface: &wl_surface::WlSurface,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         if let ext_session_lock_surface_v1::Event::Configure { serial, width, height } = event {
             lock_surface.ack_configure(serial);
             state.to_draw.push((surface.clone(), width, height));
@@ -127,8 +143,24 @@ macro_rules! ignore {
         }
     )*};
 }
-ignore!(wl_compositor::WlCompositor, wl_shm::WlShm, wl_shm_pool::WlShmPool, wl_buffer::WlBuffer, wl_output::WlOutput, wl_surface::WlSurface, ExtSessionLockManagerV1);
+ignore!(
+    wl_compositor::WlCompositor,
+    wl_shm::WlShm,
+    wl_shm_pool::WlShmPool,
+    wl_buffer::WlBuffer,
+    wl_output::WlOutput,
+    wl_surface::WlSurface,
+    ExtSessionLockManagerV1
+);
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }

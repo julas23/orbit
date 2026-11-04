@@ -78,14 +78,22 @@ impl Default for Master {
 
 /// `area` less the gaps around it and the border: one window's content.
 fn inset((x, y, w, h): Rect, gaps: i32, border: i32) -> Rect {
-    (x + gaps + border, y + gaps + border, (w - 2 * gaps - 2 * border).max(1), (h - 2 * gaps - 2 * border).max(1))
+    (
+        x + gaps + border,
+        y + gaps + border,
+        (w - 2 * gaps - 2 * border).max(1),
+        (h - 2 * gaps - 2 * border).max(1),
+    )
 }
 
 /// `count` rectangles one under the other in `area` (gaps between them
 /// and around), content inside the border.
 fn rows(count: usize, (x, y, w, h): Rect, gaps: i32, border: i32) -> Vec<Rect> {
     // Columns of the area turned on its side.
-    columns(count, (y, x, h, w), gaps, border).into_iter().map(|(ry, rx, rh, rw)| (rx, ry, rw, rh)).collect()
+    columns(count, (y, x, h, w), gaps, border)
+        .into_iter()
+        .map(|(ry, rx, rh, rw)| (rx, ry, rw, rh))
+        .collect()
 }
 
 /// The first `masters.count` windows stacked on the left, the others on
@@ -159,7 +167,12 @@ pub fn weighted(weights: &[f64], area: Rect, gaps: i32, border: i32) -> Vec<Rect
         .map(|i| {
             let (start, end) = (ends[i as usize], ends[i as usize + 1]);
             let left = x + gaps + start + i * gaps;
-            (left + border, y + gaps + border, (end - start - 2 * border).max(1), height)
+            (
+                left + border,
+                y + gaps + border,
+                (end - start - 2 * border).max(1),
+                height,
+            )
         })
         .collect()
 }
@@ -170,9 +183,14 @@ mod tests {
 
     /// No two rectangles overlap, and all are inside `area`.
     fn apart(rects: &[Rect], area: Rect) -> bool {
-        let inside = |&(x, y, w, h): &Rect| x >= area.0 && y >= area.1 && x + w <= area.0 + area.2 && y + h <= area.1 + area.3;
+        let inside =
+            |&(x, y, w, h): &Rect| x >= area.0 && y >= area.1 && x + w <= area.0 + area.2 && y + h <= area.1 + area.3;
         let overlap = |a: &Rect, b: &Rect| a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3;
-        rects.iter().all(inside) && rects.iter().enumerate().all(|(i, a)| rects[i + 1..].iter().all(|b| !overlap(a, b)))
+        rects.iter().all(inside)
+            && rects
+                .iter()
+                .enumerate()
+                .all(|(i, a)| rects[i + 1..].iter().all(|b| !overlap(a, b)))
     }
 
     #[test]
@@ -188,7 +206,16 @@ mod tests {
         assert!(apart(&rects, area));
         assert_eq!(master(1, area, 10, 0, Master::default()), columns(1, area, 10, 0));
         // Two masters, a third of the width.
-        let two = master(4, area, 10, 0, Master { ratio: 1.0 / 3.0, count: 2 });
+        let two = master(
+            4,
+            area,
+            10,
+            0,
+            Master {
+                ratio: 1.0 / 3.0,
+                count: 2,
+            },
+        );
         assert_eq!(two[0].0, two[1].0);
         assert!(two[0].1 < two[1].1);
         assert!(two[0].2 < two[2].2);

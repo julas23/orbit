@@ -38,8 +38,7 @@ pub struct Surface {
 
 /// Whether surfaces can be moved here: on Wayland, with layer-shell.
 pub fn supported() -> bool {
-    gdk::Display::default().is_some_and(|d| d.is::<gdk4_wayland::WaylandDisplay>())
-        && gtk4_layer_shell::is_supported()
+    gdk::Display::default().is_some_and(|d| d.is::<gdk4_wayland::WaylandDisplay>()) && gtk4_layer_shell::is_supported()
 }
 
 struct Mover {
@@ -155,7 +154,9 @@ fn cover(mover: &Rc<Mover>, monitor: &gdk::Monitor) {
         let weak = Rc::downgrade(mover);
         drag.connect_drag_end(move |_, dx, dy| {
             let Some(mover) = weak.upgrade() else { return };
-            let Some((x, y)) = mover.from.borrow_mut().take() else { return };
+            let Some((x, y)) = mover.from.borrow_mut().take() else {
+                return;
+            };
             mover.aim(x + dx, y + dy);
             mover.pick();
         });
@@ -284,7 +285,12 @@ fn draw(mover: &Mover, area: &gtk::DrawingArea, cr: &gtk::cairo::Context, name: 
         cr.set_source_rgba(accent.red() as f64, accent.green() as f64, accent.blue() as f64, fill);
         cr.rectangle(x + 4.0, y + 4.0, bw - 8.0, bh - 8.0);
         let _ = cr.fill_preserve();
-        cr.set_source_rgba(accent.red() as f64, accent.green() as f64, accent.blue() as f64, if aimed { 0.9 } else { 0.35 });
+        cr.set_source_rgba(
+            accent.red() as f64,
+            accent.green() as f64,
+            accent.blue() as f64,
+            if aimed { 0.9 } else { 0.35 },
+        );
         cr.set_line_width(2.0);
         if current && !aimed {
             cr.set_dash(&[8.0, 6.0], 0.0);

@@ -152,7 +152,10 @@ impl Window {
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["places-box"])
             .build();
-        let side_image = gtk::Image::builder().pixel_size(128).css_classes(["side-thumb"]).build();
+        let side_image = gtk::Image::builder()
+            .pixel_size(128)
+            .css_classes(["side-thumb"])
+            .build();
         let side_name = gtk::Label::builder()
             .wrap(true)
             .wrap_mode(gtk::pango::WrapMode::WordChar)
@@ -296,7 +299,9 @@ impl Window {
     fn connect_close(self: &Rc<Self>) {
         let weak = Rc::downgrade(self);
         self.window.connect_close_request(move |window| {
-            let Some(w) = weak.upgrade() else { return glib::Propagation::Proceed };
+            let Some(w) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
             let n = w.jobs.count();
             if n == 0 {
                 return glib::Propagation::Proceed;
@@ -305,7 +310,11 @@ impl Window {
                 .modal(true)
                 .message(tr_args("files-close-busy", &[("n", number(n as f64))]))
                 .detail(tr("files-close-busy-detail"))
-                .buttons([tr("files-close-stay"), tr("files-close-stop"), tr("files-close-background")])
+                .buttons([
+                    tr("files-close-stay"),
+                    tr("files-close-stop"),
+                    tr("files-close-background"),
+                ])
                 .cancel_button(0)
                 .default_button(2)
                 .build();
@@ -393,9 +402,18 @@ impl Window {
 
     pub fn new_tab(self: &Rc<Self>, at: Location) {
         let pane = self.make_pane();
-        let root = gtk::Paned::builder().start_child(&pane.widget).wide_handle(true).build();
-        let label = gtk::Label::builder().ellipsize(gtk::pango::EllipsizeMode::Middle).max_width_chars(20).build();
-        let close = gtk::Button::builder().icon_name("window-close-symbolic").css_classes(["flat", "tab-close"]).build();
+        let root = gtk::Paned::builder()
+            .start_child(&pane.widget)
+            .wide_handle(true)
+            .build();
+        let label = gtk::Label::builder()
+            .ellipsize(gtk::pango::EllipsizeMode::Middle)
+            .max_width_chars(20)
+            .build();
+        let close = gtk::Button::builder()
+            .icon_name("window-close-symbolic")
+            .css_classes(["flat", "tab-close"])
+            .build();
         let tab_label = gtk::Box::builder().spacing(5).build();
         tab_label.append(&label);
         tab_label.append(&close);
@@ -434,7 +452,10 @@ impl Window {
     }
 
     fn tab(&self) -> Rc<Tab> {
-        let page = self.notebook.current_page().and_then(|n| self.notebook.nth_page(Some(n)));
+        let page = self
+            .notebook
+            .current_page()
+            .and_then(|n| self.notebook.nth_page(Some(n)));
         let tabs = self.tabs.borrow();
         page.and_then(|p| tabs.iter().find(|t| t.root.upcast_ref::<gtk::Widget>() == &p).cloned())
             .unwrap_or_else(|| tabs[0].clone())
@@ -602,7 +623,9 @@ impl Window {
         // (GVfs mounts them under /run/user/…/gvfs), not from there.
         let home = Location::Path(glib::home_dir());
         let gvfs = glib::user_runtime_dir().join("gvfs");
-        let share = chain.iter().position(|l| l.path().and_then(|p| p.parent()) == Some(gvfs.as_path()));
+        let share = chain
+            .iter()
+            .position(|l| l.path().and_then(|p| p.parent()) == Some(gvfs.as_path()));
         if let Some(i) = share.or_else(|| chain.iter().position(|l| *l == home)) {
             chain.drain(..i);
         }
@@ -613,7 +636,11 @@ impl Window {
             } else if place == Location::Computer {
                 tr("files-computer")
             } else if share.is_some() && n == 0 {
-                if pane::is_admin(&place) { tr("files-admin-root") } else { place.name() }
+                if pane::is_admin(&place) {
+                    tr("files-admin-root")
+                } else {
+                    place.name()
+                }
             } else if place.parent().is_none() {
                 "/".into()
             } else {
@@ -651,17 +678,26 @@ impl Window {
             let op = gtk::MountOperation::new(Some(&self.window));
             let p = Rc::downgrade(&pane);
             let f = file.clone();
-            file.mount_enclosing_volume(gio::MountMountFlags::NONE, Some(&op), gio::Cancellable::NONE, move |_| {
-                if let Some(p) = p.upgrade() {
-                    p.go(Location::of(&f));
-                }
-            });
+            file.mount_enclosing_volume(
+                gio::MountMountFlags::NONE,
+                Some(&op),
+                gio::Cancellable::NONE,
+                move |_| {
+                    if let Some(p) = p.upgrade() {
+                        p.go(Location::of(&f));
+                    }
+                },
+            );
         } else {
             let path = match typed.strip_prefix('~') {
                 Some(rest) => glib::home_dir().join(rest.trim_start_matches('/')),
                 None => PathBuf::from(typed),
             };
-            let path = if path.is_file() { path.parent().map(PathBuf::from).unwrap_or(path) } else { path };
+            let path = if path.is_file() {
+                path.parent().map(PathBuf::from).unwrap_or(path)
+            } else {
+                path
+            };
             pane.go(Location::Path(path));
         }
         pane.focus_view();
@@ -678,7 +714,11 @@ impl Window {
     }
 
     fn selected_paths(&self) -> Vec<PathBuf> {
-        self.pane().selected().iter().filter_map(|e| e.location.path().map(PathBuf::from)).collect()
+        self.pane()
+            .selected()
+            .iter()
+            .filter_map(|e| e.location.path().map(PathBuf::from))
+            .collect()
     }
 
     fn copy(&self, cut: bool) {
@@ -694,7 +734,8 @@ impl Window {
         glib::spawn_future_local(async move {
             let Some(w) = weak.upgrade() else { return };
             if let Some((paths, cut)) = clipboard::take(&w.window).await {
-                w.jobs.start(if cut { Kind::Move } else { Kind::Copy }, paths, Some(target));
+                w.jobs
+                    .start(if cut { Kind::Move } else { Kind::Copy }, paths, Some(target));
                 if cut {
                     w.window.clipboard().set_text("");
                 }
@@ -731,7 +772,10 @@ impl Window {
 
     fn new_folder(self: &Rc<Self>) {
         let Some(dir) = self.here() else { return };
-        let entry = gtk::Entry::builder().text(tr("files-new-folder-name")).width_chars(30).build();
+        let entry = gtk::Entry::builder()
+            .text(tr("files-new-folder-name"))
+            .width_chars(30)
+            .build();
         let window = gtk::Window::builder()
             .transient_for(&self.window)
             .css_classes(["orbit-files-dialog"])
@@ -811,30 +855,41 @@ impl Window {
             .and_then(|e| e.location.path().map(PathBuf::from))
             .or_else(|| self.here());
         let Some(folder) = folder else { return };
-        let Ok(uri) = glib::filename_to_uri(&folder, None) else { return };
+        let Ok(uri) = glib::filename_to_uri(&folder, None) else {
+            return;
+        };
         let file = gio::File::for_uri(&uri.replacen("file://", "admin://", 1));
         let op = gtk::MountOperation::new(Some(&self.window));
         let weak = Rc::downgrade(self);
         let f = file.clone();
-        file.mount_enclosing_volume(gio::MountMountFlags::NONE, Some(&op), gio::Cancellable::NONE, move |r| {
-            let Some(w) = weak.upgrade() else { return };
-            match r {
-                Ok(()) => w.new_tab(Location::of(&f)),
-                Err(e) if e.matches(gio::IOErrorEnum::AlreadyMounted) => w.new_tab(Location::of(&f)),
-                Err(e) if e.matches(gio::IOErrorEnum::FailedHandled) => {}
-                Err(e) => gtk::AlertDialog::builder()
-                    .modal(true)
-                    .message(tr("files-admin-failed"))
-                    .detail(e.message())
-                    .build()
-                    .show(Some(&w.window)),
-            }
-        });
+        file.mount_enclosing_volume(
+            gio::MountMountFlags::NONE,
+            Some(&op),
+            gio::Cancellable::NONE,
+            move |r| {
+                let Some(w) = weak.upgrade() else { return };
+                match r {
+                    Ok(()) => w.new_tab(Location::of(&f)),
+                    Err(e) if e.matches(gio::IOErrorEnum::AlreadyMounted) => w.new_tab(Location::of(&f)),
+                    Err(e) if e.matches(gio::IOErrorEnum::FailedHandled) => {}
+                    Err(e) => gtk::AlertDialog::builder()
+                        .modal(true)
+                        .message(tr("files-admin-failed"))
+                        .detail(e.message())
+                        .build()
+                        .show(Some(&w.window)),
+                }
+            },
+        );
     }
 
     /// Ctrl with the wheel, or with + and −: every pane alike, kept.
     fn zoom_by(&self, by: i32) {
-        let zoom = if by == 0 { pane::ZOOM_DEFAULT } else { self.pane().zoomed(by) };
+        let zoom = if by == 0 {
+            pane::ZOOM_DEFAULT
+        } else {
+            self.pane().zoomed(by)
+        };
         if zoom == self.zoom.get() {
             return;
         }
@@ -845,7 +900,10 @@ impl Window {
             }
         }
         let blocks = format!("zoom_list: {}\nzoom_grid: {}\n", zoom.0, zoom.1);
-        if let Err(err) = self.config_dir.save_app_keys("files", &["zoom_list", "zoom_grid"], &blocks) {
+        if let Err(err) = self
+            .config_dir
+            .save_app_keys("files", &["zoom_list", "zoom_grid"], &blocks)
+        {
             log::warn!("saving the zoom: {err:#}");
         }
     }
@@ -853,8 +911,17 @@ impl Window {
     /// The list's columns, each to tick: a right-click on the headers.
     fn columns_menu(self: &Rc<Self>, widget: &gtk::Widget, at: Option<(f64, f64)>) {
         let popover = gtk::Popover::builder().css_classes(["context-menu"]).build();
-        let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).css_classes(["columns-menu"]).build();
-        column.append(&gtk::Label::builder().label(tr("files-columns")).xalign(0.0).css_classes(["places-header"]).build());
+        let column = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["columns-menu"])
+            .build();
+        column.append(
+            &gtk::Label::builder()
+                .label(tr("files-columns"))
+                .xalign(0.0)
+                .css_classes(["places-header"])
+                .build(),
+        );
         for id in pane::COLUMNS {
             let check = gtk::CheckButton::builder()
                 .label(tr(&format!("files-column-{id}")))
@@ -904,7 +971,9 @@ impl Window {
     }
 
     fn compress(&self) {
-        let (Some(dir), selected) = (self.here(), self.pane().selected()) else { return };
+        let (Some(dir), selected) = (self.here(), self.pane().selected()) else {
+            return;
+        };
         if selected.is_empty() {
             return;
         }
@@ -918,7 +987,10 @@ impl Window {
             if std::fs::create_dir_all(&into).is_err() {
                 continue;
             }
-            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let dir = path.parent().map(PathBuf::from).unwrap_or_default();
             self.jobs.command(
                 tr_args("files-job-extract", &[("name", text(name))]),
@@ -953,7 +1025,11 @@ impl Window {
             Kind::Move => tr("files-move-to"),
             _ => tr("files-copy-to"),
         };
-        let dialog = gtk::FileDialog::builder().title(title).accept_label(tr("files-choose")).modal(true).build();
+        let dialog = gtk::FileDialog::builder()
+            .title(title)
+            .accept_label(tr("files-choose"))
+            .modal(true)
+            .build();
         if let Some(here) = self.here() {
             dialog.set_initial_folder(Some(&gio::File::for_path(here)));
         }
@@ -967,8 +1043,12 @@ impl Window {
 
     /// F4: text in Orbit-Edit; anything else in its own application.
     fn edit(&self) {
-        let (text, other): (Vec<Entry>, Vec<Entry>) =
-            self.pane().selected().into_iter().filter(|e| !e.dir).partition(|e| actions::is_text(&e.mime, &e.name));
+        let (text, other): (Vec<Entry>, Vec<Entry>) = self
+            .pane()
+            .selected()
+            .into_iter()
+            .filter(|e| !e.dir)
+            .partition(|e| actions::is_text(&e.mime, &e.name));
         actions::launch_orbit("Edit", &text, &WidgetExt::display(&self.window));
         for e in other {
             self.open(&e);
@@ -995,9 +1075,16 @@ impl Window {
     /// F12: a terminal in this folder.
     fn terminal(&self) {
         let Some(dir) = self.here() else { return };
-        let terminal = ["orbit-term", "ghostty", "alacritty", "kitty", "foot", "x-terminal-emulator"]
-            .into_iter()
-            .find(|t| glib::find_program_in_path(t).is_some());
+        let terminal = [
+            "orbit-term",
+            "ghostty",
+            "alacritty",
+            "kitty",
+            "foot",
+            "x-terminal-emulator",
+        ]
+        .into_iter()
+        .find(|t| glib::find_program_in_path(t).is_some());
         if let Some(t) = terminal
             && let Err(err) = std::process::Command::new(t).current_dir(&dir).spawn()
         {
@@ -1083,7 +1170,9 @@ impl Window {
         let sort = gio::SimpleAction::new("sort", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(self);
         sort.connect_activate(move |_, id| {
-            let (Some(w), Some(id)) = (weak.upgrade(), id.and_then(|v| v.get::<String>())) else { return };
+            let (Some(w), Some(id)) = (weak.upgrade(), id.and_then(|v| v.get::<String>())) else {
+                return;
+            };
             let pane = w.pane();
             pane.sort_by(SortKey::from_id(&id), pane.sort().1);
         });
@@ -1091,19 +1180,30 @@ impl Window {
         let new_document = gio::SimpleAction::new("new-document", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(self);
         new_document.connect_activate(move |_, t| {
-            let (Some(w), Some(t)) = (weak.upgrade(), t.and_then(|v| v.get::<String>())) else { return };
+            let (Some(w), Some(t)) = (weak.upgrade(), t.and_then(|v| v.get::<String>())) else {
+                return;
+            };
             w.new_document((!t.is_empty()).then(|| PathBuf::from(t)));
         });
         group.add_action(&new_document);
         add("new-tab", |w| {
-            let at = w.pane().focused().filter(|e| e.dir).map(|e| e.location).unwrap_or_else(|| w.pane().location.borrow().clone());
+            let at = w
+                .pane()
+                .focused()
+                .filter(|e| e.dir)
+                .map(|e| e.location)
+                .unwrap_or_else(|| w.pane().location.borrow().clone());
             w.new_tab(at);
         });
         let open_with = gio::SimpleAction::new("open-with", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(self);
         open_with.connect_activate(move |_, id| {
-            let (Some(w), Some(id)) = (weak.upgrade(), id.and_then(|v| v.get::<String>())) else { return };
-            let app = gio::AppInfo::all().into_iter().find(|a| a.id().as_deref() == Some(id.as_str()));
+            let (Some(w), Some(id)) = (weak.upgrade(), id.and_then(|v| v.get::<String>())) else {
+                return;
+            };
+            let app = gio::AppInfo::all()
+                .into_iter()
+                .find(|a| a.id().as_deref() == Some(id.as_str()));
             for e in w.pane().selected() {
                 actions::open(&e, app.as_ref(), &WidgetExt::display(&w.window));
             }
@@ -1112,10 +1212,15 @@ impl Window {
         let custom = gio::SimpleAction::new("custom", Some(glib::VariantTy::STRING));
         let weak = Rc::downgrade(self);
         custom.connect_activate(move |_, n| {
-            let (Some(w), Some(n)) = (weak.upgrade(), n.and_then(|v| v.get::<String>()).and_then(|s| s.parse::<usize>().ok())) else {
+            let (Some(w), Some(n)) = (
+                weak.upgrade(),
+                n.and_then(|v| v.get::<String>()).and_then(|s| s.parse::<usize>().ok()),
+            ) else {
                 return;
             };
-            let (Some(dir), Some(action)) = (w.here(), w.actions.get(n)) else { return };
+            let (Some(dir), Some(action)) = (w.here(), w.actions.get(n)) else {
+                return;
+            };
             action.run(&dir, &w.pane().selected());
         });
         group.add_action(&custom);
@@ -1158,10 +1263,21 @@ impl Window {
         let in_folder = self.here().is_some();
         // New: a folder, or a document — empty, or from ~/Templates.
         let new_items = || {
-            let mut docs = vec![item(&tr("files-new-empty-document"), "files.new-document", Some("".to_variant()))];
+            let mut docs = vec![item(
+                &tr("files-new-empty-document"),
+                "files.new-document",
+                Some("".to_variant()),
+            )];
             for t in templates() {
-                let label = t.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                docs.push(item(&label, "files.new-document", Some(t.display().to_string().to_variant())));
+                let label = t
+                    .file_stem()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                docs.push(item(
+                    &label,
+                    "files.new-document",
+                    Some(t.display().to_string().to_variant()),
+                ));
             }
             vec![
                 item(&tr("files-new-folder"), "files.new-folder", None),
@@ -1170,7 +1286,8 @@ impl Window {
         };
         let as_admin = in_folder
             && !pane.as_admin()
-            && (selected.is_empty() || (selected.len() == 1 && selected[0].dir && selected[0].location.path().is_some()));
+            && (selected.is_empty()
+                || (selected.len() == 1 && selected[0].dir && selected[0].location.path().is_some()));
         if selected.is_empty() {
             if let Some(step) = undo::last() {
                 sections.push(vec![item(&step.label(), "files.undo", None)]);
@@ -1254,7 +1371,14 @@ impl Window {
             .iter()
             .enumerate()
             .filter(|(_, a)| a.applies(&selected))
-            .map(|(n, a)| item_icon(&a.name, "files.custom", Some(n.to_string().to_variant()), a.icon.as_deref()))
+            .map(|(n, a)| {
+                item_icon(
+                    &a.name,
+                    "files.custom",
+                    Some(n.to_string().to_variant()),
+                    a.icon.as_deref(),
+                )
+            })
             .collect();
         if !custom.is_empty() {
             sections.push(custom);
@@ -1274,7 +1398,9 @@ impl Window {
     // ------------------------------------------------- drag and drop
 
     fn connect_drag(self: &Rc<Self>, pane: &Rc<Pane>) {
-        let source = gtk::DragSource::builder().actions(gdk::DragAction::COPY | gdk::DragAction::MOVE).build();
+        let source = gtk::DragSource::builder()
+            .actions(gdk::DragAction::COPY | gdk::DragAction::MOVE)
+            .build();
         let p = Rc::downgrade(pane);
         source.connect_prepare(move |_, _, _| {
             let p = p.upgrade()?;
@@ -1287,14 +1413,19 @@ impl Window {
     /// Dropped files: moved within a disk, copied across; Ctrl copies,
     /// Shift moves.
     fn connect_drop(self: &Rc<Self>, pane: &Rc<Pane>) {
-        let target = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY | gdk::DragAction::MOVE);
+        let target = gtk::DropTarget::new(
+            gdk::FileList::static_type(),
+            gdk::DragAction::COPY | gdk::DragAction::MOVE,
+        );
         let weak = Rc::downgrade(self);
         let p = Rc::downgrade(pane);
         target.connect_drop(move |t, value, _, _| {
             let (Some(w), Some(p), Ok(list)) = (weak.upgrade(), p.upgrade(), value.get::<gdk::FileList>()) else {
                 return false;
             };
-            let Some(dir) = p.location.borrow().path().map(PathBuf::from) else { return false };
+            let Some(dir) = p.location.borrow().path().map(PathBuf::from) else {
+                return false;
+            };
             let paths: Vec<PathBuf> = list.files().iter().filter_map(|f| f.path()).collect();
             let state = t.current_event_state();
             let same_disk = paths.first().is_some_and(|s| same_device(s, &dir));
@@ -1526,7 +1657,10 @@ fn submenu(label: &str, items: Vec<gtk::Widget>) -> gtk::Widget {
     let row = gtk::Box::builder().spacing(10).build();
     row.append(&gtk::Label::builder().label(label).xalign(0.0).hexpand(true).build());
     row.append(&gtk::Image::from_icon_name("go-next-symbolic"));
-    let button = gtk::Button::builder().child(&row).css_classes(["flat", "menu-item"]).build();
+    let button = gtk::Button::builder()
+        .child(&row)
+        .css_classes(["flat", "menu-item"])
+        .build();
     let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
     let popover = gtk::Popover::builder()
         .child(&column)

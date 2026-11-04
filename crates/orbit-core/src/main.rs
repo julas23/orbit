@@ -31,12 +31,11 @@ mod config;
 mod cursor;
 mod direction;
 mod eyes;
-mod focus;
 mod floating;
+mod focus;
 mod fullscreen;
 mod grab;
 mod greet;
-mod session_lock;
 mod handlers;
 mod idle;
 mod input;
@@ -50,6 +49,7 @@ mod resize;
 mod rounded;
 mod screencopy;
 mod screensaver;
+mod session_lock;
 mod sleep;
 mod state;
 mod switcher;
@@ -75,14 +75,22 @@ fn main() -> anyhow::Result<()> {
     let mut startup = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "-c" | "--config" => config_path = args.next().map(Into::into).ok_or_else(|| anyhow::anyhow!("--config needs a file"))?,
+            "-c" | "--config" => {
+                config_path = args
+                    .next()
+                    .map(Into::into)
+                    .ok_or_else(|| anyhow::anyhow!("--config needs a file"))?
+            }
             "--" => command = args.by_ref().collect(),
             "--nested" => drm = false,
             "--drm" => drm = true,
             "--locked" => locked = true,
             "--startup" => startup = Some(true),
             "-h" | "--help" => {
-                println!("Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [--startup] [-- COMMAND…]  (default config: {})", Config::path().display());
+                println!(
+                    "Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [--startup] [-- COMMAND…]  (default config: {})",
+                    Config::path().display()
+                );
                 return Ok(());
             }
             other => anyhow::bail!("unknown argument: {other}"),
@@ -165,7 +173,11 @@ fn logging(drm: bool) {
         let _ = std::fs::create_dir_all(&dir);
         let _ = std::fs::rename(dir.join("core.log"), dir.join("core.log.prev"));
         if let Ok(file) = std::fs::File::create(dir.join("core.log")) {
-            tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(std::sync::Mutex::new(file)).init();
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_ansi(false)
+                .with_writer(std::sync::Mutex::new(file))
+                .init();
             return;
         }
     }
@@ -174,7 +186,11 @@ fn logging(drm: bool) {
 
 /// `arg` as one word for `sh -c`.
 fn shell_quote(arg: &str) -> String {
-    if !arg.is_empty() && arg.chars().all(|c| c.is_ascii_alphanumeric() || "-_./=:,+@%".contains(c)) {
+    if !arg.is_empty()
+        && arg
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./=:,+@%".contains(c))
+    {
         arg.to_owned()
     } else {
         format!("'{}'", arg.replace('\'', r"'\''"))

@@ -173,9 +173,7 @@ fn keys(info: &gio_unix::DesktopAppInfo) -> Vec<String> {
     [
         info.name().to_string(),
         executable,
-        info.startup_wm_class()
-            .map(|c| c.to_string())
-            .unwrap_or_default(),
+        info.startup_wm_class().map(|c| c.to_string()).unwrap_or_default(),
         id,
     ]
     .iter()
@@ -229,11 +227,7 @@ impl Launcher {
             .into_iter()
             .flatten()
             .find(|i| !i.list_actions().is_empty());
-        let mut recent_names: Vec<String> = [&info, &system_info]
-            .into_iter()
-            .flatten()
-            .flat_map(keys)
-            .collect();
+        let mut recent_names: Vec<String> = [&info, &system_info].into_iter().flatten().flat_map(keys).collect();
         recent_names.push(normalize(&name));
         recent_names.sort();
         recent_names.dedup();
@@ -284,8 +278,7 @@ impl Launcher {
         let result = match &self.action {
             Action::App(info) => {
                 let context = widget.display().app_launch_context();
-                info.launch(files, Some(&context))
-                    .map_err(|err| err.to_string())
+                info.launch(files, Some(&context)).map_err(|err| err.to_string())
             }
             Action::Command(command) => {
                 let paths: Vec<String> = files
@@ -293,11 +286,7 @@ impl Launcher {
                     .filter_map(|f| f.path())
                     .map(|p| glib::shell_quote(p).to_string_lossy().into_owned())
                     .collect();
-                let command = [command.clone()]
-                    .into_iter()
-                    .chain(paths)
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let command = [command.clone()].into_iter().chain(paths).collect::<Vec<_>>().join(" ");
                 glib::spawn_command_line_async(command).map_err(|err| err.to_string())
             }
         };
@@ -343,12 +332,7 @@ fn menu(launcher: &Rc<Launcher>, anchor: &gtk::Button, at: orbit_app::popup::Poi
     let main = gio::Menu::new();
     {
         let l = launcher.clone();
-        add(
-            &main,
-            &tr("dock-open"),
-            "open",
-            Box::new(move |w| l.launch(w, &[])),
-        );
+        add(&main, &tr("dock-open"), "open", Box::new(move |w| l.launch(w, &[])));
     }
     if let Some(info) = &launcher.actions {
         for (i, action) in info.list_actions().iter().enumerate() {

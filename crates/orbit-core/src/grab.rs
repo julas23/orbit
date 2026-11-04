@@ -37,13 +37,29 @@ impl Orbit {
     /// Starts moving `window` with the pointer, from where the pointer is.
     pub fn start_move(&mut self, window: Window, serial: Serial, start_data: Option<GrabStartData<Orbit>>) {
         let Some(pointer) = self.seat.get_pointer() else { return };
-        let Some(from) = self.space.element_location(&window) else { return };
+        let Some(from) = self.space.element_location(&window) else {
+            return;
+        };
         let location = pointer.current_location();
-        let start_data = start_data.unwrap_or(GrabStartData { focus: None, button: BTN_LEFT, location });
+        let start_data = start_data.unwrap_or(GrabStartData {
+            focus: None,
+            button: BTN_LEFT,
+            location,
+        });
         self.dragging = Some(window.clone());
         self.space.raise_element(&window, true);
         self.focus_window(Some(window.clone()));
-        pointer.set_grab(self, MoveGrab { start_data, window, from, at: location }, serial, Focus::Clear);
+        pointer.set_grab(
+            self,
+            MoveGrab {
+                start_data,
+                window,
+                from,
+                at: location,
+            },
+            serial,
+            Focus::Clear,
+        );
     }
 
     /// The window was let go at `pos`.
@@ -71,7 +87,12 @@ impl Orbit {
         let shown: Vec<Window> = self.visible.values().flat_map(|n| self.windows_of(*n)).collect();
         let under = shown.iter().find(|w| {
             let (x, y, width, height) = info(w).borrow().rect;
-            *w != window && !crate::floating::floats(w) && pos.x >= x as f64 && pos.x < (x + width) as f64 && pos.y >= y as f64 && pos.y < (y + height) as f64
+            *w != window
+                && !crate::floating::floats(w)
+                && pos.x >= x as f64
+                && pos.x < (x + width) as f64
+                && pos.y >= y as f64
+                && pos.y < (y + height) as f64
         });
         match under {
             Some(other) => {
@@ -90,7 +111,13 @@ impl Orbit {
 }
 
 impl PointerGrab<Orbit> for MoveGrab {
-    fn motion(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, _focus: Option<(WlSurface, Point<f64, Logical>)>, event: &MotionEvent) {
+    fn motion(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        _focus: Option<(WlSurface, Point<f64, Logical>)>,
+        event: &MotionEvent,
+    ) {
         // While the grab is active, no client has pointer focus.
         handle.motion(data, None, event);
         self.at = event.location;
@@ -99,7 +126,13 @@ impl PointerGrab<Orbit> for MoveGrab {
         data.request_render();
     }
 
-    fn relative_motion(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, focus: Option<(WlSurface, Point<f64, Logical>)>, event: &RelativeMotionEvent) {
+    fn relative_motion(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        focus: Option<(WlSurface, Point<f64, Logical>)>,
+        event: &RelativeMotionEvent,
+    ) {
         handle.relative_motion(data, focus, event);
     }
 
@@ -118,35 +151,75 @@ impl PointerGrab<Orbit> for MoveGrab {
         handle.frame(data);
     }
 
-    fn gesture_swipe_begin(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureSwipeBeginEvent) {
+    fn gesture_swipe_begin(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureSwipeBeginEvent,
+    ) {
         handle.gesture_swipe_begin(data, event)
     }
 
-    fn gesture_swipe_update(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureSwipeUpdateEvent) {
+    fn gesture_swipe_update(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureSwipeUpdateEvent,
+    ) {
         handle.gesture_swipe_update(data, event)
     }
 
-    fn gesture_swipe_end(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureSwipeEndEvent) {
+    fn gesture_swipe_end(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureSwipeEndEvent,
+    ) {
         handle.gesture_swipe_end(data, event)
     }
 
-    fn gesture_pinch_begin(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GesturePinchBeginEvent) {
+    fn gesture_pinch_begin(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GesturePinchBeginEvent,
+    ) {
         handle.gesture_pinch_begin(data, event)
     }
 
-    fn gesture_pinch_update(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GesturePinchUpdateEvent) {
+    fn gesture_pinch_update(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GesturePinchUpdateEvent,
+    ) {
         handle.gesture_pinch_update(data, event)
     }
 
-    fn gesture_pinch_end(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GesturePinchEndEvent) {
+    fn gesture_pinch_end(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GesturePinchEndEvent,
+    ) {
         handle.gesture_pinch_end(data, event)
     }
 
-    fn gesture_hold_begin(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureHoldBeginEvent) {
+    fn gesture_hold_begin(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureHoldBeginEvent,
+    ) {
         handle.gesture_hold_begin(data, event)
     }
 
-    fn gesture_hold_end(&mut self, data: &mut Orbit, handle: &mut PointerInnerHandle<'_, Orbit>, event: &GestureHoldEndEvent) {
+    fn gesture_hold_end(
+        &mut self,
+        data: &mut Orbit,
+        handle: &mut PointerInnerHandle<'_, Orbit>,
+        event: &GestureHoldEndEvent,
+    ) {
         handle.gesture_hold_end(data, event)
     }
 

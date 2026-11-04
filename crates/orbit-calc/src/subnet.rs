@@ -60,10 +60,7 @@ pub fn new() -> gtk::Widget {
     inputs.append(&gtk::Label::new(Some("/")));
     inputs.append(&prefix);
 
-    let message = gtk::Label::builder()
-        .xalign(0.0)
-        .css_classes(["message"])
-        .build();
+    let message = gtk::Label::builder().xalign(0.0).css_classes(["message"]).build();
 
     let grid = gtk::Grid::builder()
         .row_spacing(5)
@@ -111,10 +108,7 @@ pub fn new() -> gtk::Widget {
     });
     {
         let state = state.clone();
-        state
-            .address
-            .clone()
-            .connect_changed(move |_| state.address_changed());
+        state.address.clone().connect_changed(move |_| state.address_changed());
     }
     {
         let state = state.clone();

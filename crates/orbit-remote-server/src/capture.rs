@@ -51,9 +51,15 @@ pub struct Plane {
 /// modifier, or as the driver likes; with its modifier. One made by the
 /// flag says none (it is implicit), but it is linear: said so, as VA-API
 /// will not take an implicit one.
-fn allocate(device: &gbm::Device<std::fs::File>, width: u32, height: u32) -> std::io::Result<(gbm::BufferObject<()>, u64)> {
+fn allocate(
+    device: &gbm::Device<std::fs::File>,
+    width: u32,
+    height: u32,
+) -> std::io::Result<(gbm::BufferObject<()>, u64)> {
     use gbm::{BufferObjectFlags as Flags, Format, Modifier};
-    if let Ok(object) = device.create_buffer_object::<()>(width, height, Format::Xrgb8888, Flags::RENDERING | Flags::LINEAR) {
+    if let Ok(object) =
+        device.create_buffer_object::<()>(width, height, Format::Xrgb8888, Flags::RENDERING | Flags::LINEAR)
+    {
         let modifier = match object.modifier() {
             Modifier::Invalid => Modifier::Linear,
             modifier => modifier,
@@ -61,7 +67,13 @@ fn allocate(device: &gbm::Device<std::fs::File>, width: u32, height: u32) -> std
         return Ok((object, modifier.into()));
     }
     let object = device
-        .create_buffer_object_with_modifiers2(width, height, Format::Xrgb8888, [Modifier::Linear].into_iter(), Flags::RENDERING)
+        .create_buffer_object_with_modifiers2(
+            width,
+            height,
+            Format::Xrgb8888,
+            [Modifier::Linear].into_iter(),
+            Flags::RENDERING,
+        )
         .or_else(|_| device.create_buffer_object(width, height, Format::Xrgb8888, Flags::RENDERING))?;
     let modifier = object.modifier().into();
     Ok((object, modifier))
@@ -96,9 +108,12 @@ impl Capture {
         let conn = Connection::connect_to_env().context("connecting to the Wayland display")?;
         let (globals, mut queue) = registry_queue_init::<State>(&conn)?;
         let qh = queue.handle();
-        let manager: ZwlrScreencopyManagerV1 =
-            globals.bind(&qh, 3..=3, ()).context("the compositor has no wlr-screencopy version 3")?;
-        let dmabuf: ZwpLinuxDmabufV1 = globals.bind(&qh, 3..=3, ()).context("the compositor has no linux-dmabuf")?;
+        let manager: ZwlrScreencopyManagerV1 = globals
+            .bind(&qh, 3..=3, ())
+            .context("the compositor has no wlr-screencopy version 3")?;
+        let dmabuf: ZwpLinuxDmabufV1 = globals
+            .bind(&qh, 3..=3, ())
+            .context("the compositor has no linux-dmabuf")?;
         let mut state = State::default();
         let outputs: Vec<wl_output::WlOutput> = globals.contents().with_list(|list| {
             list.iter()
@@ -154,8 +169,22 @@ impl Capture {
                 modifier,
             };
             let params = dmabuf.create_params(&qh, ());
-            params.add(plane.fd.as_fd(), 0, plane.offset, plane.stride, (modifier >> 32) as u32, modifier as u32);
-            let buffer = params.create_immed(width as i32, height as i32, fourcc, zwp_linux_buffer_params_v1::Flags::empty(), &qh, ());
+            params.add(
+                plane.fd.as_fd(),
+                0,
+                plane.offset,
+                plane.stride,
+                (modifier >> 32) as u32,
+                modifier as u32,
+            );
+            let buffer = params.create_immed(
+                width as i32,
+                height as i32,
+                fourcc,
+                zwp_linux_buffer_params_v1::Flags::empty(),
+                &qh,
+                (),
+            );
             params.destroy();
             planes.push(plane);
             buffers.push(buffer);
@@ -184,7 +213,9 @@ impl Capture {
         let index = self.next;
         self.next = (self.next + 1) % BUFFERS;
         self.state.frame = FrameState::default();
-        let frame = self.manager.capture_output(i32::from(self.cursor), &self.output, &qh, ());
+        let frame = self
+            .manager
+            .capture_output(i32::from(self.cursor), &self.output, &qh, ());
         while !self.state.frame.buffer_done && !self.state.frame.failed {
             self.queue.blocking_dispatch(&mut self.state)?;
         }
@@ -218,9 +249,18 @@ pub fn measure(output: Option<&str>) -> anyhow::Result<()> {
         last = Instant::now();
         longest = longest.max(took);
         frames += 1;
-        let pixels: f64 = frame.damage.iter().map(|&(_, _, w, h)| f64::from(w) * f64::from(h)).sum();
+        let pixels: f64 = frame
+            .damage
+            .iter()
+            .map(|&(_, _, w, h)| f64::from(w) * f64::from(h))
+            .sum();
         changed += pixels / area;
-        log::debug!("remote: frame {frames} in buffer {} after {took:?}: {} rects, {:.1}% changed", frame.index, frame.damage.len(), 100.0 * pixels / area);
+        log::debug!(
+            "remote: frame {frames} in buffer {} after {took:?}: {} rects, {:.1}% changed",
+            frame.index,
+            frame.damage.len(),
+            100.0 * pixels / area
+        );
     }
     let seconds = start.elapsed().as_secs_f64();
     println!(
@@ -248,7 +288,14 @@ struct State {
 }
 
 impl Dispatch<ZwlrScreencopyFrameV1, ()> for State {
-    fn event(state: &mut Self, _: &ZwlrScreencopyFrameV1, event: frame::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        _: &ZwlrScreencopyFrameV1,
+        event: frame::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         let f = &mut state.frame;
         match event {
             frame::Event::LinuxDmabuf { format, width, height } => f.dmabuf = Some((format, width, height)),
@@ -262,7 +309,14 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for State {
 }
 
 impl Dispatch<wl_output::WlOutput, usize> for State {
-    fn event(state: &mut Self, _: &wl_output::WlOutput, event: wl_output::Event, index: &usize, _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        _: &wl_output::WlOutput,
+        event: wl_output::Event,
+        index: &usize,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         if let wl_output::Event::Name { name } = event {
             state.names[*index] = name;
         }
@@ -270,7 +324,14 @@ impl Dispatch<wl_output::WlOutput, usize> for State {
 }
 
 impl Dispatch<ZwpLinuxBufferParamsV1, ()> for State {
-    fn event(_: &mut Self, _: &ZwpLinuxBufferParamsV1, event: zwp_linux_buffer_params_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        _: &mut Self,
+        _: &ZwpLinuxBufferParamsV1,
+        event: zwp_linux_buffer_params_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         if let zwp_linux_buffer_params_v1::Event::Failed = event {
             log::error!("remote: the compositor would not take a dmabuf");
         }
@@ -287,5 +348,13 @@ macro_rules! ignore {
 ignore!(wl_buffer::WlBuffer, ZwlrScreencopyManagerV1, ZwpLinuxDmabufV1);
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }

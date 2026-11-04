@@ -69,7 +69,9 @@ impl Analyzer {
         Self {
             ring: vec![0.0; size],
             head: 0,
-            window: (0..size).map(|i| 0.5 - 0.5 * (2.0 * PI * i as f32 / (size - 1) as f32).cos()).collect(),
+            window: (0..size)
+                .map(|i| 0.5 - 0.5 * (2.0 * PI * i as f32 / (size - 1) as f32).cos())
+                .collect(),
             ranges,
             eq,
             sens: 1.0,
@@ -96,7 +98,9 @@ impl Analyzer {
     /// The bars now, 0 to 1.
     pub fn frame(&mut self) -> Vec<f32> {
         let size = self.ring.len();
-        let mut re: Vec<f32> = (0..size).map(|i| self.ring[(self.head + i) % size] * self.window[i]).collect();
+        let mut re: Vec<f32> = (0..size)
+            .map(|i| self.ring[(self.head + i) % size] * self.window[i])
+            .collect();
         let mut im = vec![0.0; size];
         fft(&mut re, &mut im);
         // A full-scale sine comes out about 1.
@@ -191,7 +195,9 @@ mod tests {
     const BANDS: usize = 12;
 
     fn sine(rate: u32, freq: f32, amplitude: f32, n: usize) -> Vec<f32> {
-        (0..n).map(|i| amplitude * (2.0 * PI * freq * i as f32 / rate as f32).sin()).collect()
+        (0..n)
+            .map(|i| amplitude * (2.0 * PI * freq * i as f32 / rate as f32).sin())
+            .collect()
     }
 
     #[test]
@@ -273,7 +279,10 @@ mod tests {
             let loudest = (0..BANDS).max_by(|&x, &y| frame[x].total_cmp(&frame[y])).unwrap();
             let (from, to) = a.ranges[loudest];
             let bin = 1000.0 * size as f32 / rate as f32;
-            assert!((from as f32) <= bin.ceil() && bin.floor() < to as f32, "band {loudest} {from}..{to}");
+            assert!(
+                (from as f32) <= bin.ceil() && bin.floor() < to as f32,
+                "band {loudest} {from}..{to}"
+            );
             // The sensitivity brought the loudest bar to the top.
             assert!(frame[loudest] > 0.9);
             let silence = vec![0.0; rate as usize / 30];

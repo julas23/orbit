@@ -142,15 +142,31 @@ impl Meter {
         if let Some(label) = &self.detail {
             label.set_label(detail);
         }
-        let tip = [value, detail, more].into_iter().filter(|t| !t.is_empty()).collect::<Vec<_>>().join("\n");
+        let tip = [value, detail, more]
+            .into_iter()
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
         self.root.set_tooltip_text(Some(&tip));
     }
 }
 
 /// The grid, then each series as a line over a faint fill, newest at the
 /// right.
-fn draw(cr: &cairo::Context, history: &[VecDeque<f64>], scale: Scale, w: f64, h: f64, colour: &gtk::gdk::RGBA) -> Result<(), cairo::Error> {
-    let (r, g, b, a) = (f64::from(colour.red()), f64::from(colour.green()), f64::from(colour.blue()), f64::from(colour.alpha()));
+fn draw(
+    cr: &cairo::Context,
+    history: &[VecDeque<f64>],
+    scale: Scale,
+    w: f64,
+    h: f64,
+    colour: &gtk::gdk::RGBA,
+) -> Result<(), cairo::Error> {
+    let (r, g, b, a) = (
+        f64::from(colour.red()),
+        f64::from(colour.green()),
+        f64::from(colour.blue()),
+        f64::from(colour.alpha()),
+    );
     cr.set_source_rgba(r, g, b, a * 0.12);
     cr.set_line_width(1.0);
     for k in 0..=8 {
@@ -291,7 +307,12 @@ fn cpu_ghz() -> Option<f64> {
     let khz: Vec<f64> = std::fs::read_dir("/sys/devices/system/cpu")
         .ok()?
         .flatten()
-        .filter(|e| e.file_name().to_string_lossy().strip_prefix("cpu").is_some_and(|n| n.parse::<u32>().is_ok()))
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .strip_prefix("cpu")
+                .is_some_and(|n| n.parse::<u32>().is_ok())
+        })
         .filter_map(|e| read_num(e.path().join("cpufreq/scaling_cur_freq")))
         .collect();
     (!khz.is_empty()).then(|| khz.iter().sum::<f64>() / khz.len() as f64 / 1e6)
@@ -312,7 +333,11 @@ pub fn ram(config: &MeterConfig, form: Form) -> gtk::Widget {
         };
         let mut detail = format!("cache {}", short(mem.cached));
         if mem.swap_total > 0.0 {
-            detail = format!("swap {} / {} · {detail}", short(mem.swap_total - mem.swap_free), short(mem.swap_total));
+            detail = format!(
+                "swap {} / {} · {detail}",
+                short(mem.swap_total - mem.swap_free),
+                short(mem.swap_total)
+            );
         }
         meter.show(&value, &detail, "");
     })
@@ -354,9 +379,13 @@ pub fn lan(config: &MeterConfig, form: Form) -> gtk::Widget {
     let mut last: Option<(Instant, u64, u64)> = None;
     every(config.interval, meter, move |meter| {
         let iface = wanted.clone().or_else(default_route);
-        let Some((rx, tx)) = net_bytes(iface.as_deref()) else { return };
+        let Some((rx, tx)) = net_bytes(iface.as_deref()) else {
+            return;
+        };
         let now = Instant::now();
-        let Some((then, last_rx, last_tx)) = last.replace((now, rx, tx)) else { return };
+        let Some((then, last_rx, last_tx)) = last.replace((now, rx, tx)) else {
+            return;
+        };
         let secs = now.duration_since(then).as_secs_f64().max(0.001);
         let down = rx.saturating_sub(last_rx) as f64 / secs;
         let up = tx.saturating_sub(last_tx) as f64 / secs;
@@ -385,7 +414,9 @@ fn net_bytes(iface: Option<&str>) -> Option<(u64, u64)> {
     let text = read("/proc/net/dev")?;
     let mut sums = None;
     for line in text.lines().skip(2) {
-        let Some((name, rest)) = line.split_once(':') else { continue };
+        let Some((name, rest)) = line.split_once(':') else {
+            continue;
+        };
         let name = name.trim();
         if iface.map_or(name == "lo", |want| name != want) {
             continue;
@@ -441,7 +472,12 @@ impl GpuSource {
         let mut cards: Vec<PathBuf> = std::fs::read_dir("/sys/class/drm")
             .ok()?
             .flatten()
-            .filter(|e| e.file_name().to_string_lossy().strip_prefix("card").is_some_and(|n| n.parse::<u32>().is_ok()))
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .strip_prefix("card")
+                    .is_some_and(|n| n.parse::<u32>().is_ok())
+            })
             .map(|e| e.path().join("device"))
             .collect();
         cards.sort();
@@ -468,9 +504,18 @@ struct GpuReading {
 fn amd_reading(dir: &Path) -> Option<GpuReading> {
     let busy = read_num(dir.join("gpu_busy_percent"))?;
     let vram = read_num(dir.join("mem_info_vram_used")).zip(read_num(dir.join("mem_info_vram_total")));
-    let hwmon = std::fs::read_dir(dir.join("hwmon")).ok().and_then(|mut d| d.next()?.ok()).map(|e| e.path());
-    let temp = hwmon.as_ref().and_then(|h| read_num(h.join("temp1_input"))).map(|m| m / 1000.0);
-    let ghz = hwmon.as_ref().and_then(|h| read_num(h.join("freq1_input"))).map(|hz| hz / 1e9);
+    let hwmon = std::fs::read_dir(dir.join("hwmon"))
+        .ok()
+        .and_then(|mut d| d.next()?.ok())
+        .map(|e| e.path());
+    let temp = hwmon
+        .as_ref()
+        .and_then(|h| read_num(h.join("temp1_input")))
+        .map(|m| m / 1000.0);
+    let ghz = hwmon
+        .as_ref()
+        .and_then(|h| read_num(h.join("freq1_input")))
+        .map(|hz| hz / 1e9);
     Some(GpuReading { busy, vram, temp, ghz })
 }
 
