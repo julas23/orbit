@@ -3,10 +3,29 @@
  * the status line below, the index of outputs on the right, as narrow as
  * its min-width at first. The font of the command line and the output
  * comes from term.yaml. The prompt's parts take the colours of the user's
- * bash prompt (xterm 256: 15, 75 / 196, 228, 15, 74). */
+ * bash prompt (xterm 256: 15, 75 / 196, 228, 15, 74). The window paints
+ * its own surface: the theme leaves window.orbit transparent. */
+window.orbit-term {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+.orbit-term .side,
+.orbit-term .status,
+.orbit-term .history,
+.orbit-term .history row:not(:selected):not(:hover) { background-color: @orbit_window; }
+.orbit-term .history row:hover    { background-color: mix(@orbit_window, @orbit_fg, 0.06); }
+.orbit-term .history row:selected { background-color: alpha(@orbit_accent, 0.35); }
+.orbit-term popover > contents {
+  background-color: @orbit_surface;
+  color: @orbit_fg;
+  border: 1px solid @orbit_border;
+}
+.orbit-term .choices,
+.orbit-term .choices row:not(:selected):not(:hover) { background-color: transparent; }
+.orbit-term .choices row:selected { background-color: alpha(@orbit_accent, 0.35); }
 .orbit-term .prompt {
   padding: 8px 10px;
-  background-color: @orbit_selected;
+  background-color: mix(@orbit_window, @orbit_fg, 0.06);
   border-bottom: 1px solid @orbit_border;
 }
 .orbit-term .part {
