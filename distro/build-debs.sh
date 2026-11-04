@@ -77,6 +77,27 @@ fi
 for crate in "${CRATES[@]}"; do
     cargo deb -p "$crate" --no-build --deb-version "$VERSION" -o "$OUT/" -q
 done
+# Every program in them starts as a program does (ELF, or #! for a
+# script): orbit-calc 4089bd8 went out with its first 64 bytes zeroed, and
+# `exec` refused it ("Exec format error").
+check_debs() {
+    local deb dir bin head bad=0
+    for deb in "$OUT"/*.deb; do
+        [ -e "$deb" ] || continue
+        dir=$(mktemp -d)
+        dpkg-deb -x "$deb" "$dir"
+        for bin in "$dir"/usr/bin/* "$dir"/usr/libexec/*; do
+            [ -f "$bin" ] && [ ! -L "$bin" ] || continue
+            head=$(head -c4 "$bin" | od -An -tx1 | tr -d ' \n')
+            case "$head" in
+                7f454c46|2321*) ;;
+                *) echo "$(basename "$deb"): ${bin#"$dir"} is not a program (starts $head)" >&2; bad=1 ;;
+            esac
+        done
+        rm -rf "$dir"
+    done
+    return $bad
+}
 
 # Metapackages: distro/meta/<name> holds the control fields that differ.
 for meta in "$ROOT"/distro/meta/*; do
@@ -233,6 +254,7 @@ if [ -n "$ARM64" ] && want orbit-local-station:arm64; then
         -e CARGO_HOME=/cache/cargo -e RUSTUP_HOME=/cache/rustup -e CARGO_TARGET_DIR=/cache/target \
         debian:trixie /src/distro/ci/build-arm64.sh
 fi
+check_debs || { echo "broken packages; nothing sent" >&2; exit 1; }
 ls -1 "$OUT"
 
 if [ -n "$UPLOAD" ]; then
