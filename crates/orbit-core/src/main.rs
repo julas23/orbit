@@ -52,6 +52,7 @@ mod screencopy;
 mod screensaver;
 mod session_lock;
 mod sleep;
+mod sound;
 mod state;
 mod switcher;
 mod tile;

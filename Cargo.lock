@@ -4613,6 +4613,7 @@ dependencies = [
  "anyhow",
  "glam",
  "image",
+ "orbit-audio",
  "orbit-ipc",
  "orbit-protocols",
  "pangocairo",

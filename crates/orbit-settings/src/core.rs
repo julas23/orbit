@@ -16,13 +16,17 @@ pub struct Wallpaper {
     pub image: String,
     pub mode: String,
     pub color: String,
-    /// `none`, `aurora`, `ink`, `facets` (the core's `effects.rs`).
+    /// `none`, `aurora`, `ink`, … (the core's `effects.rs`).
     pub effect: String,
     /// The effect's colours; empty: its own.
     pub colors: Vec<String>,
     pub speed: f64,
     /// A video (or animated GIF) over every monitor; empty: none.
     pub video: String,
+    /// The effect follows what the speakers play.
+    pub sound: bool,
+    /// Seconds idle before the effect shows alone; 0: never.
+    pub screensaver: u64,
 }
 
 /// The core's own defaults (`wallpaper.rs`).
@@ -36,6 +40,8 @@ impl Default for Wallpaper {
             colors: Vec::new(),
             speed: 1.0,
             video: String::new(),
+            sound: false,
+            screensaver: 300,
         }
     }
 }
@@ -78,6 +84,11 @@ pub fn wallpaper(dir: &ConfigDir) -> Wallpaper {
             .unwrap_or_default(),
         speed: section.get("speed").and_then(Value::as_f64).unwrap_or(default.speed),
         video: text(section, "video").unwrap_or(default.video),
+        sound: section.get("sound").and_then(Value::as_bool).unwrap_or(default.sound),
+        screensaver: section
+            .get("screensaver")
+            .and_then(Value::as_u64)
+            .unwrap_or(default.screensaver),
     }
 }
 
@@ -109,6 +120,8 @@ pub fn save_wallpaper(dir: &ConfigDir, wallpaper: &Wallpaper, everywhere: bool) 
         section.insert("colors".into(), Value::Sequence(list));
     }
     section.insert("speed".into(), wallpaper.speed.into());
+    section.insert("sound".into(), wallpaper.sound.into());
+    section.insert("screensaver".into(), wallpaper.screensaver.into());
     if wallpaper.video.is_empty() {
         section.remove("video");
     } else {

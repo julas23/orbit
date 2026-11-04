@@ -1,7 +1,8 @@
 //! The wallpaper page: a picture (from the folders where pictures usually
 //! are, or any file), how it meets the monitor, and the colour under it;
-//! the colour alone; or an effect in motion (aurora, ink, facets) with its
-//! colours and speed. For every monitor, or one (an effect: every monitor
+//! the colour alone; or an effect in motion (aurora, ink, facets, …) with
+//! its colours and speed, following the sound or not, and how long idle
+//! before it shows alone (the screensaver). For every monitor, or one (an effect: every monitor
 //! without a picture of its own). Each change is written to `core.yaml`
 //! and the core reloads it at once.
 //!
@@ -16,7 +17,7 @@ use std::{
 };
 
 use gtk::{cairo, gdk, gdk_pixbuf::Pixbuf, gio, glib, prelude::*};
-use orbit_app::i18n::tr;
+use orbit_app::i18n::{tr, tr_args};
 use orbit_common::ConfigDir;
 
 use crate::core::{self, Wallpaper};
@@ -32,8 +33,15 @@ const KINDS: &[&str] = &[
     "fire",
     "fire-blue",
     "water",
+    "borealis",
+    "stars",
+    "rain",
+    "nebula",
+    "galaxy",
     "video",
 ];
+/// The screensaver's choices, in minutes; 0: never.
+const SAVER_MINUTES: &[u64] = &[0, 1, 2, 5, 10, 15, 30];
 /// "Show"'s video, the last; the effects are between the colour and it.
 const VIDEO: usize = KINDS.len() - 1;
 fn is_effect(kind: usize) -> bool {
@@ -47,6 +55,11 @@ fn effect_colors(effect: &str) -> &'static [&'static str] {
         "facets" => &["#0f172a", "#334155", "#4682b4", "#8b5cf6"],
         "fire" => &["#050202", "#7f1d1d", "#dc2626", "#f97316", "#fde047"],
         "water" => &["#021526", "#03346e", "#0e7490", "#67e8f9", "#ecfeff"],
+        "borealis" => &["#030712", "#4ade80", "#2dd4bf", "#818cf8", "#c084fc"],
+        "stars" => &["#02030a", "#1e294f", "#93c5fd", "#fde68a", "#fca5a5"],
+        "rain" => &["#050812", "#1e293b", "#f59e0b", "#ef4444", "#38bdf8"],
+        "nebula" => &["#03020c", "#3b0764", "#be185d", "#f97316", "#fef3c7"],
+        "galaxy" => &["#010208", "#0b2a6f", "#2563eb", "#7dd3fc", "#fff4d6"],
         _ => &[],
     }
 }
@@ -140,6 +153,29 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     let color_row = crate::row(&tr("settings-color"), &color);
     let colors_row = crate::row(&tr("settings-colors"), &palette);
     let speed_row = crate::row(&tr("settings-speed"), &speed);
+    let sound = gtk::Switch::builder()
+        .active(paper.sound)
+        .halign(gtk::Align::Start)
+        .tooltip_text(tr("settings-sound-tip"))
+        .build();
+    let sound_row = crate::row(&tr("settings-sound"), &sound);
+    let minutes: Vec<String> = SAVER_MINUTES
+        .iter()
+        .map(|m| match m {
+            0 => tr("settings-saver-never"),
+            m => tr_args("settings-saver-minutes", &[("minutes", (*m as i64).into())]),
+        })
+        .collect();
+    let saver = gtk::DropDown::from_strings(&minutes.iter().map(String::as_str).collect::<Vec<_>>());
+    saver.set_tooltip_text(Some(&tr("settings-saver-tip")));
+    // The file's seconds, to the nearest choice.
+    let near = SAVER_MINUTES
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, m)| (**m * 60).abs_diff(paper.screensaver))
+        .map_or(0, |(i, _)| i);
+    saver.set_selected(near as u32);
+    let saver_row = crate::row(&tr("settings-saver"), &saver);
     let page = Rc::new(Page {
         dir: dir.clone(),
         paper: RefCell::new(paper),
@@ -156,7 +192,12 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
         mode_rows: vec![mode_row.clone().upcast()],
         video_rows: vec![choose_video.clone().upcast()],
         color_rows: vec![color_row.clone().upcast()],
-        effect_rows: vec![colors_row.clone().upcast(), speed_row.clone().upcast()],
+        effect_rows: vec![
+            colors_row.clone().upcast(),
+            speed_row.clone().upcast(),
+            sound_row.clone().upcast(),
+            saver_row.clone().upcast(),
+        ],
         message: crate::message(),
         thumbs: RefCell::default(),
     });
@@ -192,6 +233,8 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     controls.append(&color_row);
     controls.append(&colors_row);
     controls.append(&speed_row);
+    controls.append(&sound_row);
+    controls.append(&saver_row);
     controls.append(&choose);
     controls.append(&choose_video);
     controls.append(&page.message);
@@ -225,6 +268,28 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
             let speed = (scale.value() * 10.0).round() / 10.0;
             if (speed - page.paper.borrow().speed).abs() > 1e-6 {
                 page.paper.borrow_mut().speed = speed;
+                page.save(false);
+            }
+        }
+    });
+
+    sound.connect_active_notify({
+        let page = page.clone();
+        move |switch| {
+            if switch.is_active() != page.paper.borrow().sound {
+                page.paper.borrow_mut().sound = switch.is_active();
+                page.save(false);
+            }
+        }
+    });
+    saver.connect_selected_notify({
+        let page = page.clone();
+        move |dd| {
+            let Some(minutes) = SAVER_MINUTES.get(dd.selected() as usize) else {
+                return;
+            };
+            if minutes * 60 != page.paper.borrow().screensaver {
+                page.paper.borrow_mut().screensaver = minutes * 60;
                 page.save(false);
             }
         }

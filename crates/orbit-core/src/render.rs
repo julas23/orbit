@@ -102,8 +102,11 @@ pub fn output_elements(
     };
     let scale = Scale::from(output.current_scale().fractional_scale());
     let mut elements: Vec<OutputElement> = Vec::new();
+    // The screensaver, all of it shown: the effect alone, no pointer.
+    let saver = state.saver();
 
     if pointer
+        && saver < 1.0
         && let Some(location) = state.seat.get_pointer().map(|p| p.current_location())
         && geo.to_f64().contains(location)
     {
@@ -158,6 +161,13 @@ pub fn output_elements(
         crate::session_lock::face_elements(state, output, renderer, scale, 1.0, &mut elements);
         state.locked_backdrop(output, renderer, scale, 1.0, &mut elements);
         return elements;
+    }
+    // The screensaver: the effect over everything, coming or going.
+    if saver > 0.0 {
+        state.saver_elements(output, saver, &mut elements);
+        if saver >= 1.0 {
+            return elements;
+        }
     }
     // The window cards (Mod+Tab) over the blurred screen.
     if let Some(shaders) = shaders.as_ref()

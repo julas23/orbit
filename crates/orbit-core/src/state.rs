@@ -129,6 +129,9 @@ pub struct Orbit {
     pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
     pub suppressed: Vec<smithay::input::keyboard::Keycode>,
+    /// The buttons pressed to wake the screensaver: their release is not
+    /// passed on either.
+    pub saver_buttons: Vec<u32>,
     /// Whether the session is shown (`lock`).
     pub lock: crate::lock::Lock,
     /// Screen copies waiting for something to change on their monitor.
@@ -257,6 +260,7 @@ impl Orbit {
             cursor_shape_state,
             needs_render: true,
             suppressed: Vec::new(),
+            saver_buttons: Vec::new(),
             dragging: None,
             shaders: None,
             virtuals: Vec::new(),

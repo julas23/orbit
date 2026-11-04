@@ -47,6 +47,22 @@ pub enum Action {
 
 impl Orbit {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        // A click that wakes the screensaver is not the hidden window's;
+        // nor is its release.
+        if let InputEvent::PointerButton { event, .. } = &event {
+            let code = event.button_code();
+            if event.state() == ButtonState::Pressed && self.saver_swallows() && !self.locked() {
+                self.touched();
+                self.saver_buttons.push(code);
+                return;
+            }
+            if event.state() == ButtonState::Released
+                && let Some(i) = self.saver_buttons.iter().position(|c| *c == code)
+            {
+                self.saver_buttons.remove(i);
+                return;
+            }
+        }
         if matches!(
             event,
             InputEvent::Keyboard { .. }
@@ -151,6 +167,12 @@ impl Orbit {
             serial,
             Event::time(&event),
             |state, mods, handle| {
+                // A key that wakes the screensaver is not the hidden
+                // window's (its release neither).
+                if pressed && state.saver_swallows() && !state.locked() {
+                    state.suppressed.push(code);
+                    return FilterResult::Intercept(None);
+                }
                 // Escape while switching windows: back as it was.
                 if pressed && state.switcher.is_some() && handle.modified_sym() == Keysym::Escape {
                     state.suppressed.push(code);

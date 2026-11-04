@@ -15,10 +15,14 @@
 //!   mode: fill                   # fill, fit, center, stretch, tile
 //!   color: "#1b1f27"             # under the picture and around it
 //!   effect: aurora               # in place of the picture: aurora, ink,
-//!                                # facets, fire, water (`effects`); none
+//!                                # facets, fire, water, borealis, stars,
+//!                                # rain, nebula, galaxy (`effects`); none
 //!   colors: ["#0b1026", "#1d4e89", "#14b8a6"]   # the effect's, 2 to 5
 //!   speed: 1                     # how fast it moves (0: still)
 //!   fps: 30                      # frames a second while it moves
+//!   sound: false                 # the effect follows what the speakers play
+//!   screensaver: 300             # seconds idle before the windows fade and
+//!                                # the effect shows alone; 0: never
 //!   video: ~/Vídeos/mar.mp4      # over all of it: a video or an animated
 //!                                # GIF (orbit-wallpaper), silent, looping,
 //!                                # laid as `mode` says (not tile)
@@ -26,6 +30,13 @@
 //!   HDMI-A-1:
 //!     wallpaper: ~/Imagens/outro.png   # this monitor's own
 //! ```
+//!
+//! The screensaver: with an effect on, after `screensaver` seconds with no
+//! input (the same that the idle lock counts, and held off by the same:
+//! a program's inhibitor, a fullscreen window), the effect is drawn over
+//! everything, fading in over a few seconds, and the pointer hides. Any
+//! input fades it out at once; a click or a key that wakes it is not
+//! passed on (`input`), so nothing hidden is clicked or typed into.
 
 use std::{cell::RefCell, collections::HashMap, path::PathBuf};
 
@@ -79,6 +90,10 @@ pub struct Wallpaper {
     /// A video (or animated GIF) over every monitor, played by
     /// `orbit-wallpaper`; empty: none.
     pub video: String,
+    /// The effect follows what the speakers play (`sound`).
+    pub sound: bool,
+    /// Seconds with no input before the effect shows alone; 0: never.
+    pub screensaver: u64,
 }
 
 impl Default for Wallpaper {
@@ -92,6 +107,8 @@ impl Default for Wallpaper {
             speed: 1.0,
             fps: 30,
             video: String::new(),
+            sound: false,
+            screensaver: 300,
         }
     }
 }
@@ -159,7 +176,19 @@ pub struct Wallpapers {
     /// A video whose player ended by itself: not started again until the
     /// config is read again.
     failed: Option<VideoKey>,
+    /// What the speakers play, while an effect wants it.
+    sound: crate::sound::Sound,
+    /// The loudness that hurries the effect's clock, smoothed.
+    loud: f32,
+    /// How much the screensaver shows, 0..1.
+    saver: f32,
 }
+
+/// Seconds the screensaver takes to come, and to go.
+const SAVER_IN: f32 = 3.0;
+const SAVER_OUT: f32 = 0.35;
+/// From so much shown, a click or key that wakes it is not passed on.
+const SAVER_SWALLOWS: f32 = 0.5;
 
 /// What the video's player was started with: the file and the mode.
 type VideoKey = (String, String);
@@ -171,8 +200,9 @@ struct Video {
     playing: bool,
 }
 
-/// The uniforms an effect's element was last given: time, fade, colours.
-type Given = (f32, f32, Vec<[u8; 3]>);
+/// The uniforms an effect's element was last given: time, fade, sound,
+/// colours.
+type Given = (f32, f32, [f32; 2], Vec<[u8; 3]>);
 
 /// The cache, behind the state's back: drawing reads the state only.
 pub type Cache = RefCell<Wallpapers>;
@@ -196,7 +226,7 @@ impl Orbit {
         let size = geo.size.to_physical_precise_round(scale);
         let config = &self.config.wallpaper;
         if let Some(program) = self.effect_program(output) {
-            self.effect_element(output, geo.size, program, alpha, elements);
+            self.effect_element(output, "", geo.size, program, alpha, elements);
             return;
         }
         let image = self
@@ -302,6 +332,28 @@ impl Orbit {
         }
     }
 
+    /// How much the screensaver shows, 0..1.
+    pub fn saver(&self) -> f32 {
+        self.wallpapers.borrow().saver
+    }
+
+    /// Whether a click or key now would only wake the screensaver.
+    pub fn saver_swallows(&self) -> bool {
+        self.saver() >= SAVER_SWALLOWS
+    }
+
+    /// The screensaver over `output`, at `alpha`: the effect, drawn again
+    /// over all (with an element of its own: the one under the windows
+    /// stays as it is).
+    pub fn saver_elements(&self, output: &Output, alpha: f32, elements: &mut Vec<OutputElement>) {
+        let Some(geo) = self.space.output_geometry(output) else {
+            return;
+        };
+        if let Some(program) = self.effect_program(output) {
+            self.effect_element(output, "/saver", geo.size, program, alpha, elements);
+        }
+    }
+
     /// The effect's program for `output`, when it shows one: there is an
     /// effect, the monitor has no picture of its own, and it compiled.
     fn effect_program(&self, output: &Output) -> Option<GlesPixelProgram> {
@@ -323,10 +375,12 @@ impl Orbit {
             .is_some_and(|w| !w.trim().is_empty())
     }
 
-    /// The effect over `output`'s whole `size`, at `alpha`.
+    /// The effect over `output`'s whole `size`, at `alpha`; `slot` tells
+    /// apart two of the same monitor.
     fn effect_element(
         &self,
         output: &Output,
+        slot: &str,
         size: Size<i32, Logical>,
         program: GlesPixelProgram,
         alpha: f32,
@@ -346,9 +400,9 @@ impl Orbit {
         let time = cache.time;
         let area = Rectangle::from_size(size);
         let opaque = (alpha >= 1.0).then(|| vec![area]);
-        let wanted = (time, alpha, colors);
+        let wanted = (time, alpha, cache.sound.levels(), colors);
         let effect = config.effect;
-        let entry = cache.effects.entry(output.name());
+        let entry = cache.effects.entry(format!("{}{slot}", output.name()));
         // Another effect: another program, so another element.
         let (_, element, last) = match entry {
             std::collections::hash_map::Entry::Occupied(slot) if slot.get().0 == effect => slot.into_mut(),
@@ -358,7 +412,7 @@ impl Orbit {
                     area,
                     opaque.clone(),
                     1.0,
-                    crate::effects::uniforms(wanted.0, wanted.1, &wanted.2),
+                    crate::effects::uniforms(wanted.0, wanted.1, wanted.2, &wanted.3),
                     Kind::Unspecified,
                 );
                 entry.insert_entry((effect, element, wanted.clone())).into_mut()
@@ -366,7 +420,7 @@ impl Orbit {
         };
         element.resize(area, opaque);
         if *last != wanted {
-            element.update_uniforms(crate::effects::uniforms(wanted.0, wanted.1, &wanted.2));
+            element.update_uniforms(crate::effects::uniforms(wanted.0, wanted.1, wanted.2, &wanted.3));
             *last = wanted;
         }
         elements.push(OutputElement::Border(element.clone()));
@@ -400,6 +454,7 @@ impl Orbit {
         let mut cache = self.wallpapers.borrow_mut();
         if read {
             cache.failed = None;
+            cache.sound.retry();
         }
         // Ended by itself (a file it cannot play, a crash).
         let ended = cache.video.as_mut().and_then(|v| v.child.try_wait().ok().flatten());
@@ -473,26 +528,66 @@ impl Orbit {
             let _ = input.write_all(word.as_bytes()).and_then(|()| input.flush());
             video.playing = seen;
         }
+        let saver_wanted = self.saver_wanted(seen);
         let config = &self.config.wallpaper;
         let now = std::time::Instant::now();
+        let fps = config.fps.clamp(1, 240);
+        let frame = std::time::Duration::from_secs_f64(1.0 / fps as f64);
         let mut cache = self.wallpapers.borrow_mut();
         let since = cache
             .last_tick
             .replace(now)
             .map_or(0.0, |t| (now - t).as_secs_f32().min(0.25));
-        if config.effect == crate::effects::Effect::None || cache.video.is_some() {
+        let effect = config.effect != crate::effects::Effect::None && cache.video.is_none();
+        cache.sound.run(effect && seen && config.sound);
+        if !effect {
             cache.effects.clear();
+            cache.saver = 0.0;
             return std::time::Duration::from_millis(500);
         }
-        drop(cache);
+        // The screensaver comes slowly, and goes at once (gone at once
+        // when locked: the greet is drawn instead).
+        let saver = if self.locked() {
+            0.0
+        } else if saver_wanted {
+            (cache.saver + since / SAVER_IN).min(1.0)
+        } else {
+            (cache.saver - since / SAVER_OUT).max(0.0)
+        };
+        let saver_moved = saver != cache.saver;
+        cache.saver = saver;
         if !seen || config.speed <= 0.0 {
-            return std::time::Duration::from_millis(500);
+            drop(cache);
+            if saver_moved {
+                self.request_render();
+            }
+            // Shown, it must go as soon as the user is back.
+            return if saver > 0.0 { frame } else { std::time::Duration::from_millis(500) };
         }
-        let step = since * config.speed;
-        let fps = config.fps.clamp(1, 240);
-        self.wallpapers.borrow_mut().time += step;
+        // Louder, the clock runs a little faster.
+        let [bass, treble] = cache.sound.levels();
+        let target = (bass + treble) * 0.5;
+        cache.loud += (target - cache.loud) * (since * 4.0).min(1.0);
+        let step = since * config.speed * (1.0 + cache.loud);
+        cache.time += step;
+        drop(cache);
         self.request_render();
-        std::time::Duration::from_secs_f64(1.0 / fps as f64)
+        frame
+    }
+
+    /// Whether the screensaver should show: the user away long enough, and
+    /// nothing holding it off (as the idle lock).
+    fn saver_wanted(&mut self, seen: bool) -> bool {
+        let seconds = self.config.wallpaper.screensaver;
+        if !seen || seconds == 0 || self.locked() || self.idle.bus_inhibited {
+            return false;
+        }
+        use smithay::reexports::wayland_server::Resource;
+        self.idle.inhibitors.retain(|s| s.is_alive());
+        if !self.idle.inhibitors.is_empty() || self.space.outputs().any(|o| self.fullscreen_on(o).is_some()) {
+            return false;
+        }
+        self.idle.last_input.elapsed() >= std::time::Duration::from_secs(seconds)
     }
 
     /// The channel the threads answer on: what they made goes in its slot
