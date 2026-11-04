@@ -22,7 +22,8 @@ use orbit_common::ConfigDir;
 
 use crate::core::{self, Wallpaper};
 
-/// What "Show" offers: the picture, the colour, then the core's effects.
+/// What can be shown: the picture, the colour, the core's effects, a video
+/// (the page offers them as `SHOWS` and a list of the effects).
 /// `fire-blue` is the core's `fire` with the blue and white colours.
 const KINDS: &[&str] = &[
     "picture",
@@ -47,6 +48,8 @@ const VIDEO: usize = KINDS.len() - 1;
 fn is_effect(kind: usize) -> bool {
     (2..VIDEO).contains(&kind)
 }
+/// "Show" offers these four; an effect is then chosen in a list of its own.
+const SHOWS: &[&str] = &["picture", "color", "effect", "video"];
 /// Each effect's own colours, as the core has them (`effects.rs`).
 fn effect_colors(effect: &str) -> &'static [&'static str] {
     match effect {
@@ -92,7 +95,11 @@ struct Page {
     /// The picture shown in the preview, smaller, and its real size.
     picture: RefCell<Option<(Pixbuf, (i32, i32))>>,
     preview: gtk::DrawingArea,
+    /// What to show (`SHOWS`), and which effect.
     kind: gtk::DropDown,
+    effect: gtk::DropDown,
+    /// Set while `show_kind` moves the two lists: not a choice of the user's.
+    syncing: std::cell::Cell<bool>,
     mode: gtk::DropDown,
     color: gtk::ColorDialogButton,
     /// The effect's colours, one button each, and the speed.
@@ -122,8 +129,14 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
         .valign(gtk::Align::Start)
         .css_classes(["preview"])
         .build();
-    let kinds: Vec<String> = KINDS.iter().map(|k| tr(&format!("settings-kind-{k}"))).collect();
-    let kind = gtk::DropDown::from_strings(&kinds.iter().map(String::as_str).collect::<Vec<_>>());
+    let shows: Vec<String> = SHOWS.iter().map(|k| tr(&format!("settings-kind-{k}"))).collect();
+    let kind = gtk::DropDown::from_strings(&shows.iter().map(String::as_str).collect::<Vec<_>>());
+    let effects: Vec<String> = KINDS[2..VIDEO]
+        .iter()
+        .map(|k| tr(&format!("settings-kind-{k}")))
+        .collect();
+    let effect = gtk::DropDown::from_strings(&effects.iter().map(String::as_str).collect::<Vec<_>>());
+    let effect_row = crate::row(&tr("settings-effect"), &effect);
     let names: Vec<String> = MODES.iter().map(|m| tr(&format!("settings-mode-{m}"))).collect();
     let mode = gtk::DropDown::from_strings(&names.iter().map(String::as_str).collect::<Vec<_>>());
     mode.set_selected(MODES.iter().position(|m| *m == paper.mode).unwrap_or(0) as u32);
@@ -184,6 +197,8 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
         picture: RefCell::default(),
         preview,
         kind,
+        effect,
+        syncing: Default::default(),
         mode,
         color,
         swatches,
@@ -193,6 +208,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
         video_rows: vec![choose_video.clone().upcast()],
         color_rows: vec![color_row.clone().upcast()],
         effect_rows: vec![
+            effect_row.clone().upcast(),
             colors_row.clone().upcast(),
             speed_row.clone().upcast(),
             sound_row.clone().upcast(),
@@ -201,7 +217,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
         message: crate::message(),
         thumbs: RefCell::default(),
     });
-    page.kind.set_selected(page.kind_now() as u32);
+    page.show_kind(page.kind_now());
     page.show_rows();
     page.fill_swatches();
 
@@ -222,13 +238,14 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
                     .checked_sub(1)
                     .and_then(|i| page.outputs.get(i))
                     .map(|o| o.name.clone());
-                page.kind.set_selected(page.kind_now() as u32);
+                page.show_kind(page.kind_now());
                 page.load();
             }
         });
         controls.append(&crate::row(&tr("settings-monitor"), &monitor));
     }
     controls.append(&crate::row(&tr("settings-show"), &page.kind));
+    controls.append(&effect_row);
     controls.append(&mode_row);
     controls.append(&color_row);
     controls.append(&colors_row);
@@ -336,54 +353,12 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
             }
         }
     });
-    page.kind.connect_selected_notify({
-        let page = page.clone();
-        move |dd| {
-            let kind = dd.selected() as usize;
-            page.show_rows();
-            if kind == page.kind_now() {
-                return;
-            }
-            if kind == VIDEO {
-                page.choose_video(dd);
-                return;
-            }
-            if let Some(effect) = KINDS.get(kind).filter(|_| is_effect(kind)) {
-                // An effect: for every monitor without a picture of its
-                // own, so the one chosen loses its own.
-                if let Some(name) = page.target.borrow().clone()
-                    && let Err(err) = core::drop_output_wallpaper(&page.dir, &name)
-                {
-                    crate::say(&page.message, &format!("{err:#}"));
-                }
-                let mut paper = page.paper.borrow_mut();
-                // Each effect's colours are its own: none carried over.
-                paper.colors = match *effect {
-                    "fire-blue" => BLUE_FIRE.iter().map(|c| (*c).to_owned()).collect(),
-                    _ => Vec::new(),
-                };
-                paper.effect = effect.trim_end_matches("-blue").to_owned();
-                paper.video.clear();
-                drop(paper);
-                page.save(false);
-                page.fill_swatches();
-                page.load();
-                return;
-            }
-            let image = if kind == 1 {
-                String::new()
-            } else {
-                // Back to a picture: the one there was, or the first shown.
-                let first = page.thumbs.borrow().first().map(|(p, _)| p.clone());
-                match (page.paper.borrow().image.clone(), first) {
-                    (old, _) if !old.is_empty() => old,
-                    (_, Some(path)) => short(&path),
-                    _ => return,
-                }
-            };
-            page.set_image(image);
-        }
-    });
+    for dd in [&page.kind, &page.effect] {
+        dd.connect_selected_notify({
+            let page = page.clone();
+            move |_| page.kind_chosen()
+        });
+    }
     page.mode.connect_selected_notify({
         let page = page.clone();
         move |dd| {
@@ -439,6 +414,82 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
 }
 
 impl Page {
+    /// "Show" or the effect changed: what they say now, written.
+    fn kind_chosen(self: &Rc<Self>) {
+        if self.syncing.get() {
+            return;
+        }
+        let kind = self.chosen();
+        self.show_rows();
+        if kind == self.kind_now() {
+            return;
+        }
+        if kind == VIDEO {
+            self.choose_video(&self.kind);
+            return;
+        }
+        if let Some(effect) = KINDS.get(kind).filter(|_| is_effect(kind)) {
+            // An effect: for every monitor without a picture of its
+            // own, so the one chosen loses its own.
+            if let Some(name) = self.target.borrow().clone()
+                && let Err(err) = core::drop_output_wallpaper(&self.dir, &name)
+            {
+                crate::say(&self.message, &format!("{err:#}"));
+            }
+            let mut paper = self.paper.borrow_mut();
+            // Each effect's colours are its own: none carried over.
+            paper.colors = match *effect {
+                "fire-blue" => BLUE_FIRE.iter().map(|c| (*c).to_owned()).collect(),
+                _ => Vec::new(),
+            };
+            paper.effect = effect.trim_end_matches("-blue").to_owned();
+            paper.video.clear();
+            drop(paper);
+            self.save(false);
+            self.fill_swatches();
+            self.load();
+            return;
+        }
+        let image = if kind == 1 {
+            String::new()
+        } else {
+            // Back to a picture: the one there was, or the first shown.
+            let first = self.thumbs.borrow().first().map(|(p, _)| p.clone());
+            match (self.paper.borrow().image.clone(), first) {
+                (old, _) if !old.is_empty() => old,
+                (_, Some(path)) => short(&path),
+                _ => return,
+            }
+        };
+        self.set_image(image);
+    }
+
+    /// The index in `KINDS` the two lists say.
+    fn chosen(&self) -> usize {
+        match self.kind.selected() {
+            0 => 0,
+            1 => 1,
+            2 => 2 + (self.effect.selected() as usize).min(VIDEO - 3),
+            _ => VIDEO,
+        }
+    }
+
+    /// The two lists set to `kind` (an index in `KINDS`).
+    fn show_kind(&self, kind: usize) {
+        self.syncing.set(true);
+        if is_effect(kind) {
+            self.effect.set_selected((kind - 2) as u32);
+        }
+        let show = match kind {
+            0 | 1 => kind,
+            k if k == VIDEO => 3,
+            _ => 2,
+        };
+        self.kind.set_selected(show as u32);
+        self.syncing.set(false);
+        self.show_rows();
+    }
+
     /// What "Show" says for the target now (an index of `KINDS`).
     fn kind_now(&self) -> usize {
         let own = self
@@ -466,7 +517,7 @@ impl Page {
     }
 
     fn show_rows(&self) {
-        let kind = self.kind.selected() as usize;
+        let kind = self.chosen();
         for row in &self.picture_rows {
             row.set_visible(kind == 0);
         }
@@ -553,7 +604,7 @@ impl Page {
                 page.paper.borrow_mut().video = short(&path);
                 page.save(false);
             }
-            page.kind.set_selected(page.kind_now() as u32);
+            page.show_kind(page.kind_now());
             page.show_rows();
             page.preview.queue_draw();
         });
@@ -612,7 +663,7 @@ impl Page {
                 self.save(true);
             }
         }
-        self.kind.set_selected(self.kind_now() as u32);
+        self.show_kind(self.kind_now());
         self.load();
     }
 
