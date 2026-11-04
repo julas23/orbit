@@ -7,3 +7,7 @@ startup:
   - orbit-polkit
   - orbit-session
   - xdg-user-dirs-update
+login:
+  # NetworkManager's secret agent: asks a new Wi-Fi's password when the
+  # panel's network module connects to it.
+  - nm-applet --indicator

@@ -15,6 +15,13 @@ echo "LANG=$LOCALE" > $T/etc/locale.conf
 ln -sf ../locale.conf $T/etc/default/locale
 logger -t orbit "LANG=$LOCALE"
 
+# The keyboard the installer leaves (US) gets Brazilian as a second layout,
+# as the Live has it: the panel's keyboard module switches between them.
+if grep -q '^XKBLAYOUT="\?us"\?$' $T/etc/default/keyboard 2>/dev/null; then
+	sed -i -e 's/^XKBLAYOUT=.*/XKBLAYOUT="us,br"/' -e 's/^XKBVARIANT=.*/XKBVARIANT=","/' $T/etc/default/keyboard
+fi
+logger -t orbit "keyboard: $(grep ^XKBLAYOUT $T/etc/default/keyboard)"
+
 ESP=$T/boot/efi/EFI/Linux
 if [ -d "$ESP" ] && [ -f $T/etc/kernel/install.conf ]; then
 	for v in $(ls $T/lib/modules); do

@@ -29,7 +29,7 @@ live-boot live-config live-config-systemd live-build squashfs-tools xorriso
 grub-efi-amd64-bin grub-pc-bin grub-efi-amd64-signed shim-signed syslinux-common isolinux mtools
 
 # --- network, bluetooth
-network-manager network-manager-applet wpasupplicant iw wireless-regdb bluez blueman modemmanager
+network-manager network-manager-applet nm-connection-editor wpasupplicant iw wireless-regdb bluez blueman modemmanager
 
 # --- sound
 pipewire pipewire-pulse pipewire-alsa pipewire-audio wireplumber alsa-utils pavucontrol rtkit

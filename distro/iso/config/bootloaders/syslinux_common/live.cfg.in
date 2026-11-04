@@ -3,4 +3,10 @@ label live
 	menu default
 	linux @LINUX@
 	initrd @INITRD@
+	append @APPEND_LIVE@
+
+label live-toram
+	menu label Orbit Linux Live, copied to ^RAM
+	linux @LINUX@
+	initrd @INITRD@
 	append @APPEND_LIVE@ toram

@@ -26,6 +26,6 @@ lb config noauto \
 	--iso-application "Orbit Linux" \
 	--iso-publisher "Orbit Linux; https://github.com/julas23/orbit" \
 	--iso-volume "ORBIT_LINUX" \
-	--bootappend-live "boot=live components noautologin username=orbit hostname=orbit locales=pt_BR.UTF-8 keyboard-layouts=br timezone=America/Sao_Paulo quiet splash" \
+	--bootappend-live "boot=live components noautologin username=orbit hostname=orbit locales=pt_BR.UTF-8 keyboard-layouts=us,br timezone=America/Sao_Paulo quiet splash" \
 	--cache true \
 	"${@}"

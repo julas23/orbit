@@ -133,13 +133,14 @@ num menu com duas escolhas.
 - **Menu do boot da ISO**, sempre visível, com contagem regressiva (ali a
   escolha é o objetivo), em UEFI e em BIOS legado:
   - **Live** — a sessão completa no orbit-core, com painel, dock e apps,
-    carregada na memória (`toram`), usuário `orbit` sem senha; nada é gravado
-    no disco. Serve também de teste de hardware antes de instalar.
+    lida do pendrive, usuário `orbit` sem senha; nada é gravado no disco
+    (o `toram` como padrão segurava o boot por um minuto ou mais num
+    pendrive, 2026-11-04). Serve também de teste de hardware antes de instalar.
   - **Install** — o debian-installer com preseed, copiando a própria imagem
     da Live (`--debian-installer live`): offline, e instala exatamente o que
     acabou de ser testado.
-  - **Opções avançadas** — Live lendo do pendrive (sem `toram`, para pouca
-    memória), Install em modo texto, teste de memória.
+  - **Opções avançadas** — Live copiada para a memória (`toram`, o pendrive
+    pode sair), Install em modo texto, teste de memória.
 - **A Live entra sem senha** por um arquivo que só existe na imagem da Live,
   lido pelo orbit-login e pelo orbit-greet; o sistema instalado nunca o tem.
 - **Depois:** o `orbit-install` (Rust + GTK4 com o `orbit-app`, seção 10)

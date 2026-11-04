@@ -317,18 +317,18 @@ impl Default for Keyboard {
 
 impl Keyboard {
     /// Takes XKBLAYOUT, XKBVARIANT, XKBMODEL and XKBOPTIONS from the text of
-    /// `/etc/default/keyboard` (shell assignments, quoted or not). Only the
-    /// first layout of a list ("br,us") is kept, with its variant.
+    /// `/etc/default/keyboard` (shell assignments, quoted or not). A list
+    /// of layouts ("us,br") is kept whole, with its variants: the panel's
+    /// keyboard module switches between them.
     fn apply_system(&mut self, text: &str) {
         for line in text.lines() {
             let Some((key, value)) = line.trim().split_once('=') else {
                 continue;
             };
             let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
-            let first = value.split(',').next().unwrap_or_default().to_string();
             match key.trim() {
-                "XKBLAYOUT" if !first.is_empty() => self.layout = first,
-                "XKBVARIANT" => self.variant = first,
+                "XKBLAYOUT" if !value.is_empty() => self.layout = value.to_string(),
+                "XKBVARIANT" => self.variant = value.to_string(),
                 "XKBMODEL" if !value.is_empty() => self.model = value.to_string(),
                 "XKBOPTIONS" => self.options = value.to_string(),
                 _ => {}
@@ -498,7 +498,7 @@ mod tests {
         k.apply_system("# KEYBOARD CONFIGURATION FILE\nXKBMODEL=\"abnt2\"\nXKBLAYOUT=\"br,us\"\nXKBVARIANT=\",alt-intl\"\nXKBOPTIONS=\"grp:alt_shift_toggle\"\nBACKSPACE=\"guess\"\n");
         assert_eq!(
             (k.layout.as_str(), k.variant.as_str(), k.model.as_str()),
-            ("br", "", "abnt2")
+            ("br,us", ",alt-intl", "abnt2")
         );
         assert_eq!(k.options, "grp:alt_shift_toggle");
         k.apply_system("XKBLAYOUT=us\nXKBVARIANT=alt-intl\nXKBMODEL=\n");

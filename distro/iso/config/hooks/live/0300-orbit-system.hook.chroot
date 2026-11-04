@@ -1,0 +1,19 @@
+#!/bin/sh
+# What Debian's base leaves in the image and Orbit Linux does otherwise; the
+# installed system is a copy of the Live, so both get it.
+set -e
+
+# os-release: live-build copies Debian's /usr/lib/os-release to a plain
+# /etc/os-release (with IMAGE_ID=live), behind a local diversion, before
+# orbit-release is installed; everything reads /etc/os-release, so the
+# system said Debian. Back to Debian's link, to orbit-release's file.
+dpkg-divert --local --remove --no-rename /etc/os-release >/dev/null 2>&1 || true
+rm -f /etc/os-release /etc/os-release.debootstrap
+ln -s ../usr/lib/os-release /etc/os-release
+
+# The network is NetworkManager's alone: with ifupdown, an interface in
+# /etc/network/interfaces (the installer's netcfg writes the one it used)
+# is unmanaged by NetworkManager, so the panel can't control it, and
+# networking.service waits for its DHCP at boot.
+apt-get purge -y ifupdown
+rm -rf /etc/network/interfaces /etc/network/interfaces.d
