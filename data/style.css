@@ -528,10 +528,14 @@ window.orbit popover radio { color: @orbit_fg; }
   font-weight: bold;
 }
 
+/* The box is the gap (what a click finds); the line inside it is drawn. */
 .dock .separator {
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+.dock .separator .line {
   background-color: @orbit_muted;
   min-width: 2px;
   min-height: 2px;
-  margin: 6px 10px;
   border-radius: 1px;
 }

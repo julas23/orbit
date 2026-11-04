@@ -73,10 +73,10 @@ impl ConfigDir {
         self.rewrite("panel.yaml", &["start", "center", "end"], &lists, first)
     }
 
-    /// Writes the dock's launchers into `dock.yaml`, in place of its
-    /// `apps:`; the rest stays, and the first write of a run keeps the old
-    /// file as `dock.yaml.bak`.
-    pub fn save_dock_apps(&self, apps: &[DockApp], first: bool) -> anyhow::Result<()> {
+    /// Writes the dock's launchers and separators into `dock.yaml`, in
+    /// place of its `apps:`; the rest stays, and the first write of a run
+    /// keeps the old file as `dock.yaml.bak`.
+    pub fn save_dock_apps(&self, apps: &[DockEntry], first: bool) -> anyhow::Result<()> {
         let list = if apps.is_empty() {
             "apps: []\n".to_owned()
         } else {
@@ -419,7 +419,7 @@ pub struct DockConfig {
     pub reserve: bool,
     pub align: Align,
     pub icon_size: i32,
-    pub apps: Vec<DockApp>,
+    pub apps: Vec<DockEntry>,
 }
 
 impl Default for DockConfig {
@@ -433,6 +433,32 @@ impl Default for DockConfig {
             align: Align::End,
             icon_size: 24,
             apps: Vec::new(),
+        }
+    }
+}
+
+/// An entry of the dock's `apps:`: a launcher, or `- separator`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum DockEntry {
+    Separator(SeparatorWord),
+    App(DockApp),
+}
+
+/// The word `separator`, as an entry of `apps:`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SeparatorWord {
+    Separator,
+}
+
+impl DockEntry {
+    pub const SEPARATOR: Self = Self::Separator(SeparatorWord::Separator);
+
+    pub fn app(&self) -> Option<&DockApp> {
+        match self {
+            Self::App(app) => Some(app),
+            Self::Separator(_) => None,
         }
     }
 }
@@ -453,7 +479,9 @@ pub struct DockApp {
     pub exec: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
-    /// Neighbouring apps with different groups get a separator between them.
+    /// Neighbouring apps with different groups get a separator between
+    /// them — the older way: editing the dock writes `- separator`
+    /// entries instead, and no groups.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
@@ -567,5 +595,11 @@ mod tests {
         let list = format!("apps:\n{}", serde_yaml_ng::to_string(&dock.apps).unwrap());
         let out = with_blocks(text, &["apps"], &list);
         assert_eq!(out, text);
+        // Separators of their own, anywhere, side by side too.
+        let text = "apps:\n- separator\n- desktop: a.desktop\n- separator\n- separator\n";
+        let dock: DockConfig = serde_yaml_ng::from_str(text).unwrap();
+        assert_eq!(dock.apps.iter().filter(|e| e.app().is_none()).count(), 3);
+        let list = format!("apps:\n{}", serde_yaml_ng::to_string(&dock.apps).unwrap());
+        assert_eq!(list, text);
     }
 }

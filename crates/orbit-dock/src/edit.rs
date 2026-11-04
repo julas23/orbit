@@ -10,9 +10,11 @@
 //! added where it is dropped (see `appimage`). Every change is shown at
 //! once and written to `dock.yaml` (`ConfigDir::save_dock_apps`).
 //!
-//! `dock.yaml` keeps separators as groups: neighbouring launchers of
-//! different groups have one between them. Saving names each run of
-//! launchers between two separators after the group most of them had.
+//! Separators are entries of their own in `dock.yaml` (`- separator`), as
+//! many as wanted and anywhere: side by side, at the ends. An older file's
+//! groups (a separator between neighbouring launchers of different groups)
+//! are read as separators, and written as them the first time the dock
+//! changes.
 
 use std::{
     cell::{Cell, RefCell},
@@ -25,7 +27,7 @@ use gtk4_layer_shell::{KeyboardMode, LayerShell};
 use orbit_app::i18n::tr;
 use orbit_common::{
     ConfigDir,
-    config::{DockApp, Edge},
+    config::{DockApp, DockEntry, Edge},
 };
 
 use crate::{Launcher, SystemApps, appimage, badges::Badges};
@@ -80,11 +82,11 @@ enum Drop {
 }
 
 impl Editor {
-    /// The dock's launchers, from `apps`, in `launchers`; `root` is the
-    /// whole dock, which takes the clicks while editing.
+    /// The dock's launchers and separators, from `apps`, in `launchers`;
+    /// `root` is the whole dock, which takes the clicks while editing.
     pub fn new(
         dir: &ConfigDir,
-        apps: &[DockApp],
+        apps: &[DockEntry],
         icon_size: i32,
         (edge, size): (Edge, i32),
         root: &gtk::Box,
@@ -110,14 +112,11 @@ impl Editor {
             size,
         });
         editor.weak.replace(Rc::downgrade(&editor));
-        let mut last: Option<Option<&str>> = None;
-        for app in apps {
-            let group = app.group.as_deref();
-            if last.is_some_and(|last| last != group) {
-                editor.push(Kind::Separator);
-            }
-            last = Some(group);
-            editor.push(Kind::App(app.clone()));
+        for entry in with_group_separators(apps) {
+            editor.push(match entry {
+                Some(app) => Kind::App(app.clone()),
+                None => Kind::Separator,
+            });
         }
         editor.lay_out();
         gestures(&editor);
@@ -134,7 +133,18 @@ impl Editor {
 
     fn widget_for(&self, kind: &Kind) -> Option<gtk::Widget> {
         match kind {
-            Kind::Separator => Some(gtk::Box::builder().css_classes(["separator"]).build().upcast()),
+            Kind::Separator => {
+                // The line, in a box as thick as a launcher's gap: the box is
+                // what a click or a drag finds, not the 2 px line alone.
+                let line = gtk::Box::builder()
+                    .css_classes(["line"])
+                    .hexpand(self.vertical)
+                    .vexpand(!self.vertical)
+                    .build();
+                let separator = gtk::Box::builder().css_classes(["separator"]).build();
+                separator.append(&line);
+                Some(separator.upcast())
+            }
             Kind::App(app) if app.show => {
                 let launcher = Launcher::resolve(app, &self.system)?;
                 let weak = self.weak.borrow().clone();
@@ -149,46 +159,36 @@ impl Editor {
         }
     }
 
-    /// Puts the launchers and separators in the dock in the list's order;
-    /// a separator only between two launchers that show.
+    /// Puts the launchers and separators in the dock in the list's order:
+    /// every separator, wherever it is.
     fn lay_out(&self) {
         while let Some(child) = self.launchers.first_child() {
             self.launchers.remove(&child);
         }
-        let items = self.items.borrow();
-        let shows = |item: &Item| matches!(item.kind, Kind::App(_)) && item.widget.is_some();
-        let mut since = false;
-        for (i, item) in items.iter().enumerate() {
-            let Some(widget) = &item.widget else { continue };
-            match item.kind {
-                Kind::App(_) => {
-                    since = true;
-                    self.launchers.append(widget);
-                }
-                Kind::Separator => {
-                    if since && items[i + 1..].iter().any(shows) {
-                        self.launchers.append(widget);
-                        since = false;
-                    }
-                }
-            }
+        for widget in self.items.borrow().iter().filter_map(|item| item.widget.as_ref()) {
+            self.launchers.append(widget);
         }
     }
 
     /// Shows the change and writes the launchers to `dock.yaml`.
     fn changed(&self) {
         self.lay_out();
-        let list: Vec<Option<DockApp>> = self
+        // The separators as entries; the groups, which made them before,
+        // would add more on the next start.
+        let list: Vec<DockEntry> = self
             .items
             .borrow()
             .iter()
             .map(|item| match &item.kind {
-                Kind::App(app) => Some(app.clone()),
-                Kind::Separator => None,
+                Kind::App(app) => DockEntry::App(DockApp {
+                    group: None,
+                    ..app.clone()
+                }),
+                Kind::Separator => DockEntry::SEPARATOR,
             })
             .collect();
         let first = !self.saved.replace(true);
-        match self.dir.save_dock_apps(&regroup(&list), first) {
+        match self.dir.save_dock_apps(&list, first) {
             Ok(()) => log::info!("dock: launchers saved to dock.yaml"),
             Err(err) => log::error!("dock: saving the launchers: {err:#}"),
         }
@@ -304,12 +304,10 @@ impl Editor {
         }
     }
 
-    /// The list place after the launcher under (`x`, `y`); elsewhere (a gap,
-    /// a separator) the place between the items the pointer is between, or
-    /// the end. Not always the end: a separator there would not show.
+    /// The list place after the item under (`x`, `y`); elsewhere (a gap)
+    /// the place between the items the pointer is between, or the end.
     fn place_after(&self, x: f64, y: f64) -> usize {
-        let over = self.at(x, y).and_then(|id| self.index(id));
-        if let Some(i) = over.filter(|&i| matches!(self.items.borrow()[i].kind, Kind::App(_))) {
+        if let Some(i) = self.at(x, y).and_then(|id| self.index(id)) {
             return i + 1;
         }
         let pointer = if self.vertical { y } else { x };
@@ -360,41 +358,28 @@ fn launcher(desktop: String) -> DockApp {
     }
 }
 
-/// The launchers as `dock.yaml` keeps them (`None` is a separator): each
-/// run between separators in one group, named after the group most of its
-/// launchers had; a name already taken by an earlier run gets a number.
-fn regroup(list: &[Option<DockApp>]) -> Vec<DockApp> {
+/// `apps:` as the dock lays it out (`None` a separator): its separators,
+/// and one more between neighbouring launchers of different groups where
+/// there is none already.
+fn with_group_separators(apps: &[DockEntry]) -> Vec<Option<&DockApp>> {
     let mut out = Vec::new();
-    let mut used: Vec<Option<String>> = Vec::new();
-    for run in list.split(Option::is_none) {
-        let run: Vec<&DockApp> = run.iter().flatten().collect();
-        if run.is_empty() {
-            continue;
-        }
-        let mut counts: Vec<(Option<&String>, usize)> = Vec::new();
-        for app in &run {
-            match counts.iter_mut().find(|(g, _)| *g == app.group.as_ref()) {
-                Some((_, n)) => *n += 1,
-                None => counts.push((app.group.as_ref(), 1)),
+    // The group of the launcher before, when nothing separates it.
+    let mut last: Option<Option<&str>> = None;
+    for entry in apps {
+        match entry {
+            DockEntry::Separator(_) => {
+                out.push(None);
+                last = None;
+            }
+            DockEntry::App(app) => {
+                let group = app.group.as_deref();
+                if last.is_some_and(|last| last != group) {
+                    out.push(None);
+                }
+                last = Some(group);
+                out.push(Some(app));
             }
         }
-        // The most common; on a tie, the first.
-        let best = counts
-            .iter()
-            .rev()
-            .max_by_key(|(_, n)| *n)
-            .and_then(|(g, _)| g.cloned());
-        let mut group = best.clone();
-        let mut n = 2;
-        while used.contains(&group) {
-            group = Some(format!("{}-{n}", best.as_deref().unwrap_or("group")));
-            n += 1;
-        }
-        used.push(group.clone());
-        out.extend(run.into_iter().map(|app| DockApp {
-            group: group.clone(),
-            ..app.clone()
-        }));
     }
     out
 }
@@ -700,8 +685,8 @@ fn chooser(editor: &Rc<Editor>, x: f64, y: f64) {
 mod tests {
     use super::*;
 
-    fn app(name: &str, group: Option<&str>) -> Option<DockApp> {
-        Some(DockApp {
+    fn app(name: &str, group: Option<&str>) -> DockEntry {
+        DockEntry::App(DockApp {
             desktop: Some(name.into()),
             name: None,
             exec: None,
@@ -711,38 +696,31 @@ mod tests {
         })
     }
 
-    fn groups(list: &[Option<DockApp>]) -> Vec<Option<String>> {
-        regroup(list).into_iter().map(|app| app.group).collect()
+    fn laid_out(apps: &[DockEntry]) -> String {
+        with_group_separators(apps)
+            .iter()
+            .map(|e| e.and_then(|a| a.desktop.as_deref()).unwrap_or("|"))
+            .collect()
     }
 
     #[test]
-    fn separators_become_groups() {
-        // As loaded: unchanged.
+    fn separators_from_groups_and_of_their_own() {
+        let sep = DockEntry::SEPARATOR;
+        // Groups: one between each two that differ.
+        let list = [app("a", Some("web")), app("b", Some("dev")), app("c", Some("dev"))];
+        assert_eq!(laid_out(&list), "a|bc");
+        // A separator of its own where the groups change: just the one.
+        let list = [app("a", Some("web")), sep.clone(), app("b", Some("dev"))];
+        assert_eq!(laid_out(&list), "a|b");
+        // Anywhere, side by side, at the ends.
         let list = [
-            app("a", Some("web")),
-            None,
-            app("b", Some("dev")),
-            app("c", Some("dev")),
+            sep.clone(),
+            app("a", None),
+            sep.clone(),
+            sep.clone(),
+            app("b", None),
+            sep,
         ];
-        assert_eq!(
-            groups(&list),
-            [Some("web".into()), Some("dev".into()), Some("dev".into())]
-        );
-        // A separator added inside a group splits it; the second half is
-        // numbered.
-        let list = [app("a", Some("dev")), None, app("b", Some("dev"))];
-        assert_eq!(groups(&list), [Some("dev".into()), Some("dev-2".into())]);
-        // A separator removed joins two groups under the larger one; a new
-        // launcher (no group) takes its run's.
-        let list = [
-            app("a", Some("web")),
-            app("b", Some("dev")),
-            app("c", Some("dev")),
-            app("d", None),
-        ];
-        assert_eq!(groups(&list), vec![Some("dev".to_string()); 4]);
-        // Separators at the ends or side by side change nothing.
-        let list = [None, app("a", None), None, None, app("b", None), None];
-        assert_eq!(groups(&list), [None, Some("group-2".into())]);
+        assert_eq!(laid_out(&list), "|a||b|");
     }
 }

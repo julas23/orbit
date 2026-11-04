@@ -408,7 +408,12 @@ mod tests {
             .expect("dock.yaml");
         let system = SystemApps::load();
         let mut with_menu = 0;
-        for entry in dock.apps.iter().filter(|e| e.show) {
+        for entry in dock
+            .apps
+            .iter()
+            .filter_map(orbit_common::config::DockEntry::app)
+            .filter(|e| e.show)
+        {
             let Some(l) = Launcher::resolve(entry, &system) else {
                 continue;
             };
