@@ -10,6 +10,10 @@
 //! to bottom, left to right), then by window position on that monitor in the
 //! same reading order. Minimized windows have no place on screen and go last.
 //!
+//! On the vertical panel the windows of one area on one monitor share a
+//! line, each entry narrower as more come (from three on, the icon alone,
+//! the name in the tooltip); each minimized window has a line of its own.
+//!
 //! Left click focuses (a minimized window goes back to the area it left
 //! under orbit-core, comes to the current one under sway).
 //! Right click opens a menu: show/minimize, maximize, restore, send to area
@@ -172,10 +176,18 @@ impl Module {
         items.retain(|id, item| {
             let open = windows.iter().any(|w| w.id == *id);
             if !open {
-                self.list.remove(&item.button);
+                unparent(&item.button);
             }
             open
         });
+        if self.vertical {
+            for window in &windows {
+                let item = items.entry(window.id).or_insert_with(|| self.item(window));
+                self.show(item, window);
+            }
+            self.lines(&windows, &items);
+            return;
+        }
         let mut previous: Option<gtk::Widget> = None;
         for window in &windows {
             let item = items.entry(window.id).or_insert_with(|| self.item(window));
@@ -198,8 +210,10 @@ impl Module {
         if self.vertical {
             inner.append(&name);
         }
-        let button = gtk::Button::builder().child(&inner).build();
-        self.list.append(&button);
+        let button = gtk::Button::builder().child(&inner).hexpand(true).build();
+        if !self.vertical {
+            self.list.append(&button);
+        }
 
         let shared = Rc::new(RefCell::new(window.clone()));
         {
@@ -263,6 +277,47 @@ impl Module {
         *item.window.borrow_mut() = window.clone();
     }
 
+    /// The vertical panel's lines: one per area and monitor, in the list's
+    /// order, its windows side by side; one per minimized window.
+    fn lines(&self, windows: &[Window], items: &HashMap<i64, Item>) {
+        // (area, monitor) of each line, none for a minimized window, and its windows.
+        type Line = (Option<(i32, String)>, Vec<i64>);
+        let mut groups: Vec<Line> = Vec::new();
+        for window in windows {
+            let key = window.area.map(|area| (area, window.output.clone()));
+            match groups.last_mut() {
+                Some((last, ids)) if key.is_some() && *last == key => ids.push(window.id),
+                _ => groups.push((key, vec![window.id])),
+            }
+        }
+        for item in items.values() {
+            unparent(&item.button);
+        }
+        while let Some(child) = self.list.first_child() {
+            self.list.remove(&child);
+        }
+        for (_, ids) in &groups {
+            let line = gtk::Box::builder()
+                .spacing(3)
+                .homogeneous(true)
+                .css_classes(["window-line"])
+                .build();
+            let crowded = ids.len() >= 3;
+            for id in ids {
+                if let Some(item) = items.get(id) {
+                    item.name.set_visible(!crowded);
+                    let tip = item.button.tooltip_text().unwrap_or_default();
+                    let app = item.name.label();
+                    if crowded && !tip.starts_with(app.as_str()) {
+                        item.button.set_tooltip_text(Some(&format!("{app} — {tip}")));
+                    }
+                    line.append(&item.button);
+                }
+            }
+            self.list.append(&line);
+        }
+    }
+
     /// Focuses `window`; a minimized one comes back to the current area,
     /// tiled — `scratchpad show` alone would leave it floating, and tiling
     /// it in place could drop it into another area. orbit-core's own
@@ -307,6 +362,13 @@ impl Module {
         if let Err(err) = glib::spawn_command_line_async(&command) {
             log::error!("windows: running {command:?}: {err}");
         }
+    }
+}
+
+/// Takes `widget` out of the box it is in, if any.
+fn unparent(widget: &impl IsA<gtk::Widget>) {
+    if let Some(parent) = widget.parent().and_downcast::<gtk::Box>() {
+        parent.remove(widget);
     }
 }
 
@@ -578,5 +640,77 @@ mod tests {
         ];
         sort(&mut w, &outputs);
         assert_eq!(ids(&w), [3, 2, 1]);
+    }
+}
+
+#[cfg(test)]
+mod look {
+    use super::*;
+
+    /// Windows sharing lines, drawn to `$ORBIT_WINDOWS_LOOK` (PNG), on a
+    /// display of its own.
+    #[test]
+    #[ignore]
+    fn windows_look() {
+        let Ok(path) = std::env::var("ORBIT_WINDOWS_LOOK") else { return };
+        gtk::init().expect("a display");
+        let display = gtk::gdk::Display::default().unwrap();
+        let css = gtk::CssProvider::new();
+        css.load_from_string(&format!(
+            "{}\n{}\nwindow {{ background: #1b1f27; }}",
+            include_str!("../../../data/palette-dark.css"),
+            include_str!("../../../data/style.css")
+        ));
+        gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(5).css_classes(["windows"]).build();
+        let module = Rc::new(Module {
+            config: WindowsConfig::default(),
+            vertical: true,
+            list: list.clone(),
+            apps: Apps::load(&[]),
+            items: RefCell::new(HashMap::new()),
+            conn: RefCell::new(None),
+        });
+        let w = |id, class: &str, area: Option<i32>, output: &str| Window {
+            id,
+            class: class.into(),
+            title: format!("{class} title"),
+            area,
+            left: None,
+            output: output.into(),
+            x: 0,
+            y: 0,
+            focused: id == 2,
+            order: id as usize,
+        };
+        let windows = vec![
+            w(1, "firefox", Some(1), "eDP-1"),
+            w(2, "kitty", Some(1), "eDP-1"),
+            w(3, "code", Some(1), "HDMI-A-1"),
+            w(4, "a", Some(2), "eDP-1"),
+            w(5, "b", Some(2), "eDP-1"),
+            w(6, "c", Some(2), "eDP-1"),
+            w(7, "spotify", None, ""),
+        ];
+        let mut items = HashMap::new();
+        for window in &windows {
+            let item = module.item(window);
+            module.show(&item, window);
+            items.insert(window.id, item);
+        }
+        module.lines(&windows, &items);
+        let window = gtk::Window::builder().css_classes(["orbit", "orbit-panel"]).child(&list).default_width(150).build();
+        window.present();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < until {
+            glib::MainContext::default().iteration(false);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let (wd, h) = (window.width(), window.height());
+        let paintable = gtk::WidgetPaintable::new(Some(&window));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(wd), f64::from(h));
+        let node = snapshot.to_node().unwrap();
+        window.renderer().unwrap().render_texture(&node, None).save_to_png(&path).unwrap();
     }
 }
