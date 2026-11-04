@@ -14,6 +14,14 @@
 //!
 //! Each monitor gets a background layer surface showing the same picture;
 //! monitors that come and go get theirs.
+//!
+//!   orbit-wallpaper --music
+//!
+//! What is playing over the spectrum sphere (`effect: scope`): the cover,
+//! the song and the lyrics (`music.rs`). The core starts it too, and its
+//! input closing ends it the same way.
+
+mod music;
 
 use std::{cell::RefCell, io::BufRead, path::PathBuf, rc::Rc};
 
@@ -25,8 +33,10 @@ fn main() -> glib::ExitCode {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let mut args = std::env::args().skip(1);
     let (mut mode, mut file) = ("fill".to_owned(), None);
+    let mut music = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--music" => music = true,
             "--mode" => mode = args.next().unwrap_or_default(),
             "-h" | "--help" => {
                 println!("Usage: orbit-wallpaper [--mode fill|fit|center|stretch] FILE");
@@ -34,6 +44,33 @@ fn main() -> glib::ExitCode {
             }
             other => file = Some(PathBuf::from(other)),
         }
+    }
+    if music {
+        let app = gtk::Application::builder()
+            .application_id("io.github.julas23.Orbit.Wallpaper.Music")
+            .flags(gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.connect_activate(|app| {
+            music::run(app);
+            // Held until the core closes the input.
+            let hold = app.hold();
+            let (sender, receiver) = async_channel::bounded::<()>(1);
+            std::thread::spawn(move || {
+                for line in std::io::stdin().lock().lines() {
+                    if line.is_err() {
+                        break;
+                    }
+                }
+                let _ = sender.send_blocking(());
+            });
+            let app = app.clone();
+            glib::spawn_future_local(async move {
+                let _ = receiver.recv().await;
+                drop(hold);
+                app.quit();
+            });
+        });
+        return app.run_with_args::<&str>(&[]);
     }
     let Some(file) = file else {
         eprintln!("orbit-wallpaper: no file");

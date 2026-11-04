@@ -114,6 +114,8 @@ num-bigint = "0.4"
 getrandom = "0.2"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 sha1 = "0.10"
+# orbit-wallpaper --music: the Subsonic API's token, md5(password + salt).
+md-5 = "0.10"
 libloading = "0.8"
 anyhow = "1"
 # orbit-login: the system calls of a login service (fork, setuid,

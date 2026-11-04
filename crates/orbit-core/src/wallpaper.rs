@@ -22,6 +22,7 @@
 //!   speed: 1                     # how fast it moves (0: still)
 //!   fps: 30                      # frames a second while it moves
 //!   sound: false                 # the effect follows what the speakers play
+//!   music: true                  # with scope: the song and its lyrics over it
 //!   screensaver: 300             # seconds idle before the windows fade and
 //!                                # the effect shows alone; 0: never
 //!   video: ~/Vídeos/mar.mp4      # over all of it: a video or an animated
@@ -95,6 +96,9 @@ pub struct Wallpaper {
     pub sound: bool,
     /// Seconds with no input before the effect shows alone; 0: never.
     pub screensaver: u64,
+    /// With the `scope` effect, what is playing over it: the cover, the
+    /// song and the lyrics (`orbit-wallpaper --music`).
+    pub music: bool,
 }
 
 impl Default for Wallpaper {
@@ -110,6 +114,7 @@ impl Default for Wallpaper {
             video: String::new(),
             sound: false,
             screensaver: 300,
+            music: true,
         }
     }
 }
@@ -179,6 +184,10 @@ pub struct Wallpapers {
     failed: Option<VideoKey>,
     /// What the speakers play, while an effect wants it.
     sound: crate::sound::Sound,
+    /// `orbit-wallpaper --music`, while the scope shows; whether it ended
+    /// by itself (not started again until the config is read again).
+    music: Option<std::process::Child>,
+    music_failed: bool,
     /// The loudness that hurries the effect's clock, smoothed.
     loud: f32,
     /// How much the screensaver shows, 0..1.
@@ -455,6 +464,7 @@ impl Orbit {
         let mut cache = self.wallpapers.borrow_mut();
         if read {
             cache.failed = None;
+            cache.music_failed = false;
             cache.sound.retry();
         }
         // Ended by itself (a file it cannot play, a crash).
@@ -498,6 +508,45 @@ impl Orbit {
                     }
                 }
             }
+        }
+        // What is playing, over the spectrum sphere.
+        if let Some(child) = cache.music.as_mut()
+            && let Ok(Some(status)) = child.try_wait()
+        {
+            tracing::warn!("orbit-wallpaper --music ended ({status})");
+            cache.music = None;
+            cache.music_failed = true;
+        }
+        let music = config.music
+            && config.effect == crate::effects::Effect::Scope
+            && cache.video.is_none()
+            && !cache.music_failed;
+        match (music, cache.music.is_some()) {
+            (true, false) => {
+                let started = self
+                    .client("orbit-wallpaper")
+                    .arg("--music")
+                    .stdin(std::process::Stdio::piped())
+                    .spawn();
+                match started {
+                    Ok(child) => {
+                        tracing::info!("wallpaper: what is playing, over the scope");
+                        cache.music = Some(child);
+                    }
+                    Err(err) => {
+                        tracing::warn!("orbit-wallpaper --music: {err}");
+                        cache.music_failed = true;
+                    }
+                }
+            }
+            (false, true) => {
+                if let Some(mut old) = cache.music.take() {
+                    drop(old.stdin.take());
+                    let _ = old.kill();
+                    std::thread::spawn(move || old.wait());
+                }
+            }
+            _ => {}
         }
         let timer = (cache.video.is_some() || config.effect != crate::effects::Effect::None) && !cache.ticking;
         if timer {
