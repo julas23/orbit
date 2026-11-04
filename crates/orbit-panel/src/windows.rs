@@ -112,6 +112,8 @@ pub fn new(config: &WindowsConfig, vertical: bool) -> gtk::Widget {
         apps: Apps::load(&config.desktop_dirs),
         items: RefCell::new(HashMap::new()),
         conn: RefCell::new(None),
+        shown: RefCell::default(),
+        lined: RefCell::default(),
     });
     module.refresh();
     let weak = Rc::downgrade(&module);
@@ -141,6 +143,11 @@ struct Module {
     apps: Apps,
     items: RefCell<HashMap<i64, Item>>,
     conn: RefCell<Option<sway::Connection>>,
+    /// The windows last shown, and the vertical panel's lines: an event
+    /// that changes neither (a title the list does not show, a window
+    /// resized) touches nothing.
+    shown: RefCell<Vec<Window>>,
+    lined: RefCell<Vec<Vec<i64>>>,
 }
 
 impl Module {
@@ -171,6 +178,20 @@ impl Module {
         let outputs: Vec<sway::Output> = self.with_conn(|c| c.query(sway::GET_OUTPUTS)).unwrap_or_default();
         let mut windows = collect(&tree, self.config.stride.max(1));
         sort(&mut windows, &outputs);
+        // Where a window is on its monitor orders the list, but only the
+        // order shows: compare without it.
+        let same = {
+            let shown = self.shown.borrow();
+            shown.len() == windows.len()
+                && shown.iter().zip(&windows).all(|(a, b)| {
+                    (a.id, &a.class, &a.title, a.area, a.left, &a.output, a.focused)
+                        == (b.id, &b.class, &b.title, b.area, b.left, &b.output, b.focused)
+                })
+        };
+        if same {
+            return;
+        }
+        *self.shown.borrow_mut() = windows.clone();
 
         let mut items = self.items.borrow_mut();
         items.retain(|id, item| {
@@ -246,6 +267,11 @@ impl Module {
     }
 
     fn show(&self, item: &Item, window: &Window) {
+        let before = item.window.borrow().clone();
+        let fresh = item.name.label().is_empty();
+        if !fresh && before == *window {
+            return;
+        }
         let (app, gicon) = self.apps.lookup(&window.class);
         match gicon {
             Some(gicon) => orbit_app::set_gicon(&item.icon, &gicon, 16),
@@ -263,16 +289,13 @@ impl Module {
             classes.push("minimized".into());
         }
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
-        item.button.set_css_classes(&classes);
+        crate::board::set_classes(&item.button, &classes);
         let place = match window.area {
             Some(area) => tr_args("windows-place-area", &[("area", number(area))]),
             None => tr("windows-place-minimized"),
         };
-        let tooltip = if self.vertical {
-            format!("{}  [{place}]", window.title)
-        } else {
-            format!("{app} — {}  [{place}]", window.title)
-        };
+        // The name too: a crowded line shows the icon alone.
+        let tooltip = format!("{app} — {}  [{place}]", window.title);
         item.button.set_tooltip_text(Some(&tooltip));
         *item.window.borrow_mut() = window.clone();
     }
@@ -290,6 +313,11 @@ impl Module {
                 _ => groups.push((key, vec![window.id])),
             }
         }
+        let layout: Vec<Vec<i64>> = groups.iter().map(|(_, ids)| ids.clone()).collect();
+        if *self.lined.borrow() == layout {
+            return;
+        }
+        *self.lined.borrow_mut() = layout;
         for item in items.values() {
             unparent(&item.button);
         }
@@ -306,11 +334,6 @@ impl Module {
             for id in ids {
                 if let Some(item) = items.get(id) {
                     item.name.set_visible(!crowded);
-                    let tip = item.button.tooltip_text().unwrap_or_default();
-                    let app = item.name.label();
-                    if crowded && !tip.starts_with(app.as_str()) {
-                        item.button.set_tooltip_text(Some(&format!("{app} — {tip}")));
-                    }
                     line.append(&item.button);
                 }
             }
@@ -670,6 +693,8 @@ mod look {
             apps: Apps::load(&[]),
             items: RefCell::new(HashMap::new()),
             conn: RefCell::new(None),
+            shown: RefCell::default(),
+            lined: RefCell::default(),
         });
         let w = |id, class: &str, area: Option<i32>, output: &str| Window {
             id,

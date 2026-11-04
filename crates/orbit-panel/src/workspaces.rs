@@ -150,7 +150,7 @@ impl Module {
                 State::Occupied => "occupied",
                 State::Focused => "focused",
             };
-            button.set_css_classes(&["area", &index, state]);
+            crate::board::set_classes(button, &["area", &index, state]);
         }
     }
 

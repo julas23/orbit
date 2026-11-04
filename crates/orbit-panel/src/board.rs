@@ -432,6 +432,16 @@ fn content_rows(item: &Item) -> i32 {
     rows
 }
 
+/// Sets `widget`'s CSS classes only when they differ: setting them again
+/// restyles it, and redraws it, for nothing.
+pub fn set_classes(widget: &impl IsA<gtk::Widget>, classes: &[&str]) {
+    let now = widget.css_classes();
+    let same = now.len() == classes.len() && now.iter().zip(classes).all(|(a, b)| a.as_str() == *b);
+    if !same {
+        widget.set_css_classes(classes);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

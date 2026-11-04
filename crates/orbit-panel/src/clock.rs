@@ -192,6 +192,7 @@ pub fn new(config: &ClockConfig, form: Form) -> gtk::Widget {
         label: config.label.clone(),
         rotate: i64::from(config.rotate.max(1)),
         second,
+        tip: std::cell::RefCell::default(),
     });
     state.update();
     schedule(state.clone());
@@ -469,6 +470,8 @@ struct State {
     label: Option<String>,
     rotate: i64,
     second: Rc<Cell<i32>>,
+    /// The tooltip last set: it changes once a minute, not every second.
+    tip: std::cell::RefCell<String>,
 }
 
 impl State {
@@ -497,7 +500,11 @@ impl State {
             }
         }
 
-        l.root.set_tooltip_markup(Some(&self.tooltip(&now, &date)));
+        let tip = self.tooltip(&now, &date);
+        if *self.tip.borrow() != tip {
+            l.root.set_tooltip_markup(Some(&tip));
+            *self.tip.borrow_mut() = tip;
+        }
 
         self.second.set(now.second());
         l.hourglass.queue_draw();
