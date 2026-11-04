@@ -181,7 +181,9 @@ rm -rf "$dir"
 # arm64: cross-compiled in a bare Debian 13, from this same tree (so with
 # the same version).
 if [ -n "$ARM64" ]; then
-    CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/orbit-arm64
+    # ORBIT_ARM64_CACHE: elsewhere, e.g. on a machine whose container root
+    # cannot write the one another machine's root made (an LXC).
+    CACHE=${ORBIT_ARM64_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/orbit-arm64}
     mkdir -p "$CACHE"
     docker run --rm -v "$ROOT:/src:ro" -v "$OUT:/out" -v "$CACHE:/cache" \
         -e CARGO_HOME=/cache/cargo -e RUSTUP_HOME=/cache/rustup -e CARGO_TARGET_DIR=/cache/target \
