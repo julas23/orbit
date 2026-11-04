@@ -326,6 +326,7 @@ impl Orbit {
     pub fn reload_config(&mut self) {
         self.config = Config::load(&self.config_path);
         self.keys = crate::keys::Keys::load(&self.config_path, &self.config);
+        self.sync_wallpaper(true);
         if let Some(keyboard) = self.seat.get_keyboard() {
             let kb = self.config.keyboard.clone();
             if let Err(err) = keyboard.set_xkb_config(self, xkb_config(&kb)) {
@@ -779,10 +780,22 @@ impl Orbit {
 
     /// Runs `command` through the shell, as a client of this compositor.
     pub fn spawn(&self, command: &str) {
-        let mut child = std::process::Command::new("sh");
+        let mut child = self.client("sh");
+        child.arg("-c").arg(command);
+        match child.spawn() {
+            Ok(mut c) => {
+                // Reaped in the background, so it never lingers as a zombie.
+                std::thread::spawn(move || c.wait());
+            }
+            Err(err) => tracing::warn!("{command}: {err}"),
+        }
+    }
+
+    /// `program`, to be run as a client of this compositor: its
+    /// environment points at the core's display, X server and IPC.
+    pub fn client(&self, program: &str) -> std::process::Command {
+        let mut child = std::process::Command::new(program);
         child
-            .arg("-c")
-            .arg(command)
             .env("WAYLAND_DISPLAY", &self.socket_name)
             .env("XDG_SESSION_TYPE", "wayland")
             .env("XCURSOR_THEME", &self.config.cursor_theme)
@@ -805,13 +818,7 @@ impl Orbit {
                     .env_remove("I3SOCK");
             }
         }
-        match child.spawn() {
-            Ok(mut c) => {
-                // Reaped in the background, so it never lingers as a zombie.
-                std::thread::spawn(move || c.wait());
-            }
-            Err(err) => tracing::warn!("{command}: {err}"),
-        }
+        child
     }
 }
 

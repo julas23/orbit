@@ -913,3 +913,6 @@ settings-kind-water = Water, in motion
 settings-colors = Colours
 settings-own-colors = The effect's own colours
 settings-speed = Speed
+settings-kind-video = A video
+settings-choose-video = Choose a video…
+settings-videos = Videos and animations

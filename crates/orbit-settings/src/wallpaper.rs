@@ -32,7 +32,13 @@ const KINDS: &[&str] = &[
     "fire",
     "fire-blue",
     "water",
+    "video",
 ];
+/// "Show"'s video, the last; the effects are between the colour and it.
+const VIDEO: usize = KINDS.len() - 1;
+fn is_effect(kind: usize) -> bool {
+    (2..VIDEO).contains(&kind)
+}
 /// Each effect's own colours, as the core has them (`effects.rs`).
 fn effect_colors(effect: &str) -> &'static [&'static str] {
     match effect {
@@ -81,6 +87,8 @@ struct Page {
     speed: gtk::Scale,
     /// The rows shown for a picture, for a colour, for an effect.
     picture_rows: Vec<gtk::Widget>,
+    mode_rows: Vec<gtk::Widget>,
+    video_rows: Vec<gtk::Widget>,
     color_rows: Vec<gtk::Widget>,
     effect_rows: Vec<gtk::Widget>,
     message: gtk::Label,
@@ -126,6 +134,8 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     palette.append(&own);
     let choose = gtk::Button::with_label(&tr("settings-choose"));
     choose.set_halign(gtk::Align::End);
+    let choose_video = gtk::Button::with_label(&tr("settings-choose-video"));
+    choose_video.set_halign(gtk::Align::End);
     let mode_row = crate::row(&tr("settings-mode"), &mode);
     let color_row = crate::row(&tr("settings-color"), &color);
     let colors_row = crate::row(&tr("settings-colors"), &palette);
@@ -142,7 +152,9 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
         color,
         swatches,
         speed,
-        picture_rows: vec![mode_row.clone().upcast(), choose.clone().upcast()],
+        picture_rows: vec![choose.clone().upcast()],
+        mode_rows: vec![mode_row.clone().upcast()],
+        video_rows: vec![choose_video.clone().upcast()],
         color_rows: vec![color_row.clone().upcast()],
         effect_rows: vec![colors_row.clone().upcast(), speed_row.clone().upcast()],
         message: crate::message(),
@@ -181,6 +193,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     controls.append(&colors_row);
     controls.append(&speed_row);
     controls.append(&choose);
+    controls.append(&choose_video);
     controls.append(&page.message);
     fewer.connect_clicked({
         let page = page.clone();
@@ -266,7 +279,11 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
             if kind == page.kind_now() {
                 return;
             }
-            if let Some(effect) = KINDS.get(kind).filter(|_| kind >= 2) {
+            if kind == VIDEO {
+                page.choose_video(dd);
+                return;
+            }
+            if let Some(effect) = KINDS.get(kind).filter(|_| is_effect(kind)) {
                 // An effect: for every monitor without a picture of its
                 // own, so the one chosen loses its own.
                 if let Some(name) = page.target.borrow().clone()
@@ -281,6 +298,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
                     _ => Vec::new(),
                 };
                 paper.effect = effect.trim_end_matches("-blue").to_owned();
+                paper.video.clear();
                 drop(paper);
                 page.save(false);
                 page.fill_swatches();
@@ -323,6 +341,10 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
             }
         }
     });
+    choose_video.connect_clicked({
+        let page = page.clone();
+        move |button| page.choose_video(button)
+    });
     choose.connect_clicked({
         let page = page.clone();
         move |button| {
@@ -360,6 +382,10 @@ impl Page {
             .as_ref()
             .and_then(|name| core::output_wallpaper(&self.dir, name));
         let paper = self.paper.borrow();
+        // A video is over every monitor, their own pictures too.
+        if !paper.video.is_empty() {
+            return VIDEO;
+        }
         match own {
             Some(image) => usize::from(image.is_empty()),
             None => {
@@ -379,11 +405,17 @@ impl Page {
         for row in &self.picture_rows {
             row.set_visible(kind == 0);
         }
+        for row in &self.mode_rows {
+            row.set_visible(kind == 0 || kind == VIDEO);
+        }
+        for row in &self.video_rows {
+            row.set_visible(kind == VIDEO);
+        }
         for row in &self.color_rows {
-            row.set_visible(kind <= 1);
+            row.set_visible(kind <= 1 || kind == VIDEO);
         }
         for row in &self.effect_rows {
-            row.set_visible(kind >= 2);
+            row.set_visible(is_effect(kind));
         }
     }
 
@@ -432,6 +464,36 @@ impl Page {
         }
     }
 
+    /// A video asked for, then played over every monitor; nothing chosen,
+    /// "Show" goes back to what there is.
+    fn choose_video(self: &Rc<Self>, from: &impl IsA<gtk::Widget>) {
+        let filter = gtk::FileFilter::new();
+        filter.set_name(Some(&tr("settings-videos")));
+        filter.add_mime_type("video/*");
+        filter.add_mime_type("image/gif");
+        let filters = gio::ListStore::new::<gtk::FileFilter>();
+        filters.append(&filter);
+        let dialog = gtk::FileDialog::builder()
+            .title(tr("settings-choose-video"))
+            .filters(&filters)
+            .modal(true)
+            .build();
+        if let Some(videos) = glib::user_special_dir(glib::UserDirectory::Videos) {
+            dialog.set_initial_folder(Some(&gio::File::for_path(videos)));
+        }
+        let window = from.root().and_downcast::<gtk::Window>();
+        let page = self.clone();
+        dialog.open(window.as_ref(), None::<&gio::Cancellable>, move |file| {
+            if let Some(path) = file.ok().and_then(|f| f.path()) {
+                page.paper.borrow_mut().video = short(&path);
+                page.save(false);
+            }
+            page.kind.set_selected(page.kind_now() as u32);
+            page.show_rows();
+            page.preview.queue_draw();
+        });
+    }
+
     /// The picture of the target (a monitor's own, or everyone's).
     fn image(&self) -> String {
         let global = self.paper.borrow().image.clone();
@@ -461,6 +523,11 @@ impl Page {
     }
 
     fn set_image(&self, image: String) {
+        // Anything else chosen ends the video, which would cover it.
+        if !self.paper.borrow().video.is_empty() {
+            self.paper.borrow_mut().video.clear();
+            self.save(false);
+        }
         match self.target.borrow().clone() {
             Some(name) => {
                 if let Err(err) = core::save_output(&self.dir, &name, |e| {
@@ -527,7 +594,26 @@ impl Page {
 
     /// What the core will draw, at the preview's size.
     fn draw(&self, cr: &cairo::Context, w: i32, h: i32) {
-        if self.kind_now() >= 2 {
+        if self.kind_now() == VIDEO {
+            // The colour around it, and the file's name.
+            let paper = self.paper.borrow();
+            if let Ok(c) = gdk::RGBA::parse(&paper.color) {
+                cr.set_source_rgb(c.red().into(), c.green().into(), c.blue().into());
+                let _ = cr.paint();
+            }
+            let name = Path::new(&paper.video)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            cr.set_source_rgb(0.9, 0.9, 0.9);
+            cr.set_font_size(14.0);
+            if let Ok(extents) = cr.text_extents(&name) {
+                cr.move_to((w as f64 - extents.width()) / 2.0, h as f64 / 2.0);
+                let _ = cr.show_text(&name);
+            }
+            return;
+        }
+        if is_effect(self.kind_now()) {
             // The effect's colours across, as it runs them.
             let gradient = cairo::LinearGradient::new(0.0, h as f64, w as f64, 0.0);
             let colors = self.colors();

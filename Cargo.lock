@@ -4983,6 +4983,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-wallpaper"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "env_logger",
+ "gst-plugin-gtk4",
+ "gstreamer",
+ "gtk4",
+ "gtk4-layer-shell",
+ "log",
+]
+
+[[package]]
 name = "orbitctl"
 version = "0.1.0"
 dependencies = [

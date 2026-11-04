@@ -138,6 +138,7 @@ fn main() -> anyhow::Result<()> {
     for line in state.config.startup.clone().into_iter().filter(|_| state.startup) {
         state.spawn(&line);
     }
+    state.sync_wallpaper(true);
     if !state.locked() {
         state.log_in();
     }

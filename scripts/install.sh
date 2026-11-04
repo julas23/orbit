@@ -19,7 +19,7 @@ APPS=${PREFIX:-$HOME/.local}/share/applications
 # Orbit-Aigent's Whisper on the GPU when Vulkan's shader compiler is there.
 FEATURES=
 command -v glslc >/dev/null && FEATURES="--features orbit-aigent/vulkan"
-cargo build --release --manifest-path "$ROOT/Cargo.toml" $FEATURES -p orbit-panel -p orbit-dock -p orbit-notify -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder -p orbit-term -p orbit-run -p orbit-settings -p orbit-aigent -p orbitctl
+cargo build --release --manifest-path "$ROOT/Cargo.toml" $FEATURES -p orbit-panel -p orbit-dock -p orbit-notify -p orbit-calc -p orbit-clip -p orbit-blink -p orbit-view -p orbit-read -p orbit-play -p orbit-edit -p orbit-files -p orbit-pathfinder -p orbit-term -p orbit-run -p orbit-settings -p orbit-wallpaper -p orbit-aigent -p orbitctl
 
 mkdir -p "$DEST"
 # install(1) replaces the file instead of writing into it, so a running
@@ -39,6 +39,7 @@ install -m 755 "$ROOT/target/release/orbit-pathfinder" "$DEST/orbit-pathfinder"
 install -m 755 "$ROOT/target/release/orbit-term" "$DEST/orbit-term"
 install -m 755 "$ROOT/target/release/orbit-run" "$DEST/orbit-run"
 install -m 755 "$ROOT/target/release/orbit-settings" "$DEST/orbit-settings"
+install -m 755 "$ROOT/target/release/orbit-wallpaper" "$DEST/orbit-wallpaper"
 install -m 755 "$ROOT/target/release/orbit-aigent" "$DEST/orbit-aigent"
 # orbitctl talks to sway as well as to Orbit-Core.
 install -m 755 "$ROOT/target/release/orbitctl" "$DEST/orbitctl"
@@ -71,7 +72,7 @@ rm -rf "$RECIPES"
 mkdir -p "$(dirname "$RECIPES")"
 cp -r "$ROOT/data/pathfinder/recipes" "$RECIPES"
 
-echo "installed orbit-panel, orbit-dock, orbit-notify, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-pathfinder, orbit-term, orbit-run, orbit-settings, orbit-aigent, orbitctl and orbit-session in $DEST"
+echo "installed orbit-panel, orbit-dock, orbit-notify, orbit-calc, orbit-clip, orbit-blink, orbit-view, orbit-read, orbit-play, orbit-edit, orbit-files, orbit-pathfinder, orbit-term, orbit-run, orbit-settings, orbit-wallpaper, orbit-aigent, orbitctl and orbit-session in $DEST"
 echo "and the Orbit-Calc, Orbit-Clip, Orbit-Blink, Orbit-View, Orbit-Read, Orbit-Play, Orbit-Edit and Orbit-Files menu entries in $APPS"
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$APPS" || true
 echo "start them with: orbit-session"

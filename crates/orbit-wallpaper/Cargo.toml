@@ -1,0 +1,30 @@
+[package]
+name = "orbit-wallpaper"
+description = "Orbit-Wallpaper: a video or animation as the wallpaper, under the windows, Rust + GTK4 + GStreamer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Wallpaper: plays a video or an animated picture (GIF) as the wallpaper of every monitor, silent and looping, on the GPU where it can (VA-API). Started and paused by orbit-core (`wallpaper.video` in core.yaml). Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+recommends = "gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav"
+assets = [
+    ["target/release/orbit-wallpaper", "usr/bin/", "755"],
+]
+
+[dependencies]
+gtk.workspace = true
+gtk4-layer-shell.workspace = true
+gst.workspace = true
+gst-plugin-gtk4.workspace = true
+async-channel.workspace = true
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true

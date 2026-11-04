@@ -21,6 +21,8 @@ pub struct Wallpaper {
     /// The effect's colours; empty: its own.
     pub colors: Vec<String>,
     pub speed: f64,
+    /// A video (or animated GIF) over every monitor; empty: none.
+    pub video: String,
 }
 
 /// The core's own defaults (`wallpaper.rs`).
@@ -33,6 +35,7 @@ impl Default for Wallpaper {
             effect: "none".into(),
             colors: Vec::new(),
             speed: 1.0,
+            video: String::new(),
         }
     }
 }
@@ -74,6 +77,7 @@ pub fn wallpaper(dir: &ConfigDir) -> Wallpaper {
             .map(|list| list.iter().filter_map(|c| c.as_str().map(str::to_owned)).collect())
             .unwrap_or_default(),
         speed: section.get("speed").and_then(Value::as_f64).unwrap_or(default.speed),
+        video: text(section, "video").unwrap_or(default.video),
     }
 }
 
@@ -105,6 +109,11 @@ pub fn save_wallpaper(dir: &ConfigDir, wallpaper: &Wallpaper, everywhere: bool) 
         section.insert("colors".into(), Value::Sequence(list));
     }
     section.insert("speed".into(), wallpaper.speed.into());
+    if wallpaper.video.is_empty() {
+        section.remove("video");
+    } else {
+        section.insert("video".into(), wallpaper.video.clone().into());
+    }
     let mut block = Mapping::new();
     block.insert("wallpaper".into(), Value::Mapping(section));
     dir.save_app_keys("core", &["wallpaper"], &serde_yaml_ng::to_string(&block)?)?;

@@ -19,6 +19,9 @@
 //!   colors: ["#0b1026", "#1d4e89", "#14b8a6"]   # the effect's, 2 to 5
 //!   speed: 1                     # how fast it moves (0: still)
 //!   fps: 30                      # frames a second while it moves
+//!   video: ~/Vídeos/mar.mp4      # over all of it: a video or an animated
+//!                                # GIF (orbit-wallpaper), silent, looping,
+//!                                # laid as `mode` says (not tile)
 //! outputs:
 //!   HDMI-A-1:
 //!     wallpaper: ~/Imagens/outro.png   # this monitor's own
@@ -73,6 +76,9 @@ pub struct Wallpaper {
     pub speed: f32,
     /// Frames a second while it moves.
     pub fps: u32,
+    /// A video (or animated GIF) over every monitor, played by
+    /// `orbit-wallpaper`; empty: none.
+    pub video: String,
 }
 
 impl Default for Wallpaper {
@@ -85,6 +91,7 @@ impl Default for Wallpaper {
             colors: Vec::new(),
             speed: 1.0,
             fps: 30,
+            video: String::new(),
         }
     }
 }
@@ -147,6 +154,21 @@ pub struct Wallpapers {
     last_tick: Option<std::time::Instant>,
     /// Whether the timer that moves it is there.
     ticking: bool,
+    /// The video's player, while there is one.
+    video: Option<Video>,
+    /// A video whose player ended by itself: not started again until the
+    /// config is read again.
+    failed: Option<VideoKey>,
+}
+
+/// What the video's player was started with: the file and the mode.
+type VideoKey = (String, String);
+
+struct Video {
+    key: VideoKey,
+    child: std::process::Child,
+    /// What it was last told: playing, or paused.
+    playing: bool,
 }
 
 /// The uniforms an effect's element was last given: time, fade, colours.
@@ -284,7 +306,9 @@ impl Orbit {
     /// effect, the monitor has no picture of its own, and it compiled.
     fn effect_program(&self, output: &Output) -> Option<GlesPixelProgram> {
         let effect = self.config.wallpaper.effect;
-        if effect == crate::effects::Effect::None || self.own_picture(output) {
+        // A video playing covers it: no frames drawn for nothing.
+        let video = self.wallpapers.borrow().video.is_some();
+        if effect == crate::effects::Effect::None || video || self.own_picture(output) {
             return None;
         }
         self.shaders.as_ref()?.as_ref()?.effects.get(effect).cloned()
@@ -359,8 +383,96 @@ impl Orbit {
         }
     }
 
-    /// One step of the effect's clock; how long until the next.
+    /// The video's player started, changed or ended as the config says,
+    /// and the timer that moves effects and pauses the video running.
+    /// `read` after the config was read: a player that failed is tried again.
+    pub fn sync_wallpaper(&mut self, read: bool) {
+        let config = &self.config.wallpaper;
+        let wanted = (!config.video.trim().is_empty()).then(|| {
+            let mode = match config.mode {
+                Mode::Fit => "fit",
+                Mode::Center => "center",
+                Mode::Stretch => "stretch",
+                Mode::Fill | Mode::Tile => "fill",
+            };
+            (expand_home(config.video.trim()).display().to_string(), mode.to_owned())
+        });
+        let mut cache = self.wallpapers.borrow_mut();
+        if read {
+            cache.failed = None;
+        }
+        // Ended by itself (a file it cannot play, a crash).
+        let ended = cache.video.as_mut().and_then(|v| v.child.try_wait().ok().flatten());
+        if let Some(status) = ended {
+            let key = cache.video.take().map(|v| v.key);
+            tracing::warn!(
+                "wallpaper video {:?}: the player ended ({status})",
+                key.as_ref().map(|k| &k.0)
+            );
+            cache.failed = key;
+            self.needs_render = true;
+        }
+        if cache.video.as_ref().map(|v| &v.key) != wanted.as_ref() {
+            if let Some(mut old) = cache.video.take() {
+                // Its input closed, it ends; killed too, should it hang.
+                drop(old.child.stdin.take());
+                let _ = old.child.kill();
+                std::thread::spawn(move || old.child.wait());
+            }
+            if let Some(key) = wanted.filter(|k| cache.failed.as_ref() != Some(k)) {
+                let started = self
+                    .client("orbit-wallpaper")
+                    .arg("--mode")
+                    .arg(&key.1)
+                    .arg(&key.0)
+                    .stdin(std::process::Stdio::piped())
+                    .spawn();
+                match started {
+                    Ok(child) => {
+                        tracing::info!("wallpaper video {}", key.0);
+                        cache.video = Some(Video {
+                            key,
+                            child,
+                            playing: true,
+                        });
+                    }
+                    Err(err) => {
+                        tracing::warn!("orbit-wallpaper: {err}");
+                        cache.failed = Some(key);
+                    }
+                }
+            }
+        }
+        let timer = (cache.video.is_some() || config.effect != crate::effects::Effect::None) && !cache.ticking;
+        if timer {
+            cache.ticking = true;
+            drop(cache);
+            self.start_effect_timer();
+        }
+    }
+
+    /// One step of the effect's clock, and the video paused or played;
+    /// how long until the next.
     fn tick_effect(&mut self) -> std::time::Duration {
+        self.sync_wallpaper(false);
+        // Seen: some monitor with no fullscreen window over it, unlocked,
+        // with the effects on.
+        let seen = !self.locked()
+            && self.effects()
+            && self
+                .space
+                .outputs()
+                .any(|o| !self.own_picture(o) && self.fullscreen_on(o).is_none());
+        if let Some(video) = self.wallpapers.borrow_mut().video.as_mut()
+            && video.playing != seen
+            && let Some(input) = video.child.stdin.as_mut()
+        {
+            use std::io::Write;
+            let word = if seen { "play\n" } else { "pause\n" };
+            // A player gone is seen at the next step.
+            let _ = input.write_all(word.as_bytes()).and_then(|()| input.flush());
+            video.playing = seen;
+        }
         let config = &self.config.wallpaper;
         let now = std::time::Instant::now();
         let mut cache = self.wallpapers.borrow_mut();
@@ -368,21 +480,12 @@ impl Orbit {
             .last_tick
             .replace(now)
             .map_or(0.0, |t| (now - t).as_secs_f32().min(0.25));
-        if config.effect == crate::effects::Effect::None {
+        if config.effect == crate::effects::Effect::None || cache.video.is_some() {
             cache.effects.clear();
             return std::time::Duration::from_millis(500);
         }
         drop(cache);
-        // Seen: on a monitor of its own with no fullscreen window over it,
-        // unlocked, with the effects on.
-        let seen = config.speed > 0.0
-            && !self.locked()
-            && self.effects()
-            && self
-                .space
-                .outputs()
-                .any(|o| !self.own_picture(o) && self.fullscreen_on(o).is_none());
-        if !seen {
+        if !seen || config.speed <= 0.0 {
             return std::time::Duration::from_millis(500);
         }
         let step = since * config.speed;

@@ -905,3 +905,6 @@ settings-kind-water = Água, em movimento
 settings-colors = Cores
 settings-own-colors = As cores do próprio efeito
 settings-speed = Velocidade
+settings-kind-video = Um vídeo
+settings-choose-video = Escolher um vídeo…
+settings-videos = Vídeos e animações
