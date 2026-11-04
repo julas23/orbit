@@ -4805,6 +4805,7 @@ dependencies = [
  "orbit-common",
  "pbkdf2",
  "rusqlite",
+ "rustix 1.1.5",
  "serde",
  "serde_json",
  "serde_yaml_ng",

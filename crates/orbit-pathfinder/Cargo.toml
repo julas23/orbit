@@ -21,6 +21,7 @@ assets = [
 ]
 
 [dependencies]
+rustix = { workspace = true, features = ["process"] }
 orbit-app.workspace = true
 orbit-common.workspace = true
 gtk.workspace = true

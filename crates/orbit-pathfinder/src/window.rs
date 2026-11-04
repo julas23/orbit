@@ -82,7 +82,7 @@ impl Window {
         let env = Rc::new(Env {
             app: app.clone(),
             data: base(glib::user_data_dir()),
-            cache: base(glib::user_cache_dir()),
+            cache: base(cache_root()),
             user_agent: cfg.user_agent.clone(),
             external_browser: cfg.external_browser.clone(),
             profiles: RefCell::new(HashMap::new()),
@@ -97,7 +97,7 @@ impl Window {
                     .blocklists
                     .clone()
                     .unwrap_or_else(|| crate::shield::DEFAULT_LISTS.iter().map(|s| s.to_string()).collect());
-                (!lists.is_empty()).then(|| crate::shield::Shield::new(&base(glib::user_cache_dir()), lists))
+                (!lists.is_empty()).then(|| crate::shield::Shield::new(&base(cache_root()), lists))
             },
         });
 
@@ -2077,4 +2077,57 @@ mod tests {
         // And flattens back to the same slots.
         assert_eq!(flatten(&groups).len(), 5);
     }
+}
+
+/// Where the web cache goes: `~/.cache`, unless the home is on the
+/// network (the hp's is NFS): then WebKit's thousands of small reads and
+/// writes — the disk cache, the compiled block lists — would each cross
+/// the network, so they go to `/var/tmp/orbit-<uid>` on the machine's own
+/// disk (kept across reboots, unlike /tmp). A cache only: nothing is lost
+/// if it goes.
+fn cache_root() -> PathBuf {
+    let home_cache = glib::user_cache_dir();
+    if !on_network(&home_cache) {
+        return home_cache;
+    }
+    let local = PathBuf::from(format!("/var/tmp/orbit-{}", rustix::process::getuid().as_raw()));
+    let made = std::fs::create_dir_all(&local).and_then(|()| {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o700))
+    });
+    // Someone else's folder by that name is not ours to use.
+    let ours = std::fs::metadata(&local).is_ok_and(|m| {
+        use std::os::unix::fs::MetadataExt;
+        m.uid() == rustix::process::getuid().as_raw()
+    });
+    match made {
+        Ok(()) if ours => {
+            log::info!("pathfinder: the home is on the network; the cache goes to {}", local.display());
+            local
+        }
+        _ => home_cache,
+    }
+}
+
+/// Whether `path` (or the nearest folder above it that exists) is on a
+/// network or host-shared filesystem.
+fn on_network(path: &std::path::Path) -> bool {
+    const NETWORK: &[u64] = &[
+        0x6969,     // NFS
+        0x517B,     // SMB
+        0xFF53_4D42, // CIFS
+        0xFE53_4D42, // SMB2
+        0x6573_5546, // FUSE (sshfs, virtiofs)
+        0x0102_1997, // 9p
+        0x00C3_6400, // Ceph
+    ];
+    let mut at = Some(path);
+    while let Some(dir) = at {
+        if let Ok(stat) = rustix::fs::statfs(dir) {
+            #[allow(clippy::unnecessary_cast)]
+            return NETWORK.contains(&(stat.f_type as u64));
+        }
+        at = dir.parent();
+    }
+    false
 }
