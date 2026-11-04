@@ -53,6 +53,19 @@ sway), the file says where it came from and keeps that project's licence —
 code from cosmic-comp is GPL-3.0-only, so the orbit-core binary is too, while
 the rest of Orbit stays GPL-3.0-or-later (see `docs/PLANO-CORE.md`, section 9).
 
+## Screenshots
+
+| | |
+| --- | --- |
+| ![The desktop: orbit-core with the panel and the dock](screenshots/Desktop.png) | ![Windows tiled by orbit-core](screenshots/tiled.png) |
+| The desktop | Tiled windows |
+| ![orbit-term](screenshots/orbit-term.png) | ![orbit-edit](screenshots/orbit-edit.png) |
+| orbit-term | orbit-edit |
+| ![orbit-pathfinder](screenshots/orbit-pathfinder.png) | ![orbit-play](screenshots/orbit-play.png) |
+| orbit-pathfinder | orbit-play |
+| ![orbit-calc](screenshots/orbit-calc.png) | |
+| orbit-calc | |
+
 ## Progress
 
 Every component of Orbit. **Progress** is how much of what is planned for it
