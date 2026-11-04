@@ -7,6 +7,13 @@
 //! Mod+Esc); Mod+drag moves a floating one where it is let go (`grab`),
 //! Mod+right-drag resizes it (`resize`).
 //!
+//! A window waiting for an answer is never hidden: focusing any window of
+//! a program brings the program's dialogs over it (the newest over the
+//! older, its modal ones over all), a dialog keeps the
+//! keyboard while the pointer crosses the program's other windows, and a
+//! modal one (X's `_NET_WM_STATE_MODAL`, Wayland's xdg-dialog) takes it
+//! from a click on any window of its program.
+//!
 //! Snapped windows (`snap left|right`, Mod+←/→) are laid over the left or
 //! right half of what the panel and the dock leave free, above the tiled
 //! ones too, until `restore` (Mod+↓) gives them back their tile or their
@@ -83,7 +90,99 @@ pub fn is_dialog(window: &Window) -> bool {
     toplevel.parent().is_some() || fixed(min, max)
 }
 
+/// Whether a window waits for an answer before its parent goes on: X's
+/// modal state, or the modal hint of Wayland's xdg-dialog.
+pub fn is_modal(window: &Window) -> bool {
+    if let Some(x) = window.x11_surface() {
+        return x.is_modal();
+    }
+    let Some(toplevel) = window.toplevel() else {
+        return false;
+    };
+    use smithay::wayland::shell::xdg::{XdgToplevelSurfaceData, dialog::ToplevelDialogHint};
+    with_states(toplevel.wl_surface(), |states| {
+        states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()
+            .is_some_and(|d| d.lock().unwrap().dialog_hint == ToplevelDialogHint::Modal)
+    })
+}
+
+/// Who a window belongs to, to keep a program's windows together: an X
+/// window's process (they all come through XWayland), a Wayland one's
+/// client.
+#[derive(PartialEq, Eq)]
+enum Owner {
+    Process(u32),
+    Client(smithay::reexports::wayland_server::backend::ClientId),
+}
+
+fn owner(window: &Window) -> Option<Owner> {
+    if let Some(x) = window.x11_surface() {
+        return x.pid().map(Owner::Process);
+    }
+    use smithay::reexports::wayland_server::Resource;
+    window
+        .toplevel()
+        .and_then(|t| t.wl_surface().client())
+        .map(|c| Owner::Client(c.id()))
+}
+
 impl Orbit {
+    /// Whether two windows are of the same program.
+    pub fn same_app(&self, a: &Window, b: &Window) -> bool {
+        a == b || owner(a).is_some_and(|o| Some(o) == owner(b))
+    }
+
+    /// Whether `window` is `ancestor`'s, at any depth (a dialog's dialog).
+    fn descends_from(&self, window: &Window, ancestor: &Window) -> bool {
+        let mut at = self.parent_of(window);
+        // A cycle in what X says cannot keep this going.
+        for _ in 0..16 {
+            match at {
+                Some(p) if &p == ancestor => return true,
+                Some(p) => at = self.parent_of(&p),
+                None => return false,
+            }
+        }
+        false
+    }
+
+    /// What goes over `window` when it is focused, bottom first: the
+    /// floating dialogs of its program (`window` among them, if it is
+    /// one), in the order they opened — the newest, the one most likely
+    /// waiting for an answer, over the older ones, even when an older one
+    /// is focused — and its modal ones over all: a modal dialog holds the
+    /// whole program, as GTK's and X's do. GTK 3 cannot say which are
+    /// modal on Wayland; the order they opened in still keeps a
+    /// confirmation over the window that asked for it.
+    pub fn dialogs_above(&self, window: &Window) -> Vec<Window> {
+        let mut out: Vec<Window> = self
+            .space
+            .elements()
+            .filter(|w| floats(w) && is_dialog(w) && self.same_app(w, window))
+            .cloned()
+            .collect();
+        out.sort_by_key(|w| (is_modal(w), crate::workspace::info(w).borrow().id));
+        out
+    }
+
+    /// The modal dialog that answers for `window`, if one is open: its own
+    /// (the topmost, at any depth), else its program's topmost.
+    pub fn modal_for(&self, window: &Window) -> Option<Window> {
+        if is_modal(window) {
+            return None;
+        }
+        let stacked: Vec<Window> = self.space.elements().cloned().collect();
+        stacked
+            .iter()
+            .rev()
+            .find(|w| is_modal(w) && self.descends_from(w, window))
+            .or_else(|| stacked.iter().rev().find(|w| is_modal(w) && self.same_app(w, window)))
+            .filter(|w| self.workspace_of(w).is_some())
+            .cloned()
+    }
+
     /// The window `window` belongs to (its parent, or the X window it is
     /// transient for), if the core manages it.
     pub fn parent_of(&self, window: &Window) -> Option<Window> {

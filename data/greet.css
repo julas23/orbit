@@ -1,10 +1,11 @@
-/* Orbit-Greet built-in stylesheet: the locked screen. Black, as the core
- * draws it while locked (the eyes closed), with the card in the middle.
+/* Orbit-Greet built-in stylesheet: the locked screen. Transparent: the
+ * core draws what is behind — the wallpaper under a veil, or black — with
+ * the card in the middle.
  * Colours come from the palette; ~/.config/orbit/style.css goes on top.
  * Sizes on the 5 px grid, as in the panel. */
 
 window.orbit-greet {
-  background-color: #000000;
+  background-color: transparent;
   color: @orbit_fg;
 }
 

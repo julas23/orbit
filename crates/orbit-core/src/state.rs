@@ -98,6 +98,7 @@ pub struct Orbit {
         OutputManagerState,
         ViewporterState,
         smithay::wayland::fractional_scale::FractionalScaleManagerState,
+        smithay::wayland::shell::xdg::dialog::XdgDialogState,
     ),
 
     /// Where frames go: a window of the host session, or the screen.
@@ -155,6 +156,8 @@ pub struct Orbit {
     pub eyes_cache: crate::eyes::Cache,
     /// The blur's textures under a confirmation dialog (`render`).
     pub backdrop_cache: crate::eyes::Cache,
+    /// Each monitor's wallpaper, made once (`wallpaper`).
+    pub wallpapers: crate::wallpaper::Cache,
     /// Every window, the last to have the keyboard first, and the switch
     /// walking them (`switcher`).
     pub mru: Vec<Window>,
@@ -173,6 +176,7 @@ impl Orbit {
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&dh);
+        let xdg_dialog_state = smithay::wayland::shell::xdg::dialog::XdgDialogState::new::<Self>(&dh);
         let layer_shell_state = WlrLayerShellState::new::<Self>(&dh);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
@@ -245,6 +249,7 @@ impl Orbit {
                 output_manager_state,
                 viewporter_state,
                 fractional_scale_state,
+                xdg_dialog_state,
             ),
             backend: Backend::None,
             cursor_status: smithay::input::pointer::CursorImageStatus::default_named(),
@@ -273,6 +278,7 @@ impl Orbit {
             sleep_inhibitor: None,
             eyes_cache: Default::default(),
             backdrop_cache: Default::default(),
+            wallpapers: Default::default(),
             mru: Vec::new(),
             switcher: None,
         }
@@ -586,9 +592,10 @@ impl Orbit {
             if crate::floating::floats(w) || monocle {
                 self.space.raise_element(w, false);
             }
-            // Its dialogs over it: a bigger parent focused (a click, the
-            // pointer) never hides them.
-            for dialog in self.dialogs_of(w) {
+            // Its application's dialogs over it, and its own over them: a
+            // bigger window of the program focused (a click, the pointer)
+            // never hides one that waits for an answer.
+            for dialog in self.dialogs_above(w) {
                 self.space.raise_element(&dialog, false);
             }
         }
@@ -613,7 +620,7 @@ impl Orbit {
         }
         // An X window goes on top of the other X windows, for the X server,
         // and its dialogs over it.
-        let dialogs = window.as_ref().map(|w| self.dialogs_of(w)).unwrap_or_default();
+        let dialogs = window.as_ref().map(|w| self.dialogs_above(w)).unwrap_or_default();
         if let Some(xwm) = self.xwm.as_mut() {
             for x in window.iter().chain(&dialogs).filter_map(|w| w.x11_surface()) {
                 if let Err(err) = xwm.raise_window(x) {

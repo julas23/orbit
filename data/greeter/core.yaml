@@ -4,3 +4,8 @@
 # locked from the start and never unlocks).
 startup: []
 idle_lock: 0
+# Behind the greet: the user's own wallpaper is out of reach while /home is
+# shut; a picture readable by the greeter's account can be named here.
+# wallpaper:
+#   image: /usr/share/images/desktop-base/desktop-background
+#   mode: fill

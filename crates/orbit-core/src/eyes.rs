@@ -18,11 +18,11 @@ use smithay::{
         allocator::Fourcc,
         renderer::{
             Bind, Color32F, Frame, Offscreen, Renderer, Texture,
-            element::{Id, Kind, solid::SolidColorRenderElement, texture::TextureRenderElement},
+            element::{Id, Kind, texture::TextureRenderElement},
             gles::{
                 GlesError, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType, UniformValue,
             },
-            utils::{CommitCounter, draw_render_elements},
+            utils::draw_render_elements,
         },
     },
     output::Output,
@@ -351,16 +351,10 @@ impl crate::state::Orbit {
         let Some(geo) = self.space.output_geometry(output) else {
             return;
         };
-        let size = geo.size.to_physical_precise_round(scale);
         let cover = closed * closed;
         crate::session_lock::face_elements(self, output, renderer, scale, cover, elements);
-        elements.push(OutputElement::Solid(SolidColorRenderElement::new(
-            Id::new(),
-            Rectangle::from_size(size),
-            CommitCounter::default(),
-            Color32F::new(0.0, 0.0, 0.0, cover),
-            Kind::Unspecified,
-        )));
+        // What the greet stands on — the wallpaper under its veil, or black.
+        self.locked_backdrop(output, renderer, scale, cover, elements);
         let mut session = Vec::new();
         crate::render::session_elements(self, output, renderer, scale, Some(shaders), true, &mut session);
         let mut cache = std::mem::take(&mut self.eyes_cache);

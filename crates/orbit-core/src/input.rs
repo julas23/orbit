@@ -309,13 +309,19 @@ impl Orbit {
         {
             let window = self.window_under(pos);
             let over_layer = self.layer_at(pos, &[WlrLayer::Overlay, WlrLayer::Top]);
-            // A dialog keeps the keyboard when the pointer leaves it for its
-            // parent, which is bigger and all around it; a click moves it.
+            // A dialog keeps the keyboard when the pointer leaves it for
+            // another window of its program — its parent, bigger and all
+            // around it, or another of the program's windows; a click moves
+            // it (but to a modal one, see `focus_at`). A window with a modal
+            // dialog open hands the keyboard to it.
             let focused = self.focused_window();
-            let to_parent = focused
-                .as_ref()
-                .is_some_and(|f| crate::floating::floats(f) && self.parent_of(f) == window);
-            if !over_layer && window.is_some() && window != focused && !to_parent {
+            let kept = focused.as_ref().is_some_and(|f| {
+                crate::floating::floats(f)
+                    && crate::floating::is_dialog(f)
+                    && window.as_ref().is_some_and(|w| self.same_app(f, w))
+            });
+            let window = window.map(|w| self.modal_for(&w).unwrap_or(w));
+            if !over_layer && window.is_some() && window != focused && !kept {
                 self.focus_window(window);
             }
         }
@@ -357,6 +363,8 @@ impl Orbit {
             Some(layer) if matches!(layer.layer(), WlrLayer::Overlay | WlrLayer::Top) => {}
             _ => {
                 if let Some(window) = self.window_under(pos) {
+                    // Behind a modal dialog, the dialog takes it.
+                    let window = self.modal_for(&window).unwrap_or(window);
                     self.focus_window(Some(window));
                 }
             }

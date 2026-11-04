@@ -265,3 +265,75 @@ Pending:
   - [ ] Gemma's weak spots: concepts and opinions often sent to the agent (slower, not wrong); its general knowledge is shaky (a made-up "curiosity"); a long first sentence delays the voice (cut at commas?).
 - [ ] Speaking the agent's answer while it is still being written (stream-json), for a shorter wait.
 - [x] The diagnostics taken out: the room level every 30 s and `ORBIT_AIGENT_DUMP` (2026-10-24).
+
+## 14. Gaps against the common equivalents (survey 2026-11-03)
+
+What the usual counterparts of each module have and Orbit lacks, from a
+read of the code (by keyword: an item may exist under another name — check
+before building it). ★ = first. Started by the user's pick: the wallpaper
+and dialogs kept above their windows.
+
+Core (sway, niri, KWin), besides phases 2–5 of §4:
+- [x] ★ Wallpaper, as light as feh: an image (or a colour) drawn under everything, per output or for all, set in `core.yaml` (`wallpaper:`, `outputs.<name>.wallpaper`); the greet stands on the same one, blurred and dimmed, and the eyes close over it (`wallpaper.rs`, 2026-11-03). Seen nested: the picture, and the lock with the greet over it. The greeter's own core (encrypted /home shut) cannot read the user's: a system picture in `data/greeter/core.yaml`.
+- [x] ★ A dialog stays above the window it belongs to and keeps the focus (the user, 2026-11-03): focusing any window of a program brings its dialogs over it, the newest over the older and modal ones over all (GTK 3 cannot say modal on Wayland: the opening order covers it); a dialog keeps the keyboard while the pointer crosses the program's other windows; a click on a window with a modal dialog gives the dialog the keyboard; xdg-dialog spoken (GTK 4's modal hint). Seen nested with a Bambu-like client (main, a big second dialog, a modal confirmation), Wayland and X: the installed core hid the confirmation under the big one, the new one keeps it on top. Not tried: the real Bambu Studio, and the pointer crossing (no pointer in the nested test).
+- [ ] ★ Night light (wlr-gamma-control; gammastep and wlsunset need it).
+- [ ] ★ xdg-activation: an app or a notification can ask for a window to come forward.
+- [ ] foreign-toplevel: windows listed and controlled by panel, dock and tools without the sway IPC.
+- [ ] Tablets ("no tablets yet").
+- [ ] Monitor settings in a window (mode, scale, position), today only the file.
+
+Greet: an on-screen keyboard (accessibility). (Biometrics: §3.)
+
+Orbit-Run (rofi, KRunner, Ulauncher): today only commands.
+- [ ] ★ The installed applications (desktop files), fuzzy matched.
+- [ ] A calculator in the line (`=2+2`), files, emoji, a web search.
+
+Panel (Waybar, Plasma):
+- [ ] ★ Media (MPRIS): what is playing, play/pause, next — Spotify, the browser, Orbit-Play.
+- [ ] Keep awake (an idle inhibitor, "caffeine").
+- [ ] Updates waiting in apt.
+- [ ] VPN and WireGuard in the network module.
+- [ ] Microphone and camera in use.
+
+Dock (Plank, Latte, macOS):
+- [ ] ★ A mark on launchers whose app is open, and a click that goes to its window instead of opening another.
+- [ ] Hiding by itself; window previews on hover; pinning an app that is open.
+
+Notify (dunst, mako): replying inside the bubble (inline reply), a sound, rules per app (silent, timeout, position).
+
+Orbit-Edit (VS Code, Kate, gedit):
+- [ ] ★ Search in every file of the folder (Ctrl+Shift+F).
+- [ ] ★ LSP: completion, go to definition, errors on the line.
+- [ ] Git marks in the margin, Markdown preview, autosave, spell check, a terminal inside.
+
+Orbit-Term (Ghostty, Kitty): saved SSH hosts (Termius), optional.
+
+Orbit-Read (Okular, Evince):
+- [ ] ★ Opening at the page left (today always at the top — check whether that was a choice).
+- [ ] Notes and highlights in PDFs; bookmarks.
+- [ ] EPUB, DjVu, CBZ; two pages side by side.
+
+Orbit-Play (mpv, VLC, Celluloid):
+- [ ] ★ MPRIS (media keys and the panel's module need it).
+- [ ] ★ Going on from where it stopped (today from the start — the same check as Read).
+- [ ] Chapters, a frame captured, an A-B loop; check hardware decoding (VA-API) is used.
+
+Orbit-View (Eye of GNOME, gThumb, Gwenview): crop and resize, set as wallpaper, print.
+
+Orbit-Pathfinder (Wavebox, Ferdium, Firefox):
+- [ ] ★ History to browse; spell check (WebKit has both).
+- [ ] A downloads list, reader mode, page translation.
+
+Orbit-Blink (Flameshot, Spectacle):
+- [ ] ★ Recording the screen as video.
+- [ ] Marks before saving (arrows, text, blur), OCR, a colour picker.
+
+Orbit-Calc: currency conversion; the history of calculations shown.
+
+Orbit-Safe (Seahorse, KeePassXC): SSH and GPG keys; filling passwords into Pathfinder. (QR codes: §8.)
+
+Apps other desktops have and Orbit does not:
+- [ ] ★ Settings: monitors, sound, network, Bluetooth, users, default apps, look and wallpaper — today scattered in YAML files.
+- [ ] ★ A system monitor: processes, ending one, use per app.
+- [ ] Updates in a window (`apt upgrade`), as everything ships as debs.
+- [ ] Disks (Popsicle only writes images), printers, scanner.

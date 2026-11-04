@@ -206,4 +206,9 @@ impl XdgDecorationHandler for Orbit {
     }
 }
 
+/// GTK 4 says through xdg-dialog which windows are modal: those keep the
+/// keyboard while open (`floating::is_modal`). Nothing to do when it
+/// changes: it is read when it matters.
+impl smithay::wayland::shell::xdg::dialog::XdgDialogHandler for Orbit {}
+
 smithay::delegate_dispatch2!(Orbit);

@@ -100,6 +100,8 @@ pub struct Config {
     /// Seconds without input before the core locks (0: never), for every
     /// machine or by host name (`idle`).
     pub idle_lock: PerHost<u64>,
+    /// The picture under the windows, and behind the greet (`wallpaper`).
+    pub wallpaper: crate::wallpaper::Wallpaper,
 }
 
 /// One value for every machine, or one per host name, with `default` for
@@ -175,6 +177,8 @@ pub struct OutputConfig {
     /// How much larger everything is drawn on it (sway's `scale`), from 0.5
     /// to 4, fractions too.
     pub scale: Option<f64>,
+    /// This monitor's own wallpaper picture, in place of `wallpaper.image`.
+    pub wallpaper: Option<String>,
 }
 
 /// Smithay's `Transform` by sway's name for it.
@@ -276,6 +280,7 @@ impl Default for Config {
             blur_layers: vec!["orbit-confirm".into()],
             effects: Effects::Auto,
             idle_lock: PerHost::All(600),
+            wallpaper: crate::wallpaper::Wallpaper::default(),
         }
     }
 }

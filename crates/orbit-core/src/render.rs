@@ -60,6 +60,7 @@ render_elements! {
     Texture=TextureRenderElement<GlesTexture>,
     Solid=SolidColorRenderElement,
     Card=crate::cards::CardElement,
+    Memory=smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<GlesRenderer>,
 }
 
 /// A window's border, kept with the window so the damage tracker sees the
@@ -155,6 +156,7 @@ pub fn output_elements(
     }
     if state.locked() {
         crate::session_lock::face_elements(state, output, renderer, scale, 1.0, &mut elements);
+        state.locked_backdrop(output, renderer, scale, 1.0, &mut elements);
         return elements;
     }
     // The window cards (Mod+Tab) over the blurred screen.
@@ -294,6 +296,7 @@ pub fn session_elements(
         &[WlrLayer::Bottom, WlrLayer::Background],
         elements,
     );
+    state.wallpaper_elements(output, renderer, scale, 1.0, false, elements);
 }
 
 /// The layer surfaces of `layers` on `output`, topmost first.
