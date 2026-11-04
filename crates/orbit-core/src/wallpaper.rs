@@ -16,7 +16,8 @@
 //!   color: "#1b1f27"             # under the picture and around it
 //!   effect: aurora               # in place of the picture: aurora, ink,
 //!                                # facets, fire, water, borealis, stars,
-//!                                # rain, nebula, galaxy (`effects`); none
+//!                                # rain, nebula, galaxy, logo, scope
+//!                                # (`effects`); none
 //!   colors: ["#0b1026", "#1d4e89", "#14b8a6"]   # the effect's, 2 to 5
 //!   speed: 1                     # how fast it moves (0: still)
 //!   fps: 30                      # frames a second while it moves
@@ -202,7 +203,7 @@ struct Video {
 
 /// The uniforms an effect's element was last given: time, fade, sound,
 /// colours.
-type Given = (f32, f32, [f32; 2], Vec<[u8; 3]>);
+type Given = (f32, f32, crate::sound::Levels, Vec<[u8; 3]>);
 
 /// The cache, behind the state's back: drawing reads the state only.
 pub type Cache = RefCell<Wallpapers>;
@@ -412,7 +413,7 @@ impl Orbit {
                     area,
                     opaque.clone(),
                     1.0,
-                    crate::effects::uniforms(wanted.0, wanted.1, wanted.2, &wanted.3),
+                    crate::effects::uniforms(wanted.0, wanted.1, &wanted.2, &wanted.3),
                     Kind::Unspecified,
                 );
                 entry.insert_entry((effect, element, wanted.clone())).into_mut()
@@ -420,7 +421,7 @@ impl Orbit {
         };
         element.resize(area, opaque);
         if *last != wanted {
-            element.update_uniforms(crate::effects::uniforms(wanted.0, wanted.1, wanted.2, &wanted.3));
+            element.update_uniforms(crate::effects::uniforms(wanted.0, wanted.1, &wanted.2, &wanted.3));
             *last = wanted;
         }
         elements.push(OutputElement::Border(element.clone()));
@@ -539,7 +540,7 @@ impl Orbit {
             .replace(now)
             .map_or(0.0, |t| (now - t).as_secs_f32().min(0.25));
         let effect = config.effect != crate::effects::Effect::None && cache.video.is_none();
-        cache.sound.run(effect && seen && config.sound);
+        cache.sound.run(effect && seen && (config.sound || config.effect.needs_sound()));
         if !effect {
             cache.effects.clear();
             cache.saver = 0.0;
@@ -565,8 +566,8 @@ impl Orbit {
             return if saver > 0.0 { frame } else { std::time::Duration::from_millis(500) };
         }
         // Louder, the clock runs a little faster.
-        let [bass, treble] = cache.sound.levels();
-        let target = (bass + treble) * 0.5;
+        let levels = cache.sound.levels();
+        let target = (levels.bass + levels.treble) * 0.5;
         cache.loud += (target - cache.loud) * (since * 4.0).min(1.0);
         let step = since * config.speed * (1.0 + cache.loud);
         cache.time += step;

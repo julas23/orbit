@@ -39,6 +39,8 @@ const KINDS: &[&str] = &[
     "rain",
     "nebula",
     "galaxy",
+    "logo",
+    "scope",
     "video",
 ];
 /// The screensaver's choices, in minutes; 0: never.
@@ -63,6 +65,8 @@ fn effect_colors(effect: &str) -> &'static [&'static str] {
         "rain" => &["#050812", "#1e293b", "#f59e0b", "#ef4444", "#38bdf8"],
         "nebula" => &["#03020c", "#3b0764", "#be185d", "#f97316", "#fef3c7"],
         "galaxy" => &["#010208", "#0b2a6f", "#2563eb", "#7dd3fc", "#fff4d6"],
+        "logo" => &["#05070d", "#4682b4", "#6ea8e0", "#d8dee9", "#ff9500"],
+        "scope" => &["#020308", "#22d3ee", "#4ade80", "#facc15", "#f43f5e"],
         _ => &[],
     }
 }

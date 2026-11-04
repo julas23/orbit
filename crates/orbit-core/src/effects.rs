@@ -20,6 +20,14 @@
 //!   lanes across them, stars behind.
 //! - `galaxy`: a spiral galaxy turning, seen a little from the side: a
 //!   bright heart, blue arms of young stars with dust along them.
+//! - `logo`: Orbit's mark alive: the open orbit turning round the core,
+//!   the moon going round the closed one, a glow that breathes with the
+//!   bass, stars behind.
+//! - `scope`: a spectrum analyser as a sphere, after Winamp's: the
+//!   spectrum bends its outline and the two lines crossing inside it; the
+//!   louder, the more the lines smoke and blur (sharp in silence), and the
+//!   spectra just gone echo outwards, fainter and softer. It listens even
+//!   without `wallpaper.sound`.
 //!
 //! With `wallpaper.sound` the effects follow what the speakers play
 //! (`sound.rs`): the bass swells them, the treble makes them glint.
@@ -53,11 +61,19 @@ pub enum Effect {
     Rain,
     Nebula,
     Galaxy,
+    Logo,
+    Scope,
 }
 
 impl Effect {
+    /// Whether it needs the sound to be itself (it listens without
+    /// `wallpaper.sound`).
+    pub fn needs_sound(self) -> bool {
+        self == Effect::Scope
+    }
+
     /// Every effect, `None` aside.
-    pub const ALL: [Effect; 10] = [
+    pub const ALL: [Effect; 12] = [
         Effect::Aurora,
         Effect::Ink,
         Effect::Facets,
@@ -68,6 +84,8 @@ impl Effect {
         Effect::Rain,
         Effect::Nebula,
         Effect::Galaxy,
+        Effect::Logo,
+        Effect::Scope,
     ];
 }
 
@@ -144,6 +162,23 @@ impl Effect {
                 [0x7d, 0xd3, 0xfc],
                 [0xff, 0xf4, 0xd6],
             ],
+            // The mark's own: the night, the core, the open orbit, the
+            // closed one, the moon.
+            Effect::Logo => &[
+                [0x05, 0x07, 0x0d],
+                [0x46, 0x82, 0xb4],
+                [0x6e, 0xa8, 0xe0],
+                [0xd8, 0xde, 0xe9],
+                [0xff, 0x95, 0x00],
+            ],
+            // The night, then the lines from the low end to the high.
+            Effect::Scope => &[
+                [0x02, 0x03, 0x08],
+                [0x22, 0xd3, 0xee],
+                [0x4a, 0xde, 0x80],
+                [0xfa, 0xcc, 0x15],
+                [0xf4, 0x3f, 0x5e],
+            ],
         }
     }
 }
@@ -174,6 +209,72 @@ uniform vec3 c1;
 uniform vec3 c2;
 uniform vec3 c3;
 uniform vec3 c4;
+// The spectrum now (16 bands, low to high, four in each), and six past
+// ones, newest first, 8 bands each in two halves (e0, e1 the newest).
+uniform vec4 s0;
+uniform vec4 s1;
+uniform vec4 s2;
+uniform vec4 s3;
+uniform vec4 e0;
+uniform vec4 e1;
+uniform vec4 e2;
+uniform vec4 e3;
+uniform vec4 e4;
+uniform vec4 e5;
+uniform vec4 e6;
+uniform vec4 e7;
+uniform vec4 e8;
+uniform vec4 e9;
+uniform vec4 e10;
+uniform vec4 e11;
+
+float pick(vec4 v, float i) {
+    if (i < 0.5) return v.x;
+    if (i < 1.5) return v.y;
+    if (i < 2.5) return v.z;
+    return v.w;
+}
+
+float band_now(float i) {
+    if (i < 4.0) return pick(s0, i);
+    if (i < 8.0) return pick(s1, i - 4.0);
+    if (i < 12.0) return pick(s2, i - 8.0);
+    return pick(s3, i - 12.0);
+}
+
+// The spectrum at `x` (0 low … 1 high), smooth between the bands.
+float spectrum(float x) {
+    float f = clamp(x, 0.0, 1.0) * 15.0;
+    float i = floor(f);
+    return mix(band_now(i), band_now(min(i + 1.0, 15.0)), smoothstep(0.0, 1.0, f - i));
+}
+
+vec4 echo_half(float j) {
+    if (j < 0.5) return e0;
+    if (j < 1.5) return e1;
+    if (j < 2.5) return e2;
+    if (j < 3.5) return e3;
+    if (j < 4.5) return e4;
+    if (j < 5.5) return e5;
+    if (j < 6.5) return e6;
+    if (j < 7.5) return e7;
+    if (j < 8.5) return e8;
+    if (j < 9.5) return e9;
+    if (j < 10.5) return e10;
+    return e11;
+}
+
+float echo_band(float k, float i) {
+    vec4 v = i < 4.0 ? echo_half(k * 2.0) : echo_half(k * 2.0 + 1.0);
+    return pick(v, i < 4.0 ? i : i - 4.0);
+}
+
+// Echo `k` (0 the newest) at `x`, smooth between its bands.
+float echo(float k, float x) {
+    float f = clamp(x, 0.0, 1.0) * 7.0;
+    float i = floor(f);
+    return mix(echo_band(k, i), echo_band(k, min(i + 1.0, 7.0)), smoothstep(0.0, 1.0, f - i));
+}
 
 vec3 color_at(float i) {
     if (i < 0.5) return c0;
@@ -622,6 +723,140 @@ void main() {
 }
 "#;
 
+const LOGO: &str = r#"
+// The mark is drawn in its own units (svg/brand/orbit-mark.svg: 100 × 100,
+// centred on 50, 50), 100 of them across 55% of the screen's height.
+float stroke(float d, float half_width, float aa) {
+    return smoothstep(half_width + aa, half_width - aa, d);
+}
+
+void main() {
+    float scale = 100.0 / (0.55 * min(size.x, size.y));
+    vec2 p = (v_coords * size - size * 0.5) * scale;
+    float aa = scale * 1.2;
+    float t = time;
+    float r = length(p);
+    float a = atan(p.y, p.x);
+
+    // The night: darker at the edges, a few stars, a halo round the mark.
+    vec2 uv = v_coords * size / min(size.x, size.y);
+    vec3 c = c0 * (1.0 - 0.35 * smoothstep(40.0, 140.0, r));
+    c += vec3(stars(uv, 120.0, 0.93) + stars(uv + 3.7, 45.0, 0.985)) * 0.6 * smoothstep(42.0, 70.0, r);
+    float breath = 0.5 + 0.5 * sin(t * 0.7);
+    c += c1 * exp(-r * r / 2200.0) * (0.10 + 0.06 * breath + 0.35 * bass);
+
+    // The closed orbit.
+    float ring = stroke(abs(r - 38.0), 3.0, aa);
+    c = mix(c, c3, ring);
+
+    // The open orbit: two thirds of a circle (100 of 150.8 in the mark),
+    // with round ends, turning.
+    float span = 100.0 / 150.8 * 6.2832;
+    float start = radians(200.0) + t * 0.25;
+    float rel = mod(a - start, 6.2832);
+    float d_arc = rel < span ? abs(r - 24.0) : 1e3;
+    vec2 end0 = 24.0 * vec2(cos(start), sin(start));
+    vec2 end1 = 24.0 * vec2(cos(start + span), sin(start + span));
+    d_arc = min(d_arc, min(length(p - end0), length(p - end1)));
+    float arc = stroke(d_arc, 3.0, aa);
+    c = mix(c, c2, arc);
+    // A light running along it.
+    float run = pow(0.5 + 0.5 * cos(rel * 2.0 - t * 1.5), 8.0) * arc;
+    c += mix(c2, vec3(1.0), 0.5) * run * (0.25 + 0.5 * treble);
+
+    // The core, its glow breathing.
+    float core = stroke(r, 10.0, aa);
+    c += c1 * exp(-r * r / 300.0) * (0.25 + 0.2 * breath + 0.6 * bass);
+    c = mix(c, c1 * (1.0 + 0.25 * bass), core);
+
+    // The moon on the closed orbit (where the mark has it, then round).
+    float m_angle = atan(34.4, 16.1) - t * 0.18;
+    vec2 moon = 38.0 * vec2(cos(m_angle), sin(m_angle));
+    float dm = length(p - moon);
+    c += c4 * exp(-dm * dm / 90.0) * (0.35 + 0.5 * treble);
+    c = mix(c, c4, stroke(dm, 6.5, aa));
+    finish(clamp(c, 0.0, 1.0));
+}
+"#;
+
+const SCOPE: &str = r#"
+// A line `d` away, `w` wide: a sharp core when thin, a soft smoke when wide.
+float glow(float d, float w) {
+    return exp(-(d * d) / (w * w)) * (0.004 / max(w, 0.004) + 0.15);
+}
+
+// How much of echo `k` there is: none for a silent one.
+float echo_energy(float k) {
+    return clamp((echo(k, 0.0) + echo(k, 0.3) + echo(k, 0.6) + echo(k, 1.0)) * 0.6, 0.0, 1.0);
+}
+
+void main() {
+    float aspect = size.x / max(size.y, 1.0);
+    vec2 p = (v_coords - 0.5) * vec2(aspect, 1.0);
+    float t = time;
+    // How loud, 0..1: silence keeps every line sharp.
+    float loud = clamp((s0.x + s0.y + s0.z + s0.w + s1.x + s1.y + s1.z + s1.w
+                       + s2.x + s2.y + s2.z + s2.w + s3.x + s3.y + s3.z + s3.w) / 9.0, 0.0, 1.0);
+    // The smoke: the place each line is looked for, stirred.
+    vec2 stir = vec2(fbm(p * 4.0 + vec2(t * 0.35, 0.0)), fbm(p * 4.0 + vec2(3.1, -t * 0.3))) - 0.5;
+    vec2 q = p + stir * 0.05 * loud;
+    float r = length(q);
+    float a = atan(q.y, q.x);
+    // The low end on the left, the high on the right, the same above and
+    // below.
+    float x = 1.0 - abs(a) / 3.1416;
+    float base = 0.26;
+    float width = 0.0018 + 0.02 * loud;
+
+    vec3 c = c0;
+    // The echoes: the spectra just gone, outwards, fainter and softer,
+    // each turned a little, as the trail of a beam.
+    for (int k = 5; k >= 0; k--) {
+        float fk = float(k);
+        float grow = 1.0 + 0.13 * (fk + 1.0);
+        float turn = 0.06 * (fk + 1.0);
+        vec2 e = mat2(cos(turn), -sin(turn), sin(turn), cos(turn)) * q;
+        float ex = 1.0 - abs(atan(e.y, e.x)) / 3.1416;
+        float er = base * grow + 0.12 * echo(fk, ex) * grow;
+        float fadek = 1.0 - fk / 6.5;
+        float ew = 0.002 + 0.012 * loud + 0.0025 * fk;
+        c += lit(ex * 0.8 + fk * 0.04) * glow(length(e) - er, ew) * 0.9 * fadek * fadek * echo_energy(fk);
+    }
+
+    // The sphere's outline, bent by the spectrum now.
+    float level = spectrum(x);
+    float outline = base + 0.11 * level;
+    c += lit(x) * glow(r - outline, width) * 0.9;
+    // A faint shading inside, as a sphere has.
+    float inside = smoothstep(outline, outline - 0.02, r);
+    c += lit(0.2) * inside * (0.035 + 0.05 * loud) * (1.0 - r / max(outline, 0.01));
+
+    // Two lines crossing inside, each an oscilloscope of the spectrum,
+    // fading towards the outline.
+    float within = smoothstep(outline * 0.97, outline * 0.7, r);
+    float along_h = clamp(q.x / base * 0.5 + 0.5, 0.0, 1.0);
+    float along_v = clamp(q.y / base * 0.5 + 0.5, 0.0, 1.0);
+    float wave_h = 0.07 * spectrum(abs(along_h - 0.5) * 2.0) * sin(along_h * 31.4 + t * 5.0);
+    float wave_v = 0.07 * spectrum(abs(along_v - 0.5) * 2.0) * sin(along_v * 31.4 - t * 4.3);
+    c += lit(0.35 + 0.5 * along_h) * glow(q.y - wave_h * within, width) * within * 0.8;
+    c += lit(0.85 - 0.5 * along_v) * glow(q.x - wave_v * within, width) * within * 0.8;
+    // Their echoes, turned a little more each time.
+    for (int k = 0; k < 3; k++) {
+        float fk = float(k) + 1.0;
+        float turn = 0.07 * fk * (0.3 + loud);
+        vec2 e = mat2(cos(turn), -sin(turn), sin(turn), cos(turn)) * q;
+        float ew = width * (1.5 + fk);
+        float strength = echo_energy(fk - 1.0) * 0.3 / fk;
+        float eh = glow(e.y - 0.07 * echo(fk - 1.0, abs(e.x / base)) * sin(e.x / base * 15.7 + t * 5.0 - fk), ew);
+        float ev = glow(e.x - 0.07 * echo(fk - 1.0, abs(e.y / base)) * sin(e.y / base * 15.7 - t * 4.3 - fk), ew);
+        c += lit(0.6) * (eh + ev) * within * strength;
+    }
+    // The heart where they cross.
+    c += lit(1.0) * exp(-r * r / 0.0009) * (0.2 + 0.8 * bass);
+    finish(clamp(c, 0.0, 1.0));
+}
+"#;
+
 /// The programs; one that did not compile is missing.
 #[derive(Clone, Default)]
 pub struct Programs(std::collections::HashMap<Effect, GlesPixelProgram>);
@@ -660,6 +895,8 @@ impl Effect {
             Effect::Rain => RAIN,
             Effect::Nebula => NEBULA,
             Effect::Galaxy => GALAXY,
+            Effect::Logo => LOGO,
+            Effect::Scope => SCOPE,
         }
     }
 }
@@ -675,18 +912,24 @@ fn compile(renderer: &mut GlesRenderer, body: &str) -> Result<GlesPixelProgram, 
     for name in ["c0", "c1", "c2", "c3", "c4"] {
         uniforms.push(UniformName::new(name, UniformType::_3f));
     }
+    for name in SPECTRUM.iter().chain(&ECHOES) {
+        uniforms.push(UniformName::new(*name, UniformType::_4f));
+    }
     renderer.compile_custom_pixel_shader(format!("{HEADER}{body}"), &uniforms)
 }
 
+const SPECTRUM: [&str; 4] = ["s0", "s1", "s2", "s3"];
+const ECHOES: [&str; 12] = ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10", "e11"];
+
 /// The uniforms of a frame: the time in seconds, how much it shows, the
-/// sound (bass, treble; 0..1), and the colours (the last repeated up to
-/// `MOST`).
-pub fn uniforms(time: f32, fade: f32, sound: [f32; 2], colors: &[[u8; 3]]) -> Vec<Uniform<'static>> {
+/// sound, and the colours (the last repeated up to `MOST`).
+pub fn uniforms(time: f32, fade: f32, sound: &crate::sound::Levels, colors: &[[u8; 3]]) -> Vec<Uniform<'static>> {
+    let quad = |v: &[f32]| UniformValue::_4f(v[0], v[1], v[2], v[3]);
     let mut list = vec![
         Uniform::new("time", time),
         Uniform::new("fade", fade),
-        Uniform::new("bass", sound[0]),
-        Uniform::new("treble", sound[1]),
+        Uniform::new("bass", sound.bass),
+        Uniform::new("treble", sound.treble),
         Uniform::new("count", colors.len().clamp(1, MOST) as f32),
     ];
     for (i, name) in ["c0", "c1", "c2", "c3", "c4"].into_iter().enumerate() {
@@ -697,6 +940,13 @@ pub fn uniforms(time: f32, fade: f32, sound: [f32; 2], colors: &[[u8; 3]]) -> Ve
             .unwrap_or([0, 0, 0])
             .map(|c| c as f32 / 255.0);
         list.push(Uniform::new(name, UniformValue::_3f(r, g, b)));
+    }
+    for (name, four) in SPECTRUM.into_iter().zip(sound.bands.chunks_exact(4)) {
+        list.push(Uniform::new(name, quad(four)));
+    }
+    let halves = sound.echoes.iter().flat_map(|e| e.chunks_exact(4));
+    for (name, four) in ECHOES.into_iter().zip(halves) {
+        list.push(Uniform::new(name, quad(four)));
     }
     list
 }

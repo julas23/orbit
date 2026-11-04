@@ -20,13 +20,49 @@ use orbit_audio::Analyzer;
 const RATE: u32 = 44_100;
 /// Blocks a second: one analysis each.
 const BLOCKS: u32 = 60;
-const BANDS: usize = 12;
+const BANDS: usize = 16;
+/// The past spectra kept for the echoes, and their bands.
+pub const ECHOES: usize = 6;
+pub const ECHO_BANDS: usize = 8;
+/// Blocks between two echoes (a tenth of a second).
+const ECHO_EVERY: u32 = 6;
+
+/// What the effects get of the sound, 0..1 each.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Levels {
+    pub bass: f32,
+    pub treble: f32,
+    /// The spectrum now, low to high.
+    pub bands: [f32; BANDS],
+    /// The spectrum as it was, newest first, every tenth of a second, each
+    /// in fewer bands.
+    pub echoes: [[f32; ECHO_BANDS]; ECHOES],
+}
+
+impl Levels {
+    fn from_bands(frame: &[f32], before: &Levels, shift: bool) -> Self {
+        let [bass, treble] = split(frame);
+        let mut bands = [0.0; BANDS];
+        for (b, f) in bands.iter_mut().zip(frame) {
+            *b = *f;
+        }
+        let mut echoes = before.echoes;
+        if shift {
+            echoes.rotate_right(1);
+            for (i, e) in echoes[0].iter_mut().enumerate() {
+                let per = BANDS / ECHO_BANDS;
+                *e = bands[i * per..(i + 1) * per].iter().sum::<f32>() / per as f32;
+            }
+        }
+        Self { bass, treble, bands, echoes }
+    }
+}
 
 #[derive(Default)]
 pub struct Sound {
     recorder: Option<Child>,
     /// Bass and treble, the newest; zero when silent or not recording.
-    levels: Arc<Mutex<[f32; 2]>>,
+    levels: Arc<Mutex<Levels>>,
     /// The recorder ended by itself: not tried again until `retry`.
     failed: bool,
 }
@@ -53,10 +89,10 @@ impl Sound {
         self.failed = false;
     }
 
-    /// Bass and treble now, 0..1.
-    pub fn levels(&self) -> [f32; 2] {
+    /// The sound now.
+    pub fn levels(&self) -> Levels {
         if self.recorder.is_none() {
-            return [0.0; 2];
+            return Levels::default();
         }
         *self.levels.lock().unwrap()
     }
@@ -96,7 +132,7 @@ impl Sound {
             std::thread::spawn(move || child.wait());
             tracing::info!("wallpaper sound: stopped");
         }
-        *self.levels.lock().unwrap() = [0.0; 2];
+        *self.levels.lock().unwrap() = Levels::default();
     }
 }
 
@@ -107,19 +143,22 @@ impl Drop for Sound {
 }
 
 /// Reads the recorder until it ends, one block at a time.
-fn analyse(mut out: impl Read, levels: &Mutex<[f32; 2]>) {
+fn analyse(mut out: impl Read, levels: &Mutex<Levels>) {
     let per_block = (RATE / BLOCKS) as usize;
     let mut analyzer = Analyzer::new(RATE, BANDS, 40.0, 12_000.0, 0.7, BLOCKS);
     let mut bytes = vec![0u8; per_block * 2];
     let mut samples = vec![0f32; per_block];
+    let mut block = 0u32;
     while out.read_exact(&mut bytes).is_ok() {
         for (s, b) in samples.iter_mut().zip(bytes.chunks_exact(2)) {
             *s = f32::from(i16::from_le_bytes([b[0], b[1]])) / 32768.0;
         }
         analyzer.push(&samples);
-        *levels.lock().unwrap() = split(&analyzer.frame());
+        block = block.wrapping_add(1);
+        let mut now = levels.lock().unwrap();
+        *now = Levels::from_bands(&analyzer.frame(), &now, block.is_multiple_of(ECHO_EVERY));
     }
-    *levels.lock().unwrap() = [0.0; 2];
+    *levels.lock().unwrap() = Levels::default();
 }
 
 /// The bands as two: the lowest quarter, and the highest third.
@@ -139,5 +178,17 @@ mod tests {
         let bands = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5];
         assert_eq!(split(&bands), [1.0, 0.5]);
         assert_eq!(split(&[]), [0.0, 0.0]);
+    }
+
+    #[test]
+    fn echoes_shift_newest_first() {
+        let loud = [1.0; BANDS];
+        let a = Levels::from_bands(&loud, &Levels::default(), true);
+        assert_eq!(a.echoes[0], [1.0; ECHO_BANDS]);
+        let b = Levels::from_bands(&[0.0; BANDS], &a, true);
+        assert_eq!(b.echoes[0], [0.0; ECHO_BANDS]);
+        assert_eq!(b.echoes[1], [1.0; ECHO_BANDS]);
+        let c = Levels::from_bands(&loud, &b, false);
+        assert_eq!(c.echoes, b.echoes);
     }
 }
