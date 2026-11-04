@@ -118,6 +118,20 @@ pub fn new(dir: &ConfigDir, config: &PanelConfig) -> gtk::Widget {
     }
     editor.lay_out();
     gestures(&editor);
+    // A module set up from its own menu is built again from its file.
+    let weak = Rc::downgrade(&editor);
+    crate::settings::set_reloader(move |names| {
+        let Some(editor) = weak.upgrade() else { return };
+        {
+            let slots = editor.slots.borrow();
+            editor.built.borrow_mut().retain(|id, _| {
+                !slots
+                    .iter()
+                    .any(|slot| slot.id == *id && names.contains(&slot.entry.name.as_str()))
+            });
+        }
+        editor.lay_out();
+    });
     // The gestures hold it weakly; the panel holds it for good.
     crate::status::hold(board.upcast_ref(), editor);
     board.upcast()

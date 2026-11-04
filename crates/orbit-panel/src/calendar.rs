@@ -7,8 +7,9 @@
 //! around the days, like a paper calendar. The header has no lines.
 //! Normal (4 × 2): the same title and header over two weeks, this one and
 //! the next. Mini (3 × 1): weekday, day and month, "qua 21 out". Line form
-//! (horizontal panel): the day of the month. Mini, Normal and the line form
-//! open the whole month in a popover on click.
+//! (horizontal panel): the day of the month. A left click on any form opens
+//! the agenda (agenda.rs), the month over every window with the events of
+//! the calendars; a right click, the calendar's menu.
 //!
 //! Colour carries the meaning: plain days white, weekends grey, today orange;
 //! in the header, Saturday and Sunday red.
@@ -19,7 +20,7 @@
 use std::{cell::Cell, rc::Rc};
 
 use gtk::{glib, prelude::*};
-use orbit_app::i18n::{text, tr_args};
+use orbit_app::i18n::{text, tr, tr_args};
 use serde::Deserialize;
 
 use crate::{
@@ -28,7 +29,7 @@ use crate::{
 };
 
 /// `modules/calendar.yaml`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CalendarConfig {
     pub week_start: WeekStart,
@@ -36,6 +37,22 @@ pub struct CalendarConfig {
     /// equator the seasons are swapped). By default, the weather module's
     /// place.
     pub latitude: Option<f64>,
+    /// The agenda's calendars: iCalendar links (Google's secret address,
+    /// Outlook's published calendar).
+    pub calendars: Vec<crate::ics::Source>,
+    /// Minutes before the agenda fetches a calendar again.
+    pub refresh: u32,
+}
+
+impl Default for CalendarConfig {
+    fn default() -> Self {
+        Self {
+            week_start: WeekStart::default(),
+            latitude: None,
+            calendars: Vec::new(),
+            refresh: 15,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -65,9 +82,7 @@ impl WeekStart {
 pub fn new(config: &CalendarConfig, weather: Option<&WeatherConfig>, form: Form) -> gtk::Widget {
     let weeks = if form == Form::Normal { 2 } else { 6 };
     let month = Rc::new(Month::new(config.week_start, weeks));
-    // The whole month, in the popover of the smaller forms.
-    let whole = (form != Form::Full).then(|| Rc::new(Month::new(config.week_start, 6)));
-    let months: Vec<Rc<Month>> = [Some(month.clone()), whole.clone()].into_iter().flatten().collect();
+    let months: Vec<Rc<Month>> = vec![month.clone()];
     for m in &months {
         m.latitude.set(config.latitude);
     }
@@ -96,29 +111,22 @@ pub fn new(config: &CalendarConfig, weather: Option<&WeatherConfig>, form: Form)
     // border, and the card's outline is part of its size on the grid.
     let root: gtk::Widget = match form {
         Form::Full => card(&["card", "calendar", "full"], &month.root).upcast(),
-        Form::Normal => {
-            let card = card(&["card", "calendar", "normal"], &month.root);
-            month_popover(&card, whole.as_deref().expect("made for this form"));
-            card.upcast()
-        }
+        Form::Normal => card(&["card", "calendar", "normal"], &month.root).upcast(),
         Form::Mini => {
             let card = gtk::Box::builder()
                 .css_classes(["card", "calendar-mini", "mini"])
                 .build();
             month.short.set_hexpand(true);
             card.append(&month.short);
-            month_popover(&card, whole.as_deref().expect("made for this form"));
             card.upcast()
         }
         Form::Line => {
-            let button = gtk::Button::builder()
-                .css_classes(["calendar-line"])
-                .child(&month.today)
-                .build();
-            month_popover(&button, whole.as_deref().expect("made for this form"));
-            button.upcast()
+            let label = gtk::Box::builder().css_classes(["calendar-line"]).build();
+            label.append(&month.today);
+            label.upcast()
         }
     };
+    clicks(&root, config);
 
     let tooltip_month = month.clone();
     root.set_has_tooltip(form != Form::Full);
@@ -151,19 +159,199 @@ fn today() -> Option<glib::DateTime> {
     glib::DateTime::now_local().ok()
 }
 
-/// Opens `month` in a popover under `anchor` on a left click.
-fn month_popover(anchor: &impl IsA<gtk::Widget>, month: &Month) {
-    let card = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .css_classes(["card", "calendar", "popup"])
+/// A left click opens the agenda; a right click, the calendar's menu.
+pub fn clicks(root: &gtk::Widget, config: &CalendarConfig) {
+    let agenda = config.clone();
+    crate::settings::on_click(root, 1, move |anchor, _, _| {
+        // The file as it is now: the clock opens the agenda too.
+        let _ = &agenda;
+        crate::agenda::open(anchor, &crate::settings::load("calendar"));
+    });
+    let options = config.clone();
+    crate::settings::on_click(root, 3, move |anchor, x, y| menu(anchor, x, y, &options));
+}
+
+/// Refresh, the calendars, the first day of the week and the time zone.
+pub fn menu(anchor: &gtk::Widget, x: f64, y: f64, config: &CalendarConfig) {
+    use crate::settings::{Menu, save, section, submenu};
+    let menu = Menu::new();
+    let first = section(&menu, Some(&tr("panel-module-calendar")));
+    {
+        let anchor = anchor.clone();
+        menu.item(&first, &tr("calendar-open-agenda"), move || {
+            crate::agenda::open(&anchor, &crate::settings::load("calendar"));
+        });
+    }
+    menu.item(&first, &tr("calendar-refresh"), || {
+        crate::agenda::forget();
+        crate::settings::reload(&["calendar", "clock"]);
+    });
+    {
+        let anchor = anchor.clone();
+        menu.item(&first, &tr("calendar-calendars"), move || calendars(&anchor, x, y));
+    }
+
+    let more = section(&menu, None);
+    let week = submenu(&more, &tr("calendar-week-start"));
+    let current = match config.week_start {
+        WeekStart::Monday => "monday",
+        WeekStart::Sunday => "sunday",
+    };
+    menu.radio(
+        &week,
+        &[
+            ("monday".into(), tr("calendar-week-monday")),
+            ("sunday".into(), tr("calendar-week-sunday")),
+        ],
+        current,
+        |value| save("calendar", &[("week_start", value.into())], &["calendar"]),
+    );
+    {
+        let anchor = anchor.clone();
+        menu.item(
+            &more,
+            &tr_args("panel-system-zone", &[("zone", text(crate::settings::system_zone()))]),
+            move || {
+                crate::settings::zone_picker(&anchor, x, y, &tr("panel-system-zone-pick"), |zone| {
+                    crate::settings::set_system_zone(&zone);
+                });
+            },
+        );
+    }
+    menu.open(anchor, x, y);
+}
+
+/// The agenda's calendars: the list, with a remove button each, and a
+/// name and link to add one.
+fn calendars(anchor: &gtk::Widget, x: f64, y: f64) {
+    let config: CalendarConfig = crate::settings::load("calendar");
+    let content = crate::settings::form_box(&tr("calendar-calendars"));
+    content.append(
+        &gtk::Label::builder()
+            .label(tr("calendar-calendars-help"))
+            .css_classes(["dim"])
+            .wrap(true)
+            .max_width_chars(44)
+            .xalign(0.0)
+            .build(),
+    );
+    let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).build();
+    content.append(&list);
+    let entries: Rc<std::cell::RefCell<Vec<crate::ics::Source>>> = Rc::new(std::cell::RefCell::new(config.calendars));
+    let save = {
+        let entries = entries.clone();
+        move || {
+            let value = serde_json::to_value(&*entries.borrow()).unwrap_or_default();
+            crate::agenda::forget();
+            crate::settings::save("calendar", &[("calendars", value)], &[]);
+        }
+    };
+    // Filled again after each removal; it refers to itself weakly.
+    let fill: crate::settings::Refill = Rc::default();
+    {
+        let (list, entries, me) = (list.clone(), entries.clone(), Rc::downgrade(&fill));
+        let save = save.clone();
+        *fill.borrow_mut() = Some(Rc::new(move || {
+            while let Some(child) = list.first_child() {
+                list.remove(&child);
+            }
+            let config = CalendarConfig {
+                calendars: entries.borrow().clone(),
+                ..Default::default()
+            };
+            for (i, cal) in config.calendars.iter().enumerate() {
+                let row = gtk::Box::builder().spacing(8).build();
+                row.append(
+                    &gtk::Label::builder()
+                        .use_markup(true)
+                        .label(format!(
+                            "<span foreground=\"{}\">●</span> <b>{}</b>",
+                            crate::agenda::colour(&config, i),
+                            glib::markup_escape_text(&cal.name)
+                        ))
+                        .build(),
+                );
+                row.append(
+                    &gtk::Label::builder()
+                        .label(&cal.url)
+                        .css_classes(["dim"])
+                        .hexpand(true)
+                        .xalign(0.0)
+                        .ellipsize(gtk::pango::EllipsizeMode::Middle)
+                        .max_width_chars(28)
+                        .build(),
+                );
+                let remove = gtk::Button::builder()
+                    .icon_name("user-trash-symbolic")
+                    .tooltip_text(tr("calendar-remove"))
+                    .css_classes(["flat"])
+                    .build();
+                let (entries, save, me) = (entries.clone(), save.clone(), me.clone());
+                remove.connect_clicked(move |_| {
+                    if i < entries.borrow().len() {
+                        entries.borrow_mut().remove(i);
+                    }
+                    save();
+                    let again = me.upgrade().and_then(|f| f.borrow().clone());
+                    if let Some(fill) = again {
+                        glib::idle_add_local_once(move || fill());
+                    }
+                });
+                row.append(&remove);
+                list.append(&row);
+            }
+        }));
+    }
+    let refill = {
+        let fill = fill.clone();
+        move || {
+            let again = fill.borrow().clone();
+            if let Some(f) = again {
+                f();
+            }
+        }
+    };
+    refill();
+
+    let name = gtk::Entry::builder().placeholder_text(tr("calendar-name")).build();
+    let url = gtk::Entry::builder()
+        .placeholder_text(tr("calendar-url"))
+        .width_chars(40)
         .build();
-    card.append(&month.root);
-    let popover = gtk::Popover::builder().child(&card).build();
-    popover.set_parent(anchor);
-    let click = gtk::GestureClick::builder().button(1).build();
-    click.connect_released(move |_, _, _, _| popover.popup());
-    anchor.add_controller(click);
-    anchor.set_cursor_from_name(Some("pointer"));
+    let add = gtk::Button::builder().label(tr("calendar-add")).css_classes(["suggested-action"]).build();
+    let status = gtk::Label::builder().css_classes(["dim"]).xalign(0.0).wrap(true).build();
+    content.append(&name);
+    content.append(&url);
+    content.append(&add);
+    content.append(&status);
+    let _ = crate::settings::popover(anchor, x, y, &content);
+    name.grab_focus();
+    let try_add = {
+        let (name, url, entries, fill, status) = (name.clone(), url.clone(), entries.clone(), refill.clone(), status.clone());
+        move || {
+            let link = url.text().trim().to_string();
+            if !(link.starts_with("https://") || link.starts_with("http://") || link.starts_with("webcal://")) {
+                status.set_label(&tr("calendar-url-bad"));
+                return;
+            }
+            let label = match name.text().trim() {
+                "" => tr("panel-module-calendar"),
+                n => n.to_string(),
+            };
+            entries.borrow_mut().push(crate::ics::Source { name: label, url: link, colour: None });
+            save();
+            fill();
+            name.set_text("");
+            url.set_text("");
+            status.set_label(&tr("calendar-added"));
+        }
+    };
+    let try_add = Rc::new(try_add);
+    {
+        let try_add = try_add.clone();
+        add.connect_clicked(move |_| try_add());
+    }
+    url.connect_activate(move |_| try_add());
 }
 
 struct Month {

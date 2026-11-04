@@ -439,6 +439,102 @@ window.orbit-menu { background: transparent; }
 /* Spectrum (spectrum.rs): drawn with cairo; the line and the Normal bars
  * take this colour, the Full grid a faint wash of it. */
 .spectrum { color: @orbit_accent; }
+/* The small media buttons under the bars (media.rs). */
+.media-controls { min-height: 16px; }
+.media-controls button.media-button {
+  min-height: 14px; min-width: 0; padding: 0 2px; margin: 0;
+  font-size: 11px; color: @orbit_muted; background: none; border: none; box-shadow: none;
+}
+.media-controls button.media-button:hover { color: @orbit_accent; }
+.media-controls button.media-button:disabled { opacity: 0.35; }
+
+/* The clock's looks (clock.rs `theme`). */
+.clock-theme-neon .time  { color: #ff4fd8; text-shadow: 0 0 6px alpha(#ff4fd8, 0.8); }
+.clock-theme-neon .zone,
+.clock-theme-neon .date  { color: #4fe3ff; }
+.clock-theme-neon .hourglass { color: #4fe3ff; }
+.clock-theme-amber .time,
+.clock-theme-amber .zone,
+.clock-theme-amber .date,
+.clock-theme-amber label { color: #ffb000; }
+.clock-theme-amber .hourglass { color: #ffb000; }
+.clock-theme-mono label  { color: @orbit_fg; }
+.clock-theme-mono .hourglass { color: @orbit_fg; }
+.clock-theme-ice .time   { color: #cfefff; }
+.clock-theme-ice .zone,
+.clock-theme-ice .date,
+.clock-theme-ice .world-code,
+.clock-theme-ice .world-diff { color: #7cc6ff; }
+.clock-theme-ice .hourglass { color: #7cc6ff; }
+
+/* The modules' own forms and the weather's details (settings.rs, weather.rs). */
+.module-form { padding: 6px; }
+.module-form .form-title { font-weight: bold; font-size: 13px; }
+.module-form .section, .weather-details .section {
+  font-weight: bold; font-size: 11px; color: @orbit_muted; margin-top: 4px;
+}
+window.orbit popover .dim, .orbit-agenda .dim { color: @orbit_muted; font-size: 11px; }
+window.orbit popover entry, window.orbit popover spinbutton {
+  background-color: @orbit_button; color: @orbit_fg; border: 1px solid @orbit_border; border-radius: 5px;
+}
+window.orbit popover list, window.orbit popover row { background: none; color: @orbit_fg; }
+window.orbit popover row:hover, window.orbit popover row:selected { background-color: alpha(@orbit_accent, 0.35); }
+window.orbit popover button {
+  background-color: @orbit_button; color: @orbit_fg; border: none; border-radius: 5px; padding: 4px 10px;
+}
+window.orbit popover button:hover { background-color: @orbit_button_hover; }
+window.orbit popover button.flat { background: none; }
+window.orbit popover button.suggested-action { background-color: alpha(@orbit_accent, 0.6); }
+.weather-details { padding: 8px; min-width: 460px; }
+.weather-details .place    { font-size: 16px; font-weight: bold; }
+.weather-details .big-temp { font-size: 36px; font-weight: bold; }
+.weather-details .desc     { font-size: 13px; }
+.weather-details .range    { font-size: 11px; color: @orbit_muted; }
+.weather-details .glyph    { color: @orbit_accent; }
+.weather-details .fact-glyph { color: @orbit_accent; font-size: 13px; }
+.weather-details .fact-name  { color: @orbit_muted; font-size: 11px; }
+.weather-details .fact-value { font-size: 12px; font-weight: bold; }
+.weather-details .hour      { font-size: 10px; color: @orbit_muted; }
+.weather-details .hour-temp { font-size: 12px; font-weight: bold; }
+.weather-details .hour-rain { font-size: 9px; color: @orbit_cold; }
+.weather-details .day-name  { font-size: 12px; font-weight: bold; min-width: 70px; }
+.weather-details .day-desc  { font-size: 11px; }
+.weather-details .day-rain  { font-size: 10px; color: @orbit_cold; }
+.weather-details .min       { font-size: 12px; font-weight: bold; color: @orbit_cold; }
+.weather-details .max       { font-size: 12px; font-weight: bold; color: @orbit_alert; }
+
+/* The agenda (agenda.rs): the month over every window. */
+window.orbit-agenda { background-color: transparent; }
+.agenda-backdrop { background-color: rgba(0, 0, 0, 0.55); padding: 48px; }
+.agenda-card {
+  background-color: @orbit_surface; color: @orbit_fg; border: 1px solid @orbit_border;
+  border-radius: 12px; padding: 18px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+.agenda-month { font-size: 22px; font-weight: bold; min-width: 220px; }
+.agenda-button { color: @orbit_fg; background: none; border: none; border-radius: 6px; padding: 4px 10px; }
+.agenda-button:hover { background-color: @orbit_hover; }
+.agenda-name { font-weight: bold; color: @orbit_muted; padding: 4px 0; }
+.agenda-name.weekend { color: @orbit_alert; }
+.agenda-cell {
+  border: 1px solid @orbit_border; border-radius: 6px; margin: 2px; padding: 4px 6px;
+  background-color: @orbit_faint;
+}
+.agenda-cell:hover { background-color: @orbit_selected; }
+.agenda-cell.other { opacity: 0.45; }
+.agenda-cell.weekend .agenda-number { color: @orbit_muted; }
+.agenda-cell.today { border-color: @orbit_today; }
+.agenda-cell.today .agenda-number { color: @orbit_today; }
+.agenda-cell.picked { background-color: alpha(@orbit_accent, 0.25); border-color: @orbit_accent; }
+.agenda-number { font-size: 14px; font-weight: bold; }
+.agenda-event { font-size: 11px; }
+.agenda-more { font-size: 10px; color: @orbit_muted; }
+.agenda-side { border-left: 1px solid @orbit_border; padding-left: 16px; }
+.agenda-day-title { font-size: 17px; font-weight: bold; }
+.agenda-item { padding: 6px; border-radius: 6px; background-color: @orbit_faint; }
+.agenda-when { font-size: 11px; color: @orbit_muted; }
+.agenda-summary { font-size: 13px; font-weight: bold; }
+.agenda-legend { font-size: 11px; }
+.agenda-status { color: @orbit_muted; }
 
 /* Aigent (aigent.rs): the sphere is drawn with cairo in its own colours
  * (white, red, yellow); Full shows the agent in use under it. */

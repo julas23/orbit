@@ -40,7 +40,7 @@ pub struct WeatherConfig {
     /// `lua-norte`). Not in the repository: they come from third-party
     /// themes. Without them, Nerd Font glyphs are used.
     pub icon_dir: String,
-    /// brweather theme, 1 to 7.
+    /// brweather theme, 1 to 7; 0 for the font's glyphs.
     pub icon_theme: u32,
     /// Characters of the description shown at once; longer ones scroll.
     pub marquee: usize,
@@ -62,12 +62,15 @@ impl Default for WeatherConfig {
 }
 
 impl WeatherConfig {
-    fn dir(&self) -> std::path::PathBuf {
+    pub fn dir(&self) -> std::path::PathBuf {
         orbit_common::config::expand_home(self.icon_dir.as_ref())
     }
 
     /// The picture for `code`, its night version if asked and available.
     pub fn picture(&self, code: i32, night: bool) -> Option<std::path::PathBuf> {
+        if self.icon_theme == 0 {
+            return None;
+        }
         let theme = self.dir().join(format!("tema{}", self.icon_theme));
         let base = brweather_code(code);
         let night_file = theme.join(format!("{base}2.png"));
@@ -105,6 +108,20 @@ pub struct Weather {
     pub uv: Option<f64>,
     /// Today first.
     pub days: Vec<Day>,
+    /// The next 24 hours, from this one.
+    #[serde(default)]
+    pub hours: Vec<Hour>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Hour {
+    /// `HH:MM`
+    pub time: String,
+    pub code: i32,
+    pub temperature: f64,
+    /// Chance of rain, %.
+    pub rain: f64,
+    pub is_day: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -117,6 +134,11 @@ pub struct Day {
     /// `HH:MM`
     pub sunrise: String,
     pub sunset: String,
+    /// Chance of rain, %, and the highest UV index.
+    #[serde(default)]
+    pub rain: Option<f64>,
+    #[serde(default)]
+    pub uv: Option<f64>,
 }
 
 type Listener = Box<dyn Fn(&Weather)>;
@@ -139,6 +161,24 @@ thread_local! {
 
 /// Calls `listener` with the weather now (from the cache, if any) and after
 /// every fetch. The first call starts the service with `source`.
+/// Drops the service, so the next [`subscribe`] starts it again with its
+/// own options (the module's file changed).
+pub fn reset() {
+    SERVICE.with(|s| s.borrow_mut().take());
+}
+
+/// Fetches again now.
+pub fn refresh() {
+    if let Some(service) = SERVICE.with(|s| s.borrow().clone()) {
+        service.fetch();
+    }
+}
+
+/// The weather last fetched, if any.
+pub fn last() -> Option<Weather> {
+    SERVICE.with(|s| s.borrow().as_ref().and_then(|s| s.last.borrow().clone()))
+}
+
 pub fn subscribe(source: &WeatherConfig, listener: impl Fn(&Weather) + 'static) {
     let service = SERVICE.with(|s| {
         s.borrow_mut()
@@ -264,10 +304,12 @@ fn fetch(source: &WeatherConfig) -> Result<Weather, String> {
 
     let url = format!(
         "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}\
-         &models={model}&timezone=auto&forecast_days=5\
+         &models={model}&timezone=auto&forecast_days=7&forecast_hours=24\
          &current=weather_code,temperature_2m,apparent_temperature,relative_humidity_2m,\
 is_day,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m\
-         &daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset",
+         &hourly=weather_code,temperature_2m,precipitation_probability,is_day\
+         &daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,\
+precipitation_probability_max,uv_index_max",
         model = source.model,
     );
     let om = get_json(&agent, &url)?;
@@ -284,7 +326,7 @@ is_day,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m\
     if count == 0 || current.is_null() {
         return Err("Open-Meteo: no current or daily data".into());
     }
-    let days = (0..count)
+    let days: Vec<Day> = (0..count)
         .map(|i| Day {
             date: daily["time"][i].as_str().unwrap_or_default().to_string(),
             code: daily["weather_code"][i].as_i64().unwrap_or_default() as i32,
@@ -292,6 +334,18 @@ is_day,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m\
             max: num(&daily["temperature_2m_max"][i]),
             sunrise: time(&daily["sunrise"][i]),
             sunset: time(&daily["sunset"][i]),
+            rain: daily["precipitation_probability_max"][i].as_f64(),
+            uv: daily["uv_index_max"][i].as_f64(),
+        })
+        .collect();
+    let hourly = &om["hourly"];
+    let hours = (0..hourly["time"].as_array().map_or(0, Vec::len))
+        .map(|i| Hour {
+            time: time(&hourly["time"][i]),
+            code: hourly["weather_code"][i].as_i64().unwrap_or_default() as i32,
+            temperature: num(&hourly["temperature_2m"][i]),
+            rain: num(&hourly["precipitation_probability"][i]),
+            is_day: hourly["is_day"][i].as_i64() == Some(1),
         })
         .collect();
     Ok(Weather {
@@ -306,9 +360,63 @@ is_day,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m\
         pressure: num(&current["pressure_msl"]),
         wind_speed: num(&current["wind_speed_10m"]),
         wind_direction: num(&current["wind_direction_10m"]),
-        uv,
+        uv: uv.or_else(|| days.first().and_then(|d| d.uv)),
         days,
+        hours,
     })
+}
+
+/// A place found by name.
+#[derive(Debug, Clone)]
+pub struct Place {
+    pub name: String,
+    /// State and country, for telling places of the same name apart.
+    pub region: String,
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
+/// Places called `name`, from Open-Meteo's geocoding (blocking: call it on
+/// a thread).
+pub fn search_places(name: &str, language: &str) -> Result<Vec<Place>, String> {
+    let mut url = String::from("https://geocoding-api.open-meteo.com/v1/search?count=10&format=json");
+    url.push_str("&language=");
+    url.push_str(language);
+    url.push_str("&name=");
+    for byte in name.trim().bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => url.push(byte as char),
+            _ => url.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    let json = get_json(&agent(), &url)?;
+    let text = |v: &Value| v.as_str().unwrap_or_default().to_string();
+    Ok(json["results"]
+        .as_array()
+        .map(|results| {
+            results
+                .iter()
+                .filter_map(|r| {
+                    let region: Vec<String> = [text(&r["admin1"]), text(&r["country"])]
+                        .into_iter()
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    Some(Place {
+                        name: text(&r["name"]),
+                        region: region.join(", "),
+                        latitude: r["latitude"].as_f64()?,
+                        longitude: r["longitude"].as_f64()?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+/// Fetches at once (blocking), for the tests.
+#[cfg(test)]
+pub fn fetch_now(source: &WeatherConfig) -> Result<Weather, String> {
+    fetch(source)
 }
 
 fn cache_path() -> std::path::PathBuf {

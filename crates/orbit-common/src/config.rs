@@ -100,6 +100,13 @@ impl ConfigDir {
         self.rewrite(&format!("{name}.yaml"), keys, blocks, false)
     }
 
+    /// Writes top-level `keys` of panel module `name`'s file
+    /// (`modules/<name>.yaml`) as `blocks`; the rest of the file, comments
+    /// included, stays.
+    pub fn save_module_keys(&self, name: &str, keys: &[&str], blocks: &str) -> anyhow::Result<()> {
+        self.rewrite(&format!("modules/{name}.yaml"), keys, blocks, false)
+    }
+
     /// File `name` with its top-level `keys` replaced by `blocks`.
     fn rewrite(&self, name: &str, keys: &[&str], blocks: &str, first: bool) -> anyhow::Result<()> {
         let path = self.path.join(name);
@@ -112,7 +119,7 @@ impl ConfigDir {
             std::fs::write(path.with_extension("yaml.bak"), &text)
                 .with_context(|| format!("backing up {}", path.display()))?;
         }
-        std::fs::create_dir_all(&self.path)?;
+        std::fs::create_dir_all(path.parent().unwrap_or(&self.path))?;
         let temp = path.with_extension("yaml.new");
         std::fs::write(&temp, with_blocks(&text, keys, blocks))
             .and_then(|()| std::fs::rename(&temp, &path))

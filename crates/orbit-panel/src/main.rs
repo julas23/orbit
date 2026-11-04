@@ -8,6 +8,7 @@ mod aigent;
 mod bluetooth;
 mod board;
 mod brightness;
+mod agenda;
 mod calendar;
 mod clock;
 mod confirm;
@@ -16,7 +17,9 @@ mod dbusmenu;
 mod disk;
 mod edit;
 mod forecast;
+mod ics;
 mod maintenance;
+mod media;
 mod menu;
 mod meters;
 mod monitors;
@@ -24,6 +27,7 @@ mod network;
 mod notifications;
 mod pulse;
 mod session;
+mod settings;
 mod sni;
 mod spectrum;
 mod status;
@@ -54,6 +58,7 @@ fn main() -> glib::ExitCode {
 /// Reads `panel.yaml` and builds the panel.
 fn build(app: &gtk::Application, dir: &ConfigDir) -> orbit_app::Built {
     let panel = dir.panel()?;
+    settings::init(dir);
     if !panel.enabled {
         return Ok(None);
     }

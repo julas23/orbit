@@ -929,3 +929,109 @@ settings-speed = Speed
 settings-kind-video = A video
 settings-choose-video = Choose a video…
 settings-videos = Videos and animations
+
+## Panel modules set up from their own clicks (settings.rs, weather.rs,
+## calendar.rs, agenda.rs, clock.rs, spectrum.rs, media.rs).
+panel-zone-search = Search for a city or zone
+panel-system-zone = System time zone: { $zone }…
+panel-system-zone-pick = The system's time zone
+
+weather-details-range = low { $min }°C · high { $max }°C · feels like { $feels }°C
+weather-humidity = Humidity
+weather-wind = Wind
+weather-pressure = Pressure
+weather-clouds = Clouds
+weather-uv = UV index
+weather-rain = Chance of rain
+weather-sunrise = Sunrise
+weather-sunset = Sunset
+weather-moon = Moon
+weather-season = Season
+weather-next-hours = Next hours
+weather-next-days = Next days
+weather-refresh = Refresh now
+weather-location = Location…
+weather-location-auto = Automatic (by the network)
+weather-location-search = City name, then Enter
+weather-location-searching = Searching…
+weather-location-none = No place by that name
+weather-interval = Update every
+weather-every = { $minutes } minutes
+weather-icons = Icons
+weather-icons-glyphs = Font glyphs
+weather-icons-theme = Theme { $n }
+
+calendar-open-agenda = Open the agenda
+calendar-refresh = Refresh
+calendar-calendars = Calendars…
+calendar-calendars-help = Paste an iCalendar link: in Google Calendar, Settings › the calendar › "Secret address in iCal format"; in Outlook, Settings › Calendar › Shared calendars › "Publish a calendar" (ICS link).
+calendar-name = Name (e.g. Work)
+calendar-url = https://… or webcal://… (.ics)
+calendar-url-bad = The link must start with https://, http:// or webcal://
+calendar-add = Add
+calendar-added = Added: it shows the next time the agenda opens.
+calendar-remove = Remove this calendar
+calendar-week-start = Week starts on
+calendar-week-monday = Monday
+calendar-week-sunday = Sunday
+
+agenda-title = Agenda
+agenda-previous = Previous month
+agenda-next = Next month
+agenda-today = Today
+agenda-refresh = Fetch the calendars again
+agenda-close = Close (Esc)
+agenda-loading = Fetching the calendars…
+agenda-failed = { $count ->
+    [one] A calendar could not be fetched; showing its last copy.
+   *[other] { $count } calendars could not be fetched; showing their last copies.
+}
+agenda-no-calendars = No calendars yet: right-click the calendar › Calendars… to add one.
+agenda-more = +{ $count } more
+agenda-free = Nothing on this day.
+agenda-all-day = All day
+
+clock-settings = Settings…
+clock-refresh = Refresh
+clock-theme = Look
+clock-theme-orbit = Orbit (the theme's colours)
+clock-theme-neon = Neon
+clock-theme-amber = Amber
+clock-theme-mono = Monochrome
+clock-theme-ice = Ice
+clock-label = Label before the time
+clock-label-auto = The zone's abbreviation
+clock-rotate = Seconds per world clock
+clock-world = World clocks (up to four)
+clock-world-add = Add a clock…
+clock-world-remove = Remove this clock
+clock-save = Save
+
+spectrum-theme = Look
+spectrum-theme-classic = Classic
+spectrum-theme-fire = Fire
+spectrum-theme-ocean = Ocean
+spectrum-theme-aurora = Aurora
+spectrum-theme-neon = Neon
+spectrum-theme-sunset = Sunset
+spectrum-theme-accent = Theme colour
+spectrum-theme-mono = Monochrome
+spectrum-theme-custom = My colours
+spectrum-colours = My colours…
+spectrum-colour-top = Top
+spectrum-colour-middle = Middle
+spectrum-colour-bottom = Bottom
+spectrum-colours-apply = Use these colours
+spectrum-framerate = Frame rate
+spectrum-fps = { $fps } per second
+spectrum-fall = Bars fall
+spectrum-fall-fast = Fast
+spectrum-fall-normal = Normal
+spectrum-fall-slow = Slow
+spectrum-media-show = Show the media buttons
+spectrum-media-hide = Hide the media buttons
+spectrum-refresh = Start again
+
+media-previous = Previous
+media-play-pause = Play or pause
+media-next = Next

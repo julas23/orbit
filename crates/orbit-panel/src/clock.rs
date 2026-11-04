@@ -17,7 +17,7 @@
 use std::{cell::Cell, rc::Rc, time::Duration};
 
 use gtk::{glib, graphene, prelude::*};
-use orbit_app::i18n::{number, tr_args};
+use orbit_app::i18n::{number, text, tr, tr_args};
 use serde::Deserialize;
 
 use crate::board::Form;
@@ -35,7 +35,13 @@ pub struct ClockConfig {
     pub world: Vec<WorldClock>,
     /// Seconds each world clock stays on screen.
     pub rotate: u32,
+    /// The look: `orbit` (the theme's colours), `neon`, `amber`, `mono`
+    /// or `ice`.
+    pub theme: String,
 }
+
+/// The clock's looks, as (value, message id).
+pub const THEMES: &[&str] = &["orbit", "neon", "amber", "mono", "ice"];
 
 impl Default for ClockConfig {
     fn default() -> Self {
@@ -43,17 +49,19 @@ impl Default for ClockConfig {
             label: None,
             world: Vec::new(),
             rotate: 5,
+            theme: "orbit".into(),
         }
     }
 }
 
 /// A time zone for the clock.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorldClock {
     /// Short code shown on the panel, e.g. an airport code (`LHR`).
     pub code: String,
     /// Full name for the tooltip; defaults to `code`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// IANA time-zone identifier, e.g. `Europe/London`.
     pub tz: String,
@@ -187,7 +195,196 @@ pub fn new(config: &ClockConfig, form: Form) -> gtk::Widget {
     });
     state.update();
     schedule(state.clone());
-    state.labels.root.clone()
+    let root = state.labels.root.clone();
+    root.add_css_class(&format!("clock-theme-{}", config.theme));
+    crate::settings::on_click(&root, 1, |anchor, _, _| {
+        crate::agenda::open(anchor, &crate::settings::load("calendar"));
+    });
+    let options = config.clone();
+    crate::settings::on_click(&root, 3, move |anchor, x, y| menu(anchor, x, y, &options));
+    root
+}
+
+/// Settings, refresh, the system's time zone and the look.
+fn menu(anchor: &gtk::Widget, x: f64, y: f64, config: &ClockConfig) {
+    use crate::settings::{Menu, save, section, submenu};
+    let menu = Menu::new();
+    let first = section(&menu, Some(&tr("panel-module-clock")));
+    {
+        let anchor = anchor.clone();
+        menu.item(&first, &tr("clock-settings"), move || settings(&anchor, x, y));
+    }
+    menu.item(&first, &tr("clock-refresh"), || crate::settings::reload(&["clock"]));
+    {
+        let anchor = anchor.clone();
+        menu.item(
+            &first,
+            &tr_args("panel-system-zone", &[("zone", text(crate::settings::system_zone()))]),
+            move || {
+                crate::settings::zone_picker(&anchor, x, y, &tr("panel-system-zone-pick"), |zone| {
+                    crate::settings::set_system_zone(&zone);
+                });
+            },
+        );
+    }
+    let more = section(&menu, None);
+    let looks = submenu(&more, &tr("clock-theme"));
+    let choices: Vec<(String, String)> = THEMES
+        .iter()
+        .map(|t| ((*t).to_string(), tr(&format!("clock-theme-{t}"))))
+        .collect();
+    menu.radio(&looks, &choices, &config.theme, |value| {
+        save("clock", &[("theme", value.into())], &["clock"]);
+    });
+    menu.open(anchor, x, y);
+}
+
+/// "America/Sao_Paulo" → ("SAO", "Sao Paulo").
+fn names_of(zone: &str) -> (String, String) {
+    let city = zone.rsplit('/').next().unwrap_or(zone).replace('_', " ");
+    let code: String = crate::settings::fold(&city)
+        .chars()
+        .filter(char::is_ascii_alphabetic)
+        .take(3)
+        .collect::<String>()
+        .to_uppercase();
+    (code, city)
+}
+
+/// The clock's own label and its world clocks: each with its code, name
+/// and zone, removed by its button; another added from the zone list.
+fn settings(anchor: &gtk::Widget, x: f64, y: f64) {
+    let config: ClockConfig = crate::settings::load("clock");
+    let content = crate::settings::form_box(&tr("clock-settings"));
+
+    let label = gtk::Entry::builder()
+        .placeholder_text(tr("clock-label-auto"))
+        .text(config.label.clone().unwrap_or_default())
+        .build();
+    let row = gtk::Box::builder().spacing(8).build();
+    row.append(&gtk::Label::builder().label(tr("clock-label")).hexpand(true).xalign(0.0).build());
+    row.append(&label);
+    content.append(&row);
+
+    let rotate = gtk::SpinButton::with_range(1.0, 60.0, 1.0);
+    rotate.set_value(f64::from(config.rotate.max(1)));
+    let row = gtk::Box::builder().spacing(8).build();
+    row.append(&gtk::Label::builder().label(tr("clock-rotate")).hexpand(true).xalign(0.0).build());
+    row.append(&rotate);
+    content.append(&row);
+
+    content.append(&gtk::Label::builder().label(tr("clock-world")).css_classes(["section"]).xalign(0.0).build());
+    let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).build();
+    content.append(&list);
+    let world = Rc::new(std::cell::RefCell::new(config.world.clone()));
+    let add = gtk::Button::builder().label(tr("clock-world-add")).build();
+    content.append(&add);
+    let done = gtk::Button::builder().label(tr("clock-save")).css_classes(["suggested-action"]).build();
+    content.append(&done);
+
+    // Rows of entries that edit `world` in place.
+    let fill: crate::settings::Refill = Rc::default();
+    {
+        let (list, world, add, me) = (list.clone(), world.clone(), add.clone(), Rc::downgrade(&fill));
+        *fill.borrow_mut() = Some(Rc::new(move || {
+            while let Some(child) = list.first_child() {
+                list.remove(&child);
+            }
+            for (i, clock) in world.borrow().iter().enumerate() {
+                let row = gtk::Box::builder().spacing(6).build();
+                let code = gtk::Entry::builder().text(&clock.code).width_chars(4).max_length(5).build();
+                let name = gtk::Entry::builder()
+                    .text(clock.name.clone().unwrap_or_default())
+                    .placeholder_text(&clock.code)
+                    .hexpand(true)
+                    .build();
+                let zone = gtk::Label::builder().label(&clock.tz).css_classes(["dim"]).build();
+                let remove = gtk::Button::builder()
+                    .icon_name("user-trash-symbolic")
+                    .tooltip_text(tr("clock-world-remove"))
+                    .css_classes(["flat"])
+                    .build();
+                {
+                    let world = world.clone();
+                    code.connect_changed(move |e| {
+                        if let Some(c) = world.borrow_mut().get_mut(i) {
+                            c.code = e.text().trim().to_uppercase();
+                        }
+                    });
+                }
+                {
+                    let world = world.clone();
+                    name.connect_changed(move |e| {
+                        if let Some(c) = world.borrow_mut().get_mut(i) {
+                            let text = e.text().trim().to_string();
+                            c.name = (!text.is_empty()).then_some(text);
+                        }
+                    });
+                }
+                {
+                    let (world, me) = (world.clone(), me.clone());
+                    remove.connect_clicked(move |_| {
+                        if i < world.borrow().len() {
+                            world.borrow_mut().remove(i);
+                        }
+                        let again = me.upgrade().and_then(|f| f.borrow().clone());
+                        if let Some(fill) = again {
+                            glib::idle_add_local_once(move || fill());
+                        }
+                    });
+                }
+                row.append(&code);
+                row.append(&name);
+                row.append(&zone);
+                row.append(&remove);
+                list.append(&row);
+            }
+            add.set_sensitive(world.borrow().len() < MAX_WORLD_CLOCKS);
+        }));
+    }
+    let refill = {
+        let fill = fill.clone();
+        move || {
+            let again = fill.borrow().clone();
+            if let Some(f) = again {
+                f();
+            }
+        }
+    };
+    refill();
+
+    let popover = crate::settings::popover(anchor, x, y, &content);
+    {
+        let world = world.clone();
+        let refill = refill.clone();
+        // A popover of its own over the button, inside this one.
+        add.connect_clicked(move |button| {
+            let (world, refill) = (world.clone(), refill.clone());
+            let below = f64::from(button.height());
+            crate::settings::zone_picker(button.upcast_ref(), 0.0, below, &tr("clock-world-add"), move |tz| {
+                let (code, name) = names_of(&tz);
+                world.borrow_mut().push(WorldClock { code, name: Some(name), tz });
+                refill();
+            });
+        });
+    }
+    let weak = popover.downgrade();
+    done.connect_clicked(move |_| {
+        let text = label.text().trim().to_string();
+        let world: Vec<WorldClock> = world.borrow().iter().filter(|c| !c.code.is_empty()).cloned().collect();
+        crate::settings::save(
+            "clock",
+            &[
+                ("label", if text.is_empty() { serde_json::Value::Null } else { text.into() }),
+                ("world", serde_json::to_value(&world).unwrap_or_default()),
+                ("rotate", (rotate.value() as u32).into()),
+            ],
+            &["clock"],
+        );
+        if let Some(p) = weak.upgrade() {
+            p.popdown();
+        }
+    });
 }
 
 fn label(class: &str, halign: gtk::Align) -> gtk::Label {

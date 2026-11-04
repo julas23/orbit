@@ -103,7 +103,7 @@ fn show(cards: &[DayCard], config: &WeatherConfig, w: &Weather) {
 }
 
 /// The day's short weekday name.
-fn weekday(day: &weather_data::Day) -> String {
+pub fn weekday(day: &weather_data::Day) -> String {
     date(&day.date)
         .and_then(|d| d.format("%a").ok())
         .map(|s| s.trim_end_matches('.').to_string())
@@ -128,7 +128,7 @@ pub fn tooltip(day: &weather_data::Day) -> String {
 }
 
 /// `YYYY-MM-DD` at local noon.
-fn date(text: &str) -> Option<glib::DateTime> {
+pub fn date(text: &str) -> Option<glib::DateTime> {
     let mut parts = text.split('-').map(|p| p.parse::<i32>().ok());
     let (y, m, d) = (parts.next()??, parts.next()??, parts.next()??);
     glib::DateTime::from_local(y, m, d, 12, 0, 0.0).ok()

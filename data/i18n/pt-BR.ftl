@@ -921,3 +921,108 @@ settings-speed = Velocidade
 settings-kind-video = Um vídeo
 settings-choose-video = Escolher um vídeo…
 settings-videos = Vídeos e animações
+
+## Módulos do painel configurados pelos próprios cliques.
+panel-zone-search = Procure uma cidade ou fuso
+panel-system-zone = Fuso do sistema: { $zone }…
+panel-system-zone-pick = O fuso horário do sistema
+
+weather-details-range = mínima { $min }°C · máxima { $max }°C · sensação { $feels }°C
+weather-humidity = Umidade
+weather-wind = Vento
+weather-pressure = Pressão
+weather-clouds = Nuvens
+weather-uv = Índice UV
+weather-rain = Chance de chuva
+weather-sunrise = Nascer do sol
+weather-sunset = Pôr do sol
+weather-moon = Lua
+weather-season = Estação
+weather-next-hours = Próximas horas
+weather-next-days = Próximos dias
+weather-refresh = Atualizar agora
+weather-location = Localidade…
+weather-location-auto = Automática (pela rede)
+weather-location-search = Nome da cidade, depois Enter
+weather-location-searching = Procurando…
+weather-location-none = Nenhum lugar com esse nome
+weather-interval = Atualizar a cada
+weather-every = { $minutes } minutos
+weather-icons = Ícones
+weather-icons-glyphs = Glifos da fonte
+weather-icons-theme = Tema { $n }
+
+calendar-open-agenda = Abrir a agenda
+calendar-refresh = Atualizar
+calendar-calendars = Calendários…
+calendar-calendars-help = Cole um link iCalendar: no Google Agenda, Configurações › a agenda › "Endereço secreto no formato iCal"; no Outlook, Configurações › Calendário › Calendários compartilhados › "Publicar um calendário" (link ICS).
+calendar-name = Nome (ex.: Trabalho)
+calendar-url = https://… ou webcal://… (.ics)
+calendar-url-bad = O link precisa começar com https://, http:// ou webcal://
+calendar-add = Adicionar
+calendar-added = Adicionado: aparece na próxima vez que a agenda abrir.
+calendar-remove = Remover este calendário
+calendar-week-start = A semana começa na
+calendar-week-monday = Segunda-feira
+calendar-week-sunday = Domingo
+
+agenda-title = Agenda
+agenda-previous = Mês anterior
+agenda-next = Próximo mês
+agenda-today = Hoje
+agenda-refresh = Buscar os calendários de novo
+agenda-close = Fechar (Esc)
+agenda-loading = Buscando os calendários…
+agenda-failed = { $count ->
+    [one] Um calendário não pôde ser buscado; mostrando a última cópia.
+   *[other] { $count } calendários não puderam ser buscados; mostrando as últimas cópias.
+}
+agenda-no-calendars = Nenhum calendário ainda: clique com o botão direito no calendário › Calendários… para adicionar.
+agenda-more = +{ $count } outros
+agenda-free = Nada neste dia.
+agenda-all-day = O dia todo
+
+clock-settings = Configurações…
+clock-refresh = Atualizar
+clock-theme = Visual
+clock-theme-orbit = Orbit (as cores do tema)
+clock-theme-neon = Neon
+clock-theme-amber = Âmbar
+clock-theme-mono = Monocromático
+clock-theme-ice = Gelo
+clock-label = Rótulo antes da hora
+clock-label-auto = A sigla do fuso
+clock-rotate = Segundos por relógio do mundo
+clock-world = Relógios do mundo (até quatro)
+clock-world-add = Adicionar um relógio…
+clock-world-remove = Remover este relógio
+clock-save = Salvar
+
+spectrum-theme = Visual
+spectrum-theme-classic = Clássico
+spectrum-theme-fire = Fogo
+spectrum-theme-ocean = Oceano
+spectrum-theme-aurora = Aurora
+spectrum-theme-neon = Neon
+spectrum-theme-sunset = Pôr do sol
+spectrum-theme-accent = Cor do tema
+spectrum-theme-mono = Monocromático
+spectrum-theme-custom = Minhas cores
+spectrum-colours = Minhas cores…
+spectrum-colour-top = Topo
+spectrum-colour-middle = Meio
+spectrum-colour-bottom = Base
+spectrum-colours-apply = Usar estas cores
+spectrum-framerate = Quadros por segundo
+spectrum-fps = { $fps } por segundo
+spectrum-fall = Queda das barras
+spectrum-fall-fast = Rápida
+spectrum-fall-normal = Normal
+spectrum-fall-slow = Lenta
+spectrum-media-show = Mostrar os botões de mídia
+spectrum-media-hide = Esconder os botões de mídia
+spectrum-refresh = Recomeçar
+
+media-previous = Anterior
+media-play-pause = Tocar ou pausar
+media-next = Próxima

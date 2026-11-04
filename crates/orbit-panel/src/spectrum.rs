@@ -26,6 +26,8 @@ use gtk::{cairo, prelude::*};
 use orbit_audio::Analyzer;
 use serde::Deserialize;
 
+use orbit_app::i18n::{text, tr, tr_args};
+
 use crate::{board::Form, pulse};
 
 /// `modules/spectrum.yaml`.
@@ -40,6 +42,12 @@ pub struct SpectrumConfig {
     /// As CAVA's `noise_reduction`, but for the fall only: 0 drops at
     /// once, 1 floats down slowly.
     pub noise_reduction: f32,
+    /// The colours: one of [`THEMES`]; `custom` takes `colours`.
+    pub theme: String,
+    /// `custom`'s colours, top to bottom, `#rrggbb`.
+    pub colours: Vec<String>,
+    /// Small media buttons under the bars (Normal and Full).
+    pub media: bool,
 }
 
 impl Default for SpectrumConfig {
@@ -49,8 +57,76 @@ impl Default for SpectrumConfig {
             low: 50.0,
             high: 10_000.0,
             noise_reduction: 0.77,
+            theme: "classic".into(),
+            colours: vec!["#eb3330".into(), "#fa8c1f".into(), "#fad933".into()],
+            media: true,
         }
     }
+}
+
+/// The looks a left click goes through, in order. `classic`: the theme's
+/// accent, and the fire gradient in Full; `accent` and `mono`: one colour
+/// (the accent, the text's); the others a gradient in every size.
+pub const THEMES: &[&str] = &["classic", "fire", "ocean", "aurora", "neon", "sunset", "accent", "mono", "custom"];
+
+type Rgb = (f64, f64, f64);
+
+/// The CSS colours at hand: the area's (the accent) and the card's text.
+struct Ink {
+    accent: gtk::gdk::RGBA,
+    text: gtk::gdk::RGBA,
+}
+
+/// What the bars are painted with.
+#[derive(Clone)]
+enum Paint {
+    /// The CSS colour of the area (the accent).
+    Accent,
+    /// The text's colour.
+    Mono,
+    /// Top to bottom.
+    Gradient([Rgb; 3]),
+}
+
+fn hex(colour: &str) -> Option<Rgb> {
+    let c = gtk::gdk::RGBA::parse(colour).ok()?;
+    Some((f64::from(c.red()), f64::from(c.green()), f64::from(c.blue())))
+}
+
+/// The paint of `theme` in `form`.
+fn paint(config: &SpectrumConfig, theme: &str, form: Form) -> Paint {
+    let g = |a: Rgb, b: Rgb, c: Rgb| Paint::Gradient([a, b, c]);
+    match theme {
+        "classic" if form == Form::Full => g(RED, ORANGE, YELLOW),
+        "classic" | "accent" => Paint::Accent,
+        "mono" => Paint::Mono,
+        "fire" => g(RED, ORANGE, YELLOW),
+        "ocean" => g((0.30, 0.85, 0.95), (0.13, 0.55, 0.90), (0.10, 0.25, 0.65)),
+        "aurora" => g((0.75, 0.40, 0.95), (0.25, 0.80, 0.85), (0.20, 0.90, 0.45)),
+        "neon" => g((1.0, 0.20, 0.75), (0.60, 0.25, 1.0), (0.15, 0.85, 1.0)),
+        "sunset" => g((0.98, 0.45, 0.35), (0.85, 0.30, 0.55), (0.40, 0.20, 0.60)),
+        "custom" => {
+            let pick = |i: usize, fallback: Rgb| config.colours.get(i).and_then(|c| hex(c)).unwrap_or(fallback);
+            g(pick(0, RED), pick(1, ORANGE), pick(2, YELLOW))
+        }
+        _ => Paint::Accent,
+    }
+}
+
+/// Sets `cr`'s source to `paint` over the height from `top` to `bottom`.
+fn set_paint(cr: &cairo::Context, paint: &Paint, ink: &Ink, top: f64, bottom: f64) -> Result<(), cairo::Error> {
+    match paint {
+        Paint::Accent => set_colour(cr, &ink.accent, 1.0),
+        Paint::Mono => set_colour(cr, &ink.text, 1.0),
+        Paint::Gradient(stops) => {
+            let gradient = cairo::LinearGradient::new(0.0, top, 0.0, bottom);
+            for (offset, (r, g, b)) in [0.0, 0.5, 1.0].into_iter().zip(stops) {
+                gradient.add_color_stop_rgb(offset, *r, *g, *b);
+            }
+            cr.set_source(&gradient)?;
+        }
+    }
+    Ok(())
 }
 
 const RATE: u32 = 44_100;
@@ -82,16 +158,23 @@ pub fn new(config: &SpectrumConfig, form: Form) -> gtk::Widget {
         area.set_size_request(70, 24);
     }
     let bars = Rc::new(RefCell::new(vec![0.0f32; bands]));
+    let theme = Rc::new(RefCell::new(config.theme.clone()));
     {
         let bars = bars.clone();
+        let (theme, options) = (theme.clone(), config.clone());
         area.set_draw_func(move |area, cr, w, h| {
             let bars = bars.borrow();
             let colour = area.color();
+            let ink = Ink {
+                accent: colour,
+                text: area.parent().map_or(colour, |p| p.color()),
+            };
+            let painted = paint(&options, &theme.borrow(), form);
             let (w, h) = (f64::from(w), f64::from(h));
             let drawn = match form {
-                Form::Mini | Form::Line => draw_line(cr, &bars, w, h, &colour),
-                Form::Normal => draw_bars(cr, &bars, w, h, &colour),
-                Form::Full => draw_full(cr, &bars, w, h, &colour),
+                Form::Mini | Form::Line => draw_line(cr, &bars, w, h, &painted, &ink),
+                Form::Normal => draw_bars(cr, &bars, w, h, &painted, &ink),
+                Form::Full => draw_full(cr, &bars, w, h, &painted, &ink),
             };
             if let Err(err) = drawn {
                 log::warn!("spectrum: drawing: {err}");
@@ -103,6 +186,8 @@ pub fn new(config: &SpectrumConfig, form: Form) -> gtk::Widget {
     // thread, once however many frames came meanwhile.
     let latest: Latest = Arc::default();
     let (wake, woken) = async_channel::bounded::<()>(1);
+    clicks(&area, config, &theme);
+    let media = config.media;
     let config = config.clone();
     {
         let latest = latest.clone();
@@ -121,7 +206,150 @@ pub fn new(config: &SpectrumConfig, form: Form) -> gtk::Widget {
             }
         }
     });
+    if media && matches!(form, Form::Normal | Form::Full) {
+        let column = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["spectrum-media"])
+            .build();
+        column.append(&area);
+        column.append(&crate::media::controls());
+        return column.upcast();
+    }
     area.upcast()
+}
+
+/// A left click goes to the next look (kept in the file); a right click
+/// opens the module's menu.
+fn clicks(area: &gtk::DrawingArea, config: &SpectrumConfig, theme: &Rc<RefCell<String>>) {
+    {
+        let theme = theme.clone();
+        crate::settings::on_click(area, 1, move |widget, _, _| {
+            let next = {
+                let now = theme.borrow();
+                let at = THEMES.iter().position(|t| *t == now.as_str()).unwrap_or(0);
+                THEMES[(at + 1) % THEMES.len()].to_string()
+            };
+            widget.set_tooltip_text(Some(&tr(&format!("spectrum-theme-{next}"))));
+            *theme.borrow_mut() = next.clone();
+            widget.queue_draw();
+            crate::settings::save("spectrum", &[("theme", next.into())], &[]);
+        });
+    }
+    let (config, theme) = (config.clone(), theme.clone());
+    crate::settings::on_click(area, 3, move |widget, x, y| menu(widget, x, y, &config, &theme));
+}
+
+/// The looks, the custom colours, the frame rate and how the bars fall.
+fn menu(anchor: &gtk::Widget, x: f64, y: f64, config: &SpectrumConfig, theme: &Rc<RefCell<String>>) {
+    use crate::settings::{Menu, save, section, submenu};
+    let menu = Menu::new();
+    let first = section(&menu, Some(&tr("panel-module-spectrum")));
+    let looks = submenu(&first, &tr("spectrum-theme"));
+    let choices: Vec<(String, String)> = THEMES
+        .iter()
+        .map(|t| ((*t).to_string(), tr(&format!("spectrum-theme-{t}"))))
+        .collect();
+    {
+        let current = theme.borrow().clone();
+        let (theme, anchor) = (theme.clone(), anchor.clone());
+        menu.radio(&looks, &choices, &current, move |value| {
+            *theme.borrow_mut() = value.clone();
+            anchor.queue_draw();
+            save("spectrum", &[("theme", value.into())], &[]);
+        });
+    }
+    {
+        let anchor = anchor.clone();
+        let config = config.clone();
+        menu.item(&first, &tr("spectrum-colours"), move || colours(&anchor, x, y, &config));
+    }
+
+    let more = section(&menu, None);
+    let rate = submenu(&more, &tr("spectrum-framerate"));
+    let choices: Vec<(String, String)> = [30u32, 60, 120]
+        .iter()
+        .map(|f| (f.to_string(), tr_args("spectrum-fps", &[("fps", text(f.to_string()))])))
+        .collect();
+    menu.radio(&rate, &choices, &config.framerate.to_string(), |value| {
+        if let Ok(fps) = value.parse::<u32>() {
+            save("spectrum", &[("framerate", fps.into())], &["spectrum"]);
+        }
+    });
+    let fall = submenu(&more, &tr("spectrum-fall"));
+    let current = match config.noise_reduction {
+        n if n < 0.65 => "0.5",
+        n if n > 0.85 => "0.9",
+        _ => "0.77",
+    };
+    menu.radio(
+        &fall,
+        &[
+            ("0.5".into(), tr("spectrum-fall-fast")),
+            ("0.77".into(), tr("spectrum-fall-normal")),
+            ("0.9".into(), tr("spectrum-fall-slow")),
+        ],
+        current,
+        |value| {
+            if let Ok(n) = value.parse::<f64>() {
+                save("spectrum", &[("noise_reduction", n.into())], &["spectrum"]);
+            }
+        },
+    );
+    let media = config.media;
+    menu.item(
+        &more,
+        &tr(if media { "spectrum-media-hide" } else { "spectrum-media-show" }),
+        move || save("spectrum", &[("media", (!media).into())], &["spectrum"]),
+    );
+    menu.item(&more, &tr("spectrum-refresh"), || crate::settings::reload(&["spectrum"]));
+    menu.open(anchor, x, y);
+}
+
+/// The custom look's three colours, top to bottom.
+fn colours(anchor: &gtk::Widget, x: f64, y: f64, config: &SpectrumConfig) {
+    let content = crate::settings::form_box(&tr("spectrum-colours"));
+    let buttons: Vec<gtk::ColorDialogButton> = (0..3)
+        .map(|i| {
+            let button = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::builder().with_alpha(false).build()));
+            let colour = config.colours.get(i).and_then(|c| gtk::gdk::RGBA::parse(c).ok());
+            if let Some(colour) = colour {
+                button.set_rgba(&colour);
+            }
+            let row = gtk::Box::builder().spacing(8).build();
+            row.append(
+                &gtk::Label::builder()
+                    .label(tr(["spectrum-colour-top", "spectrum-colour-middle", "spectrum-colour-bottom"][i]))
+                    .hexpand(true)
+                    .xalign(0.0)
+                    .build(),
+            );
+            row.append(&button);
+            content.append(&row);
+            button
+        })
+        .collect();
+    let apply = gtk::Button::builder().label(tr("spectrum-colours-apply")).css_classes(["suggested-action"]).build();
+    content.append(&apply);
+    let popover = crate::settings::popover(anchor, x, y, &content);
+    let weak = popover.downgrade();
+    apply.connect_clicked(move |_| {
+        let hexes: Vec<serde_json::Value> = buttons
+            .iter()
+            .map(|b| {
+                let c = b.rgba();
+                let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                format!("#{:02x}{:02x}{:02x}", byte(c.red()), byte(c.green()), byte(c.blue())).into()
+            })
+            .collect();
+        crate::settings::save(
+            "spectrum",
+            &[("theme", "custom".into()), ("colours", serde_json::Value::Array(hexes))],
+            &["spectrum"],
+        );
+        if let Some(p) = weak.upgrade() {
+            p.popdown();
+        }
+    });
 }
 
 /// The bars not drawn yet.
@@ -179,7 +407,14 @@ fn set_colour(cr: &cairo::Context, colour: &gtk::gdk::RGBA, alpha: f64) {
 }
 
 /// Mini: one smooth line through the bands, along the bottom when quiet.
-fn draw_line(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gdk::RGBA) -> Result<(), cairo::Error> {
+fn draw_line(
+    cr: &cairo::Context,
+    bars: &[f32],
+    w: f64,
+    h: f64,
+    paint: &Paint,
+    ink: &Ink,
+) -> Result<(), cairo::Error> {
     let (left, width) = (PAD, w - 2.0 * PAD);
     let (bottom, height) = (h - PAD, h - 2.0 * PAD);
     let points: Vec<(f64, f64)> = bars
@@ -206,7 +441,7 @@ fn draw_line(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gd
             p2.1,
         );
     }
-    set_colour(cr, colour, 1.0);
+    set_paint(cr, paint, ink, PAD, h - PAD)?;
     cr.set_line_width(1.5);
     cr.set_line_cap(cairo::LineCap::Round);
     cr.set_line_join(cairo::LineJoin::Round);
@@ -220,9 +455,16 @@ fn bar_x(i: usize, n: usize, w: f64, gap: f64) -> (f64, f64) {
 }
 
 /// Normal: 12 bars with rounded tops; a 1 px stub when quiet.
-fn draw_bars(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gdk::RGBA) -> Result<(), cairo::Error> {
+fn draw_bars(
+    cr: &cairo::Context,
+    bars: &[f32],
+    w: f64,
+    h: f64,
+    paint: &Paint,
+    ink: &Ink,
+) -> Result<(), cairo::Error> {
     let (bottom, height) = (h - PAD, h - 2.0 * PAD);
-    set_colour(cr, colour, 1.0);
+    set_paint(cr, paint, ink, PAD, bottom)?;
     for (i, v) in bars.iter().enumerate() {
         let (x, width) = bar_x(i, bars.len(), w, NORMAL_GAP);
         let tall = (f64::from(*v) * height).max(1.0);
@@ -246,7 +488,15 @@ fn draw_bars(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gd
 
 /// Full: a grid, then thin bars cut from one gradient — yellow at the
 /// bottom, orange in the middle, red at the top.
-fn draw_full(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gdk::RGBA) -> Result<(), cairo::Error> {
+fn draw_full(
+    cr: &cairo::Context,
+    bars: &[f32],
+    w: f64,
+    h: f64,
+    paint: &Paint,
+    ink: &Ink,
+) -> Result<(), cairo::Error> {
+    let colour = &ink.accent;
     let (left, right) = (PAD, w - PAD);
     let (top, bottom) = (PAD, h - PAD);
     // The grid: 8 columns, and rows as many as keep its cells square, on
@@ -266,11 +516,7 @@ fn draw_full(cr: &cairo::Context, bars: &[f32], w: f64, h: f64, colour: &gtk::gd
     }
     cr.stroke()?;
 
-    let gradient = cairo::LinearGradient::new(0.0, top, 0.0, bottom);
-    for (offset, (r, g, b)) in [(0.0, RED), (0.5, ORANGE), (1.0, YELLOW)] {
-        gradient.add_color_stop_rgb(offset, r, g, b);
-    }
-    cr.set_source(&gradient)?;
+    set_paint(cr, paint, ink, top, bottom)?;
     let height = bottom - top;
     for (i, v) in bars.iter().enumerate() {
         let (x, width) = bar_x(i, bars.len(), w, FULL_GAP);
@@ -390,6 +636,8 @@ mod tests {
         cr.set_source_rgb(0.08, 0.09, 0.11);
         cr.paint().unwrap();
         let accent = gtk::gdk::RGBA::new(0.27, 0.51, 0.71, 1.0);
+        let ink = Ink { accent, text: gtk::gdk::RGBA::WHITE };
+        let config = SpectrumConfig::default();
         let mut x = gap;
         for (form, w, h, bands) in sizes {
             let bars = frames(bands);
@@ -400,9 +648,9 @@ mod tests {
             cr.rectangle(0.0, 0.0, w, h);
             cr.fill().unwrap();
             match form {
-                Form::Mini => draw_line(&cr, &bars, w, h, &accent),
-                Form::Normal => draw_bars(&cr, &bars, w, h, &accent),
-                _ => draw_full(&cr, &bars, w, h, &accent),
+                Form::Mini => draw_line(&cr, &bars, w, h, &paint(&config, "classic", form), &ink),
+                Form::Normal => draw_bars(&cr, &bars, w, h, &paint(&config, "classic", form), &ink),
+                _ => draw_full(&cr, &bars, w, h, &paint(&config, "classic", form), &ink),
             }
             .unwrap();
             cr.restore().unwrap();
