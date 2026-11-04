@@ -2,9 +2,12 @@
 # The boot screen is Orbit's when Plymouth is there: on a first install, and
 # whenever the theme chosen is not installed (Debian's default, ceratopsian,
 # comes with desktop-base, which Orbit Linux doesn't have, and Plymouth then
-# falls back to text). The initramfs is made again by the trigger.
+# falls back to text). The initramfs is made again by the trigger. Only
+# with Plymouth configured: unpacked but not configured, its plymouthd.conf
+# isn't in place yet, and writing one stops dpkg at the conffile question.
 set -e
-if [ "$1" = configure ] && command -v plymouth-set-default-theme >/dev/null; then
+if [ "$1" = configure ] && command -v plymouth-set-default-theme >/dev/null &&
+    [ "$(dpkg-query -W -f='${db:Status-Status}' plymouth 2>/dev/null)" = installed ]; then
     theme=$(plymouth-set-default-theme 2>/dev/null || true)
     if [ -z "$2" ] || [ ! -e "/usr/share/plymouth/themes/$theme/$theme.plymouth" ]; then
         plymouth-set-default-theme orbit
