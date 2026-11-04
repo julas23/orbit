@@ -18,6 +18,7 @@ recommends = "gvfs-backends, gvfs-fuse, ffmpegthumbnailer, udisks2, p7zip-full, 
 assets = [
     ["target/release/orbit-files", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Files.desktop", "usr/share/applications/", "644"],
+    ["../../data/icons/io.github.julas23.Orbit.Files.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
 ]
 
 [dependencies]
