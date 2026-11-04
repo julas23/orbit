@@ -374,6 +374,15 @@ impl Orbit {
             .map(|m| json!({ "width": m.size.w, "height": m.size.h, "refresh": m.refresh }))
             .unwrap_or(Value::Null);
         let props = output.physical_properties();
+        let preferred = output.preferred_mode();
+        let mut modes: Vec<Value> = output
+            .modes()
+            .iter()
+            .map(|m| json!({ "width": m.size.w, "height": m.size.h, "refresh": m.refresh, "preferred": Some(*m) == preferred }))
+            .collect();
+        if modes.is_empty() && !mode.is_null() {
+            modes.push(mode.clone());
+        }
         let mut value = json!({
             "id": 10 + index as i64,
             "type": "output",
@@ -389,7 +398,7 @@ impl Orbit {
             "subpixel_hinting": "unknown",
             "transform": crate::config::transform_name(output.current_transform()),
             "current_workspace": self.visible.get(&name).map(|n| n.to_string()),
-            "modes": [mode.clone()],
+            "modes": modes,
             "current_mode": mode,
             "rect": rect((geo.loc.x, geo.loc.y, geo.size.w, geo.size.h)),
             "focused": self.focused_output_name() == name,

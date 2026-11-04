@@ -14,6 +14,11 @@
 //!   image: ~/Imagens/fundo.jpg   # empty: the colour alone
 //!   mode: fill                   # fill, fit, center, stretch, tile
 //!   color: "#1b1f27"             # under the picture and around it
+//!   effect: aurora               # in place of the picture: aurora, ink,
+//!                                # facets, fire, water (`effects`); none
+//!   colors: ["#0b1026", "#1d4e89", "#14b8a6"]   # the effect's, 2 to 5
+//!   speed: 1                     # how fast it moves (0: still)
+//!   fps: 30                      # frames a second while it moves
 //! outputs:
 //!   HDMI-A-1:
 //!     wallpaper: ~/Imagens/outro.png   # this monitor's own
@@ -31,13 +36,16 @@ use smithay::{
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 solid::SolidColorRenderElement,
             },
-            gles::GlesRenderer,
+            gles::{GlesPixelProgram, GlesRenderer, element::PixelShaderElement},
             utils::CommitCounter,
         },
     },
     output::Output,
-    reexports::calloop::channel::{self, Sender},
-    utils::{Physical, Rectangle, Scale, Size, Transform},
+    reexports::calloop::{
+        channel::{self, Sender},
+        timer::{TimeoutAction, Timer},
+    },
+    utils::{Logical, Physical, Rectangle, Scale, Size, Transform},
 };
 
 use crate::{render::OutputElement, state::Orbit};
@@ -47,7 +55,7 @@ const LOCKED_VEIL: f32 = 0.4;
 /// How much it blurs it, in pixels of the monitor at scale 1.
 const LOCKED_BLUR: f32 = 24.0;
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Wallpaper {
     /// The picture: a path (`~` for home); empty for the colour alone.
@@ -56,6 +64,15 @@ pub struct Wallpaper {
     /// `#rrggbb`: under the picture, around it when it does not cover
     /// the monitor, and alone without one.
     pub color: String,
+    /// Drawn in place of the picture, on the monitors without one of
+    /// their own (`outputs.<name>.wallpaper`).
+    pub effect: crate::effects::Effect,
+    /// The effect's colours, `#rrggbb`; fewer than two: its own.
+    pub colors: Vec<String>,
+    /// How fast the effect moves; 0 keeps it still.
+    pub speed: f32,
+    /// Frames a second while it moves.
+    pub fps: u32,
 }
 
 impl Default for Wallpaper {
@@ -64,6 +81,10 @@ impl Default for Wallpaper {
             image: String::new(),
             mode: Mode::Fill,
             color: "#1b1f27".into(),
+            effect: crate::effects::Effect::None,
+            colors: Vec::new(),
+            speed: 1.0,
+            fps: 30,
         }
     }
 }
@@ -117,7 +138,19 @@ pub struct Wallpapers {
     veils: HashMap<String, Id>,
     /// Where the threads send what they made (made the first time).
     sender: Option<Sender<Made>>,
+    /// The effect's element per monitor, and the uniforms it was last
+    /// given (time, fade, colours): a frame with nothing new is no damage.
+    effects: HashMap<String, (crate::effects::Effect, PixelShaderElement, Given)>,
+    /// The effect's clock, in seconds: it runs only while the effect is
+    /// seen (`tick_effect`).
+    time: f32,
+    last_tick: Option<std::time::Instant>,
+    /// Whether the timer that moves it is there.
+    ticking: bool,
 }
+
+/// The uniforms an effect's element was last given: time, fade, colours.
+type Given = (f32, f32, Vec<[u8; 3]>);
 
 /// The cache, behind the state's back: drawing reads the state only.
 pub type Cache = RefCell<Wallpapers>;
@@ -140,6 +173,10 @@ impl Orbit {
         let name = output.name();
         let size = geo.size.to_physical_precise_round(scale);
         let config = &self.config.wallpaper;
+        if let Some(program) = self.effect_program(output) {
+            self.effect_element(output, geo.size, program, alpha, elements);
+            return;
+        }
         let image = self
             .config
             .outputs
@@ -216,7 +253,8 @@ impl Orbit {
             return;
         };
         let size = geo.size.to_physical_precise_round(scale);
-        let has_picture = !self.config.wallpaper.image.trim().is_empty()
+        let has_picture = self.effect_program(output).is_some()
+            || !self.config.wallpaper.image.trim().is_empty()
             || self
                 .config
                 .outputs
@@ -240,6 +278,118 @@ impl Orbit {
         if has_picture {
             self.wallpaper_elements(output, renderer, scale, alpha, true, elements);
         }
+    }
+
+    /// The effect's program for `output`, when it shows one: there is an
+    /// effect, the monitor has no picture of its own, and it compiled.
+    fn effect_program(&self, output: &Output) -> Option<GlesPixelProgram> {
+        let effect = self.config.wallpaper.effect;
+        if effect == crate::effects::Effect::None || self.own_picture(output) {
+            return None;
+        }
+        self.shaders.as_ref()?.as_ref()?.effects.get(effect).cloned()
+    }
+
+    /// Whether `output` has a picture of its own.
+    fn own_picture(&self, output: &Output) -> bool {
+        self.config
+            .outputs
+            .get(&*output.name())
+            .and_then(|o| o.wallpaper.as_deref())
+            .is_some_and(|w| !w.trim().is_empty())
+    }
+
+    /// The effect over `output`'s whole `size`, at `alpha`.
+    fn effect_element(
+        &self,
+        output: &Output,
+        size: Size<i32, Logical>,
+        program: GlesPixelProgram,
+        alpha: f32,
+        elements: &mut Vec<OutputElement>,
+    ) {
+        let config = &self.config.wallpaper;
+        let mut colors: Vec<[u8; 3]> = config.colors.iter().filter_map(|c| parse_rgb(c)).collect();
+        if colors.len() < 2 {
+            colors = config.effect.default_colors().to_vec();
+        }
+        colors.truncate(crate::effects::MOST);
+        let mut cache = self.wallpapers.borrow_mut();
+        if !cache.ticking {
+            cache.ticking = true;
+            self.start_effect_timer();
+        }
+        let time = cache.time;
+        let area = Rectangle::from_size(size);
+        let opaque = (alpha >= 1.0).then(|| vec![area]);
+        let wanted = (time, alpha, colors);
+        let effect = config.effect;
+        let entry = cache.effects.entry(output.name());
+        // Another effect: another program, so another element.
+        let (_, element, last) = match entry {
+            std::collections::hash_map::Entry::Occupied(slot) if slot.get().0 == effect => slot.into_mut(),
+            entry => {
+                let element = PixelShaderElement::new(
+                    program,
+                    area,
+                    opaque.clone(),
+                    1.0,
+                    crate::effects::uniforms(wanted.0, wanted.1, &wanted.2),
+                    Kind::Unspecified,
+                );
+                entry.insert_entry((effect, element, wanted.clone())).into_mut()
+            }
+        };
+        element.resize(area, opaque);
+        if *last != wanted {
+            element.update_uniforms(crate::effects::uniforms(wanted.0, wanted.1, &wanted.2));
+            *last = wanted;
+        }
+        elements.push(OutputElement::Border(element.clone()));
+    }
+
+    /// Moves the effect on, `fps` times a second while it is seen.
+    fn start_effect_timer(&self) {
+        let timer = Timer::from_duration(std::time::Duration::from_millis(30));
+        let inserted = self
+            .loop_handle
+            .insert_source(timer, |_, _, state| TimeoutAction::ToDuration(state.tick_effect()));
+        if let Err(err) = inserted {
+            tracing::error!("wallpaper effect: {err}");
+        }
+    }
+
+    /// One step of the effect's clock; how long until the next.
+    fn tick_effect(&mut self) -> std::time::Duration {
+        let config = &self.config.wallpaper;
+        let now = std::time::Instant::now();
+        let mut cache = self.wallpapers.borrow_mut();
+        let since = cache
+            .last_tick
+            .replace(now)
+            .map_or(0.0, |t| (now - t).as_secs_f32().min(0.25));
+        if config.effect == crate::effects::Effect::None {
+            cache.effects.clear();
+            return std::time::Duration::from_millis(500);
+        }
+        drop(cache);
+        // Seen: on a monitor of its own with no fullscreen window over it,
+        // unlocked, with the effects on.
+        let seen = config.speed > 0.0
+            && !self.locked()
+            && self.effects()
+            && self
+                .space
+                .outputs()
+                .any(|o| !self.own_picture(o) && self.fullscreen_on(o).is_none());
+        if !seen {
+            return std::time::Duration::from_millis(500);
+        }
+        let step = since * config.speed;
+        let fps = config.fps.clamp(1, 240);
+        self.wallpapers.borrow_mut().time += step;
+        self.request_render();
+        std::time::Duration::from_secs_f64(1.0 / fps as f64)
     }
 
     /// The channel the threads answer on: what they made goes in its slot

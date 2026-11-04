@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit-Settings
+GenericName=Settings
+GenericName[pt_BR]=Configurações
+Comment=Wallpaper and monitors
+Comment[pt_BR]=Papel de parede e monitores
+Exec=orbit-settings
+Icon=preferences-desktop
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=wallpaper;background;monitor;display;resolution;scale;

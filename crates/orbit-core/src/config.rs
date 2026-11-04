@@ -22,6 +22,9 @@
 //! areas: 4               # the grid of areas Alt/Mod+Ctrl+arrows walk:
 //! area_columns: 2        # 1 2 / 3 4, as the panel shows them
 //! blur_layers: [orbit-confirm]   # overlay surfaces with the screen blurred under
+//! desktop_menu: orbit-settings menu   # a right click on the bare wallpaper
+//!                        # runs it with X Y OUTPUT (the click, in that
+//!                        # monitor's logical pixels); empty: nothing
 //! effects: auto          # the lock's eyes and the blur: on, off, or auto
 //!                        # (off on battery)
 //! idle_lock: 600         # seconds without input before locking; 0: never
@@ -102,6 +105,9 @@ pub struct Config {
     pub idle_lock: PerHost<u64>,
     /// The picture under the windows, and behind the greet (`wallpaper`).
     pub wallpaper: crate::wallpaper::Wallpaper,
+    /// Run on a right click on the bare wallpaper, with the click's place
+    /// appended: `X Y OUTPUT`. Empty: nothing.
+    pub desktop_menu: String,
 }
 
 /// One value for every machine, or one per host name, with `default` for
@@ -281,6 +287,7 @@ impl Default for Config {
             effects: Effects::Auto,
             idle_lock: PerHost::All(600),
             wallpaper: crate::wallpaper::Wallpaper::default(),
+            desktop_menu: "orbit-settings menu".into(),
         }
     }
 }

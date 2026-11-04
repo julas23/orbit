@@ -4931,6 +4931,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbit-settings"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "gtk4",
+ "gtk4-layer-shell",
+ "log",
+ "orbit-app",
+ "orbit-common",
+ "orbit-ipc",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+]
+
+[[package]]
 name = "orbit-term"
 version = "0.1.0"
 dependencies = [

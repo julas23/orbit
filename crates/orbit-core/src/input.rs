@@ -108,6 +108,14 @@ impl Orbit {
                     }
                     return;
                 }
+                // A right click on the bare wallpaper: the desktop's menu.
+                if event.state() == ButtonState::Pressed
+                    && event.button_code() == crate::resize::BTN_RIGHT
+                    && !pointer.is_grabbed()
+                    && self.desktop_menu(pointer.current_location())
+                {
+                    return;
+                }
                 if event.state() == ButtonState::Pressed && !pointer.is_grabbed() {
                     self.focus_at(pointer.current_location());
                 }
@@ -369,6 +377,34 @@ impl Orbit {
                 }
             }
         }
+    }
+
+    /// Opens the desktop's menu (`desktop_menu`) when nothing is at `pos`
+    /// but the wallpaper — the core's, or a background layer's (a video
+    /// wallpaper, swaybg): true when it was started.
+    fn desktop_menu(&self, pos: Point<f64, Logical>) -> bool {
+        let command = self.config.desktop_menu.trim();
+        if command.is_empty() {
+            return false;
+        }
+        let Some(output) = self.output_at(pos) else {
+            return false;
+        };
+        let Some(geo) = self.space.output_geometry(&output) else {
+            return false;
+        };
+        let at = pos - geo.loc.to_f64();
+        if let Some((surface, _)) = self.surface_under(pos) {
+            let map = layer_map_for_output(&output);
+            let background = map
+                .layer_under(smithay::wayland::shell::wlr_layer::Layer::Background, at)
+                .is_some_and(|l| l.wl_surface() == &surface);
+            if !background {
+                return false;
+            }
+        }
+        self.spawn(&format!("{command} {} {} {}", at.x as i32, at.y as i32, output.name()));
+        true
     }
 
     /// The window under `pos` that can be focused and moved: not an X menu

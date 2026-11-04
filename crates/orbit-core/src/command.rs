@@ -193,6 +193,40 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.move_output(name, (x, y));
             Ok(())
         }
+        // sway's `output NAME mode|scale|transform …`, for this session
+        // (as wlr-output-management would; orbit-settings writes core.yaml).
+        [
+            "output",
+            name,
+            what @ ("mode" | "resolution" | "res" | "scale" | "transform"),
+            value,
+        ] => {
+            let mut change = crate::output_management::Change::default();
+            match *what {
+                "scale" => match value.parse::<f64>() {
+                    Ok(scale) if (0.5..=4.0).contains(&scale) => change.scale = Some(scale),
+                    _ => return Err(format!("output {name}: not a scale from 0.5 to 4: {value}")),
+                },
+                "transform" => match crate::config::parse_transform(value) {
+                    Some(transform) => change.transform = Some(transform),
+                    None => return Err(format!("output {name}: not a transform: {value}")),
+                },
+                _ => match crate::config::parse_mode(value) {
+                    Some((w, h, rate)) => {
+                        change.mode = Some((w as i32, h as i32, rate.map_or(0, |r| (r * 1000.0).round() as i32)))
+                    }
+                    None => return Err(format!("output {name}: not a mode: {value}")),
+                },
+            }
+            if state.output_named(name).is_none() {
+                return Err(format!("There is no output called {name}"));
+            }
+            if state.apply_heads(std::iter::once(((*name).to_owned(), change)).collect()) {
+                Ok(())
+            } else {
+                Err(format!("output {name}: {what} {value} not applied"))
+            }
+        }
         // Orbit's own: a virtual monitor (orbit-remote-server's client).
         ["output", name, "create", mode] => {
             let Some((w, h, rate)) = crate::config::parse_mode(mode) else {

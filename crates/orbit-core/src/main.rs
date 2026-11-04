@@ -30,6 +30,7 @@ mod command;
 mod config;
 mod cursor;
 mod direction;
+mod effects;
 mod eyes;
 mod floating;
 mod focus;

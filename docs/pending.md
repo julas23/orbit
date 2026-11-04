@@ -280,7 +280,10 @@ Core (sway, niri, KWin), besides phases 2–5 of §4:
 - [ ] ★ xdg-activation: an app or a notification can ask for a window to come forward.
 - [ ] foreign-toplevel: windows listed and controlled by panel, dock and tools without the sway IPC.
 - [ ] Tablets ("no tablets yet").
-- [ ] Monitor settings in a window (mode, scale, position), today only the file.
+- [x] Monitor settings in a window: resolution, refresh rate, scale and rotation in Orbit-Settings, set at once (`output NAME mode|scale|transform`, new in the core) and kept in core.yaml under `HOST/NAME` only when confirmed, back by themselves after 15 s (2026-11-03). Where each monitor sits stays the panel's monitors module's. Nested: the commands on a virtual monitor, the page drawn. Not tried: a mode change on a real monitor.
+- [x] A right click on the bare wallpaper (or a background layer's) runs `desktop_menu` (default `orbit-settings menu`) with the click's place: a small menu there, Wallpaper… and Monitors… (2026-11-03). Seen nested (menu run by hand; no pointer in the nested test).
+- [ ] Video and animated wallpapers.
+- [x] Wallpaper effects drawn from colours, in motion, as GPU shaders (`effects.rs`, `wallpaper.effect`): aurora, ink, facets, fire (red and yellow; blue and white with those colours), water; 2–5 colours, speed, fps (30). Time stops (no frames) with the effects off or on battery (`effects: auto`), under a fullscreen window and while locked. Chosen in Orbit-Settings, "Show" (2026-11-04). Seen nested, two frames apart each. Not measured: the GPU cost on the hp (Vega 8).
 
 Greet: an on-screen keyboard (accessibility). (Biometrics: §3.)
 
@@ -333,7 +336,7 @@ Orbit-Calc: currency conversion; the history of calculations shown.
 Orbit-Safe (Seahorse, KeePassXC): SSH and GPG keys; filling passwords into Pathfinder. (QR codes: §8.)
 
 Apps other desktops have and Orbit does not:
-- [ ] ★ Settings: monitors, sound, network, Bluetooth, users, default apps, look and wallpaper — today scattered in YAML files.
+- [ ] ★ Settings: monitors, sound, network, Bluetooth, users, default apps, look and wallpaper — today scattered in YAML files. Started 2026-11-03: `orbit-settings` with the wallpaper (picture from the usual folders or any file, fit, colour; all monitors or one; written to core.yaml and reloaded at once, with a preview of what the core draws) and the monitors.
 - [ ] ★ A system monitor: processes, ending one, use per app.
 - [ ] Updates in a window (`apt upgrade`), as everything ships as debs.
 - [ ] Disks (Popsicle only writes images), printers, scanner.

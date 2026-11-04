@@ -123,6 +123,8 @@ pub struct Shaders {
     pub up: GlesTexProgram,
     /// A window card in perspective (`cards`).
     pub card: GlesTexProgram,
+    /// The wallpaper's effects; each may be missing (`effects`).
+    pub effects: crate::effects::Programs,
 }
 
 impl Shaders {
@@ -145,12 +147,14 @@ impl Shaders {
         )?;
         let (down, up) = crate::eyes::compile(renderer)?;
         let card = crate::cards::compile(renderer)?;
+        let effects = crate::effects::Programs::compile(renderer);
         Ok(Self {
             clip,
             border,
             down,
             up,
             card,
+            effects,
         })
     }
 }

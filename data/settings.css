@@ -1,0 +1,85 @@
+/* Orbit-Settings built-in stylesheet: the settings window and the
+ * desktop's right-click menu. Colours come from the palette;
+ * ~/.config/orbit/style.css goes on top. Sizes on the 5 px grid. */
+
+window.orbit-settings {
+  background-color: @orbit_window;
+  color: @orbit_fg;
+}
+window.orbit-settings .sidebar {
+  min-width: 180px;
+  background-color: mix(@orbit_window, @orbit_fg, 0.05);
+  border-right: 1px solid @orbit_border;
+}
+window.orbit-settings .page {
+  padding: 20px;
+}
+window.orbit-settings .heading {
+  font-weight: bold;
+}
+window.orbit-settings .row {
+  min-height: 35px;
+}
+window.orbit-settings .row > dropdown,
+window.orbit-settings .row > colorbutton,
+window.orbit-settings .row > scale {
+  min-width: 200px;
+}
+/* The effect's colours: small swatches in a line. */
+window.orbit-settings .row colorbutton > button {
+  min-width: 25px;
+  padding: 4px;
+}
+window.orbit-settings .preview {
+  border-radius: 10px;
+  border: 1px solid @orbit_border;
+}
+window.orbit-settings .thumb {
+  padding: 0;
+  border-radius: 5px;
+  border: 2px solid transparent;
+}
+window.orbit-settings .thumb.current {
+  border-color: @orbit_accent;
+}
+window.orbit-settings .card {
+  padding: 15px;
+  border-radius: 10px;
+  background-color: @orbit_faint;
+  border: 1px solid @orbit_border;
+}
+window.orbit-settings .keep {
+  padding: 10px 15px;
+  border-radius: 10px;
+  background-color: alpha(@orbit_accent, 0.15);
+  border: 1px solid @orbit_accent;
+}
+window.orbit-settings .dim {
+  color: @orbit_muted;
+}
+window.orbit-settings .message {
+  color: @orbit_warn;
+}
+
+/* The desktop's menu: a transparent sheet over the monitor, the card at
+ * the click. */
+window.orbit-desktop-menu {
+  background: none;
+}
+window.orbit-desktop-menu .card {
+  min-width: 220px;
+  padding: 5px;
+  border-radius: 10px;
+  background-color: @orbit_window;
+  color: @orbit_fg;
+  border: 1px solid @orbit_border;
+  box-shadow: 0 5px 15px alpha(#000000, 0.35);
+}
+window.orbit-desktop-menu .item {
+  min-height: 35px;
+  padding: 0 10px;
+  border-radius: 5px;
+}
+window.orbit-desktop-menu .item:hover {
+  background-color: alpha(@orbit_accent, 0.2);
+}

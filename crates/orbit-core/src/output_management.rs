@@ -261,7 +261,7 @@ impl Orbit {
 
     /// A configuration from a client: true once it took effect. Kept for
     /// this session, as `outputs:` in core.yaml would say it.
-    fn apply_heads(&mut self, changes: HashMap<String, Change>) -> bool {
+    pub fn apply_heads(&mut self, changes: HashMap<String, Change>) -> bool {
         if changes.values().any(|c| c.off) {
             tracing::info!("output management: switching a monitor off is not done yet");
             return false;

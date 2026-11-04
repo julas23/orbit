@@ -1,0 +1,33 @@
+[package]
+name = "orbit-settings"
+description = "Orbit-Settings: wallpaper and monitors, and the desktop's right-click menu, Rust + GTK4"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "x11"
+priority = "optional"
+extended-description = "Orbit-Settings: the wallpaper (a picture, how it meets the screen, or a colour) and the monitors (resolution, refresh rate, scale, rotation), written to core.yaml; and the menu a right click on the desktop opens. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto"
+assets = [
+    ["target/release/orbit-settings", "usr/bin/", "755"],
+    ["../../data/io.github.julas23.Orbit.Settings.desktop", "usr/share/applications/", "644"],
+]
+
+[dependencies]
+orbit-app.workspace = true
+orbit-common.workspace = true
+orbit-ipc.workspace = true
+gtk.workspace = true
+gtk4-layer-shell.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+log.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
