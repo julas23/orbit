@@ -356,9 +356,22 @@ impl Orbit {
         self.arrange();
     }
 
-    /// A floating window still without its place drew a new size: it is
-    /// centred again.
+    /// A window committed. Its first frame: a Wayland window of a fixed
+    /// size is a dialog, floating — GTK gives a window that cannot be
+    /// resized (Orbit-Blink's options) its size limits after its first
+    /// commit, too late for `first_configure`. A floating window still
+    /// without its place drew a new size: it is centred again.
     pub fn floating_committed(&mut self, window: &Window) {
+        let first_frame = window.toplevel().is_some() && {
+            let drawn = !window.geometry().is_empty();
+            let mut info = info(window).borrow_mut();
+            let first = drawn && !info.drawn;
+            info.drawn |= drawn;
+            first
+        };
+        if first_frame {
+            self.float_if_dialog(window);
+        }
         let unplaced = {
             let info = info(window).borrow();
             info.floating && info.float_at.is_none()

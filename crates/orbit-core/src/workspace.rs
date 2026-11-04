@@ -58,6 +58,9 @@ pub struct Info {
     pub float_size: Option<(i32, i32)>,
     pub snap: Option<crate::floating::Half>,
     pub weight: f64,
+    /// Whether it has drawn its first frame (a Wayland window's size
+    /// limits are known by then; see `floating_committed`).
+    pub drawn: bool,
 }
 
 /// The window's info; given on the first call.
@@ -73,6 +76,7 @@ pub fn info(window: &Window) -> &RefCell<Info> {
             float_size: None,
             snap: None,
             weight: 1.0,
+            drawn: false,
         })
     });
     window.user_data().get::<RefCell<Info>>().expect("just inserted")
