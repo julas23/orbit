@@ -1,0 +1,10 @@
+#!/bin/sh
+# Where Orbit's programs keep each user's data on the machine's own disk
+# when the home is on the network (Orbit-Pathfinder's cookies and logins):
+# shared like /var/tmp (each user's folder inside is 0700), but nothing in
+# it is cleaned by age.
+set -e
+if [ "$1" = configure ]; then
+    install -d -m 1777 /var/lib/orbit-local
+fi
+#DEBHELPER#

@@ -81,7 +81,7 @@ impl Window {
         let base = |root: PathBuf| root.join("orbit").join("pathfinder");
         let env = Rc::new(Env {
             app: app.clone(),
-            data: base(glib::user_data_dir()),
+            data: data_dir(&base(glib::user_data_dir())),
             cache: base(cache_root()),
             user_agent: cfg.user_agent.clone(),
             external_browser: cfg.external_browser.clone(),
@@ -2079,6 +2079,22 @@ mod tests {
     }
 }
 
+/// A folder of ours, 0700, under `parent` (a shared one, 1777):
+/// `<parent>/<prefix><uid>`. `None` when it cannot be made, or someone
+/// else's folder already has the name.
+fn own_dir(parent: &str, prefix: &str) -> Option<PathBuf> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let uid = rustix::process::getuid().as_raw();
+    let dir = PathBuf::from(format!("{parent}/{prefix}{uid}"));
+    std::fs::create_dir_all(&dir).ok()?;
+    let meta = std::fs::metadata(&dir).ok()?;
+    if meta.uid() != uid {
+        return None;
+    }
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
+    Some(dir)
+}
+
 /// Where the web cache goes: `~/.cache`, unless the home is on the
 /// network (the hp's is NFS): then WebKit's thousands of small reads and
 /// writes — the disk cache, the compiled block lists — would each cross
@@ -2090,23 +2106,52 @@ fn cache_root() -> PathBuf {
     if !on_network(&home_cache) {
         return home_cache;
     }
-    let local = PathBuf::from(format!("/var/tmp/orbit-{}", rustix::process::getuid().as_raw()));
-    let made = std::fs::create_dir_all(&local).and_then(|()| {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o700))
-    });
-    // Someone else's folder by that name is not ours to use.
-    let ours = std::fs::metadata(&local).is_ok_and(|m| {
-        use std::os::unix::fs::MetadataExt;
-        m.uid() == rustix::process::getuid().as_raw()
-    });
-    match made {
-        Ok(()) if ours => {
+    match own_dir("/var/tmp", "orbit-") {
+        Some(local) => {
             log::info!("pathfinder: the home is on the network; the cache goes to {}", local.display());
             local
         }
-        _ => home_cache,
+        None => home_cache,
     }
+}
+
+/// Where the browser keeps its data — cookies, logins, site storage,
+/// trusted certificates, icons: `home` (`~/.local/share/orbit/pathfinder`),
+/// unless the home is on the network. Then each machine keeps its own, in
+/// `/var/lib/orbit-local/<uid>/pathfinder` (the package makes the shared
+/// folder; unlike /var/tmp, nothing there is cleaned by age), the home's
+/// copied there the first time. The home's copy stays as it was.
+fn data_dir(home: &std::path::Path) -> PathBuf {
+    if !on_network(home) {
+        return home.to_path_buf();
+    }
+    let Some(local) = own_dir("/var/lib/orbit-local", "").map(|d| d.join("pathfinder")) else {
+        log::warn!("pathfinder: /var/lib/orbit-local is missing; the data stays in the home, on the network");
+        return home.to_path_buf();
+    };
+    if !local.exists() {
+        if home.is_dir() {
+            log::info!("pathfinder: copying the data from {} to {}", home.display(), local.display());
+            let partial = local.with_extension("copying");
+            let _ = std::fs::remove_dir_all(&partial);
+            let copied = std::process::Command::new("cp")
+                .arg("-a")
+                .arg(home)
+                .arg(&partial)
+                .status()
+                .is_ok_and(|s| s.success())
+                && std::fs::rename(&partial, &local).is_ok();
+            if !copied {
+                log::error!("pathfinder: copying the data failed; it stays in the home this time");
+                let _ = std::fs::remove_dir_all(&partial);
+                return home.to_path_buf();
+            }
+        } else if std::fs::create_dir_all(&local).is_err() {
+            return home.to_path_buf();
+        }
+    }
+    log::info!("pathfinder: the home is on the network; the data is in {}", local.display());
+    local
 }
 
 /// Whether `path` (or the nearest folder above it that exists) is on a

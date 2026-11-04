@@ -14,6 +14,7 @@ section = "web"
 priority = "optional"
 extended-description = "Orbit-Pathfinder: a private web browser with a sidebar of services, on WebKitGTK. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
+maintainer-scripts = "debian/"
 assets = [
     ["target/release/orbit-pathfinder", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Pathfinder.desktop", "usr/share/applications/", "644"],
