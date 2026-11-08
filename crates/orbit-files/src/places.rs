@@ -4,14 +4,21 @@
 //! server" for SMB, SFTP, FTP or WebDAV shares, which GVfs mounts (asking
 //! for a password when one is needed).
 
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+    rc::Rc,
+};
 
-use gtk::{gio, glib, prelude::*};
+use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::tr;
 
 use crate::entry::{self, Location};
 
 type Go = Rc<dyn Fn(Location)>;
+/// Files dropped on a place: what, where (None: the trash), and whether
+/// copied (or else moved).
+type Dropped = Rc<RefCell<Option<Box<dyn Fn((Vec<PathBuf>, Option<PathBuf>, bool))>>>>;
 
 pub struct Places {
     pub widget: gtk::ScrolledWindow,
@@ -21,6 +28,7 @@ pub struct Places {
     /// Every mount under "Devices", not just volumes; the eye on the
     /// heading turns it over.
     all_mounts: Cell<bool>,
+    on_dropped: Dropped,
 }
 
 impl Places {
@@ -40,6 +48,7 @@ impl Places {
             monitor: gio::VolumeMonitor::get(),
             go: Rc::new(go),
             all_mounts: Cell::new(all_mounts),
+            on_dropped: Rc::default(),
         });
         places.fill();
         // Disks come and go.
@@ -59,6 +68,68 @@ impl Places {
             });
         }
         places
+    }
+
+    /// Called with files dropped on a place.
+    pub fn connect_dropped(&self, f: impl Fn((Vec<PathBuf>, Option<PathBuf>, bool)) + 'static) {
+        *self.on_dropped.borrow_mut() = Some(Box::new(f));
+    }
+
+    /// Files dropped on `row` go into `to` (a local folder) — or, for the
+    /// trash, to the trash.
+    fn take_drops(&self, row: &gtk::ListBoxRow, to: &Location) {
+        let trash = matches!(to, Location::Uri(u) if u == "trash:///");
+        let Some(dir) = to.path().map(PathBuf::from).or(trash.then(PathBuf::new)) else {
+            return;
+        };
+        let target = gtk::DropTarget::new(
+            gdk::FileList::static_type(),
+            gdk::DragAction::COPY | gdk::DragAction::MOVE,
+        );
+        target.set_preload(true);
+        let d = dir.clone();
+        target.connect_motion(move |t, _, _| {
+            let paths = t
+                .value()
+                .and_then(|v| v.get::<gdk::FileList>().ok())
+                .map(|l| crate::pane::paths_of(&l));
+            match paths {
+                _ if trash => gdk::DragAction::MOVE,
+                None => gdk::DragAction::COPY,
+                Some(p) => match crate::pane::drop_kind(&p, &d, t.current_event_state()) {
+                    Some(true) => gdk::DragAction::COPY,
+                    Some(false) => gdk::DragAction::MOVE,
+                    None => gdk::DragAction::empty(),
+                },
+            }
+        });
+        let dropped = self.on_dropped.clone();
+        target.connect_drop(move |t, value, _, _| {
+            let Ok(list) = value.get::<gdk::FileList>() else {
+                return false;
+            };
+            let paths = crate::pane::paths_of(&list);
+            let (to, copy) = if trash {
+                if paths.is_empty() {
+                    return false;
+                }
+                (None, false)
+            } else {
+                let Some(copy) = crate::pane::drop_kind(&paths, &dir, t.current_event_state()) else {
+                    return false;
+                };
+                (Some(dir.clone()), copy)
+            };
+            let paths: Vec<PathBuf> = paths
+                .into_iter()
+                .filter(|s| to.as_deref().is_none_or(|to| s.parent() != Some(to)))
+                .collect();
+            if let Some(f) = dropped.borrow().as_ref() {
+                f((paths, to, copy));
+            }
+            true
+        });
+        row.add_controller(target);
     }
 
     fn fill(self: &Rc<Self>) {
@@ -161,6 +232,7 @@ impl Places {
                     content.append(&eject);
                 }
             }
+            self.take_drops(&row, &Location::of(&root));
             let go = self.go.clone();
             self.on_click(&row, move || go(Location::of(&root)));
         }
@@ -258,6 +330,7 @@ impl Places {
 
     fn place(&self, icon: &str, name: &str, to: Location) {
         let row = self.row_with_icon(&gio::ThemedIcon::new(&format!("{icon}-symbolic")).upcast(), name);
+        self.take_drops(&row, &to);
         let go = self.go.clone();
         self.on_click(&row, move || go(to.clone()));
     }

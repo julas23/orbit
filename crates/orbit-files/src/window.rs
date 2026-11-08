@@ -227,6 +227,17 @@ impl Window {
                 w.pane().go(to);
             }
         });
+        let weak = Rc::downgrade(&w);
+        places.connect_dropped(move |(paths, to, copy)| {
+            if let Some(w) = weak.upgrade() {
+                match to {
+                    Some(to) => w
+                        .jobs
+                        .start(if copy { Kind::Copy } else { Kind::Move }, paths, Some(to)),
+                    None => w.jobs.start(Kind::Trash, paths, None),
+                }
+            }
+        });
         places.widget.set_vexpand(true);
         w.places_widget.append(&places.widget);
         w.places_widget.append(&side);
@@ -538,8 +549,14 @@ impl Window {
             }
         });
         pane.widget.add_controller(click);
-        self.connect_drop(&pane);
-        self.connect_drag(&pane);
+        // Files dropped on the pane (see `Pane::connect_dnd`).
+        let weak = Rc::downgrade(self);
+        pane.connect_dropped(move |(paths, to, copy)| {
+            if let Some(w) = weak.upgrade() {
+                w.jobs
+                    .start(if copy { Kind::Copy } else { Kind::Move }, paths, Some(to));
+            }
+        });
         pane
     }
 
@@ -1395,53 +1412,6 @@ impl Window {
         orbit_app::popup::open(&popover, widget, Some((x, y)));
     }
 
-    // ------------------------------------------------- drag and drop
-
-    fn connect_drag(self: &Rc<Self>, pane: &Rc<Pane>) {
-        let source = gtk::DragSource::builder()
-            .actions(gdk::DragAction::COPY | gdk::DragAction::MOVE)
-            .build();
-        let p = Rc::downgrade(pane);
-        source.connect_prepare(move |_, _, _| {
-            let p = p.upgrade()?;
-            let files: Vec<gio::File> = p.selected().iter().map(|e| e.location.file()).collect();
-            (!files.is_empty()).then(|| gdk::ContentProvider::for_value(&gdk::FileList::from_array(&files).to_value()))
-        });
-        pane.widget.add_controller(source);
-    }
-
-    /// Dropped files: moved within a disk, copied across; Ctrl copies,
-    /// Shift moves.
-    fn connect_drop(self: &Rc<Self>, pane: &Rc<Pane>) {
-        let target = gtk::DropTarget::new(
-            gdk::FileList::static_type(),
-            gdk::DragAction::COPY | gdk::DragAction::MOVE,
-        );
-        let weak = Rc::downgrade(self);
-        let p = Rc::downgrade(pane);
-        target.connect_drop(move |t, value, _, _| {
-            let (Some(w), Some(p), Ok(list)) = (weak.upgrade(), p.upgrade(), value.get::<gdk::FileList>()) else {
-                return false;
-            };
-            let Some(dir) = p.location.borrow().path().map(PathBuf::from) else {
-                return false;
-            };
-            let paths: Vec<PathBuf> = list.files().iter().filter_map(|f| f.path()).collect();
-            let state = t.current_event_state();
-            let same_disk = paths.first().is_some_and(|s| same_device(s, &dir));
-            let kind = if state.contains(gdk::ModifierType::CONTROL_MASK) {
-                Kind::Copy
-            } else if state.contains(gdk::ModifierType::SHIFT_MASK) || same_disk {
-                Kind::Move
-            } else {
-                Kind::Copy
-            };
-            w.jobs.start(kind, paths, Some(dir));
-            true
-        });
-        pane.widget.add_controller(target);
-    }
-
     // ------------------------------------------------------------ keys
 
     fn connect_keys(self: &Rc<Self>) {
@@ -1642,14 +1612,6 @@ fn templates() -> Vec<PathBuf> {
         )
     });
     found
-}
-
-fn same_device(a: &std::path::Path, b: &std::path::Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    match (std::fs::metadata(a), std::fs::metadata(b)) {
-        (Ok(x), Ok(y)) => x.dev() == y.dev(),
-        _ => false,
-    }
 }
 
 /// A menu entry that opens `items` in a popover beside it.

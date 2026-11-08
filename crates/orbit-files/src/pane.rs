@@ -16,12 +16,13 @@
 
 use std::{
     cell::{Cell, RefCell},
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
 
-use gtk::{gio, glib, prelude::*};
+use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::{number, text, tr, tr_args};
 
 use crate::{
@@ -164,6 +165,9 @@ pub struct Pane {
     on_menu: Callback<(gtk::Widget, f64, f64)>,
     on_columns_menu: Callback<(gtk::Widget, f64, f64)>,
     on_zoom: Callback<i32>,
+    on_dropped: Callback<(Vec<PathBuf>, PathBuf, bool)>,
+    /// The folder a drag hovers, lit.
+    drop_row: RefCell<Option<gtk::Widget>>,
 }
 
 impl Pane {
@@ -312,6 +316,8 @@ impl Pane {
             on_menu: RefCell::default(),
             on_columns_menu: RefCell::default(),
             on_zoom: RefCell::default(),
+            on_dropped: RefCell::default(),
+            drop_row: RefCell::default(),
         });
         pane.connect();
         pane.apply_filter();
@@ -355,6 +361,12 @@ impl Pane {
     /// Called with +1 or −1: Ctrl with the wheel.
     pub fn connect_zoom(&self, f: impl Fn(i32) + 'static) {
         *self.on_zoom.borrow_mut() = Some(Box::new(f));
+    }
+
+    /// Called with files dropped here: what, the folder they go to, and
+    /// whether they are copied (or else moved).
+    pub fn connect_dropped(&self, f: impl Fn((Vec<PathBuf>, PathBuf, bool)) + 'static) {
+        *self.on_dropped.borrow_mut() = Some(Box::new(f));
     }
 
     fn connect(self: &Rc<Self>) {
@@ -452,6 +464,7 @@ impl Pane {
                 glib::Propagation::Stop
             });
             activate.add_controller(scroll);
+            self.connect_dnd(&activate);
         }
         let weak = Rc::downgrade(self);
         self.computer.connect_go(move |to| {
@@ -878,6 +891,141 @@ impl Pane {
         if let Some(e) = self.focused() {
             self.activate(&e);
         }
+    }
+
+    // ------------------------------------------------- drag and drop
+
+    /// Dragging and dropping in a view. A drag starts on an entry — the
+    /// selection with it when it is selected, else it alone — and leaves
+    /// the empty space to the rubberband; taken before the view's own
+    /// handling, which would rubberband from an entry too. A drop goes
+    /// into the folder under the pointer, or else into the one shown:
+    /// moved, or copied with Ctrl.
+    fn connect_dnd(self: &Rc<Self>, view: &gtk::Widget) {
+        let source = gtk::DragSource::builder()
+            .actions(gdk::DragAction::COPY | gdk::DragAction::MOVE)
+            .propagation_phase(gtk::PropagationPhase::Capture)
+            .build();
+        let weak = Rc::downgrade(self);
+        let widget = view.clone();
+        source.connect_prepare(move |source, x, y| {
+            let p = weak.upgrade()?;
+            let position = position_under(&widget, x, y)?;
+            if !p.selection.is_selected(position) {
+                p.selection.select_item(position, true);
+            }
+            let files: Vec<gio::File> = p.selected().iter().map(|e| e.location.file()).collect();
+            if files.is_empty() {
+                return None;
+            }
+            if let Some(row) = row_under(&widget, x, y) {
+                let at = widget
+                    .compute_point(&row, &gtk::graphene::Point::new(x as f32, y as f32))
+                    .unwrap_or_else(|| gtk::graphene::Point::new(0.0, 0.0));
+                source.set_icon(
+                    Some(&gtk::WidgetPaintable::new(Some(&row))),
+                    at.x() as i32,
+                    at.y() as i32,
+                );
+            }
+            Some(gdk::ContentProvider::for_value(
+                &gdk::FileList::from_array(&files).to_value(),
+            ))
+        });
+        view.add_controller(source);
+
+        let target = gtk::DropTarget::new(
+            gdk::FileList::static_type(),
+            gdk::DragAction::COPY | gdk::DragAction::MOVE,
+        );
+        // The files are known while hovering, to say copy or move.
+        target.set_preload(true);
+        let weak = Rc::downgrade(self);
+        let widget = view.clone();
+        target.connect_motion(move |t, x, y| {
+            let Some(p) = weak.upgrade() else {
+                return gdk::DragAction::empty();
+            };
+            let (to, row) = p.drop_place(&widget, x, y);
+            let Some(to) = to else {
+                p.light_drop(None);
+                return gdk::DragAction::empty();
+            };
+            let Some(paths) = t
+                .value()
+                .and_then(|v| v.get::<gdk::FileList>().ok())
+                .map(|l| paths_of(&l))
+            else {
+                // Not read yet.
+                p.light_drop(row);
+                return gdk::DragAction::COPY;
+            };
+            match drop_kind(&paths, &to, t.current_event_state()) {
+                Some(copy) => {
+                    p.light_drop(row);
+                    if copy {
+                        gdk::DragAction::COPY
+                    } else {
+                        gdk::DragAction::MOVE
+                    }
+                }
+                None => {
+                    p.light_drop(None);
+                    gdk::DragAction::empty()
+                }
+            }
+        });
+        let weak = Rc::downgrade(self);
+        target.connect_leave(move |_| {
+            if let Some(p) = weak.upgrade() {
+                p.light_drop(None);
+            }
+        });
+        let weak = Rc::downgrade(self);
+        let widget = view.clone();
+        target.connect_drop(move |t, value, x, y| {
+            let Some(p) = weak.upgrade() else { return false };
+            p.light_drop(None);
+            let (Ok(list), (Some(to), _)) = (value.get::<gdk::FileList>(), p.drop_place(&widget, x, y)) else {
+                return false;
+            };
+            let paths = paths_of(&list);
+            let Some(copy) = drop_kind(&paths, &to, t.current_event_state()) else {
+                return false;
+            };
+            let paths: Vec<PathBuf> = paths.into_iter().filter(|s| s.parent() != Some(to.as_path())).collect();
+            if let Some(f) = p.on_dropped.borrow().as_ref() {
+                f((paths, to, copy));
+            }
+            true
+        });
+        view.add_controller(target);
+    }
+
+    /// Where a drop at (x, y) goes: the folder under it (with its row),
+    /// or the one shown.
+    fn drop_place(&self, view: &gtk::Widget, x: f64, y: f64) -> (Option<PathBuf>, Option<gtk::Widget>) {
+        if let Some(e) = position_under(view, x, y).and_then(|n| self.entry_at(n))
+            && e.dir
+            && let Some(path) = e.location.path()
+        {
+            return (Some(path.to_path_buf()), row_under(view, x, y));
+        }
+        (self.location.borrow().path().map(Path::to_path_buf), None)
+    }
+
+    fn light_drop(&self, row: Option<gtk::Widget>) {
+        let mut lit = self.drop_row.borrow_mut();
+        if *lit == row {
+            return;
+        }
+        if let Some(old) = lit.take() {
+            old.remove_css_class("drop-into");
+        }
+        if let Some(new) = &row {
+            new.add_css_class("drop-into");
+        }
+        *lit = row;
     }
 
     // ---------------------------------------------------------- selection
@@ -1483,6 +1631,42 @@ fn position_under(view: &gtk::Widget, x: f64, y: f64) -> Option<u32> {
         node = w.parent();
     }
     None
+}
+
+/// The row (or icon) of the entry at (`x`, `y`): what holds all of it,
+/// all the columns of a list's row.
+fn row_under(view: &gtk::Widget, x: f64, y: f64) -> Option<gtk::Widget> {
+    let mut node = view.pick(x, y, gtk::PickFlags::DEFAULT);
+    let mut cell = None;
+    while let Some(w) = node {
+        if &w == view {
+            break;
+        }
+        if cell.is_none() {
+            if position_of_cell(&w).is_some() {
+                cell = Some(w.clone());
+            }
+        } else if w.css_name() == "row" || w.css_name() == "child" {
+            return Some(w);
+        }
+        node = w.parent();
+    }
+    cell
+}
+
+pub fn paths_of(list: &gdk::FileList) -> Vec<PathBuf> {
+    list.files().iter().filter_map(|f| f.path()).collect()
+}
+
+/// Whether files dropped in `to` are copied (true) or moved, or None:
+/// into themselves, or where they are already. Moved, as a rule — also
+/// across disks (here the home's folders are mounts of their own); Ctrl
+/// copies.
+pub fn drop_kind(paths: &[PathBuf], to: &Path, state: gdk::ModifierType) -> Option<bool> {
+    if paths.is_empty() || paths.iter().any(|s| to.starts_with(s)) || paths.iter().all(|s| s.parent() == Some(to)) {
+        return None;
+    }
+    Some(state.contains(gdk::ModifierType::CONTROL_MASK))
 }
 
 /// Whether `location` is reached through GVfs's admin:// — as root.
