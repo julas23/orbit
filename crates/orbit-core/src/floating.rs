@@ -371,6 +371,7 @@ impl Orbit {
         };
         if first_frame {
             self.float_if_dialog(window);
+            self.apply_rules(window, true);
         }
         let unplaced = {
             let info = info(window).borrow();

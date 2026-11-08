@@ -34,6 +34,8 @@ pub struct Idle {
     /// Some program holds an `org.freedesktop.ScreenSaver` inhibitor.
     pub bus_inhibited: bool,
     timer: Option<RegistrationToken>,
+    /// Looks every few seconds whether the monitors should go off.
+    power_timer: Option<RegistrationToken>,
 }
 
 impl Default for Idle {
@@ -43,6 +45,7 @@ impl Default for Idle {
             inhibitors: Vec::new(),
             bus_inhibited: false,
             timer: None,
+            power_timer: None,
         }
     }
 }
@@ -51,6 +54,51 @@ impl Orbit {
     /// Any input: the idle time starts again.
     pub fn touched(&mut self) {
         self.idle.last_input = Instant::now();
+        // ext-idle-notify's clients (swayidle) hear the user is back.
+        self.extra.idle_notifier.notify_activity(&self.seat);
+        // Monitors switched off for idleness come back on.
+        if crate::udev::any_off(self) {
+            crate::udev::set_power(self, None, true);
+        }
+    }
+
+    /// Whether something asks for the screen to stay on: a video playing
+    /// (idle-inhibit, the session bus) or a fullscreen window.
+    fn kept_awake(&mut self) -> bool {
+        self.idle.inhibitors.retain(|s| s.is_alive());
+        let fullscreen = self.space.outputs().any(|o| self.fullscreen_on(o).is_some());
+        self.idle.bus_inhibited || !self.idle.inhibitors.is_empty() || fullscreen
+    }
+
+    /// Seconds with no input before the monitors switch off (`idle_off`);
+    /// locked, a minute at most.
+    fn power_timeout(&self) -> Option<Duration> {
+        let seconds = self.config.idle_off.get(&crate::config::hostname());
+        let seconds = if self.locked() {
+            if seconds == 0 { 60 } else { seconds.min(60) }
+        } else {
+            seconds
+        };
+        (seconds > 0).then(|| Duration::from_secs(seconds))
+    }
+
+    fn power_check(&mut self) -> TimeoutAction {
+        let every = Duration::from_secs(5);
+        if crate::udev::any_off(self) {
+            return TimeoutAction::ToDuration(every);
+        }
+        let Some(timeout) = self.power_timeout() else {
+            return TimeoutAction::ToDuration(every);
+        };
+        // Locked, the screen goes dark however the programs ask.
+        if !self.locked() && self.kept_awake() {
+            return TimeoutAction::ToDuration(every);
+        }
+        if self.idle.last_input.elapsed() >= timeout {
+            tracing::info!("idle for {} s: monitors off", self.idle.last_input.elapsed().as_secs());
+            crate::udev::set_power(self, None, false);
+        }
+        TimeoutAction::ToDuration(every)
     }
 
     /// The timeout this machine has, if any.
@@ -67,6 +115,16 @@ impl Orbit {
         }
         if !matches!(self.backend, Backend::Drm(_)) {
             return;
+        }
+        if self.idle.power_timer.is_none() {
+            match self
+                .loop_handle
+                .insert_source(Timer::from_duration(Duration::from_secs(5)), |_, _, state| {
+                    state.power_check()
+                }) {
+                Ok(token) => self.idle.power_timer = Some(token),
+                Err(err) => tracing::error!("power timer: {err}"),
+            }
         }
         let Some(timeout) = self.idle_timeout() else {
             tracing::info!("idle: never locks");
@@ -109,12 +167,14 @@ impl IdleInhibitHandler for Orbit {
     fn inhibit(&mut self, surface: WlSurface) {
         tracing::info!("idle inhibited by {:?}", surface.id());
         self.idle.inhibitors.push(surface);
+        self.extra.idle_notifier.set_is_inhibited(true);
     }
 
     fn uninhibit(&mut self, surface: WlSurface) {
         self.idle.inhibitors.retain(|s| s != &surface && s.is_alive());
         if self.idle.inhibitors.is_empty() {
             tracing::info!("idle no longer inhibited");
+            self.extra.idle_notifier.set_is_inhibited(false);
             self.touched();
         }
     }

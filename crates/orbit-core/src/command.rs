@@ -227,6 +227,38 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
                 Err(format!("output {name}: {what} {value} not applied"))
             }
         }
+        // sway's `output NAME power on|off` (`dpms` too): swayidle's
+        // "monitors off"; `*` is every monitor. Any input switches them on.
+        ["output", name, "power" | "dpms", value @ ("on" | "off" | "toggle")] => {
+            let output = if *name == "*" {
+                None
+            } else {
+                Some(
+                    state
+                        .output_named(name)
+                        .ok_or_else(|| format!("There is no output called {name}"))?,
+                )
+            };
+            let on = match *value {
+                "on" => true,
+                "off" => false,
+                _ => crate::udev::any_off(state),
+            };
+            crate::udev::set_power(state, output.as_ref(), on);
+            Ok(())
+        }
+        // sway's `output NAME adaptive_sync on|off`: variable refresh.
+        [
+            "output",
+            name,
+            "adaptive_sync",
+            value @ ("on" | "off" | "enable" | "disable"),
+        ] => {
+            let output = state
+                .output_named(name)
+                .ok_or_else(|| format!("There is no output called {name}"))?;
+            crate::udev::set_vrr(state, &output, matches!(*value, "on" | "enable"))
+        }
         // Orbit's own: a virtual monitor (orbit-remote-server's client).
         ["output", name, "create", mode] => {
             let Some((w, h, rate)) = crate::config::parse_mode(mode) else {

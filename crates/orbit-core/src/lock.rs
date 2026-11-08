@@ -62,7 +62,7 @@ impl Orbit {
     /// Whether frames must keep coming (the eyes moving, the window cards
     /// moving).
     pub fn animating(&self) -> bool {
-        matches!(self.lock, Lock::Closing(_) | Lock::Opening(_)) || self.switch_moving()
+        matches!(self.lock, Lock::Closing(_) | Lock::Opening(_)) || self.switch_moving() || self.fading_in()
     }
 
     /// The eyes finish moving once their time is up; called at each frame.

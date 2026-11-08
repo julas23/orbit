@@ -158,6 +158,7 @@ impl XwmHandler for Orbit {
         if fullscreen {
             self.set_fullscreen(&window, true);
         }
+        self.apply_rules(&window, true);
     }
 
     /// A menu or tooltip: where it asks, above everything. Its place is

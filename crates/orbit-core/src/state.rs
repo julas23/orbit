@@ -165,6 +165,17 @@ pub struct Orbit {
     /// walking them (`switcher`).
     pub mru: Vec<Window>,
     pub switcher: Option<crate::switcher::Switcher>,
+    /// The protocols of `protocols`: activation, idle, input methods…
+    pub extra: crate::protocols::Extra,
+    /// wlr-foreign-toplevel-management's clients (`toplevels`).
+    pub toplevels: crate::toplevels::Toplevels,
+    /// wlr-gamma-control's clients (`gamma`).
+    pub gamma: crate::gamma::Gamma,
+    /// Rung when a client leaves (`session_lock`); also for the clients
+    /// of a sandbox's socket.
+    left_ping: smithay::reexports::calloop::ping::Ping,
+    /// The input devices (libinput), set up as the config says (`devices`).
+    pub devices: Vec<smithay::reexports::input::Device>,
 }
 
 impl Orbit {
@@ -186,7 +197,8 @@ impl Orbit {
         let data_device_state = DataDeviceState::new::<Self>(&dh);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&dh);
         // orbit-clip reads and sets the clipboard through it.
-        let data_control_state = DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
+        let data_control_state =
+            DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |c| !crate::protocols::sandboxed(c));
         let viewporter_state = ViewporterState::new::<Self>(&dh);
         // Monitors at 1.25, 1.5…: clients draw at the scale, not blurred up.
         let fractional_scale_state = smithay::wayland::fractional_scale::FractionalScaleManagerState::new::<Self>(&dh);
@@ -214,8 +226,12 @@ impl Orbit {
                 .expect("the default keymap");
         }
         seat.add_pointer();
+        seat.add_touch();
 
-        let socket_name = Self::listen(display, event_loop);
+        let extra = crate::protocols::Extra::new(&dh, event_loop.handle());
+        let toplevels = crate::toplevels::Toplevels::new(&dh);
+        let gamma = crate::gamma::Gamma::new(&dh);
+        let (socket_name, left_ping) = Self::listen(display, event_loop);
         let cursor = crate::cursor::Cursor::load(&config.cursor_theme, config.cursor_size);
         let keys = crate::keys::Keys::load(&config_path, &config);
 
@@ -285,11 +301,24 @@ impl Orbit {
             wallpapers: Default::default(),
             mru: Vec::new(),
             switcher: None,
+            extra,
+            toplevels,
+            gamma,
+            left_ping,
+            devices: Vec::new(),
         }
     }
 
+    /// What a client of a sandbox's socket rings when it leaves.
+    pub fn client_left_ping(&self) -> Option<smithay::reexports::calloop::ping::Ping> {
+        Some(self.left_ping.clone())
+    }
+
     /// The Wayland socket clients connect to, and the display's own events.
-    fn listen(display: Display<Self>, event_loop: &mut EventLoop<'static, Self>) -> OsString {
+    fn listen(
+        display: Display<Self>,
+        event_loop: &mut EventLoop<'static, Self>,
+    ) -> (OsString, smithay::reexports::calloop::ping::Ping) {
         let socket = ListeningSocketSource::new_auto().expect("a Wayland socket");
         let name = socket.socket_name().to_os_string();
         let handle = event_loop.handle();
@@ -298,10 +327,11 @@ impl Orbit {
         handle
             .insert_source(source, |(), &mut (), state| state.client_left())
             .expect("the ping in the event loop");
+        let left_socket = left.clone();
         handle
             .insert_source(socket, move |stream, _, state| {
                 let data = ClientState {
-                    left: Some(left.clone()),
+                    left: Some(left_socket.clone()),
                     ..Default::default()
                 };
                 if let Err(err) = state.display_handle.insert_client(stream, Arc::new(data)) {
@@ -321,7 +351,7 @@ impl Orbit {
                 },
             )
             .expect("the display in the event loop");
-        name
+        (name, left)
     }
 
     /// Reads the config again (`reload`): keyboard, gaps, borders,
@@ -344,6 +374,7 @@ impl Orbit {
         self.arrange();
         self.output_event();
         self.arm_idle();
+        self.configure_devices();
     }
 
     /// Notes the keyboard's layouts and which is active.
@@ -385,6 +416,9 @@ impl Orbit {
     /// the workspace it shows (a dialog, on its parent's), with the
     /// keyboard.
     pub fn add_window(&mut self, window: Window) {
+        window
+            .user_data()
+            .insert_if_missing(|| crate::render::Opened(Instant::now()));
         info(&window).borrow_mut().id = self.next_window_id;
         self.next_window_id += 1;
         let num = self
@@ -614,6 +648,12 @@ impl Orbit {
         // Locked, it is noted for the unlock and nothing more.
         if self.locked() {
             return;
+        }
+        // The taskbars of wlr-foreign-toplevel-management: which is active.
+        if before != window {
+            for w in [before.clone(), window.clone()].into_iter().flatten() {
+                self.toplevel_updated(&w);
+            }
         }
         for w in &self.all_windows().cloned().collect::<Vec<_>>() {
             let active = window.as_ref() == Some(w);
@@ -855,6 +895,8 @@ pub struct ClientState {
     pub greet: Option<smithay::reexports::calloop::ping::Ping>,
     /// Set on the socket's clients: rung when one closes (`session_lock`).
     pub left: Option<smithay::reexports::calloop::ping::Ping>,
+    /// Set on the clients of a sandbox's socket (`protocols`).
+    pub security_context: Option<smithay::wayland::security_context::SecurityContext>,
 }
 
 impl ClientData for ClientState {

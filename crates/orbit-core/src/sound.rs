@@ -54,7 +54,12 @@ impl Levels {
                 *e = bands[i * per..(i + 1) * per].iter().sum::<f32>() / per as f32;
             }
         }
-        Self { bass, treble, bands, echoes }
+        Self {
+            bass,
+            treble,
+            bands,
+            echoes,
+        }
     }
 }
 
@@ -163,7 +168,13 @@ fn analyse(mut out: impl Read, levels: &Mutex<Levels>) {
 
 /// The bands as two: the lowest quarter, and the highest third.
 fn split(bands: &[f32]) -> [f32; 2] {
-    let mean = |b: &[f32]| if b.is_empty() { 0.0 } else { b.iter().sum::<f32>() / b.len() as f32 };
+    let mean = |b: &[f32]| {
+        if b.is_empty() {
+            0.0
+        } else {
+            b.iter().sum::<f32>() / b.len() as f32
+        }
+    };
     let low = bands.len().div_ceil(4);
     let high = bands.len() - bands.len() / 3;
     [mean(&bands[..low]), mean(&bands[high..])]

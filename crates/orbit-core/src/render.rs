@@ -63,6 +63,32 @@ render_elements! {
     Memory=smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<GlesRenderer>,
 }
 
+/// A window's shadow, kept with it as the border is.
+#[derive(Default)]
+struct Shadow(Option<(PixelShaderElement, ShadowLook)>);
+type ShadowLook = ([f32; 4], i32, i32, (i32, i32));
+
+fn shadow_of(window: &Window) -> &RefCell<Shadow> {
+    window.user_data().insert_if_missing(|| RefCell::new(Shadow::default()));
+    window.user_data().get::<RefCell<Shadow>>().expect("just inserted")
+}
+
+/// When a window first showed: it fades in (`animations`).
+pub struct Opened(pub std::time::Instant);
+
+/// How long a window takes to fade in.
+pub const FADE_IN: std::time::Duration = std::time::Duration::from_millis(160);
+
+/// How far a window has faded in, from 0 to 1.
+fn opacity(state: &Orbit, window: &Window) -> f32 {
+    if !state.config.animations || !state.effects() {
+        return 1.0;
+    }
+    window.user_data().get::<Opened>().map_or(1.0, |o| {
+        (o.0.elapsed().as_secs_f32() / FADE_IN.as_secs_f32()).clamp(0.0, 1.0)
+    })
+}
+
 /// A window's border, kept with the window so the damage tracker sees the
 /// same element frame after frame; and the colour it was last given.
 #[derive(Default)]
@@ -391,6 +417,8 @@ fn window_elements(
         );
     }
 
+    let fade = opacity(state, window);
+
     // Fullscreen: square corners, no border.
     let fullscreen = crate::fullscreen::is_fullscreen(window);
     let radius = if fullscreen {
@@ -405,7 +433,7 @@ fn window_elements(
         surface,
         at,
         scale,
-        1.0,
+        fade,
         Kind::Unspecified,
     ) {
         match shaders {
@@ -424,9 +452,13 @@ fn window_elements(
     }
 
     let width = state.config.border;
-    let Some(shaders) = shaders.filter(|_| width > 0 && !fullscreen) else {
+    let Some(shaders) = shaders.filter(|_| !fullscreen) else {
         return;
     };
+    shadow_element(state, window, rect, radius, width.max(0), shaders, elements);
+    if width <= 0 {
+        return;
+    }
     let colour = if state.focused_window().as_ref() == Some(window) {
         color(&state.config.focused_color)
     } else {
@@ -460,5 +492,74 @@ fn window_elements(
     }
     if let Some((element, ..)) = &border.0 {
         elements.push(OutputElement::Border(element.clone()));
+    }
+}
+
+/// The shadow under `window` (at `rect` on the output), if the config
+/// gives it one: floating windows, or all (`shadows:`). It goes last of
+/// the window's elements, so under them.
+fn shadow_element(
+    state: &Orbit,
+    window: &Window,
+    rect: Rectangle<i32, Logical>,
+    radius: i32,
+    border: i32,
+    shaders: &Shaders,
+    elements: &mut Vec<OutputElement>,
+) {
+    let wanted = match state.config.shadows.as_str() {
+        "all" => true,
+        "floating" => crate::floating::floats(window),
+        _ => false,
+    };
+    let Some(program) = shaders.shadow.as_ref().filter(|_| wanted && state.effects()) else {
+        return;
+    };
+    let spread = state.config.shadow_size.max(1);
+    let offset = spread / 4;
+    let colour = color(&state.config.shadow_color);
+    let size = (rect.size.w + 2 * border, rect.size.h + 2 * border);
+    let area = Rectangle::new(
+        rect.loc - Point::from((border + spread, border + spread)),
+        (size.0 + 2 * spread, size.1 + 2 * spread + offset).into(),
+    );
+    let look = (colour, radius + border, spread, size);
+    let uniforms = || {
+        crate::rounded::shadow_uniforms(
+            colour,
+            (radius + border) as f32,
+            spread as f32,
+            offset as f32,
+            (size.0 as f32, size.1 as f32),
+        )
+    };
+    let shadow = shadow_of(window);
+    let mut shadow = shadow.borrow_mut();
+    match &mut shadow.0 {
+        Some((element, last)) => {
+            element.resize(area, None);
+            if *last != look {
+                element.update_uniforms(uniforms());
+                *last = look;
+            }
+        }
+        None => {
+            let element = PixelShaderElement::new(program.clone(), area, None, 1.0, uniforms(), Kind::Unspecified);
+            shadow.0 = Some((element, look));
+        }
+    }
+    if let Some((element, _)) = &shadow.0 {
+        // A pixel shader as the border is.
+        elements.push(OutputElement::Border(element.clone()));
+    }
+}
+
+impl Orbit {
+    /// Whether a window is still fading in: frames keep coming.
+    pub fn fading_in(&self) -> bool {
+        self.config.animations
+            && self
+                .all_windows()
+                .any(|w| w.user_data().get::<Opened>().is_some_and(|o| o.0.elapsed() < FADE_IN))
     }
 }

@@ -184,8 +184,53 @@ impl TabletSeatHandler for Orbit {
     type ToolFocus = WlSurface;
 }
 
-// Pointer locks (games) come later; the seat needs the handler.
-impl PointerConstraintsHandler for Orbit {}
+/// Pointer locks and confinements (games, Blender, remote desktops): one
+/// starts when the pointer is over its surface (`input`); a lock let go
+/// leaves the pointer where the program hinted.
+impl PointerConstraintsHandler for Orbit {
+    fn new_constraint(&mut self, surface: &WlSurface, pointer: &smithay::input::pointer::PointerHandle<Self>) {
+        if pointer.current_focus().as_ref() == Some(surface) {
+            let at = self
+                .surface_under(pointer.current_location())
+                .map(|(_, loc)| pointer.current_location() - loc)
+                .unwrap_or_default();
+            self.activate_constraint(surface, at, pointer);
+        }
+    }
+
+    fn remove_constraint(
+        &mut self,
+        _surface: &WlSurface,
+        pointer: &smithay::input::pointer::PointerHandle<Self>,
+        removed: smithay::wayland::pointer_constraints::ConstraintRemove,
+    ) {
+        use smithay::wayland::pointer_constraints::{ConstraintRemove, PointerConstraint};
+        let Some((hint_surface, hint)) = self.extra.cursor_position_hint.take() else {
+            return;
+        };
+        if let ConstraintRemove::Destroyed(PointerConstraint::Locked(_)) = removed
+            && let Some(window) = self.window_for(&hint_surface)
+            && let Some(origin) = self.space.element_location(&window)
+        {
+            let geometry = window.geometry().loc;
+            pointer.set_location((origin - geometry).to_f64() + hint);
+        }
+    }
+
+    fn cursor_position_hint(
+        &mut self,
+        surface: &WlSurface,
+        pointer: &smithay::input::pointer::PointerHandle<Self>,
+        location: smithay::utils::Point<f64, smithay::utils::Logical>,
+    ) {
+        let active = smithay::wayland::pointer_constraints::with_pointer_constraint(surface, pointer, |c| {
+            c.is_some_and(|c| c.is_active())
+        });
+        if active {
+            self.extra.cursor_position_hint = Some((surface.clone(), location));
+        }
+    }
+}
 
 /// The core draws the borders: windows are asked not to draw their own
 /// title bars (GTK and Qt then go without; others ignore it).

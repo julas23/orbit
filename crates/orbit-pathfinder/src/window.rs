@@ -502,11 +502,25 @@ impl Window {
         this.install_actions(app);
 
         this.rebuild();
-        // Services always active load now, so their counts arrive.
-        for service in this.services.borrow().iter() {
-            if service.cfg.borrow().always_active {
-                this.attach(service);
-            }
+        // Services always active load too, so their counts arrive — one
+        // after the other, after the one shown: all at once, they fought
+        // the page being looked at for the processor and the network.
+        let waiting: Vec<Rc<Service>> = this
+            .services
+            .borrow()
+            .iter()
+            .filter(|s| s.cfg.borrow().always_active)
+            .cloned()
+            .collect();
+        for (n, service) in waiting.into_iter().enumerate() {
+            let weak = Rc::downgrade(&this);
+            glib::timeout_add_local_once(std::time::Duration::from_millis(1500 * (n as u64 + 1)), move || {
+                if let Some(w) = weak.upgrade()
+                    && !service.is_loaded()
+                {
+                    w.attach(&service);
+                }
+            });
         }
         this.watch_hibernation();
         // A dock started (or restarted) after us hears the count again —

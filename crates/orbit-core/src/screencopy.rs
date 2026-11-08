@@ -129,6 +129,11 @@ impl GlobalDispatch2<ZwlrScreencopyManagerV1, Orbit> for ScreencopyGlobal {
     ) {
         data_init.init(manager, ManagerData);
     }
+
+    /// Not for a sandbox: a screen copy reads every window.
+    fn can_view(&self, client: &Client) -> bool {
+        !crate::protocols::sandboxed(client)
+    }
 }
 
 impl Dispatch2<ZwlrScreencopyManagerV1, Orbit> for ManagerData {

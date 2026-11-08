@@ -379,6 +379,10 @@ impl GlobalDispatch2<ZwlrOutputManagerV1, Orbit> for ManagerGlobal {
         om.clients.insert(client.id(), data);
         manager.done(om.serial);
     }
+
+    fn can_view(&self, client: &Client) -> bool {
+        !crate::protocols::sandboxed(client)
+    }
 }
 
 impl Dispatch2<ZwlrOutputManagerV1, Orbit> for ManagerData {

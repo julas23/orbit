@@ -10,14 +10,25 @@
 //! not reach Ctrl+Alt+Backspace or Ctrl+Alt+F1…F12: a remote user should
 //! not end the session, or switch the server's console under its owner.
 //!
+//! A virtual machine or remote desktop that inhibits the shortcuts
+//! (`protocols`) gets them all but Ctrl+Alt+Backspace and the consoles.
+//! A pointer lock holds the pointer still (only relative motion goes
+//! out); a confinement keeps it over its surface. Touchpad gestures go to
+//! the window under the pointer, but three-finger swipes, which walk the
+//! areas of the grid. A touch screen
+//! touches the surfaces under the finger; a tablet's pen moves and clicks
+//! as a mouse.
+//!
 //! Ported from Smithay's smallvil `src/input.rs` @ 24647fc (MIT, Copyright
 //! (c) 2017 Victor Berger and Victoria Brekenfeld); shortcuts held back from
 //! clients as anvil `src/input_handler.rs` @ 24647fc does (same licence).
 
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent, KeyState,
-        KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent, GestureEndEvent,
+        GesturePinchUpdateEvent, GestureSwipeUpdateEvent, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
+        PointerAxisEvent, PointerButtonEvent, PointerMotionEvent, TabletToolEvent, TabletToolTipEvent,
+        TabletToolTipState, TouchEvent,
     },
     desktop::{WindowSurfaceType, layer_map_for_output},
     input::{
@@ -33,6 +44,16 @@ use smithay::{
 };
 
 use crate::{config::Modifier, state::Orbit};
+
+/// A swipe of three or more fingers, the core's: where it has gone.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Swipe {
+    pub dx: f64,
+    pub dy: f64,
+}
+
+/// How far a swipe goes, in the touchpad's units, to count.
+const SWIPE: f64 = 120.0;
 
 /// What a shortcut does.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,17 +91,19 @@ impl Orbit {
                 | InputEvent::PointerMotionAbsolute { .. }
                 | InputEvent::PointerButton { .. }
                 | InputEvent::PointerAxis { .. }
+                | InputEvent::GestureSwipeBegin { .. }
+                | InputEvent::GesturePinchBegin { .. }
+                | InputEvent::GestureHoldBegin { .. }
+                | InputEvent::TouchDown { .. }
+                | InputEvent::TabletToolProximity { .. }
+                | InputEvent::TabletToolTip { .. }
         ) {
             self.touched();
         }
         match event {
             InputEvent::Keyboard { event, .. } => self.key::<I>(event, KeyboardSource::MAIN, false),
             // A mouse or touchpad: it moves the pointer by so much.
-            InputEvent::PointerMotion { event, .. } => {
-                let Some(pointer) = self.seat.get_pointer() else { return };
-                let pos = self.clamp(pointer.current_location() + event.delta());
-                self.pointer_to(pos, Event::time(&event));
-            }
+            InputEvent::PointerMotion { event, .. } => self.relative_motion::<I>(event),
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let Some(output) = self.output() else { return };
                 let Some(geo) = self.space.output_geometry(&output) else {
@@ -147,7 +170,301 @@ impl Orbit {
                 pointer.frame(self);
             }
             InputEvent::PointerAxis { event, .. } => self.wheel::<I>(event),
+            _ if self.locked() => {}
+            InputEvent::GestureSwipeBegin { event, .. } => {
+                let pointer = self.seat.get_pointer();
+                if self.config.gestures && event.fingers() >= 3 {
+                    self.extra.swipe = Some(Swipe::default());
+                } else if let Some(p) = pointer {
+                    p.gesture_swipe_begin(
+                        self,
+                        &smithay::input::pointer::GestureSwipeBeginEvent {
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                            fingers: event.fingers(),
+                        },
+                    );
+                }
+            }
+            InputEvent::GestureSwipeUpdate { event, .. } => match &mut self.extra.swipe {
+                Some(swipe) => {
+                    swipe.dx += event.delta_x();
+                    swipe.dy += event.delta_y();
+                }
+                None => {
+                    if let Some(p) = self.seat.get_pointer() {
+                        p.gesture_swipe_update(
+                            self,
+                            &smithay::input::pointer::GestureSwipeUpdateEvent {
+                                time: Event::time(&event),
+                                delta: event.delta(),
+                            },
+                        );
+                    }
+                }
+            },
+            InputEvent::GestureSwipeEnd { event, .. } => match self.extra.swipe.take() {
+                Some(swipe) if !event.cancelled() => self.swiped(swipe),
+                Some(_) => {}
+                None => {
+                    if let Some(p) = self.seat.get_pointer() {
+                        p.gesture_swipe_end(
+                            self,
+                            &smithay::input::pointer::GestureSwipeEndEvent {
+                                serial: SERIAL_COUNTER.next_serial(),
+                                time: Event::time(&event),
+                                cancelled: event.cancelled(),
+                            },
+                        );
+                    }
+                }
+            },
+            InputEvent::GesturePinchBegin { event, .. } => {
+                if let Some(p) = self.seat.get_pointer() {
+                    p.gesture_pinch_begin(
+                        self,
+                        &smithay::input::pointer::GesturePinchBeginEvent {
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                            fingers: event.fingers(),
+                        },
+                    );
+                }
+            }
+            InputEvent::GesturePinchUpdate { event, .. } => {
+                if let Some(p) = self.seat.get_pointer() {
+                    p.gesture_pinch_update(
+                        self,
+                        &smithay::input::pointer::GesturePinchUpdateEvent {
+                            time: Event::time(&event),
+                            delta: event.delta(),
+                            scale: event.scale(),
+                            rotation: event.rotation(),
+                        },
+                    );
+                }
+            }
+            InputEvent::GesturePinchEnd { event, .. } => {
+                if let Some(p) = self.seat.get_pointer() {
+                    p.gesture_pinch_end(
+                        self,
+                        &smithay::input::pointer::GesturePinchEndEvent {
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                            cancelled: event.cancelled(),
+                        },
+                    );
+                }
+            }
+            InputEvent::GestureHoldBegin { event, .. } => {
+                if let Some(p) = self.seat.get_pointer() {
+                    p.gesture_hold_begin(
+                        self,
+                        &smithay::input::pointer::GestureHoldBeginEvent {
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                            fingers: event.fingers(),
+                        },
+                    );
+                }
+            }
+            InputEvent::GestureHoldEnd { event, .. } => {
+                if let Some(p) = self.seat.get_pointer() {
+                    p.gesture_hold_end(
+                        self,
+                        &smithay::input::pointer::GestureHoldEndEvent {
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                            cancelled: event.cancelled(),
+                        },
+                    );
+                }
+            }
+            InputEvent::TouchDown { event, .. } => {
+                let Some(pos) = self.touch_position(&event) else { return };
+                self.focus_at(pos);
+                let under = self.surface_under(pos);
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.down(
+                        self,
+                        under,
+                        &smithay::input::touch::DownEvent {
+                            slot: event.slot(),
+                            location: pos,
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                        },
+                    );
+                }
+            }
+            InputEvent::TouchMotion { event, .. } => {
+                let Some(pos) = self.touch_position(&event) else { return };
+                let under = self.surface_under(pos);
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.motion(
+                        self,
+                        under,
+                        &smithay::input::touch::MotionEvent {
+                            slot: event.slot(),
+                            location: pos,
+                            time: Event::time(&event),
+                        },
+                    );
+                }
+            }
+            InputEvent::TouchUp { event, .. } => {
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.up(
+                        self,
+                        &smithay::input::touch::UpEvent {
+                            slot: event.slot(),
+                            serial: SERIAL_COUNTER.next_serial(),
+                            time: Event::time(&event),
+                        },
+                    );
+                }
+            }
+            InputEvent::TouchCancel { .. } => {
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.cancel(self);
+                }
+            }
+            InputEvent::TouchFrame { .. } => {
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.frame(self);
+                }
+            }
+            // A pen: the pointer goes where it points, the tip clicks.
+            InputEvent::TabletToolAxis { event, .. } => {
+                if let Some(pos) = self.tablet_position(&event) {
+                    self.pointer_to(pos, Event::time(&event));
+                }
+            }
+            InputEvent::TabletToolProximity { event, .. } => {
+                if let Some(pos) = self.tablet_position(&event) {
+                    self.pointer_to(pos, Event::time(&event));
+                }
+            }
+            InputEvent::TabletToolTip { event, .. } => {
+                let Some(pointer) = self.seat.get_pointer() else { return };
+                let pressed = event.tip_state() == TabletToolTipState::Down;
+                if pressed && !pointer.is_grabbed() {
+                    self.focus_at(pointer.current_location());
+                }
+                pointer.button(
+                    self,
+                    &ButtonEvent {
+                        button: crate::grab::BTN_LEFT,
+                        state: if pressed {
+                            ButtonState::Pressed
+                        } else {
+                            ButtonState::Released
+                        },
+                        serial: SERIAL_COUNTER.next_serial(),
+                        time: Event::time(&event),
+                    },
+                );
+                pointer.frame(self);
+            }
             _ => {}
+        }
+    }
+
+    /// A three-finger swipe ended: it walks the areas of the grid, the way
+    /// the fingers push (as on a phone: left brings the area on the right).
+    fn swiped(&mut self, swipe: Swipe) {
+        let command = if swipe.dx.abs() >= swipe.dy.abs() {
+            if swipe.dx.abs() < SWIPE {
+                return;
+            }
+            if swipe.dx < 0.0 {
+                "workspace right"
+            } else {
+                "workspace left"
+            }
+        } else {
+            if swipe.dy.abs() < SWIPE {
+                return;
+            }
+            if swipe.dy < 0.0 {
+                "workspace down"
+            } else {
+                "workspace up"
+            }
+        };
+        self.run(Action::Command(command.into()));
+    }
+
+    /// Where a touch is, on the touch screen's monitor: the laptop's own
+    /// panel, or else the first.
+    fn touch_position<E: AbsolutePositionEvent<I>, I: InputBackend>(&self, event: &E) -> Option<Point<f64, Logical>> {
+        let output = self
+            .space
+            .outputs()
+            .find(|o| o.name().starts_with("eDP"))
+            .or_else(|| self.space.outputs().next())?
+            .clone();
+        let geo = self.space.output_geometry(&output)?;
+        Some(event.position_transformed(geo.size) + geo.loc.to_f64())
+    }
+
+    fn tablet_position<E: TabletToolEvent<I>, I: InputBackend>(&self, event: &E) -> Option<Point<f64, Logical>> {
+        let output = self.output()?;
+        let geo = self.space.output_geometry(&output)?;
+        Some(event.position_transformed(geo.size) + geo.loc.to_f64())
+    }
+
+    /// A mouse or touchpad moved: relative motion for those who listen
+    /// (games); the pointer moves, unless a lock holds it, or within its
+    /// confinement.
+    fn relative_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
+        let Some(pointer) = self.seat.get_pointer() else { return };
+        let here = pointer.current_location();
+        let under = if self.locked() {
+            self.face_surface_under(here)
+        } else {
+            self.surface_under(here)
+        };
+        pointer.relative_motion(
+            self,
+            under.clone(),
+            &smithay::input::pointer::RelativeMotionEvent {
+                delta: event.delta(),
+                delta_unaccel: event.delta_unaccel(),
+                time: Event::time(&event),
+            },
+        );
+        let constraint = under
+            .as_ref()
+            .filter(|_| !self.locked())
+            .and_then(|(surface, loc)| crate::protocols::constraint_at(surface, &pointer, here - *loc));
+        let mut pos = self.clamp(here + event.delta());
+        match constraint {
+            Some((true, _)) => {
+                pointer.frame(self);
+                return;
+            }
+            Some((false, region)) => {
+                let (surface, loc) = under.clone().expect("a constraint has a surface");
+                let inside = |p: Point<f64, Logical>| {
+                    region.as_ref().is_none_or(|r| r.contains((p - loc).to_i32_round()))
+                        && self.surface_under(p).is_some_and(|(s, _)| s == surface)
+                };
+                if !inside(Point::from((pos.x, here.y))) {
+                    pos.x = here.x;
+                }
+                if !inside(Point::from((pos.x, pos.y))) {
+                    pos.y = here.y;
+                }
+            }
+            None => {}
+        }
+        self.pointer_to(pos, Event::time(&event));
+        // A constraint waiting where the pointer arrived starts now.
+        if !self.locked()
+            && let Some((surface, loc)) = self.surface_under(pos)
+        {
+            self.activate_constraint(&surface, pos - loc, &pointer);
         }
     }
 
@@ -221,6 +538,10 @@ impl Orbit {
                     } else {
                         FilterResult::Intercept(None)
                     };
+                }
+                // A virtual machine or a remote desktop takes every key.
+                if state.shortcuts_inhibited() && state.switcher.is_none() {
+                    return FilterResult::Forward;
                 }
                 let sym = handle
                     .raw_latin_sym_or_raw_current_sym()

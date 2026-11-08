@@ -213,7 +213,7 @@ pub fn typed(text: &str, search: &str) -> String {
         return String::new();
     }
     let lower = text.to_ascii_lowercase();
-    if ["http://", "https://", "file://", "about:"]
+    if ["http://", "https://", "file://", "about:", "webkit://"]
         .iter()
         .any(|s| lower.starts_with(s))
     {

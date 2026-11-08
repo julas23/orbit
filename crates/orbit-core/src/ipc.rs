@@ -257,6 +257,11 @@ impl Orbit {
 
     /// A `window` event: "new", "close", "focus", "title", "move".
     pub fn window_event(&mut self, change: &str, window: &Window) {
+        // The other lists of windows (`protocols`, `toplevels`) too.
+        self.toplevels_changed(change, window);
+        if change == "title" {
+            self.apply_rules(window, false);
+        }
         let window = window.clone();
         self.emit(
             "window",

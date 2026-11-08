@@ -589,7 +589,9 @@ impl Orbit {
             .replace(now)
             .map_or(0.0, |t| (now - t).as_secs_f32().min(0.25));
         let effect = config.effect != crate::effects::Effect::None && cache.video.is_none();
-        cache.sound.run(effect && seen && (config.sound || config.effect.needs_sound()));
+        cache
+            .sound
+            .run(effect && seen && (config.sound || config.effect.needs_sound()));
         if !effect {
             cache.effects.clear();
             cache.saver = 0.0;
@@ -612,7 +614,11 @@ impl Orbit {
                 self.request_render();
             }
             // Shown, it must go as soon as the user is back.
-            return if saver > 0.0 { frame } else { std::time::Duration::from_millis(500) };
+            return if saver > 0.0 {
+                frame
+            } else {
+                std::time::Duration::from_millis(500)
+            };
         }
         // Louder, the clock runs a little faster.
         let levels = cache.sound.levels();

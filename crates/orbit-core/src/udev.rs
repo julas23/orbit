@@ -102,7 +102,10 @@ fn wait_until_shown() {
 /// 8-bit colour: what every monitor takes.
 const FORMATS: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
-type Manager = DrmOutputManager<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
+/// What a frame carries to its vblank: the presentation feedback of the
+/// surfaces it showed (presentation-time).
+type Feedback = Option<smithay::desktop::utils::OutputPresentationFeedback>;
+type Manager = DrmOutputManager<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, Feedback, DrmDeviceFd>;
 type Element = OutputElement;
 
 pub struct DrmData {
@@ -119,7 +122,10 @@ struct Surface {
     output: Output,
     /// The connector's modes, for `set_mode`.
     modes: Vec<smithay::reexports::drm::control::Mode>,
-    drm_output: DrmOutput<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>,
+    drm_output: DrmOutput<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, Feedback, DrmDeviceFd>,
+    connector: connector::Handle,
+    /// Switched off (DPMS): nothing is drawn until it is switched on.
+    off: bool,
     global: GlobalId,
     /// A frame is queued and its vblank has not come.
     waiting: bool,
@@ -232,6 +238,12 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
     event_loop
         .handle()
         .insert_source(LibinputInputBackend::new(libinput.clone()), |event, _, state| {
+            // Touchpads and mice set up as the config says (`devices`).
+            match &event {
+                smithay::backend::input::InputEvent::DeviceAdded { device } => state.device_added(device.clone()),
+                smithay::backend::input::InputEvent::DeviceRemoved { device } => state.device_removed(device),
+                _ => {}
+            }
             state.process_input_event(event)
         })
         .map_err(|e| anyhow::anyhow!("libinput in the event loop: {e}"))?;
@@ -271,8 +283,8 @@ pub fn init(event_loop: &mut EventLoop<'static, Orbit>, state: &mut Orbit) -> an
 
     event_loop
         .handle()
-        .insert_source(drm_notifier, move |event, _, state| match event {
-            DrmEvent::VBlank(crtc) => vblank(state, crtc),
+        .insert_source(drm_notifier, move |event, metadata, state| match event {
+            DrmEvent::VBlank(crtc) => vblank(state, crtc, metadata),
             DrmEvent::Error(err) => tracing::error!("DRM: {err:?}"),
         })
         .map_err(|e| anyhow::anyhow!("DRM events in the event loop: {e}"))?;
@@ -420,6 +432,20 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
         }
     };
     tracing::info!("{name}: {}x{}@{}", wl_mode.size.w, wl_mode.size.h, wl_mode.refresh);
+    // Variable refresh when the config asks and the monitor can.
+    if state.config.outputs.get(&name).is_some_and(|o| o.adaptive_sync) {
+        let handle = connector.handle();
+        drm_output.with_compositor(|c| match c.vrr_supported(handle) {
+            Ok(support) if support != smithay::backend::drm::VrrSupport::NotSupported => {
+                if let Err(err) = c.use_vrr(true) {
+                    tracing::warn!("{name}: adaptive sync: {err:?}");
+                } else {
+                    tracing::info!("{name}: adaptive sync on");
+                }
+            }
+            _ => tracing::info!("{name}: no adaptive sync"),
+        });
+    }
     let modes = connector.modes().to_vec();
     drm.surfaces.insert(
         crtc,
@@ -427,6 +453,8 @@ fn connected(state: &mut Orbit, connector: connector::Info, crtc: crtc::Handle) 
             output: output.clone(),
             modes,
             drm_output,
+            connector: connector.handle(),
+            off: false,
             global,
             waiting: false,
             scheduled: false,
@@ -516,13 +544,47 @@ pub fn schedule(state: &mut Orbit) {
     }
 }
 
-fn vblank(state: &mut Orbit, crtc: crtc::Handle) {
+fn vblank(state: &mut Orbit, crtc: crtc::Handle, metadata: &mut Option<smithay::backend::drm::DrmEventMetadata>) {
     let Backend::Drm(drm) = &mut state.backend else { return };
     let Some(surface) = drm.surfaces.get_mut(&crtc) else {
         return;
     };
-    if let Err(err) = surface.drm_output.frame_submitted() {
-        tracing::warn!("frame submitted: {err:?}");
+    match surface.drm_output.frame_submitted() {
+        // The frame is on screen: the surfaces it showed hear when.
+        Ok(Some(Some(mut feedback))) => {
+            use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback::Kind;
+            let refresh = surface
+                .output
+                .current_mode()
+                .filter(|m| m.refresh > 0)
+                .map(|m| {
+                    smithay::wayland::presentation::Refresh::fixed(Duration::from_secs_f64(
+                        1_000.0 / f64::from(m.refresh),
+                    ))
+                })
+                .unwrap_or(smithay::wayland::presentation::Refresh::Unknown);
+            let seq = metadata.as_ref().map_or(0, |m| m.sequence);
+            let hardware = metadata.as_ref().and_then(|m| match m.time {
+                smithay::backend::drm::DrmEventTime::Monotonic(t) if !t.is_zero() => Some(t),
+                _ => None,
+            });
+            match hardware {
+                Some(t) => feedback.presented::<_, smithay::utils::Monotonic>(
+                    t,
+                    refresh,
+                    seq as u64,
+                    Kind::Vsync | Kind::HwClock | Kind::HwCompletion,
+                ),
+                None => feedback.presented(
+                    smithay::utils::Clock::<smithay::utils::Monotonic>::new().now(),
+                    refresh,
+                    seq as u64,
+                    Kind::Vsync,
+                ),
+            }
+        }
+        Ok(_) => {}
+        Err(err) => tracing::warn!("frame submitted: {err:?}"),
     }
     surface.waiting = false;
     if surface.dirty && !surface.scheduled {
@@ -550,6 +612,15 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
         state.backend = Backend::Drm(drm);
         return;
     }
+    // Switched off: nothing to draw until it comes back on.
+    if drm.surfaces.get(&crtc).is_some_and(|s| s.off) {
+        if let Some(surface) = drm.surfaces.get_mut(&crtc) {
+            surface.scheduled = false;
+        }
+        state.backend = Backend::Drm(drm);
+        send_frames(state, &output);
+        return;
+    }
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
         surface.scheduled = false;
         surface.dirty = false;
@@ -561,13 +632,18 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
             .drm_output
             .render_frame(&mut drm.renderer, &elements, clear, FrameFlags::DEFAULT)
         {
-            Ok(result) if !result.is_empty => match surface.drm_output.queue_frame(()) {
-                Ok(()) => {
-                    surface.waiting = true;
-                    None
+            Ok(result) if !result.is_empty => {
+                match surface
+                    .drm_output
+                    .queue_frame(Some(presentation_feedback(state, &output, &result.states)))
+                {
+                    Ok(()) => {
+                        surface.waiting = true;
+                        None
+                    }
+                    Err(err) => Some(format!("queue frame: {err:?}")),
                 }
-                Err(err) => Some(format!("queue frame: {err:?}")),
-            },
+            }
             Ok(_) => None,
             Err(err) => Some(format!("render: {err:?}")),
         };
@@ -676,6 +752,145 @@ pub fn send_frames(state: &mut Orbit, output: &Output) {
     state.popups.cleanup();
     layer_map_for_output(output).cleanup();
     let _ = state.display_handle.flush_clients();
+}
+
+/// Notes which surfaces the frame showed on `output` and takes their
+/// presentation feedback, told at the frame's vblank.
+fn presentation_feedback(
+    state: &Orbit,
+    output: &Output,
+    states: &smithay::backend::renderer::element::RenderElementStates,
+) -> smithay::desktop::utils::OutputPresentationFeedback {
+    use smithay::{
+        backend::renderer::element::default_primary_scanout_output_compare,
+        desktop::utils::{
+            OutputPresentationFeedback, surface_presentation_feedback_flags_from_states,
+            surface_primary_scanout_output, update_surface_primary_scanout_output,
+        },
+    };
+    let mut feedback = OutputPresentationFeedback::new(output);
+    let update = |surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+                  data: &smithay::wayland::compositor::SurfaceData| {
+        update_surface_primary_scanout_output(
+            surface,
+            output,
+            data,
+            None,
+            states,
+            default_primary_scanout_output_compare,
+        );
+    };
+    for window in state.space.elements_for_output(output) {
+        window.with_surfaces(update);
+        window.take_presentation_feedback(&mut feedback, surface_primary_scanout_output, |surface, _| {
+            surface_presentation_feedback_flags_from_states(surface, None, states)
+        });
+    }
+    for layer in layer_map_for_output(output).layers() {
+        layer.with_surfaces(update);
+        layer.take_presentation_feedback(&mut feedback, surface_primary_scanout_output, |surface, _| {
+            surface_presentation_feedback_flags_from_states(surface, None, states)
+        });
+    }
+    feedback
+}
+
+/// Switches monitors off or on (DPMS): `output * power off`, and after
+/// `idle_off` seconds with no input. None: all of them.
+pub fn set_power(state: &mut Orbit, output: Option<&Output>, on: bool) {
+    let Backend::Drm(drm) = &mut state.backend else { return };
+    for surface in drm.surfaces.values_mut() {
+        if output.is_some_and(|o| *o != surface.output) || surface.off != on {
+            continue;
+        }
+        if on {
+            surface.off = false;
+            surface.dirty = true;
+            tracing::info!("{}: on", surface.output.name());
+        } else {
+            if let Err(err) = surface.drm_output.with_compositor(|c| c.clear()) {
+                tracing::warn!("{}: off: {err}", surface.output.name());
+                continue;
+            }
+            surface.off = true;
+            surface.waiting = false;
+            tracing::info!("{}: off", surface.output.name());
+        }
+    }
+    if on {
+        state.request_render();
+    }
+}
+
+/// Variable refresh on `output`, if the monitor can.
+pub fn set_vrr(state: &mut Orbit, output: &Output, on: bool) -> Result<(), String> {
+    let Backend::Drm(drm) = &mut state.backend else {
+        return Err("adaptive sync: only on the screen".into());
+    };
+    let Some(surface) = drm.surfaces.values_mut().find(|s| s.output == *output) else {
+        return Err(format!("{}: not a screen", output.name()));
+    };
+    let connector = surface.connector;
+    surface.drm_output.with_compositor(|c| {
+        if on
+            && matches!(
+                c.vrr_supported(connector),
+                Ok(smithay::backend::drm::VrrSupport::NotSupported) | Err(_)
+            )
+        {
+            return Err(format!("{}: no adaptive sync", output.name()));
+        }
+        c.use_vrr(on)
+            .map_err(|e| format!("{}: adaptive sync: {e:?}", output.name()))
+    })?;
+    surface.dirty = true;
+    state.request_render();
+    Ok(())
+}
+
+/// Whether any monitor is switched off.
+pub fn any_off(state: &Orbit) -> bool {
+    matches!(&state.backend, Backend::Drm(drm) if drm.surfaces.values().any(|s| s.off))
+}
+
+/// The number of entries of `output`'s gamma ramp, per colour (0: none).
+pub fn gamma_size(state: &Orbit, output: &Output) -> u32 {
+    use smithay::reexports::drm::control::Device;
+    let Backend::Drm(drm) = &state.backend else { return 0 };
+    drm.surfaces
+        .iter()
+        .find(|(_, s)| s.output == *output)
+        .and_then(|(crtc, _)| drm.manager.device().get_crtc(*crtc).ok())
+        .map_or(0, |c| c.gamma_length())
+}
+
+/// Sets `output`'s gamma ramp (night light: gammastep, wlsunset).
+pub fn set_gamma(state: &Orbit, output: &Output, red: &[u16], green: &[u16], blue: &[u16]) -> bool {
+    use smithay::reexports::drm::control::Device;
+    let Backend::Drm(drm) = &state.backend else {
+        return false;
+    };
+    let Some((crtc, surface)) = drm.surfaces.iter().find(|(_, s)| s.output == *output) else {
+        return false;
+    };
+    let _ = surface;
+    match drm.manager.device().set_gamma(*crtc, red, green, blue) {
+        Ok(()) => true,
+        Err(err) => {
+            tracing::warn!("{}: gamma: {err}", output.name());
+            false
+        }
+    }
+}
+
+/// Back to the identity ramp (the client that set it went away).
+pub fn reset_gamma(state: &Orbit, output: &Output) {
+    let size = gamma_size(state, output) as usize;
+    if size < 2 {
+        return;
+    }
+    let ramp: Vec<u16> = (0..size).map(|i| ((i * 0xffff) / (size - 1)) as u16).collect();
+    set_gamma(state, output, &ramp, &ramp, &ramp);
 }
 
 impl DrmData {

@@ -113,11 +113,56 @@ void main() {
 }
 "#;
 
+/// A soft shadow under a window: darkest at its edge, gone `spread`
+/// pixels out; nothing under the window itself (it may be translucent).
+const SHADOW: &str = r#"
+precision highp float;
+uniform vec2 size;
+uniform float alpha;
+varying vec2 v_coords;
+
+#if defined(DEBUG_FLAGS)
+uniform float tint;
+#endif
+
+uniform vec4 color;
+uniform float radius;
+uniform float spread;
+// The shadow's box and the window's, in the element's pixels.
+uniform vec2 box_origin;
+uniform vec2 box_size;
+uniform vec2 window_origin;
+
+float distance_to(vec2 p, vec2 origin, vec2 box, float r) {
+    vec2 hs = box * 0.5;
+    vec2 q = abs(p - (origin + hs)) - (hs - vec2(r));
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+void main() {
+    vec2 p = v_coords * size;
+    float d = distance_to(p, box_origin, box_size, radius);
+    float fall = 1.0 - clamp(d / spread, 0.0, 1.0);
+    float shade = fall * fall;
+    float outside = clamp(distance_to(p, window_origin, box_size, radius) + 0.5, 0.0, 1.0);
+    vec4 c = vec4(color.rgb * color.a, color.a) * shade * outside * alpha;
+
+#if defined(DEBUG_FLAGS)
+    if (tint == 1.0)
+        c = vec4(0.0, 0.2, 0.0, 0.2) + c * 0.8;
+#endif
+
+    gl_FragColor = c;
+}
+"#;
+
 /// The two programs, compiled once per renderer.
 #[derive(Clone)]
 pub struct Shaders {
     pub clip: GlesTexProgram,
     pub border: GlesPixelProgram,
+    /// The windows' shadows; none when it failed to compile.
+    pub shadow: Option<GlesPixelProgram>,
     /// The blur's passes down and up (`eyes`).
     pub down: GlesTexProgram,
     pub up: GlesTexProgram,
@@ -145,12 +190,27 @@ impl Shaders {
                 UniformName::new("width", UniformType::_1f),
             ],
         )?;
+        let shadow = renderer
+            .compile_custom_pixel_shader(
+                SHADOW,
+                &[
+                    UniformName::new("color", UniformType::_4f),
+                    UniformName::new("radius", UniformType::_1f),
+                    UniformName::new("spread", UniformType::_1f),
+                    UniformName::new("box_origin", UniformType::_2f),
+                    UniformName::new("box_size", UniformType::_2f),
+                    UniformName::new("window_origin", UniformType::_2f),
+                ],
+            )
+            .inspect_err(|err| tracing::warn!("shadow shader: {err:?}; no shadows"))
+            .ok();
         let (down, up) = crate::eyes::compile(renderer)?;
         let card = crate::cards::compile(renderer)?;
         let effects = crate::effects::Programs::compile(renderer);
         Ok(Self {
             clip,
             border,
+            shadow,
             down,
             up,
             card,
@@ -166,6 +226,25 @@ pub fn border_uniforms(color: [f32; 4], radius: f32, width: f32) -> Vec<Uniform<
         Uniform::new("color", UniformValue::_4f(color[0], color[1], color[2], color[3])),
         Uniform::new("radius", radius),
         Uniform::new("width", width),
+    ]
+}
+
+/// The uniforms of a shadow `spread` wide, `offset` down, under a window
+/// of `size` with corners of `radius`, in logical pixels.
+pub fn shadow_uniforms(
+    color: [f32; 4],
+    radius: f32,
+    spread: f32,
+    offset: f32,
+    size: (f32, f32),
+) -> Vec<Uniform<'static>> {
+    vec![
+        Uniform::new("color", UniformValue::_4f(color[0], color[1], color[2], color[3])),
+        Uniform::new("radius", radius),
+        Uniform::new("spread", spread.max(1.0)),
+        Uniform::new("box_origin", UniformValue::_2f(spread, spread + offset)),
+        Uniform::new("box_size", UniformValue::_2f(size.0, size.1)),
+        Uniform::new("window_origin", UniformValue::_2f(spread, spread)),
     ]
 }
 

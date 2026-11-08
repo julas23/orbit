@@ -30,6 +30,21 @@
 //! idle_lock: 600         # seconds without input before locking; 0: never
 //! # or by machine (the file synced between several):
 //! # idle_lock: { default: 600, think: 0, julas: 0 }
+//! idle_off: 900          # seconds without input before the monitors switch
+//!                        # off (locked: a minute at most); 0: never
+//! touchpad: { tap: true, natural_scroll: true, speed: 0.0, disable_while_typing: true,
+//!             middle_emulation: false, click: clickfinger, scroll: two_finger, left_handed: false }
+//! mouse: { natural_scroll: false, speed: 0.0, profile: adaptive, left_handed: false }
+//! gestures: true         # three-finger swipes walk the areas
+//! shadows: floating      # under floating windows; all; none
+//! shadow_color: "#00000066"
+//! shadow_size: 24
+//! animations: true       # new windows fade in (not on battery with effects: auto)
+//! rules:                 # what windows do when they open (the first rule that
+//!                        # matches; app_id and title are regular expressions)
+//!   - { app_id: "pavucontrol", floating: true, size: [800, 600] }
+//!   - { app_id: "(?i)thunderbird", workspace: 3 }
+//!   - { title: "Picture-in-Picture", floating: true, size: [480, 270], focus: false }
 //! outputs:               # where each monitor sits; unnamed ones stack
 //!   HDMI-A-1: { position: [0, 1080] }   # below the laptop's, centred
 //!   DP-1: { mode: 1920x1080@60 }        # not its preferred mode (or 1920x1080:
@@ -69,6 +84,13 @@ pub struct Config {
     pub border: i32,
     /// Radius of the windows' corners (0: square).
     pub corner_radius: i32,
+    /// Shadows under the windows: `floating` (the default), `all` or
+    /// `none`; their colour and how far they reach.
+    pub shadows: String,
+    pub shadow_color: String,
+    pub shadow_size: i32,
+    /// New windows fade in (off with the effects, on battery).
+    pub animations: bool,
     /// RGB colours of the border: the focused window's and the others'.
     pub focused_color: String,
     pub unfocused_color: String,
@@ -103,6 +125,18 @@ pub struct Config {
     /// Seconds without input before the core locks (0: never), for every
     /// machine or by host name (`idle`).
     pub idle_lock: PerHost<u64>,
+    /// Seconds with no input before the monitors switch off (0: never;
+    /// locked, after a minute at most); a video playing keeps them on.
+    pub idle_off: PerHost<u64>,
+    /// The touchpads and mice (libinput), see `devices`.
+    pub touchpad: crate::devices::Touchpad,
+    pub mouse: crate::devices::Mouse,
+    /// Three-finger swipes on a touchpad walk the areas (as
+    /// Ctrl+Alt+arrows).
+    pub gestures: bool,
+    /// What windows do when they open, by app_id (or X class) and title:
+    /// see `rules`.
+    pub rules: Vec<crate::rules::Rule>,
     /// The picture under the windows, and behind the greet (`wallpaper`).
     pub wallpaper: crate::wallpaper::Wallpaper,
     /// Run on a right click on the bare wallpaper, with the click's place
@@ -185,6 +219,9 @@ pub struct OutputConfig {
     pub scale: Option<f64>,
     /// This monitor's own wallpaper picture, in place of `wallpaper.image`.
     pub wallpaper: Option<String>,
+    /// Variable refresh (FreeSync, G-Sync compatible), when the monitor
+    /// can (sway's `adaptive_sync`).
+    pub adaptive_sync: bool,
 }
 
 /// Smithay's `Transform` by sway's name for it.
@@ -271,6 +308,10 @@ impl Default for Config {
             master_count: crate::tile::Master::default().count,
             border: 2,
             corner_radius: 10,
+            shadows: "floating".into(),
+            shadow_color: "#00000066".into(),
+            shadow_size: 24,
+            animations: true,
             focused_color: "#4682b4".into(),
             unfocused_color: "#4c566a".into(),
             focus_follows_mouse: true,
@@ -286,6 +327,11 @@ impl Default for Config {
             blur_layers: vec!["orbit-confirm".into()],
             effects: Effects::Auto,
             idle_lock: PerHost::All(600),
+            idle_off: PerHost::All(900),
+            touchpad: Default::default(),
+            mouse: Default::default(),
+            gestures: true,
+            rules: Vec::new(),
             wallpaper: crate::wallpaper::Wallpaper::default(),
             desktop_menu: "orbit-settings menu".into(),
         }

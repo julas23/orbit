@@ -43,11 +43,16 @@ Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.m
 - [x] A nested core leaves `startup:` and `login:` out unless `--startup` asks: the default ones handed its display to the outer session's systemd and D-Bus (the outer portals then failed) and `orbit-session` took the outer panel and dock (2026-10-23).
 - [x] Phase 2, `wlr-output-management` (ported from niri): wlr-randr, kanshi and nwg-displays see every monitor with its connector's modes, and set mode, place, turn and scale for the session (as `outputs:` would; the file is left alone); switching one off fails, not done yet. Nested with wlr-randr: a virtual monitor's mode and scale and the window's turn applied (2026-10-23). Not tried: a mode change on a real monitor (DRM `use_mode`).
 - [ ] Phase 2: hotplug, a monitor switched off, VRR/tearing. Done when the hp gets a full day without going back to sway.
+  - [x] VRR: `adaptive_sync: true` per output in core.yaml and `output NAME adaptive_sync on|off` (2026-11-08). Not tried on a FreeSync monitor.
+  - [x] Monitors off (DPMS): `output NAME|* power|dpms on|off|toggle` (swayidle's), and by themselves after `idle_off` seconds (default 900; locked, a minute), a video playing keeps them on; any input brings them back (2026-11-08). Not tried on the hp yet.
+  - [ ] Turning a monitor off through wlr-output-management (out of the layout, not DPMS); tearing-control.
 - [x] Phase 3, layouts: each workspace has its own, `columns` (as before), `master` (55% for the first, the rest stacked), `monocle` (one at a time, the focused on top) and `bsp` (bspwm's spiral); `layout NAME` and `layout next` (Mod+Ctrl+Space), `layout:` in core.yaml for new workspaces, the name in get_workspaces (2026-10-23, nested-tested on a virtual monitor; verified on the hp 2026-10-24).
 - [x] Phase 3: `master_ratio` and `master_count` in core.yaml; named scratchpads as sway's, `[app_id=…] scratchpad show`: hidden, the window comes floating over the workspace in front; in front and focused, it goes back (2026-10-23, nested-tested).
 - [ ] Phase 3: the `scroll` layout (niri's columns that scroll). (Tags left out on 2026-10-22: maybe in a later major version.)
 - [x] Phase 4, effects off on battery: `effects: auto` (the default) leaves out the lock's eyes and the blur behind confirmations while on battery (mains looked at every 10 s); `on` and `off` force it (2026-10-23). Not seen yet on battery.
 - [ ] Phase 4: animations, shadows, blur, gestures, overview.
+  - [x] Shadows under floating windows (`shadows: floating|all|none`, `shadow_color`, `shadow_size`; a shader as the border), new windows fade in (`animations`, off with the effects on battery), three-finger swipes walk the areas (`gestures`) (2026-11-08, shadows seen nested).
+  - [ ] Blur behind translucent windows, the overview (an exposé of the areas), animated moves.
 - [ ] Phase 5: `orbit-remote-server` (§9, phase 1 working 2026-10-23), Jarvis wallpaper, orbit-aigent integrated with the core, own monitor settings, `orbit-keys` (password app).
 
 ## 5. Panel
@@ -276,10 +281,14 @@ and dialogs kept above their windows.
 Core (sway, niri, KWin), besides phases 2–5 of §4:
 - [x] ★ Wallpaper, as light as feh: an image (or a colour) drawn under everything, per output or for all, set in `core.yaml` (`wallpaper:`, `outputs.<name>.wallpaper`); the greet stands on the same one, blurred and dimmed, and the eyes close over it (`wallpaper.rs`, 2026-11-03). Seen nested: the picture, and the lock with the greet over it. The greeter's own core (encrypted /home shut) cannot read the user's: a system picture in `data/greeter/core.yaml`.
 - [x] ★ A dialog stays above the window it belongs to and keeps the focus (the user, 2026-11-03): focusing any window of a program brings its dialogs over it, the newest over the older and modal ones over all (GTK 3 cannot say modal on Wayland: the opening order covers it); a dialog keeps the keyboard while the pointer crosses the program's other windows; a click on a window with a modal dialog gives the dialog the keyboard; xdg-dialog spoken (GTK 4's modal hint). Seen nested with a Bambu-like client (main, a big second dialog, a modal confirmation), Wayland and X: the installed core hid the confirmation under the big one, the new one keeps it on top. Not tried: the real Bambu Studio, and the pointer crossing (no pointer in the nested test).
-- [ ] ★ Night light (wlr-gamma-control; gammastep and wlsunset need it).
-- [ ] ★ xdg-activation: an app or a notification can ask for a window to come forward.
-- [ ] foreign-toplevel: windows listed and controlled by panel, dock and tools without the sway IPC.
-- [ ] Tablets ("no tablets yet").
+- [x] ★ Night light: wlr-gamma-control (`gamma.rs`), one client per monitor, the ramp back to neutral when it goes; on the screen only (2026-11-08). Not tried with gammastep on the hp yet.
+- [x] ★ xdg-activation: a window comes forward (from another area, or minimised) for a fresh token (2026-11-08).
+- [x] foreign-toplevel: ext-foreign-toplevel-list (Smithay's) and wlr-foreign-toplevel-management (`toplevels.rs`: activate, close, minimise, maximize, fullscreen) for Waybar's taskbar, nwg-dock and the like (2026-11-08).
+- [x] Tablets: the pen moves the pointer and its tip clicks (no pressure yet); touch screens touch (2026-11-08).
+- [x] The rest of what the common compositors speak (2026-11-08, `protocols.rs`, all seen advertised nested): pointer-constraints and relative-pointer (games, Blender), keyboard-shortcuts-inhibit (VMs, remote desktops; Ctrl+Alt+Backspace and the consoles still work), pointer-gestures, ext-idle-notify (swayidle), text-input-v3 and input-method-v2 (fcitx5, ibus; candidate windows as popups), xdg-foreign (portal dialogs), presentation-time (fed from the DRM vblanks), single-pixel-buffer, content-type, alpha-modifier, security-context (a sandbox's clients see none of the privileged globals: clipboard history, screen copies, monitors, gamma, the windows' list).
+- [x] Touchpads and mice (`devices.rs`): tap, natural scrolling (both on for touchpads by default), speed, acceleration profile, disable while typing, click and scroll methods, left-handed; applied when plugged in and on `reload` (2026-11-08). Not tried on the hp's touchpad yet.
+- [x] Window rules (`rules:`, as sway's `for_window`): float, workspace, size, position on its monitor, fullscreen, maximized, not taking the keyboard, by app_id and title (2026-11-08, seen nested).
+- [ ] Left out: drm-lease (VR), HDR and colour management, ext-image-copy-capture (screencasts go through wlr-screencopy), tablet pressure and tools.
 - [x] Monitor settings in a window: resolution, refresh rate, scale and rotation in Orbit-Settings, set at once (`output NAME mode|scale|transform`, new in the core) and kept in core.yaml under `HOST/NAME` only when confirmed, back by themselves after 15 s (2026-11-03). Where each monitor sits stays the panel's monitors module's. Nested: the commands on a virtual monitor, the page drawn. Not tried: a mode change on a real monitor.
 - [x] A right click on the bare wallpaper (or a background layer's) runs `desktop_menu` (default `orbit-settings menu`) with the click's place: a small menu there, Wallpaper… and Monitors… (2026-11-03). Seen nested (menu run by hand; no pointer in the nested test).
 - [x] Video and animated wallpapers (2026-11-04): `wallpaper.video` in core.yaml, played by `orbit-wallpaper` (new crate: a background layer surface per monitor, GStreamer playbin into gtk4paintablesink, GL so VA-API frames stay on the GPU; silent, the sound never decoded; gapless loop; fit as `mode`). The core starts, changes and ends it and tells it `pause`/`play` on its standard input — paused while locked, under fullscreen windows and with the effects off (battery on `auto`); the input closed, it ends, so it never outlives the core; a player that ends by itself is not started again until the config is read. Orbit-Settings: "Show" → "A video". Seen nested: plays on a monitor made after it started, pauses and resumes, ends when taken out, a missing file falls back, an animated GIF plays. Not tried: VA-API decoding on the hp, the cost there.
@@ -304,10 +313,8 @@ Dock (Plank, Latte, macOS):
 
 Notify (dunst, mako): replying inside the bubble (inline reply), a sound, rules per app (silent, timeout, position).
 
-Orbit-Edit (VS Code, Kate, gedit):
-- [ ] ★ Search in every file of the folder (Ctrl+Shift+F).
-- [ ] ★ LSP: completion, go to definition, errors on the line.
-- [ ] Git marks in the margin, Markdown preview, autosave, spell check, a terminal inside.
+Orbit-Edit (VS Code, Kate, gedit): all done 2026-11-08 (b048996) — the file watched on disk and saved as root, LSP (rust-analyzer seen nested: the error counted and underlined), git marks (seen), Ctrl+Shift+F, palette, recent and reopen, line commands, split, Markdown preview, terminal, spelling (seen), words and snippets completed, .editorconfig, trim and final newline, format on save, autosave, print, the sidebar's menu.
+- [ ] Not tried by hand yet: the keys (no way to type into the nested session here), the terminal, printing, renaming with a server.
 
 Orbit-Term (Ghostty, Kitty): saved SSH hosts (Termius), optional.
 
@@ -323,9 +330,8 @@ Orbit-Play (mpv, VLC, Celluloid):
 
 Orbit-View (Eye of GNOME, gThumb, Gwenview): crop and resize, set as wallpaper, print.
 
-Orbit-Pathfinder (Wavebox, Ferdium, Firefox):
-- [ ] ★ History to browse; spell check (WebKit has both).
-- [ ] A downloads list, reader mode, page translation.
+Orbit-Pathfinder (Wavebox, Ferdium, Firefox): done 2026-11-08 (d95d5bd) — Ctrl+F, print, history (seen written, mode 600) and bookmarks with the address bar's suggestions, Ctrl+K, reopen the closed tab, downloads list, reader mode (F9), focus mode, split, private window, spelling, translation when `translate:` is set; `webkit://gpu` opens (hardware acceleration seen on: DMABuf renderer, WebGL, accelerated canvas). Always-active services now load one after another after the one shown.
+- [ ] Left out: spaces and tree tabs (another tab model), extensions (WebKitGTK has none), another engine (Gecko cannot be embedded; CEF/Chromium means rewriting the services' layer).
 
 Orbit-Blink (Flameshot, Spectacle):
 - [ ] ★ Recording the screen as video.
