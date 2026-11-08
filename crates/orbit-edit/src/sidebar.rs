@@ -1,6 +1,8 @@
 //! The folder beside the tabs: its tree, folders first, hidden files and
 //! the usual build and dependency folders left out; a click opens a file.
 //! And Ctrl+P, to find a file of the folder by a few letters of its name.
+//! A right click offers new files and folders, renaming, the trash, the
+//! path copied and a terminal there.
 
 use std::{
     cell::RefCell,
@@ -12,7 +14,7 @@ use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::tr;
 
 /// Folders nobody edits by hand.
-const SKIPPED: &[&str] = &[
+pub const SKIPPED: &[&str] = &[
     ".git",
     "node_modules",
     "target",
@@ -26,6 +28,7 @@ const SKIPPED: &[&str] = &[
 const MOST_FILES: usize = 50_000;
 
 type Opener = Box<dyn Fn(&Path)>;
+type Renamed = Box<dyn Fn(&Path, &Path)>;
 
 pub struct Sidebar {
     pub widget: gtk::Box,
@@ -33,6 +36,8 @@ pub struct Sidebar {
     list: gtk::ListView,
     root: RefCell<Option<PathBuf>>,
     on_open: RefCell<Option<Opener>>,
+    on_renamed: RefCell<Option<Renamed>>,
+    on_terminal: RefCell<Option<Opener>>,
 }
 
 impl Sidebar {
@@ -101,7 +106,18 @@ impl Sidebar {
             list,
             root: RefCell::default(),
             on_open: RefCell::default(),
+            on_renamed: RefCell::default(),
+            on_terminal: RefCell::default(),
         });
+        let click = gtk::GestureClick::builder().button(3).build();
+        let weak = Rc::downgrade(&sidebar);
+        click.connect_pressed(move |gesture, _, x, y| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            if let Some(s) = weak.upgrade() {
+                s.menu(x, y);
+            }
+        });
+        sidebar.list.add_controller(click);
         let weak = Rc::downgrade(&sidebar);
         sidebar.list.connect_activate(move |list, position| {
             let (Some(s), Some(row)) = (
@@ -132,6 +148,198 @@ impl Sidebar {
 
     pub fn connect_open(&self, f: impl Fn(&Path) + 'static) {
         *self.on_open.borrow_mut() = Some(Box::new(f));
+    }
+
+    /// Called with a file or folder renamed here: where it was, where it is.
+    pub fn connect_renamed(&self, f: impl Fn(&Path, &Path) + 'static) {
+        *self.on_renamed.borrow_mut() = Some(Box::new(f));
+    }
+
+    /// Called for "Open a terminal here".
+    pub fn connect_terminal(&self, f: impl Fn(&Path) + 'static) {
+        *self.on_terminal.borrow_mut() = Some(Box::new(f));
+    }
+
+    /// The file or folder of the row at (x, y) of the list.
+    fn path_at(&self, x: f64, y: f64) -> Option<PathBuf> {
+        let mut node = self.list.pick(x, y, gtk::PickFlags::DEFAULT);
+        while let Some(w) = node {
+            if let Some(expander) = w.downcast_ref::<gtk::TreeExpander>() {
+                return expander
+                    .list_row()
+                    .and_then(|r| r.item())
+                    .and_downcast::<gio::FileInfo>()
+                    .and_then(|i| file_of(&i))
+                    .and_then(|f| f.path());
+            }
+            node = w.parent();
+        }
+        None
+    }
+
+    /// The right-click menu, for the row there or (on no row) the folder.
+    fn menu(self: &Rc<Self>, x: f64, y: f64) {
+        let Some(root) = self.root() else { return };
+        let target = self.path_at(x, y);
+        let is_root = target.is_none();
+        let target = target.unwrap_or(root);
+        let dir = if target.is_dir() {
+            target.clone()
+        } else {
+            target.parent().map_or_else(|| target.clone(), Path::to_path_buf)
+        };
+        let popover = gtk::Popover::builder()
+            .has_arrow(false)
+            .css_classes(["context-menu"])
+            .build();
+        let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+        popover.set_child(Some(&column));
+        let item = |label: String, f: Box<dyn Fn()>| {
+            let b = gtk::Button::builder()
+                .label(label)
+                .css_classes(["flat", "menu-item"])
+                .build();
+            if let Some(l) = b.child().and_downcast::<gtk::Label>() {
+                l.set_xalign(0.0);
+            }
+            let p = popover.clone();
+            b.connect_clicked(move |_| {
+                p.popdown();
+                f();
+            });
+            column.append(&b);
+        };
+        let parent = self.widget.root().and_downcast::<gtk::Window>();
+        {
+            let (s, dir, parent) = (Rc::downgrade(self), dir.clone(), parent.clone());
+            item(
+                tr("edit-new-file"),
+                Box::new(move || {
+                    let (Some(parent), s, dir) = (parent.clone(), s.clone(), dir.clone()) else {
+                        return;
+                    };
+                    crate::editor::ask_text(&parent, &tr("edit-new-file"), "", move |name| {
+                        if name.is_empty() {
+                            return;
+                        }
+                        let path = dir.join(&name);
+                        if let Some(d) = path.parent() {
+                            let _ = std::fs::create_dir_all(d);
+                        }
+                        match std::fs::File::create_new(&path) {
+                            Ok(_) => {
+                                if let Some(s) = s.upgrade()
+                                    && let Some(f) = s.on_open.borrow().as_ref()
+                                {
+                                    f(&path);
+                                }
+                            }
+                            Err(err) => log::warn!("{}: {err}", path.display()),
+                        }
+                    });
+                }),
+            );
+        }
+        {
+            let (dir, parent) = (dir.clone(), parent.clone());
+            item(
+                tr("edit-new-folder"),
+                Box::new(move || {
+                    let (Some(parent), dir) = (parent.clone(), dir.clone()) else {
+                        return;
+                    };
+                    crate::editor::ask_text(&parent, &tr("edit-new-folder"), "", move |name| {
+                        if !name.is_empty()
+                            && let Err(err) = std::fs::create_dir_all(dir.join(&name))
+                        {
+                            log::warn!("{name}: {err}");
+                        }
+                    });
+                }),
+            );
+        }
+        if !is_root {
+            let (s, t, parent) = (Rc::downgrade(self), target.clone(), parent.clone());
+            item(
+                tr("edit-rename"),
+                Box::new(move || {
+                    let (Some(parent), s, target) = (parent.clone(), s.clone(), t.clone()) else {
+                        return;
+                    };
+                    let name = target
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    crate::editor::ask_text(&parent, &tr("edit-rename"), &name.clone(), move |new| {
+                        if new.is_empty() || new == name {
+                            return;
+                        }
+                        let to = target.with_file_name(&new);
+                        if to.exists() {
+                            return;
+                        }
+                        match std::fs::rename(&target, &to) {
+                            Ok(()) => {
+                                if let Some(s) = s.upgrade()
+                                    && let Some(f) = s.on_renamed.borrow().as_ref()
+                                {
+                                    f(&target, &to);
+                                }
+                            }
+                            Err(err) => log::warn!("{}: {err}", target.display()),
+                        }
+                    });
+                }),
+            );
+            let target = target.clone();
+            item(
+                tr("edit-trash"),
+                Box::new(move || {
+                    if let Err(err) = gio::File::for_path(&target).trash(gio::Cancellable::NONE) {
+                        log::warn!("{}: {err}", target.display());
+                    }
+                }),
+            );
+        }
+        {
+            let (target, widget) = (target.clone(), self.widget.clone());
+            item(
+                tr("edit-copy-path"),
+                Box::new(move || widget.clipboard().set_text(&target.to_string_lossy())),
+            );
+        }
+        {
+            let (s, dir) = (Rc::downgrade(self), dir.clone());
+            item(
+                tr("edit-terminal-here"),
+                Box::new(move || {
+                    if let Some(s) = s.upgrade()
+                        && let Some(f) = s.on_terminal.borrow().as_ref()
+                    {
+                        f(&dir);
+                    }
+                }),
+            );
+        }
+        {
+            let dir = dir.clone();
+            item(
+                tr("edit-open-in-files"),
+                Box::new(move || {
+                    let uri = gio::File::for_path(&dir).uri();
+                    if let Err(err) = gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>) {
+                        log::warn!("{uri}: {err}");
+                    }
+                }),
+            );
+        }
+        popover.set_parent(&self.list);
+        popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popover.connect_closed(|p| {
+            let p = p.clone();
+            glib::idle_add_local_once(move || p.unparent());
+        });
+        popover.popup();
     }
 
     pub fn root(&self) -> Option<PathBuf> {
@@ -355,7 +563,7 @@ fn walk(root: &Path, dir: &Path, found: &mut Vec<String>) {
 
 /// How well `query` matches `path`: its letters in order, closer together
 /// and in the file's name scoring higher; `None` if they are not all there.
-fn score(query: &str, path: &str) -> Option<i32> {
+pub fn score(query: &str, path: &str) -> Option<i32> {
     if query.is_empty() {
         return Some(0);
     }

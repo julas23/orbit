@@ -26,4 +26,4 @@ gtk.workspace = true
 log.workspace = true
 anyhow.workspace = true
 poppler-rs.workspace = true
-pulldown-cmark.workspace = true
+orbit-markdown.workspace = true

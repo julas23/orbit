@@ -3708,6 +3708,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a7cbbd4ad467251987c6e5b47d53b11a5a05add08f2447a9e2d70aef1e0d138"
 
 [[package]]
+name = "libspelling"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aa3967523e0c59c89ca5695cd01538fdf9aa354a16a7dd48e2873c2b88d57ae"
+dependencies = [
+ "gio 0.22.10",
+ "glib 0.22.10",
+ "gtk4",
+ "libc",
+ "libspelling-sys",
+ "sourceview5",
+]
+
+[[package]]
+name = "libspelling-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f7a85c4b41986eb3ec46b755b8f986e0e65ef254e6b35059b4a462ca9d76612"
+dependencies = [
+ "gio-sys 0.22.9",
+ "glib-sys 0.22.9",
+ "gobject-sys 0.22.9",
+ "gtk4-sys",
+ "libc",
+ "sourceview5-sys",
+ "system-deps 7.0.8",
+]
+
+[[package]]
 name = "libsqlite3-sys"
 version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4669,12 +4698,17 @@ dependencies = [
  "anyhow",
  "async-channel",
  "gtk4",
+ "libspelling",
  "log",
  "orbit-app",
  "orbit-common",
+ "orbit-markdown",
+ "regex",
  "serde",
  "serde_json",
+ "similar",
  "sourceview5",
+ "vte4",
 ]
 
 [[package]]
@@ -4757,6 +4791,15 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "orbit-markdown"
+version = "0.1.0"
+dependencies = [
+ "gtk4",
+ "orbit-app",
+ "pulldown-cmark",
 ]
 
 [[package]]
@@ -4893,8 +4936,8 @@ dependencies = [
  "log",
  "orbit-app",
  "orbit-common",
+ "orbit-markdown",
  "poppler-rs",
- "pulldown-cmark",
 ]
 
 [[package]]
@@ -6024,6 +6067,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "simplecss"

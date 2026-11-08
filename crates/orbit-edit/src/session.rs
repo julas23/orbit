@@ -15,6 +15,8 @@ pub struct Session {
     pub tabs: Vec<Tab>,
     pub active: usize,
     pub next_id: u64,
+    /// The files opened lately, newest first (Ctrl+R).
+    pub recent: Vec<PathBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

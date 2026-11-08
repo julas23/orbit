@@ -11,7 +11,7 @@ use std::{
 
 use gtk::{gdk, gio, glib, prelude::*};
 
-use crate::markdown::{self, Rendered};
+use orbit_markdown::{self as markdown, Rendered};
 
 /// The widest the text runs, in pixels.
 const MEASURE: f64 = 800.0;

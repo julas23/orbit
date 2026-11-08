@@ -5,19 +5,30 @@
 //! of its own: several cursors (Ctrl+D, Ctrl+click) and column selection
 //! (Alt+drag), indent guides and folding by indentation, the folder in a
 //! sidebar with Ctrl+P to find a file in it, comments toggled with Ctrl+/,
-//! and the session — tabs and unsaved text — kept between runs.
+//! and the session — tabs and unsaved text — kept between runs. And: the
+//! file watched on disk, saved as root when it must be, language servers
+//! (`lsp`), the git marks, search in every file, the command palette,
+//! the view split, the Markdown preview, a terminal, spelling, the
+//! folder's .editorconfig, formatting and saving by itself.
 //!
 //! Options in `~/.config/orbit/edit.yaml`.
 
 mod doc;
 mod editor;
+mod editorconfig;
 mod findbar;
 mod fold;
+mod gitmarks;
+mod lsp;
 mod multi;
+mod palette;
+mod preview;
+mod search;
 mod session;
 mod sidebar;
+mod terminal;
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use editor::Editor;
 use gtk::{gio, glib, prelude::*};
@@ -36,6 +47,26 @@ pub struct Config {
     pub insert_spaces: bool,
     pub minimap: bool,
     pub wrap: bool,
+    /// Spaces at the ends of lines taken off on saving; a newline put at
+    /// the end. A folder's .editorconfig says otherwise for its files.
+    pub trim_trailing: bool,
+    pub final_newline: bool,
+    pub show_whitespace: bool,
+    /// Files saved by themselves a moment after the typing stops, and
+    /// when the window loses the focus.
+    pub autosave: bool,
+    /// Spelling checked as one types (comments and strings, in code).
+    pub spell: bool,
+    /// Formatted on saving, by the language server or by `formatters`.
+    pub format_on_save: bool,
+    /// A program to format a language with, by GtkSourceView's name of
+    /// it: the text on its standard input, the result on its output
+    /// (`rust: [rustfmt, --edition, "2024"]`). Without one, the language
+    /// server formats.
+    pub formatters: HashMap<String, Vec<String>>,
+    /// The language servers, by GtkSourceView's name of the language, in
+    /// place of the usual ones; `[]` for none.
+    pub lsp: HashMap<String, Vec<String>>,
 }
 
 impl Default for Config {
@@ -47,6 +78,14 @@ impl Default for Config {
             insert_spaces: true,
             minimap: true,
             wrap: false,
+            trim_trailing: false,
+            final_newline: false,
+            show_whitespace: false,
+            autosave: false,
+            spell: true,
+            format_on_save: false,
+            formatters: HashMap::new(),
+            lsp: HashMap::new(),
         }
     }
 }

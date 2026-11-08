@@ -43,14 +43,14 @@ fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu fonts-liberat
 
 # --- what the Orbit apps load at run time (their own .deb depend on the
 # libraries; these are the plugins and helpers no library names)
-glycin-loaders bubblewrap gvfs gvfs-backends gvfs-fuse
+glycin-loaders bubblewrap gvfs gvfs-backends gvfs-fuse hunspell-en-us hunspell-pt-br
 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
 gstreamer1.0-libav gstreamer1.0-pipewire gstreamer1.0-gtk4
 
 # --- building Orbit (the orbit-dev metapackage; rustup brings the toolchain)
 build-essential pkg-config libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev libpoppler-glib-dev
 libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
-libgtksourceview-5-dev libvte-2.91-gtk4-dev libwebkitgtk-6.0-dev libseat-dev libinput-dev
+libgtksourceview-5-dev libspelling-1-dev libvte-2.91-gtk4-dev libwebkitgtk-6.0-dev libseat-dev libinput-dev
 libudev-dev libgbm-dev libxkbcommon-dev libdrm-dev libsystemd-dev libdisplay-info-dev libpixman-1-dev
 libssl-dev libsqlite3-dev clang mold
 

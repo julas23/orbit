@@ -14,6 +14,7 @@ section = "editors"
 priority = "optional"
 extended-description = "Orbit-Edit: text editor. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
+recommends = "git, hunspell-en-us | hunspell-dictionary"
 assets = [
     ["target/release/orbit-edit", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Edit.desktop", "usr/share/applications/", "644"],
@@ -29,3 +30,10 @@ serde.workspace = true
 serde_json.workspace = true
 async-channel.workspace = true
 sourceview5.workspace = true
+vte4.workspace = true
+orbit-markdown.workspace = true
+regex = "1"
+# The git marks: the text compared with the committed file, line by line.
+similar = "2"
+# Spell checking as one types (GNOME Text Editor's), on enchant.
+libspelling = "0.5"

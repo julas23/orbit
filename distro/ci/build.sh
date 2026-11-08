@@ -18,7 +18,7 @@ apt-get install -y -qq --no-install-recommends \
     ca-certificates curl git build-essential pkg-config clang cmake mold rsync \
     libgtk-4-dev libgtk4-layer-shell-dev libseccomp-dev libpoppler-glib-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev \
-    libgtksourceview-5-dev libvte-2.91-gtk4-dev libwebkitgtk-6.0-dev \
+    libgtksourceview-5-dev libspelling-1-dev libvte-2.91-gtk4-dev libwebkitgtk-6.0-dev \
     libseat-dev libinput-dev libudev-dev libgbm-dev libxkbcommon-dev libdrm-dev libsystemd-dev \
     libdisplay-info-dev libpixman-1-dev libssl-dev libsqlite3-dev libpam0g-dev \
     libfontconfig-dev libfreetype-dev libasound2-dev libpipewire-0.3-dev libdbus-1-dev \

@@ -73,3 +73,39 @@ window.quick-open .quick-open-box {
 window.quick-open .results { background: none; }
 window.quick-open .results row { padding: 5px 10px; border-radius: 5px; }
 window.quick-open .results row:selected { background-color: alpha(@orbit_accent, 0.45); }
+window.quick-open .results .keys { color: @orbit_muted; font-size: 12px; }
+
+/* The file changed on disk. */
+window.orbit-edit .disk-banner {
+  padding: 8px 10px;
+  background-color: alpha(#ebcb8b, 0.18);
+  border-bottom: 1px solid alpha(#ebcb8b, 0.5);
+}
+
+/* Find in the folder (Ctrl+Shift+F). */
+window.search-files { background-color: @orbit_window; color: @orbit_fg; }
+window.search-files .results { background: none; }
+window.search-files .results row { padding: 3px 10px; border-radius: 5px; }
+window.search-files .results row:selected { background-color: alpha(@orbit_accent, 0.45); }
+window.search-files .search-place { color: @orbit_accent; font-family: monospace; font-size: 12px; }
+window.search-files .search-text { font-family: monospace; font-size: 12px; }
+window.search-files .option:checked { background: alpha(@orbit_accent, 0.45); }
+
+/* A line of text asked for (rename, new file). */
+window.ask-text .quick-open-box { padding: 15px; }
+
+/* The language server: the count, the hover. */
+window.orbit-edit .status .diagnostics { color: @orbit_muted; }
+.hover-text { padding: 5px 8px; }
+.hover-text.hover-error { color: #bf616a; }
+.hover-text.hover-warning { color: #ebcb8b; }
+.hover-text.hover-doc { font-family: monospace; font-size: 12px; }
+
+/* The terminal and the preview. */
+window.orbit-edit .terminal-panel { border-top: 1px solid @orbit_border; }
+window.orbit-edit textview.md-preview,
+window.orbit-edit textview.md-preview text { background-color: mix(@orbit_window, @orbit_fg, 0.03); }
+
+/* The sidebar's menu. */
+window.orbit-edit popover.context-menu .menu-item { padding: 5px 12px; }
+window.orbit-edit popover.context-menu .menu-item:hover { background-color: alpha(@orbit_accent, 0.35); }

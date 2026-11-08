@@ -8,7 +8,6 @@
 //! monospaced font. Documents always open at the top.
 
 mod actions;
-mod markdown;
 mod pdf;
 mod reader;
 mod textdoc;
