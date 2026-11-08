@@ -48,6 +48,19 @@ pub struct Config {
     /// never unloaded.
     #[serde(default = "hibernate_default", skip_serializing_if = "is_hibernate_default")]
     pub hibernate_after: u32,
+    /// The pages of the browser kept in the history (Ctrl+H, and the
+    /// address bar's suggestions); `false` keeps none.
+    #[serde(default = "yes", skip_serializing_if = "is_yes")]
+    pub history: bool,
+    /// A page that translates another, `{url}` the page and `{lang}` the
+    /// language to ("https://translate.google.com/translate?sl=auto&tl={lang}&u={url}");
+    /// no translating when absent — it is an outside service.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub translate: Option<String>,
+}
+
+fn is_yes(b: &bool) -> bool {
+    *b
 }
 
 fn hibernate_default() -> u32 {
@@ -68,6 +81,8 @@ impl Default for Config {
             search: None,
             blocklists: None,
             hibernate_after: hibernate_default(),
+            history: true,
+            translate: None,
         }
     }
 }

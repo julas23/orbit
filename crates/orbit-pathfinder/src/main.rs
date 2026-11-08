@@ -6,9 +6,11 @@
 //! the plan is `docs/PLANO-PATHFINDER.md`.
 
 mod bitwarden;
+mod browse;
 mod config;
 mod cookies;
 mod import;
+mod library;
 mod passwords;
 mod privacy;
 mod recipe;

@@ -131,3 +131,37 @@ window.orbit-pathfinder-dialog {
 }
 window.orbit-pathfinder-dialog .dialog-box { padding: 15px; }
 window.orbit-pathfinder-dialog .error-text { color: @orbit_alert; }
+
+/* Find in the page. */
+window.orbit-pathfinder .findbar { padding: 4px 8px; border-bottom: 1px solid @orbit_border; }
+window.orbit-pathfinder .findbar .option:checked { background: alpha(@orbit_accent, 0.45); }
+window.orbit-pathfinder .find-count { color: @orbit_muted; font-size: 12px; }
+
+/* Downloads. */
+window.orbit-pathfinder button.downloading { color: @orbit_accent; }
+.downloads { padding: 8px; }
+.downloads .download { padding: 4px 0; }
+
+/* Ctrl+K, the history, the bookmarks. */
+window.chooser .chooser-box {
+  padding: 10px;
+  background-color: @orbit_surface;
+  border: 1px solid @orbit_outline;
+  border-radius: 10px;
+}
+window.chooser .results { background: none; }
+window.chooser .results row { padding: 5px 10px; border-radius: 5px; }
+window.chooser .results row:selected { background-color: alpha(@orbit_accent, 0.45); }
+window.chooser .detail, .suggestions .detail { color: @orbit_muted; font-size: 12px; }
+.suggestions row { padding: 4px 8px; }
+.suggestions row:selected { background-color: alpha(@orbit_accent, 0.45); }
+
+/* The split view, the private window. */
+window.orbit-pathfinder .side-bar { padding: 2px 6px; border-bottom: 1px solid @orbit_border; }
+window.orbit-pathfinder .side-title { font-size: 12px; color: @orbit_muted; }
+window.orbit-pathfinder.private .private-badge {
+  padding: 2px 10px;
+  border-radius: 10px;
+  background-color: alpha(#b48ead, 0.35);
+  font-size: 12px;
+}

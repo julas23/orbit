@@ -72,6 +72,10 @@ pub struct Env {
     pub shield: Option<Rc<crate::shield::Shield>>,
     /// The Ferdium recipes found.
     pub recipes: recipe::Index,
+    /// The browser's history and bookmarks.
+    pub library: Rc<crate::library::Library>,
+    /// The downloads of this run, under the button in the bar.
+    pub downloads: Rc<crate::browse::Downloads>,
 }
 
 impl Env {
@@ -128,6 +132,19 @@ impl Env {
         // permission granted from the start (WhatsApp and Teams ask the page,
         // not the user, whether they may notify).
         let context = webkit6::WebContext::new();
+        // Spelling in text fields: the desktop's language, and English.
+        context.set_spell_checking_enabled(true);
+        let mut languages: Vec<String> = glib::language_names()
+            .iter()
+            .map(|l| l.split(['.', '@']).next().unwrap_or("").to_string())
+            .filter(|l| l.contains('_'))
+            .take(1)
+            .collect();
+        if !languages.iter().any(|l| l == "en_US") {
+            languages.push("en_US".into());
+        }
+        let refs: Vec<&str> = languages.iter().map(String::as_str).collect();
+        context.set_spell_checking_languages(&refs);
         context.connect_initialize_notification_permissions(glib::clone!(
             #[weak(rename_to = env)]
             self,
@@ -817,6 +834,12 @@ impl Service {
         }
     }
 
+    /// A page beside the shown one (the split view), on the service's
+    /// storage; not one of its tabs.
+    pub fn side_view(self: &Rc<Self>, url: &str) -> webkit6::WebView {
+        self.make_view(url.to_owned())
+    }
+
     fn make_view(self: &Rc<Self>, first: String) -> webkit6::WebView {
         self.counted.set(false);
         let env = self.env.upgrade().expect("the window outlives its services");
@@ -877,6 +900,9 @@ impl Service {
                 let Some(service) = weak.upgrade() else { return };
                 let title = view.title().unwrap_or_default();
                 if service.cfg.borrow().browser {
+                    if let (Some(env), Some(uri)) = (service.env.upgrade(), view.uri()) {
+                        env.library.visited(&uri, &title);
+                    }
                     service.tabs_changed();
                 } else if !service.recipe_counts.get() {
                     service.set_unread(privacy::unread(&title).unwrap_or(0));
@@ -918,6 +944,12 @@ impl Service {
             weak,
             move |view, event| {
                 let Some(service) = weak.upgrade() else { return };
+                if event == webkit6::LoadEvent::Committed
+                    && service.cfg.borrow().browser
+                    && let (Some(env), Some(uri)) = (service.env.upgrade(), view.uri())
+                {
+                    env.library.visited(&uri, view.title().as_deref().unwrap_or(""));
+                }
                 if event != webkit6::LoadEvent::Finished
                     || service.good_icon.get()
                     || service.cfg.borrow().icon.is_some()
@@ -1311,6 +1343,7 @@ fn popup(view: &webkit6::WebView, service: Weak<Service>) -> webkit6::WebView {
 /// Downloads go to the Downloads folder, under a name not yet taken, and
 /// say so when done.
 fn watch_download(env: &Rc<Env>, download: &webkit6::Download) {
+    env.downloads.add(download);
     download.connect_decide_destination(|download, suggested| {
         let dir = glib::user_special_dir(glib::UserDirectory::Downloads).unwrap_or_else(glib::home_dir);
         let name: String = suggested.chars().map(|c| if c == '/' { '_' } else { c }).collect();

@@ -7,8 +7,21 @@
 //! data and remove; "+" at the bottom adds one. Ctrl+1…9 picks a service,
 //! Ctrl+Tab cycles the ones loaded, Ctrl+R reloads, Alt+←/→ go back and
 //! forward, Ctrl+plus/minus/0 zoom, F12 opens the web inspector.
+//!
+//! As a browser (`browse`, `library`): Ctrl+F finds in the page, Ctrl+P
+//! prints, Ctrl+D bookmarks, Ctrl+H the history, Ctrl+Shift+O the
+//! bookmarks, Ctrl+K anything by name (a service, a tab, a bookmark, a
+//! page visited), Ctrl+Shift+T the tab closed last, Ctrl+J the downloads,
+//! F9 reader mode, F11 fullscreen, Ctrl+Shift+B the page alone (focus),
+//! Ctrl+Shift+S a second page beside it, Ctrl+Shift+N a private window.
+//! The address bar suggests pages from the bookmarks and the history.
 
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    path::PathBuf,
+    rc::Rc,
+};
 
 use gtk::{gdk, gio, glib, prelude::*};
 use orbit_app::i18n::{text, tr, tr_args};
@@ -16,6 +29,7 @@ use orbit_common::ConfigDir;
 use webkit6::prelude::*;
 
 use crate::{
+    browse::{self, Downloads, FindBar, Item, Suggestions},
     config::{self, Config},
     service::{Env, Service},
     state::State,
@@ -73,12 +87,22 @@ pub struct Window {
     key_button: gtk::Button,
     /// The unread total last sent to the dock.
     announced: std::cell::Cell<u32>,
+    findbar: Rc<FindBar>,
+    suggestions: RefCell<Option<Rc<Suggestions>>>,
+    star: gtk::Button,
+    sidebar: gtk::Box,
+    bar: gtk::Box,
+    /// The page shown and, when split, a second one beside it.
+    split: gtk::Paned,
+    side: RefCell<Option<(gtk::Box, webkit6::WebView)>>,
+    focus_mode: Cell<bool>,
 }
 
 impl Window {
     pub fn new(app: &gtk::Application, dir: &ConfigDir) -> anyhow::Result<Rc<Self>> {
         let cfg: Config = dir.app("pathfinder")?;
         let base = |root: PathBuf| root.join("orbit").join("pathfinder");
+        let downloads = Downloads::new();
         let env = Rc::new(Env {
             app: app.clone(),
             data: data_dir(&base(glib::user_data_dir())),
@@ -99,6 +123,8 @@ impl Window {
                     .unwrap_or_else(|| crate::shield::DEFAULT_LISTS.iter().map(|s| s.to_string()).collect());
                 (!lists.is_empty()).then(|| crate::shield::Shield::new(&base(cache_root()), lists))
             },
+            library: crate::library::Library::load(data_dir(&base(glib::user_data_dir())), cfg.history),
+            downloads: downloads.clone(),
         });
 
         let window = gtk::ApplicationWindow::builder()
@@ -167,6 +193,7 @@ impl Window {
         let outside = button("send-to-symbolic", "pathfinder-open-external");
         let key_button = button("changes-prevent-symbolic", "pathfinder-fill");
         let home = button("go-home-symbolic", "pathfinder-home");
+        let star = button("non-starred-symbolic", "pathfinder-bookmark");
         let address = gtk::Entry::builder()
             .hexpand(true)
             .placeholder_text(tr("pathfinder-address-hint"))
@@ -180,11 +207,14 @@ impl Window {
             forward.upcast_ref(),
             reload.upcast_ref(),
             address.upcast_ref(),
+            star.upcast_ref(),
+            downloads.button.upcast_ref(),
             key_button.upcast_ref(),
             outside.upcast_ref(),
         ] {
             bar.append(w);
         }
+        let findbar = FindBar::new();
 
         let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
         let empty = gtk::Label::builder()
@@ -212,7 +242,14 @@ impl Window {
         let page = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
         page.append(&tabbar);
         page.append(&bar);
-        page.append(&stack);
+        page.append(&findbar.widget);
+        let split = gtk::Paned::builder()
+            .start_child(&stack)
+            .resize_start_child(true)
+            .shrink_start_child(false)
+            .vexpand(true)
+            .build();
+        page.append(&split);
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         root.append(&sidebar);
         root.append(&page);
@@ -255,7 +292,39 @@ impl Window {
             vault: Rc::new(crate::passwords::Vault::default()),
             key_button,
             announced: std::cell::Cell::new(0),
+            findbar,
+            suggestions: RefCell::default(),
+            star: star.clone(),
+            sidebar: sidebar.clone(),
+            bar: bar.clone(),
+            split,
+            side: RefCell::default(),
+            focus_mode: Cell::new(false),
         });
+        star.connect_clicked(glib::clone!(
+            #[weak]
+            this,
+            move |_| this.toggle_bookmark()
+        ));
+        {
+            let weak = Rc::downgrade(&this);
+            let suggestions = Suggestions::new(&this.address, move |url| {
+                if let Some(w) = weak.upgrade() {
+                    w.go_to(url);
+                }
+            });
+            *this.suggestions.borrow_mut() = Some(suggestions);
+        }
+        this.window.connect_close_request(glib::clone!(
+            #[weak]
+            this,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_| {
+                this.env.library.save();
+                glib::Propagation::Proceed
+            }
+        ));
 
         {
             let weak = Rc::downgrade(&this);
@@ -307,7 +376,14 @@ impl Window {
         this.address.connect_activate(glib::clone!(
             #[weak]
             this,
-            move |e| this.go_to(&e.text())
+            move |e| {
+                let picked = this.suggestions.borrow().as_ref().and_then(|s| {
+                    let p = s.picked();
+                    s.hide();
+                    p
+                });
+                this.go_to(&picked.unwrap_or_else(|| e.text().to_string()));
+            }
         ));
         {
             // Editing: the page's address waits; leaving puts it back.
@@ -324,6 +400,11 @@ impl Window {
                         this.editing.set(false);
                         this.update_bar();
                     }
+                    if !focus.contains_focus()
+                        && let Some(s) = this.suggestions.borrow().as_ref()
+                    {
+                        s.hide();
+                    }
                 }
             ));
             this.address.add_controller(focus);
@@ -331,9 +412,13 @@ impl Window {
             this.address.connect_changed(glib::clone!(
                 #[weak]
                 this,
-                move |_| {
+                move |e| {
                     if !this.setting_address.get() {
                         this.editing.set(true);
+                        let found = this.env.library.suggest(&e.text(), 8);
+                        if let Some(s) = this.suggestions.borrow().as_ref() {
+                            s.show(found, e.width());
+                        }
                     }
                 }
             ));
@@ -344,6 +429,25 @@ impl Window {
                 #[upgrade_or]
                 glib::Propagation::Proceed,
                 move |_, key, _, _| {
+                    if let Some(s) = this.suggestions.borrow().as_ref()
+                        && s.shown()
+                    {
+                        match key {
+                            gdk::Key::Down => {
+                                s.step(1);
+                                return glib::Propagation::Stop;
+                            }
+                            gdk::Key::Up => {
+                                s.step(-1);
+                                return glib::Propagation::Stop;
+                            }
+                            gdk::Key::Escape => {
+                                s.hide();
+                                return glib::Propagation::Stop;
+                            }
+                            _ => {}
+                        }
+                    }
                     if key != gdk::Key::Escape {
                         return glib::Propagation::Proceed;
                     }
@@ -757,6 +861,13 @@ impl Window {
         self.address.set_tooltip_text(view.title().as_deref());
         self.back.set_sensitive(view.can_go_back());
         self.forward.set_sensitive(view.can_go_forward());
+        let marked = view.uri().is_some_and(|u| self.env.library.is_bookmarked(&u));
+        self.star.set_icon_name(if marked {
+            "starred-symbolic"
+        } else {
+            "non-starred-symbolic"
+        });
+        self.findbar.set_view(Some(&view));
     }
 
     /// Group badges (on folded groups) and the window title.
@@ -1428,6 +1539,48 @@ impl Window {
             .label(tr("pathfinder-import-title"))
             .css_classes(["flat", "menu-item"])
             .build();
+        let entry = |label: &str, f: fn(&Rc<Window>)| {
+            let b = gtk::Button::builder()
+                .label(tr(label))
+                .css_classes(["flat", "menu-item"])
+                .build();
+            let weak = Rc::downgrade(self);
+            let p = popover.downgrade();
+            b.connect_clicked(move |_| {
+                if let Some(p) = p.upgrade() {
+                    p.popdown();
+                }
+                if let Some(w) = weak.upgrade() {
+                    f(&w);
+                }
+            });
+            b
+        };
+        let browse_items = [
+            entry("pathfinder-history", |w| w.history()),
+            entry("pathfinder-bookmarks", |w| w.bookmarks()),
+            entry("pathfinder-private-window", |w| w.private_window(None)),
+            entry("pathfinder-translate", |w| w.translate()),
+            entry("pathfinder-clear-history", |w| {
+                let weak = Rc::downgrade(w);
+                w.confirm(
+                    &tr("pathfinder-clear-history-question"),
+                    &tr("pathfinder-clear-history"),
+                    move || {
+                        if let Some(w) = weak.upgrade() {
+                            w.env.library.clear_history();
+                        }
+                    },
+                );
+            }),
+        ];
+        for item in browse_items.iter() {
+            if let Some(label) = item.child().and_downcast::<gtk::Label>() {
+                label.set_xalign(0.0);
+            }
+            list.append(item);
+        }
+        list.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         for item in [&edit, &reload, &import] {
             if let Some(label) = item.child().and_downcast::<gtk::Label>() {
                 label.set_xalign(0.0);
@@ -1566,6 +1719,46 @@ impl Window {
             }),
         );
         add("next-tab", None, Box::new(|this, _| this.step_tab(1)));
+        add(
+            "find",
+            None,
+            Box::new(|this, _| {
+                if let Some(v) = this.current_view() {
+                    this.findbar.show(&v);
+                }
+            }),
+        );
+        add(
+            "print",
+            None,
+            Box::new(|this, _| {
+                if let Some(v) = this.current_view() {
+                    webkit6::PrintOperation::new(&v).run_dialog(Some(&this.window));
+                }
+            }),
+        );
+        add("bookmark", None, Box::new(|this, _| this.toggle_bookmark()));
+        add("history", None, Box::new(|this, _| this.history()));
+        add("bookmarks", None, Box::new(|this, _| this.bookmarks()));
+        add("anything", None, Box::new(|this, _| this.anything()));
+        add("reopen-tab", None, Box::new(|this, _| this.reopen_tab()));
+        add("downloads", None, Box::new(|this, _| this.env.downloads.button.popup()));
+        add("reader", None, Box::new(|this, _| this.reader()));
+        add(
+            "fullscreen",
+            None,
+            Box::new(|this, _| {
+                if this.window.is_fullscreen() {
+                    this.window.unfullscreen();
+                } else {
+                    this.window.fullscreen();
+                }
+            }),
+        );
+        add("focus-mode", None, Box::new(|this, _| this.toggle_focus_mode()));
+        add("split", None, Box::new(|this, _| this.toggle_split()));
+        add("private", None, Box::new(|this, _| this.private_window(None)));
+        add("translate", None, Box::new(|this, _| this.translate()));
         add("previous-tab", None, Box::new(|this, _| this.step_tab(-1)));
         add(
             "inspect",
@@ -1599,9 +1792,309 @@ impl Window {
             ("win.close-tab", &["<Control>w"]),
             ("win.next-tab", &["<Control>Page_Down"]),
             ("win.previous-tab", &["<Control>Page_Up"]),
+            ("win.find", &["<Control>f"]),
+            ("win.print", &["<Control>p"]),
+            ("win.bookmark", &["<Control>d"]),
+            ("win.history", &["<Control>h"]),
+            ("win.bookmarks", &["<Control><Shift>o"]),
+            ("win.anything", &["<Control>k"]),
+            ("win.reopen-tab", &["<Control><Shift>t"]),
+            ("win.downloads", &["<Control>j"]),
+            ("win.reader", &["F9"]),
+            ("win.fullscreen", &["F11"]),
+            ("win.focus-mode", &["<Control><Shift>b"]),
+            ("win.split", &["<Control><Shift>s"]),
+            ("win.private", &["<Control><Shift>n"]),
         ] {
             app.set_accels_for_action(action, keys);
         }
+    }
+
+    // ------------------------------------------------------- browsing
+
+    /// Ctrl+D: the page shown bookmarked, or no longer.
+    fn toggle_bookmark(&self) {
+        let Some(view) = self.current_view() else { return };
+        let Some(url) = view.uri() else { return };
+        self.env
+            .library
+            .toggle_bookmark(&url, view.title().as_deref().unwrap_or(""));
+        self.update_bar();
+    }
+
+    /// Opens `url` in the browser: a new tab, shown.
+    fn open_in_browser(self: &Rc<Self>, url: &str) {
+        let browser = self.browser.clone();
+        browser.new_tab(url, true);
+        self.select(&browser);
+    }
+
+    fn visit_item(self: &Rc<Self>, url: &str, title: &str, icon: &'static str) -> Item {
+        let weak = Rc::downgrade(self);
+        let u = url.to_string();
+        Item::new(
+            if title.is_empty() {
+                url.to_string()
+            } else {
+                title.to_string()
+            },
+            url.to_string(),
+            icon,
+            move || {
+                if let Some(w) = weak.upgrade() {
+                    w.open_in_browser(&u);
+                }
+            },
+        )
+    }
+
+    /// Ctrl+H: the pages visited, newest first; Delete forgets one.
+    fn history(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        let query: browse::Query = Rc::new(move |text: &str| {
+            let Some(w) = weak.upgrade() else { return Vec::new() };
+            let text = text.to_lowercase();
+            w.env
+                .library
+                .history()
+                .into_iter()
+                .filter(|v| {
+                    text.is_empty() || v.url.to_lowercase().contains(&text) || v.title.to_lowercase().contains(&text)
+                })
+                .take(200)
+                .map(|v| {
+                    let mut item = w.visit_item(&v.url, &v.title, "document-open-recent-symbolic");
+                    let lib = w.env.library.clone();
+                    let url = v.url.clone();
+                    item.delete = Some(Rc::new(move || lib.forget(&url)));
+                    item
+                })
+                .collect()
+        });
+        browse::choose(self.window.upcast_ref(), &tr("pathfinder-history"), query);
+    }
+
+    /// Ctrl+Shift+O: the bookmarks; Delete takes one away.
+    fn bookmarks(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        let query: browse::Query = Rc::new(move |text: &str| {
+            let Some(w) = weak.upgrade() else { return Vec::new() };
+            let text = text.to_lowercase();
+            w.env
+                .library
+                .bookmarks()
+                .into_iter()
+                .filter(|b| {
+                    text.is_empty() || b.url.to_lowercase().contains(&text) || b.title.to_lowercase().contains(&text)
+                })
+                .map(|b| {
+                    let mut item = w.visit_item(&b.url, &b.title, "starred-symbolic");
+                    let lib = w.env.library.clone();
+                    let url = b.url.clone();
+                    let weak = Rc::downgrade(&w);
+                    item.delete = Some(Rc::new(move || {
+                        lib.remove_bookmark(&url);
+                        if let Some(w) = weak.upgrade() {
+                            w.update_bar();
+                        }
+                    }));
+                    item
+                })
+                .collect()
+        });
+        browse::choose(self.window.upcast_ref(), &tr("pathfinder-bookmarks"), query);
+    }
+
+    /// Ctrl+K: a service, a tab of the browser, a bookmark, a page of the
+    /// history — or, failing those, what was typed, searched.
+    fn anything(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        let query: browse::Query = Rc::new(move |typed: &str| {
+            let Some(w) = weak.upgrade() else { return Vec::new() };
+            let lower = typed.trim().to_lowercase();
+            let mut items = Vec::new();
+            let services: Vec<Rc<Service>> = w.services.borrow().clone();
+            for s in std::iter::once(w.browser.clone()).chain(services) {
+                let name = s.name();
+                if lower.is_empty() || name.to_lowercase().contains(&lower) {
+                    let weak = Rc::downgrade(&w);
+                    let s2 = s.clone();
+                    items.push(Item::new(name, String::new(), "view-grid-symbolic", move || {
+                        if let Some(w) = weak.upgrade() {
+                            w.select(&s2);
+                        }
+                    }));
+                }
+            }
+            for (i, view) in w.browser.views().iter().enumerate() {
+                let title = view.title().map(|t| t.to_string()).unwrap_or_default();
+                let url = view.uri().map(|u| u.to_string()).unwrap_or_default();
+                if lower.is_empty() || title.to_lowercase().contains(&lower) || url.to_lowercase().contains(&lower) {
+                    let weak = Rc::downgrade(&w);
+                    items.push(Item::new(title, url, "tab-new-symbolic", move || {
+                        if let Some(w) = weak.upgrade() {
+                            let b = w.browser.clone();
+                            w.select(&b);
+                            b.show_tab(i);
+                        }
+                    }));
+                }
+            }
+            if !lower.is_empty() {
+                for (url, title) in w.env.library.suggest(&lower, 12) {
+                    items.push(w.visit_item(&url, &title, "document-open-recent-symbolic"));
+                }
+                let weak = Rc::downgrade(&w);
+                let typed = typed.trim().to_string();
+                items.push(Item::new(
+                    tr_args("pathfinder-search-for", &[("text", text(typed.clone()))]),
+                    String::new(),
+                    "system-search-symbolic",
+                    move || {
+                        if let Some(w) = weak.upgrade() {
+                            w.go_to(&typed);
+                        }
+                    },
+                ));
+            }
+            items
+        });
+        browse::choose(self.window.upcast_ref(), &tr("pathfinder-anything"), query);
+    }
+
+    /// Ctrl+Shift+T: the tab closed last, open again.
+    fn reopen_tab(self: &Rc<Self>) {
+        if let Some(url) = self.env.library.reopen() {
+            self.open_in_browser(&url);
+        }
+    }
+
+    /// F9: the article alone, in clear type; again, the page as it was.
+    fn reader(&self) {
+        let Some(view) = self.current_view() else { return };
+        view.evaluate_javascript(
+            &format!("(function() {{ {} }})()", browse::READER),
+            None,
+            Some("orbit-reader"),
+            gio::Cancellable::NONE,
+            |result| {
+                if let Err(err) = result {
+                    log::warn!("reader: {err}");
+                }
+            },
+        );
+    }
+
+    /// Ctrl+Shift+B: the page alone — no sidebar, no bars — and back.
+    fn toggle_focus_mode(&self) {
+        let on = !self.focus_mode.get();
+        self.focus_mode.set(on);
+        self.sidebar.set_visible(!on);
+        self.bar.set_visible(!on);
+        let browsing = self
+            .current
+            .borrow()
+            .as_ref()
+            .is_some_and(|c| c.key == self.browser.key);
+        self.tabbar.set_visible(!on && browsing);
+    }
+
+    /// Ctrl+Shift+S: the page shown, open a second time beside it (on the
+    /// same storage), each going its own way; again, back to one.
+    fn toggle_split(self: &Rc<Self>) {
+        if let Some((holder, view)) = self.side.borrow_mut().take() {
+            self.split.set_end_child(None::<&gtk::Widget>);
+            view.try_close();
+            drop(holder);
+            return;
+        }
+        let Some(current) = self.current.borrow().clone() else {
+            return;
+        };
+        let url = current
+            .view()
+            .and_then(|v| v.uri())
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| self.cfg.borrow().home.clone().unwrap_or_else(|| DEFAULT_HOME.into()));
+        let view = current.side_view(&url);
+        let title = gtk::Label::builder()
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .css_classes(["side-title"])
+            .build();
+        let back = gtk::Button::builder()
+            .icon_name("go-previous-symbolic")
+            .css_classes(["flat"])
+            .tooltip_text(tr("pathfinder-back"))
+            .build();
+        let close = gtk::Button::builder()
+            .icon_name("window-close-symbolic")
+            .css_classes(["flat"])
+            .tooltip_text(tr("pathfinder-split-close"))
+            .build();
+        let head = gtk::Box::builder().spacing(5).css_classes(["side-bar"]).build();
+        head.append(&back);
+        head.append(&title);
+        head.append(&close);
+        let holder = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .width_request(320)
+            .build();
+        holder.append(&head);
+        holder.append(&view);
+        {
+            let title = title.clone();
+            view.connect_title_notify(move |v| title.set_label(v.title().as_deref().unwrap_or("")));
+        }
+        {
+            let v = view.clone();
+            back.connect_clicked(move |_| v.go_back());
+        }
+        close.connect_clicked(glib::clone!(
+            #[weak(rename_to = this)]
+            self,
+            move |_| this.toggle_split()
+        ));
+        self.split.set_end_child(Some(&holder));
+        let width = self.split.width();
+        self.split.set_position(if width > 0 { width / 2 } else { 700 });
+        *self.side.borrow_mut() = Some((holder, view));
+    }
+
+    /// Ctrl+Shift+N: a private window, on `url` or empty.
+    fn private_window(&self, url: Option<&str>) {
+        let search = self
+            .cfg
+            .borrow()
+            .search
+            .clone()
+            .unwrap_or_else(|| DEFAULT_SEARCH.into());
+        browse::private_window(&self.env.app, url.unwrap_or(""), search);
+    }
+
+    /// The page shown, translated by the service `translate:` names.
+    fn translate(self: &Rc<Self>) {
+        let Some(template) = self.cfg.borrow().translate.clone() else {
+            let dialog = gtk::AlertDialog::builder()
+                .modal(true)
+                .message(tr("pathfinder-translate-none"))
+                .detail(tr("pathfinder-translate-none-detail"))
+                .build();
+            dialog.show(Some(&self.window));
+            return;
+        };
+        let Some(url) = self.current_view().and_then(|v| v.uri()) else {
+            return;
+        };
+        let lang = glib::language_names()
+            .first()
+            .map(|l| l.split(['_', '.', '@']).next().unwrap_or("en").to_string())
+            .filter(|l| l != "C" && l != "POSIX")
+            .unwrap_or_else(|| "en".into());
+        let encoded = glib::Uri::escape_string(&url, None, false);
+        let target = template.replace("{url}", &encoded).replace("{lang}", &lang);
+        self.open_in_browser(&target);
     }
 
     /// Opens what was typed in the address bar — an address, or a search —
@@ -1726,6 +2219,9 @@ impl Window {
 
     /// Closes the browser's tab `index` (Ctrl+W: the one shown).
     fn close_tab(self: &Rc<Self>, index: usize) {
+        if let Some(url) = self.browser.views().get(index).and_then(|v| v.uri()) {
+            self.env.library.closed(&url);
+        }
         if let Some(view) = self.browser.close_tab(index) {
             self.stack.remove(&view);
         }
@@ -2108,7 +2604,10 @@ fn cache_root() -> PathBuf {
     }
     match own_dir("/var/tmp", "orbit-") {
         Some(local) => {
-            log::info!("pathfinder: the home is on the network; the cache goes to {}", local.display());
+            log::info!(
+                "pathfinder: the home is on the network; the cache goes to {}",
+                local.display()
+            );
             local
         }
         None => home_cache,
@@ -2131,7 +2630,11 @@ fn data_dir(home: &std::path::Path) -> PathBuf {
     };
     if !local.exists() {
         if home.is_dir() {
-            log::info!("pathfinder: copying the data from {} to {}", home.display(), local.display());
+            log::info!(
+                "pathfinder: copying the data from {} to {}",
+                home.display(),
+                local.display()
+            );
             let partial = local.with_extension("copying");
             let _ = std::fs::remove_dir_all(&partial);
             let copied = std::process::Command::new("cp")
@@ -2150,7 +2653,10 @@ fn data_dir(home: &std::path::Path) -> PathBuf {
             return home.to_path_buf();
         }
     }
-    log::info!("pathfinder: the home is on the network; the data is in {}", local.display());
+    log::info!(
+        "pathfinder: the home is on the network; the data is in {}",
+        local.display()
+    );
     local
 }
 
@@ -2158,8 +2664,8 @@ fn data_dir(home: &std::path::Path) -> PathBuf {
 /// network or host-shared filesystem.
 fn on_network(path: &std::path::Path) -> bool {
     const NETWORK: &[u64] = &[
-        0x6969,     // NFS
-        0x517B,     // SMB
+        0x6969,      // NFS
+        0x517B,      // SMB
         0xFF53_4D42, // CIFS
         0xFE53_4D42, // SMB2
         0x6573_5546, // FUSE (sshfs, virtiofs)
