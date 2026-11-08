@@ -619,6 +619,8 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
         }
         state.backend = Backend::Drm(drm);
         send_frames(state, &output);
+        state.lock_shown();
+        state.confirm_lock();
         return;
     }
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
@@ -897,7 +899,8 @@ impl DrmData {
     /// Every screen shows the last frame drawn, with nothing left to draw;
     /// on another console, none shows the session at all.
     pub fn settled(&self) -> bool {
-        !self.session.is_active() || self.surfaces.values().all(|s| !s.dirty && !s.scheduled && !s.waiting)
+        // A monitor switched off shows nothing: it waits for none.
+        !self.session.is_active() || self.surfaces.values().all(|s| s.off || (!s.dirty && !s.scheduled && !s.waiting))
     }
 
     /// Switches to virtual terminal `vt` (Ctrl+Alt+F1…F12).
