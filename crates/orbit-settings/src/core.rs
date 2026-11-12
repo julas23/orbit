@@ -92,6 +92,42 @@ pub fn wallpaper(dir: &ConfigDir) -> Wallpaper {
     }
 }
 
+/// The core's `idle_off` when the file does not say (`config.rs`).
+const IDLE_OFF_DEFAULT: u64 = 900;
+
+/// Seconds idle before the monitors switch off on this machine; 0: never.
+/// `idle_off` is one number for every machine, or `{ default: …, HOST: … }`,
+/// read as the core reads it.
+pub fn idle_off(dir: &ConfigDir) -> u64 {
+    match read(dir).get("idle_off") {
+        None => IDLE_OFF_DEFAULT,
+        Some(Value::Mapping(map)) => map
+            .get(hostname().as_str())
+            .or_else(|| map.get("default"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        Some(value) => value.as_u64().unwrap_or(IDLE_OFF_DEFAULT),
+    }
+}
+
+/// Writes this machine's `idle_off` as `HOST: seconds` (the file is synced):
+/// a single number becomes the other machines' `default`.
+pub fn save_idle_off(dir: &ConfigDir, seconds: u64) -> anyhow::Result<()> {
+    let mut map = match read(dir).get("idle_off") {
+        Some(Value::Mapping(map)) => map.clone(),
+        other => {
+            let mut map = Mapping::new();
+            let all = other.and_then(Value::as_u64).unwrap_or(IDLE_OFF_DEFAULT);
+            map.insert("default".into(), all.into());
+            map
+        }
+    };
+    map.insert(hostname().into(), seconds.into());
+    let mut block = Mapping::new();
+    block.insert("idle_off".into(), Value::Mapping(map));
+    dir.save_app_keys("core", &["idle_off"], &serde_yaml_ng::to_string(&block)?)
+}
+
 /// The picture of monitor `name` alone, when it has one of its own.
 pub fn output_wallpaper(dir: &ConfigDir, name: &str) -> Option<String> {
     output_entry(&read(dir), name)
@@ -308,6 +344,32 @@ mod tests {
         assert!(!text.contains("a.png"));
         assert_eq!(wallpaper(&config).image, "~/y.jpg");
         assert!(output_wallpaper(&config, "DP-1").is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn idle_off_per_machine() {
+        let dir = std::env::temp_dir().join(format!("orbit-settings-idle-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let config = ConfigDir::new(&dir);
+        let host = hostname();
+        // Not in the file: the core's default.
+        std::fs::write(dir.join("core.yaml"), "# mine\nidle_lock: 600\n").unwrap();
+        assert_eq!(idle_off(&config), 900);
+        // One number for all: it stays for the others, this machine gets its own.
+        std::fs::write(dir.join("core.yaml"), "# mine\nidle_off: 300\n").unwrap();
+        assert_eq!(idle_off(&config), 300);
+        save_idle_off(&config, 0).unwrap();
+        assert_eq!(idle_off(&config), 0);
+        let file = read(&config);
+        assert_eq!(file["idle_off"]["default"].as_u64(), Some(300));
+        assert_eq!(file["idle_off"][host.as_str()].as_u64(), Some(0));
+        // Per machine already: the others' entries stay.
+        std::fs::write(dir.join("core.yaml"), "idle_off: { default: 900, otherhost: 60 }\n").unwrap();
+        assert_eq!(idle_off(&config), 900);
+        save_idle_off(&config, 1800).unwrap();
+        assert_eq!(idle_off(&config), 1800);
+        assert_eq!(read(&config)["idle_off"]["otherhost"].as_u64(), Some(60));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

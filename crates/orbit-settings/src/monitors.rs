@@ -18,6 +18,8 @@ const SCALES: &[f64] = &[1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 const TURNS: &[&str] = &["normal", "90", "180", "270"];
 /// Seconds before a change not kept goes back.
 const KEEP: u32 = 15;
+/// The choices for switching the monitors off (minutes; 0: never).
+const OFF_MINUTES: &[u64] = &[0, 1, 2, 5, 10, 15, 30, 60];
 
 /// What one monitor is set to.
 #[derive(Debug, Clone, PartialEq)]
@@ -304,12 +306,58 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     foot.append(&page.apply);
     body.append(&foot);
     body.append(&page.keep_bar);
+    body.append(&power_card(&page));
     body.append(&page.message);
     gtk::ScrolledWindow::builder()
         .child(&body)
         .hscrollbar_policy(gtk::PolicyType::Never)
         .build()
         .upcast()
+}
+
+/// When the monitors switch off with no input (`idle_off`, this machine's):
+/// written at once and the core reloads, as the screensaver.
+fn power_card(page: &Rc<Page>) -> gtk::Box {
+    let labels: Vec<String> = OFF_MINUTES
+        .iter()
+        .map(|m| match m {
+            0 => tr("settings-saver-never"),
+            m => tr_args("settings-saver-minutes", &[("minutes", (*m as i64).into())]),
+        })
+        .collect();
+    let off = gtk::DropDown::from_strings(&labels.iter().map(String::as_str).collect::<Vec<_>>());
+    off.set_tooltip_text(Some(&tr("settings-off-tip")));
+    let seconds = core::idle_off(&page.dir);
+    // The file's seconds, to the nearest choice.
+    let near = OFF_MINUTES
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, m)| (**m * 60).abs_diff(seconds))
+        .map_or(0, |(i, _)| i);
+    off.set_selected(near as u32);
+    off.connect_selected_notify({
+        let page = page.clone();
+        move |dd| {
+            let Some(minutes) = OFF_MINUTES.get(dd.selected() as usize) else {
+                return;
+            };
+            if minutes * 60 == core::idle_off(&page.dir) {
+                return;
+            }
+            let told = core::save_idle_off(&page.dir, minutes * 60).and_then(|()| core::command("reload"));
+            match told {
+                Ok(()) => crate::say(&page.message, ""),
+                Err(err) => crate::say(&page.message, &format!("{}: {err:#}", tr("settings-not-told"))),
+            }
+        }
+    });
+    let card = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(10)
+        .css_classes(["card"])
+        .build();
+    card.append(&crate::row(&tr("settings-off"), &off));
+    card
 }
 
 impl Page {
