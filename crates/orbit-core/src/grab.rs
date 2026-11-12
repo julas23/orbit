@@ -37,6 +37,11 @@ impl Orbit {
     /// Starts moving `window` with the pointer, from where the pointer is.
     pub fn start_move(&mut self, window: Window, serial: Serial, start_data: Option<GrabStartData<Orbit>>) {
         let Some(pointer) = self.seat.get_pointer() else { return };
+        // GTK (Ghostty) can ask twice for the same press: replacing the
+        // grab would drop the window and stop drawing it while it moves.
+        if self.dragging.as_ref() == Some(&window) && pointer.is_grabbed() {
+            return;
+        }
         let Some(from) = self.space.element_location(&window) else {
             return;
         };
