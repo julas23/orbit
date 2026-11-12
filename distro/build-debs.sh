@@ -7,7 +7,7 @@
 # HOST, puts them in the repository server's incoming folder
 # (distro/repo/sync.sh publishes them).
 #
-#   distro/build-debs.sh [--arm64] [--upload root@10.0.0.111] [--all]
+#   distro/build-debs.sh [--arm64] [--upload ubuntu@rationalazimuth.com] [--all]
 #
 # With --upload, only the packages that changed since the ones in the
 # incoming folder are built and sent (distro/changed.py says which, and

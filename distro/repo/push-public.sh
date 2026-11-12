@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# OBSOLETE since 2026-11-12: aptly runs on the web server itself (sync.sh
+# there) and nginx serves orbit-public directly; nothing to copy. Kept for a
+# repository server apart from the web server again.
 # push-public.sh — copies the public publication of the repository server
 # (orbit-public, see sync.sh) to the public web server, where it is
 # https://rationalazimuth.com/orbit. Run it from a machine that reaches both

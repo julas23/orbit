@@ -19,7 +19,7 @@
 #       newest: those repositories keep every version ever made
 #   http://SERVER/orbit-public trixie main   Orbit's own packages only, but
 #       those in public.exclude (metapackages that need the third parties):
-#       what may go to the internet — push-public.sh copies it to
+#       what may go to the internet — served as
 #       https://rationalazimuth.com/orbit
 #
 # GitHub's API allows 60 requests an hour without a token: set GITHUB_TOKEN
@@ -27,6 +27,14 @@
 #
 # Each run makes dated snapshots and switches the publications to them, so
 # a bad update can be switched back (`aptly publish switch`).
+#
+# Before the first run: aptly checks the Debian mirrors against root's
+# trustedkeys.gpg, which must hold Debian's current archive keys (trixie's
+# too; on a server not running trixie, take debian-archive-keyring from
+# trixie itself, its hash checked through a Release its older key signs):
+#   gpg --no-default-keyring --keyring trustedkeys.gpg \
+#       --import /usr/share/keyrings/debian-archive-keyring.gpg
+# and /etc/aptly.conf with "rootDir": "/srv/aptly".
 set -euo pipefail
 
 DIR=$(cd "${1:-$(dirname "$0")}" && pwd)
@@ -46,7 +54,9 @@ publish() { # prefix snapshot [architectures]
     local archs=${3:-amd64,all} have
     # A publication keeps the architectures it was made with: other ones
     # mean making it again.
-    have=$(aptly publish show "$DIST" "$1" 2>/dev/null | sed -n 's/^Architectures: //p' | tr ' ' '\n' | sort | paste -sd,)
+    # Not published yet (the first run): `publish show` fails, and with
+    # pipefail that would end the script.
+    have=$(aptly publish show "$DIST" "$1" 2>/dev/null | sed -n 's/^Architectures: //p' | tr ' ' '\n' | sort | paste -sd,) || have=""
     if [[ -n "$have" && "$have" != "$(tr ',' '\n' <<< "$archs" | sort | paste -sd,)" ]]; then
         aptly publish drop "$DIST" "$1" >/dev/null
         have=""

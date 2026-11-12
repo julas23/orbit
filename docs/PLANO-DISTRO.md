@@ -265,10 +265,19 @@ num menu com duas escolhas.
 
 ## 7. Infraestrutura
 
-**Repositório apt no ar desde 2026-10-21:** LXC `10.0.0.111` (Debian 13), aptly
-+ nginx, chave `Orbit Linux Archive (pre-release)`
-`285F 4964 06AB A347 4D1A 5983 9C2D 444C BEB0 4CC0` (ed25519, até 2029, gerada
-no próprio servidor — a chave definitiva, mestre offline, vem antes da Fase D).
+**Repositório apt refeito na VPS em 2026-11-12:** a LXC `10.0.0.111` (aptly
+desde 2026-10-21) morreu em 2026-11-10 e levou a chave
+`285F 4964 06AB A347 4D1A 5983 9C2D 444C BEB0 4CC0`, que não tinha cópia. Agora
+o aptly roda na VPS da Oracle (Ubuntu 24.04, `/srv/aptly`, configuração em
+`/srv/orbit-repo-config`, `orbit-repo-sync.timer` toda noite) e o nginx serve
+só a publicação `orbit-public` em https://rationalazimuth.com/orbit. Chave
+nova `Orbit Linux Archive`
+`33CD 1DA3 80C2 3E38 A916 3BE0 F1FB B3C7 B040 716C` (ed25519, até 2029-11-11,
+gerada na VPS, sem senha para o timer assinar). **Cópia da chave privada e do
+certificado de revogação fora da VPS** — sem ela, perder o servidor é perder o
+repositório de novo. Envio dos pacotes:
+`distro/build-debs.sh --upload ubuntu@VPS` (só o incoming `orbit` é do
+`ubuntu`). Os endereços `10.0.0.111` abaixo são histórico.
 
 ```
 # /etc/apt/sources.list.d/orbit.sources (chave em
