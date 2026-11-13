@@ -238,6 +238,12 @@ impl Window {
                 }
             }
         });
+        let weak = Rc::downgrade(&w);
+        places.connect_here(move || {
+            weak.upgrade()
+                .map(|w| w.pane().location.borrow().clone())
+                .unwrap_or(Location::Computer)
+        });
         places.widget.set_vexpand(true);
         w.places_widget.append(&places.widget);
         w.places_widget.append(&side);
@@ -1142,6 +1148,24 @@ impl Window {
         crate::properties::show(self.window.upcast_ref(), selected);
     }
 
+    /// Ctrl+D: the selected folders to the bookmarks — or, none
+    /// selected, the folder the window is in.
+    fn bookmark(&self) {
+        let pane = self.pane();
+        let mut files: Vec<gio::File> = pane
+            .selected()
+            .into_iter()
+            .filter(|e| e.dir)
+            .map(|e| e.location.file())
+            .collect();
+        if files.is_empty() {
+            files.push(pane.location.borrow().file());
+        }
+        if let Some(places) = self.places.borrow().as_ref() {
+            places.add_bookmarks(&files);
+        }
+    }
+
     /// F1: the keys.
     fn help(&self) {
         crate::help::show(self.window.upcast_ref());
@@ -1175,6 +1199,7 @@ impl Window {
         add("properties", |w| w.properties());
         add("undo", |w| w.undo());
         add("admin", |w| w.open_as_admin());
+        add("bookmark", |w| w.bookmark());
         add("columns", |w| {
             let pane = w.pane();
             w.columns_menu(pane.widget.upcast_ref(), None);
@@ -1314,6 +1339,7 @@ impl Window {
                 new.push(item(&tr("files-paste"), "files.paste", None));
                 sections.push(new);
             }
+            sections.push(vec![item(&tr("files-bookmark-add"), "files.bookmark", None)]);
             // Sorting, for every view; the columns, for the list.
             let (key, ascending) = pane.sort();
             let mark = |k: SortKey| (k == key).then_some("object-select-symbolic");
@@ -1357,6 +1383,7 @@ impl Window {
             }
             if selected.iter().all(|e| e.dir) {
                 open.push(item(&tr("files-open-tab"), "files.new-tab", None));
+                open.push(item(&tr("files-bookmark-add"), "files.bookmark", None));
             }
             sections.push(open);
             sections.push(vec![
@@ -1476,6 +1503,7 @@ impl Window {
                 Key::f | Key::F if shift => pane.open_search(),
                 Key::f | Key::F => pane.open_filter(),
                 Key::z | Key::Z => self.undo(),
+                Key::d | Key::D => self.bookmark(),
                 Key::plus | Key::equal | Key::KP_Add => self.zoom_by(1),
                 Key::minus | Key::KP_Subtract => self.zoom_by(-1),
                 Key::_0 | Key::KP_0 => self.zoom_by(0),

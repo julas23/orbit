@@ -34,6 +34,7 @@ const KEYS: &[(&str, &str)] = &[
     ("Alt+← → ↑", "files-help-history"),
     ("Alt+Enter", "files-help-properties"),
     ("Ctrl+Z", "files-help-undo"),
+    ("Ctrl+D", "files-help-bookmark"),
     ("Ctrl+Shift+F", "files-help-search"),
     ("Ctrl+wheel, Ctrl+= − 0", "files-help-zoom"),
     ("j k h l, gg G", "files-help-vim"),

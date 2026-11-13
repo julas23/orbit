@@ -1,5 +1,8 @@
-//! The places along the left: home and the user's folders, the GTK
-//! bookmarks (shared with every GTK file dialog), the trash, the disks —
+//! The places along the left: the computer, home and the user's folders,
+//! the trash, the GTK bookmarks (shared with every GTK file dialog: added
+//! with the + on their heading, Ctrl+D or a folder dropped on it,
+//! reordered by dragging, and moved or removed from their right-click
+//! menu), the disks —
 //! mounted or not, with eject for those that can be — and "Connect to
 //! server" for SMB, SFTP, FTP or WebDAV shares, which GVfs mounts (asking
 //! for a password when one is needed).
@@ -29,6 +32,10 @@ pub struct Places {
     /// heading turns it over.
     all_mounts: Cell<bool>,
     on_dropped: Dropped,
+    /// Where the window is: what the + on "Bookmarks" adds.
+    here: RefCell<Option<Box<dyn Fn() -> Location>>>,
+    /// The bookmarks file, changed by another window or a GTK dialog.
+    bookmarks_monitor: RefCell<Option<gio::FileMonitor>>,
 }
 
 impl Places {
@@ -49,8 +56,29 @@ impl Places {
             go: Rc::new(go),
             all_mounts: Cell::new(all_mounts),
             on_dropped: Rc::default(),
+            here: RefCell::default(),
+            bookmarks_monitor: RefCell::default(),
         });
         places.fill();
+        if let Ok(monitor) =
+            gio::File::for_path(bookmarks_file()).monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+        {
+            let weak = Rc::downgrade(&places);
+            monitor.connect_changed(move |_, _, _, event| {
+                if matches!(
+                    event,
+                    gio::FileMonitorEvent::ChangesDoneHint
+                        | gio::FileMonitorEvent::Created
+                        | gio::FileMonitorEvent::Deleted
+                        | gio::FileMonitorEvent::MovedIn
+                        | gio::FileMonitorEvent::Renamed
+                ) && let Some(p) = weak.upgrade()
+                {
+                    p.refill();
+                }
+            });
+            *places.bookmarks_monitor.borrow_mut() = Some(monitor);
+        }
         // Disks come and go.
         for signal in [
             "mount-added",
@@ -68,6 +96,48 @@ impl Places {
             });
         }
         places
+    }
+
+    /// Where the window is, for the + on "Bookmarks".
+    pub fn connect_here(&self, f: impl Fn() -> Location + 'static) {
+        *self.here.borrow_mut() = Some(Box::new(f));
+    }
+
+    /// Adds folders to the bookmarks, after the ones there (those already
+    /// there stay where they are).
+    pub fn add_bookmarks(self: &Rc<Self>, files: &[gio::File]) {
+        let mut lines = read_bookmarks();
+        let mut changed = false;
+        for file in files {
+            if !bookmarkable(file) {
+                continue;
+            }
+            let uri = file.uri().to_string();
+            if !lines.iter().any(|l| split(l).0 == uri) {
+                lines.push(uri);
+                changed = true;
+            }
+        }
+        if changed {
+            self.save_bookmarks(&lines);
+        }
+    }
+
+    fn save_bookmarks(self: &Rc<Self>, lines: &[String]) {
+        if let Err(e) = write_bookmarks(lines) {
+            log::warn!("bookmarks: {e}");
+        }
+        self.refill();
+    }
+
+    /// Fills the list again — later, not from inside a row being removed.
+    fn refill(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            if let Some(p) = weak.upgrade() {
+                p.fill();
+            }
+        });
     }
 
     /// Called with files dropped on a place.
@@ -138,7 +208,9 @@ impl Places {
         }
         self.header(&tr("files-places"));
         let home = glib::home_dir();
+        self.place("computer", &tr("files-computer"), Location::Computer);
         self.place("user-home", &tr("files-home"), Location::Path(home.clone()));
+        self.separator();
         use glib::UserDirectory as U;
         for dir in [U::Desktop, U::Documents, U::Downloads, U::Music, U::Pictures, U::Videos] {
             if let Some(path) = glib::user_special_dir(dir).filter(|p| p.is_dir() && *p != home) {
@@ -150,20 +222,26 @@ impl Places {
                 self.place(icon, &name, Location::Path(path));
             }
         }
+        self.separator();
         self.place("user-trash", &tr("files-trash"), Location::Uri("trash:///".into()));
-        self.place("computer", &tr("files-computer"), Location::Computer);
 
-        let bookmarks = bookmarks();
-        if !bookmarks.is_empty() {
-            self.header(&tr("files-bookmarks"));
-            for (file, name) in bookmarks {
-                let label = name.unwrap_or_else(|| {
-                    file.basename()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default()
-                });
-                self.place("folder", &label, Location::of(&file));
-            }
+        // Always there, for its +.
+        self.bookmarks_header();
+        let lines = read_bookmarks();
+        for (n, line) in lines.iter().enumerate() {
+            let (uri, name) = split(line);
+            let file = gio::File::for_uri(uri);
+            let label = name.map(str::to_owned).unwrap_or_else(|| {
+                file.basename()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            });
+            let icon = file
+                .path()
+                .and_then(|p| entry::special_folder_icon(&p))
+                .unwrap_or("folder");
+            let row = self.place(icon, &label, Location::of(&file));
+            self.manage_bookmark(&row, n, lines.len());
         }
 
         let all = self.all_mounts.get();
@@ -314,6 +392,144 @@ impl Places {
         self.list.append(&row);
     }
 
+    /// "Bookmarks", with a + that adds the folder the window is in; a
+    /// folder dropped on it is added too.
+    fn bookmarks_header(self: &Rc<Self>) {
+        let content = gtk::Box::builder().spacing(5).build();
+        content.append(
+            &gtk::Label::builder()
+                .label(tr("files-bookmarks"))
+                .xalign(0.0)
+                .hexpand(true)
+                .css_classes(["places-header"])
+                .build(),
+        );
+        let add = gtk::Button::builder()
+            .icon_name("list-add-symbolic")
+            .tooltip_text(tr("files-bookmark-add-here"))
+            .css_classes(["flat", "eject"])
+            .build();
+        let weak = Rc::downgrade(self);
+        add.connect_clicked(move |_| {
+            let Some(p) = weak.upgrade() else { return };
+            let here = p.here.borrow().as_ref().map(|f| f());
+            if let Some(here) = here {
+                p.add_bookmarks(&[here.file()]);
+            }
+        });
+        content.append(&add);
+        let row = gtk::ListBoxRow::builder()
+            .child(&content)
+            .activatable(false)
+            .selectable(false)
+            .css_classes(["bookmarks-header"])
+            .build();
+        let target = gtk::DropTarget::new(
+            gdk::FileList::static_type(),
+            gdk::DragAction::LINK | gdk::DragAction::COPY,
+        );
+        let weak = Rc::downgrade(self);
+        target.connect_drop(move |_, value, _, _| {
+            let (Some(p), Ok(list)) = (weak.upgrade(), value.get::<gdk::FileList>()) else {
+                return false;
+            };
+            let dirs: Vec<gio::File> = list
+                .files()
+                .into_iter()
+                .filter(|f| {
+                    f.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE) == gio::FileType::Directory
+                })
+                .collect();
+            p.add_bookmarks(&dirs);
+            !dirs.is_empty()
+        });
+        row.add_controller(target);
+        self.list.append(&row);
+    }
+
+    /// Bookmark `n` of `count`: dragged onto another to take its place,
+    /// and a right-click menu to move it up or down or remove it.
+    fn manage_bookmark(self: &Rc<Self>, row: &gtk::ListBoxRow, n: usize, count: usize) {
+        row.add_css_class("bookmark");
+        // Dragging it: its number, which only this program takes.
+        let source = gtk::DragSource::builder().actions(gdk::DragAction::MOVE).build();
+        source.connect_prepare(move |_, _, _| Some(gdk::ContentProvider::for_value(&(n as u32).to_value())));
+        let r = row.downgrade();
+        source.connect_drag_begin(move |s, _| {
+            if let Some(r) = r.upgrade() {
+                s.set_icon(Some(&gtk::WidgetPaintable::new(Some(&r))), 0, 0);
+            }
+        });
+        row.add_controller(source);
+        let target = gtk::DropTarget::new(u32::static_type(), gdk::DragAction::MOVE);
+        let weak = Rc::downgrade(self);
+        target.connect_drop(move |_, value, _, _| {
+            let (Some(p), Ok(from)) = (weak.upgrade(), value.get::<u32>()) else {
+                return false;
+            };
+            p.save_bookmarks(&moved(read_bookmarks(), from as usize, n));
+            true
+        });
+        row.add_controller(target);
+
+        let menu = gtk::GestureClick::builder().button(gdk::BUTTON_SECONDARY).build();
+        let weak = Rc::downgrade(self);
+        let r = row.downgrade();
+        menu.connect_pressed(move |_, _, x, y| {
+            let (Some(p), Some(row)) = (weak.upgrade(), r.upgrade()) else {
+                return;
+            };
+            let popover = gtk::Popover::builder().css_classes(["context-menu"]).build();
+            let column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+            let mut items: Vec<(&str, Option<usize>)> = Vec::new();
+            if n > 0 {
+                items.push(("files-bookmark-up", Some(n - 1)));
+            }
+            if n + 1 < count {
+                items.push(("files-bookmark-down", Some(n + 1)));
+            }
+            items.push(("files-bookmark-remove", None));
+            for (label, to) in items {
+                let button = gtk::Button::builder()
+                    .child(&gtk::Label::builder().label(tr(label)).xalign(0.0).build())
+                    .css_classes(["flat", "menu-item"])
+                    .build();
+                let weak = Rc::downgrade(&p);
+                let pop = popover.downgrade();
+                button.connect_clicked(move |_| {
+                    if let Some(pop) = pop.upgrade() {
+                        pop.popdown();
+                    }
+                    let Some(p) = weak.upgrade() else { return };
+                    let mut lines = read_bookmarks();
+                    match to {
+                        Some(to) => lines = moved(lines, n, to),
+                        None if n < lines.len() => {
+                            lines.remove(n);
+                        }
+                        None => return,
+                    }
+                    p.save_bookmarks(&lines);
+                });
+                column.append(&button);
+            }
+            popover.set_child(Some(&column));
+            orbit_app::popup::open(&popover, &row, Some((x, y)));
+        });
+        row.add_controller(menu);
+    }
+
+    /// A line between groups of places.
+    fn separator(&self) {
+        let row = gtk::ListBoxRow::builder()
+            .child(&gtk::Separator::new(gtk::Orientation::Horizontal))
+            .activatable(false)
+            .selectable(false)
+            .css_classes(["places-separator"])
+            .build();
+        self.list.append(&row);
+    }
+
     fn header(&self, title: &str) {
         let label = gtk::Label::builder()
             .label(title)
@@ -328,11 +544,12 @@ impl Places {
         self.list.append(&row);
     }
 
-    fn place(&self, icon: &str, name: &str, to: Location) {
+    fn place(&self, icon: &str, name: &str, to: Location) -> gtk::ListBoxRow {
         let row = self.row_with_icon(&gio::ThemedIcon::new(&format!("{icon}-symbolic")).upcast(), name);
         self.take_drops(&row, &to);
         let go = self.go.clone();
         self.on_click(&row, move || go(to.clone()));
+        row
     }
 
     fn row_with_icon(&self, icon: &gio::Icon, name: &str) -> gtk::ListBoxRow {
@@ -420,17 +637,79 @@ pub fn is_network(volume: &gio::Volume) -> bool {
     volume.identifier("class").as_deref() == Some("network")
 }
 
-/// The GTK bookmarks: (location, name).
-fn bookmarks() -> Vec<(gio::File, Option<String>)> {
-    let file = glib::user_config_dir().join("gtk-3.0").join("bookmarks");
-    std::fs::read_to_string(file)
+fn bookmarks_file() -> PathBuf {
+    glib::user_config_dir().join("gtk-3.0").join("bookmarks")
+}
+
+/// The GTK bookmarks, a line each: "uri" or "uri name".
+fn read_bookmarks() -> Vec<String> {
+    std::fs::read_to_string(bookmarks_file())
         .unwrap_or_default()
         .lines()
         .filter(|l| !l.trim().is_empty())
-        .map(|l| {
-            let mut parts = l.splitn(2, ' ');
-            let uri = parts.next().unwrap_or_default();
-            (gio::File::for_uri(uri), parts.next().map(str::to_owned))
-        })
+        .map(str::to_owned)
         .collect()
+}
+
+fn write_bookmarks(lines: &[String]) -> std::io::Result<()> {
+    let file = bookmarks_file();
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut text = lines.join("\n");
+    if !text.is_empty() {
+        text.push('\n');
+    }
+    // Whole or not at all: GTK dialogs read it too.
+    let tmp = file.with_extension("orbit-files.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(tmp, file)
+}
+
+/// A bookmark line: its URI, and the name given to it, if any.
+fn split(line: &str) -> (&str, Option<&str>) {
+    match line.split_once(' ') {
+        Some((uri, name)) if !name.trim().is_empty() => (uri, Some(name)),
+        Some((uri, _)) => (uri, None),
+        None => (line, None),
+    }
+}
+
+/// A folder worth a bookmark: not "Computer", nor the trash.
+fn bookmarkable(file: &gio::File) -> bool {
+    !file.has_uri_scheme("computer") && !file.has_uri_scheme("trash")
+}
+
+/// `lines` with the one at `from` taken to `to`, the others making room.
+fn moved(mut lines: Vec<String>, from: usize, to: usize) -> Vec<String> {
+    if from < lines.len() && to < lines.len() && from != to {
+        let line = lines.remove(from);
+        lines.insert(to, line);
+    }
+    lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(s: &[&str]) -> Vec<String> {
+        s.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn moving_a_bookmark_takes_the_place_of_another() {
+        let l = v(&["a", "b", "c", "d"]);
+        assert_eq!(moved(l.clone(), 0, 2), v(&["b", "c", "a", "d"]));
+        assert_eq!(moved(l.clone(), 3, 1), v(&["a", "d", "b", "c"]));
+        assert_eq!(moved(l.clone(), 1, 1), l);
+        assert_eq!(moved(l.clone(), 9, 1), l);
+    }
+
+    #[test]
+    fn a_bookmark_line_has_a_uri_and_maybe_a_name() {
+        assert_eq!(split("file:///home/a"), ("file:///home/a", None));
+        assert_eq!(split("file:///home/a Meu nome"), ("file:///home/a", Some("Meu nome")));
+        assert_eq!(split("file:///home/a "), ("file:///home/a", None));
+    }
 }
