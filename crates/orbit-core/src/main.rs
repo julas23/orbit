@@ -27,6 +27,7 @@
 
 mod cards;
 mod command;
+mod compose;
 mod config;
 mod cursor;
 mod devices;

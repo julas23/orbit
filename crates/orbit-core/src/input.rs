@@ -546,10 +546,17 @@ impl Orbit {
                 let sym = handle
                     .raw_latin_sym_or_raw_current_sym()
                     .unwrap_or_else(|| handle.modified_sym());
-                match state.keys.command(mods, sym) {
+                match state.keys.command(mods, sym).map(str::to_owned) {
                     Some(command) => {
+                        state.compose.reset();
                         state.suppressed.push(code);
-                        FilterResult::Intercept(Some(Action::Command(command.to_owned())))
+                        FilterResult::Intercept(Some(Action::Command(command)))
+                    }
+                    // A dead key, or what follows it, for a program typing
+                    // through text-input (`compose`).
+                    None if state.compose_key(mods, handle.modified_sym()) => {
+                        state.suppressed.push(code);
+                        FilterResult::Intercept(None)
                     }
                     None => FilterResult::Forward,
                 }

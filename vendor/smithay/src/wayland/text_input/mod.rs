@@ -167,7 +167,9 @@ where
                     },
                 );
                 handle.add_instance(&instance);
-                if input_method_handle.has_instance() {
+                // Orbit: also while the compositor is the input method — GTK
+                // binds text-input only after its window has the focus.
+                if input_method_handle.has_instance() || handle.compositor_input_method() {
                     handle.enter();
                 }
             }

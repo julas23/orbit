@@ -129,6 +129,8 @@ pub struct Orbit {
     pub dragging: Option<Window>,
     /// Keys a shortcut took: their release is not sent to clients.
     pub suppressed: Vec<smithay::input::keyboard::Keycode>,
+    /// Dead keys for the programs typing through text-input (`compose`).
+    pub compose: crate::compose::Compose,
     /// The buttons pressed to wake the screensaver: their release is not
     /// passed on either.
     pub saver_buttons: Vec<u32>,
@@ -227,6 +229,9 @@ impl Orbit {
         }
         seat.add_pointer();
         seat.add_touch();
+        // The core is the input method until a real one connects
+        // (`compose`): text-input is entered on the focused window.
+        smithay::wayland::text_input::TextInputSeat::text_input(&seat).set_compositor_input_method(true);
 
         let extra = crate::protocols::Extra::new(&dh, event_loop.handle());
         let toplevels = crate::toplevels::Toplevels::new(&dh);
@@ -276,6 +281,7 @@ impl Orbit {
             cursor_shape_state,
             needs_render: true,
             suppressed: Vec::new(),
+            compose: crate::compose::Compose::new(),
             saver_buttons: Vec::new(),
             dragging: None,
             shaders: None,
