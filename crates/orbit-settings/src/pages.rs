@@ -305,6 +305,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-upd-check", "settings-upd-install", "settings-upd-auto", "settings-upd-repos", "settings-upd-history"],
     },
     Page {
+        id: "boot",
+        group: Group::System,
+        title: "settings-boot",
+        icon: "system-reboot-symbolic",
+        keywords: "settings-boot-keywords",
+        options: &["settings-boot-timeout", "settings-boot-default", "settings-boot-snapshots", "settings-boot-restart-menu"],
+    },
+    Page {
         id: "about",
         group: Group::Orbit,
         title: "settings-about",

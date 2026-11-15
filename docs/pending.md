@@ -360,7 +360,21 @@ with Step 2; the phases then run alongside the steps above.
   folder's folders measured when asked). Left: drives for every user at
   boot (systemd mounts through the helper), and what to do when a pen
   drive, camera or phone is plugged in (nothing of Orbit's automounts yet;
-  udiskie does on the user's machines).
+  udiskie does on the user's machines). B4 done 2026-11-15: Printers and
+  scanners through CUPS's tools (lpstat; my default, paper and two-sided
+  per person with lpoptions; the queue and cancelling; a test page;
+  printers found by `driverless` or typed, added with `lpadmin -m
+  everywhere` and removed, which the lpadmin group may do;
+  system-config-printer as "Advanced…"; SANE's scanners with sane-utils).
+  No printer here to try it on. B5 done 2026-11-15: Boot (the helper's new
+  `boot-info`, `boot-timeout`, `boot-default` and `snapshot` steps:
+  systemd-boot's menu time and default entry, snapper's snapshots listed
+  and taken; reading asks for the password, so the page reads when asked;
+  restart into the boot menu through logind). Left: going back to a
+  snapshot (the distro's UKI hook of PLANO-DISTRO §6.4 comes first), the
+  boot theme (Plymouth). Phase B's "done when" (an SMB folder at login, a
+  network printer added, an update installed, all from Orbit-Settings) is
+  for the user to try.
 - [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,
   Updates, Lock screen and login, Boot. Done when an SMB folder mounted at
   login, a network printer added and an update installed all go through

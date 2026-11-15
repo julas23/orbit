@@ -15,12 +15,14 @@ mod about;
 mod appearance;
 mod apps_page;
 mod bluetooth;
+mod boot;
 mod core;
 mod datetime;
 mod housekeeping;
 mod dbus;
 mod dock_page;
 mod drives;
+mod helper;
 mod keyboard;
 mod lock_page;
 mod menu;
@@ -167,6 +169,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "drives" => drives::page(dir),
             "storage" => storage::page(),
             "printers" => printers::page(),
+            "boot" => boot::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

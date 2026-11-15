@@ -102,6 +102,10 @@ fn describe(step: &Privileged) -> String {
         Privileged::Refresh => "Fetching the package lists".into(),
         Privileged::Upgrade => "Installing the updates".into(),
         Privileged::AutoUpdates(m) => format!("Automatic updates: {m}"),
+        Privileged::BootInfo => "Reading the boot settings".into(),
+        Privileged::BootTimeout(n) => format!("Boot menu: {n} s"),
+        Privileged::BootDefault(id) => format!("Booting {id} by default"),
+        Privileged::Snapshot(_) => "Taking a snapshot".into(),
     }
 }
 
@@ -119,6 +123,81 @@ fn run(step: &Privileged) -> Result<(), String> {
         Privileged::Refresh => apt(&["update"]),
         Privileged::Upgrade => apt(&["dist-upgrade"]),
         Privileged::AutoUpdates(mode) => auto_updates(mode),
+        Privileged::BootInfo => boot_info(),
+        Privileged::BootTimeout(seconds) => boot_timeout(*seconds),
+        Privileged::BootDefault(id) => tool("bootctl", &["set-default", id]).map(|_| ()),
+        Privileged::Snapshot(description) => {
+            tool("snapper", &["-c", "root", "create", "-c", "number", "-d", description]).map(|_| ())
+        }
+    }
+}
+
+/// systemd-boot's loader.conf, where bootctl finds the ESP.
+fn loader_conf() -> Result<String, String> {
+    let esp = tool("bootctl", &["--print-esp-path"])?;
+    Ok(format!("{}/loader/loader.conf", esp.trim()))
+}
+
+/// The boot loader's entries and the root's snapshots, as one `info`
+/// line of JSON: {"timeout", "entries", "snapshots"}; what cannot be read
+/// is null.
+fn boot_info() -> Result<(), String> {
+    let json = |text: Result<String, String>| text.ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
+    let timeout = loader_conf()
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| {
+            t.lines()
+                .find_map(|l| l.trim().strip_prefix("timeout").map(|v| v.trim().to_owned()))
+        });
+    let info = serde_json::json!({
+        "timeout": timeout,
+        "entries": json(tool("bootctl", &["list", "--json=short", "--no-pager"])),
+        "snapshots": json(tool("snapper", &["--jsonout", "-c", "root", "list"])),
+    });
+    println!("info {info}");
+    Ok(())
+}
+
+/// loader.conf's `timeout` set, its other lines kept.
+fn boot_timeout(seconds: u32) -> Result<(), String> {
+    let path = loader_conf()?;
+    let old = std::fs::read_to_string(&path).unwrap_or_default();
+    std::fs::write(&path, with_timeout(&old, seconds)).map_err(|e| format!("{path}: {e}"))
+}
+
+fn with_timeout(old: &str, seconds: u32) -> String {
+    let mut found = false;
+    let mut lines: Vec<String> = old
+        .lines()
+        .map(|l| {
+            if l.trim_start().starts_with("timeout") {
+                found = true;
+                format!("timeout {seconds}")
+            } else {
+                l.to_owned()
+            }
+        })
+        .collect();
+    if !found {
+        lines.push(format!("timeout {seconds}"));
+    }
+    lines.join("\n") + "\n"
+}
+
+/// A tool's output, or its last error line.
+fn tool(program: &str, args: &[&str]) -> Result<String, String> {
+    let out = Command::new(program)
+        .args(args)
+        .env("PATH", PATH)
+        .env("LC_ALL", "C.UTF-8")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("{program}: {e}"))?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        Err(last_line(&out.stderr).unwrap_or_else(|| format!("{program} failed")))
     }
 }
 
@@ -281,6 +360,17 @@ mod tests {
         assert_eq!(steps, vec![Privileged::Refresh, Privileged::Upgrade, Privileged::AutoUpdates("security".into())]);
         assert!(parse(&words("auto-updates sometimes")).is_err());
         assert!(parse(&words("reboot")).is_err());
+    }
+
+    #[test]
+    fn boot_steps() {
+        let (_, steps) = parse(&words("boot-info -- boot-timeout 5 -- boot-default orbit-6.12.uki.efi -- snapshot before")).unwrap();
+        assert_eq!(steps[1], Privileged::BootTimeout(5));
+        assert_eq!(steps[1].args(), vec!["boot-timeout", "5"]);
+        assert!(parse(&words("boot-timeout 7")).is_err());
+        assert!(parse(&words("boot-default ../../x")).is_err());
+        assert_eq!(with_timeout("default @saved\ntimeout 0\n", 5), "default @saved\ntimeout 5\n");
+        assert_eq!(with_timeout("", 3), "timeout 3\n");
     }
 
     #[test]

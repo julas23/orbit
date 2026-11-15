@@ -186,7 +186,7 @@ fn privileged(steps: &[orbit_services::Privileged], trial: bool) -> bool {
                 eprintln!("Error: {e}");
                 failed = true;
             }
-            Event::Done => {}
+            Event::Done | Event::Info(_) => {}
         }
     }
     match run.wait() {

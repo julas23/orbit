@@ -27,6 +27,10 @@ use serde::Serialize;
 pub mod accounts;
 pub mod updates;
 
+/// The boot menu's times Orbit offers, in seconds (0: hidden behind a
+/// key, as Orbit Linux installs it).
+pub const BOOT_TIMEOUTS: [(u32, &str); 5] = [(0, "0"), (3, "3"), (5, "5"), (10, "10"), (30, "30")];
+
 /// The helper, run as root by `pkexec`.
 pub const HELPER: &str = "/usr/libexec/orbit-services-helper";
 /// The firewall's service files: the packages', then this machine's own.
@@ -440,6 +444,14 @@ pub enum Privileged {
     /// What unattended-upgrades installs alone: one of
     /// [`updates::AUTO_MODES`].
     AutoUpdates(String),
+    /// The boot loader's entries and the snapshots, read (an `info` line).
+    BootInfo,
+    /// Seconds the boot menu waits (0: hidden behind a key).
+    BootTimeout(u32),
+    /// The boot loader's default entry (an id `bootctl list` gives).
+    BootDefault(String),
+    /// A snapshot of the system now, with this description.
+    Snapshot(String),
 }
 
 impl Privileged {
@@ -454,6 +466,17 @@ impl Privileged {
             Privileged::Refresh => vec!["refresh"],
             Privileged::Upgrade => vec!["upgrade"],
             Privileged::AutoUpdates(m) => vec!["auto-updates", m],
+            Privileged::BootInfo => vec!["boot-info"],
+            Privileged::BootTimeout(_) => vec!["boot-timeout", self.number()],
+            Privileged::BootDefault(id) => vec!["boot-default", id],
+            Privileged::Snapshot(d) => vec!["snapshot", d],
+        }
+    }
+
+    fn number(&self) -> &str {
+        match self {
+            Privileged::BootTimeout(n) => BOOT_TIMEOUTS.iter().find(|(v, _)| v == n).map_or("0", |(_, s)| s),
+            _ => "",
         }
     }
 
@@ -462,6 +485,7 @@ impl Privileged {
         match verb {
             "refresh" => Ok(Privileged::Refresh),
             "upgrade" => Ok(Privileged::Upgrade),
+            "boot-info" => Ok(Privileged::BootInfo),
             _ => Err(format!("unknown step: {verb}")),
         }
     }
@@ -486,7 +510,18 @@ impl Privileged {
                 .iter()
                 .any(|s| matches!(s.kind, Kind::System { unit } if unit == arg))
         };
+        // A loader entry: letters, digits and - _ . + (`bootctl list`).
+        let entry = || !arg.is_empty() && arg.chars().all(|c| c.is_ascii_alphanumeric() || "-_.+@".contains(c));
         match verb {
+            "boot-timeout" => BOOT_TIMEOUTS
+                .iter()
+                .find(|(_, s)| *s == arg)
+                .map(|(v, _)| Privileged::BootTimeout(*v))
+                .ok_or_else(|| format!("not a boot menu time: {arg}")),
+            "boot-default" if entry() => Ok(Privileged::BootDefault(arg.to_owned())),
+            "boot-default" => Err(format!("not a boot entry: {arg}")),
+            "snapshot" if arg.chars().count() <= 80 && !arg.chars().any(char::is_control) => Ok(Privileged::Snapshot(arg.to_owned())),
+            "snapshot" => Err("a snapshot's description: one line, at most 80 characters".into()),
             "auto-updates" if updates::AUTO_MODES.contains(&arg) => Ok(Privileged::AutoUpdates(arg.to_owned())),
             "auto-updates" => Err(format!("not a mode of the automatic updates: {arg}")),
             "install" if package() => Ok(Privileged::Install(arg.to_owned())),
@@ -575,6 +610,8 @@ pub enum Event {
     Undone,
     Error(String),
     Done,
+    /// What a reading step found: one JSON line (`boot-info`).
+    Info(String),
 }
 
 impl Event {
@@ -591,6 +628,7 @@ impl Event {
             "undone" => Event::Undone,
             "error" => Event::Error(rest.into()),
             "done" => Event::Done,
+            "info" => Event::Info(rest.into()),
             _ => return None,
         })
     }

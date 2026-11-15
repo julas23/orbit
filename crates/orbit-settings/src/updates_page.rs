@@ -10,7 +10,7 @@ use std::rc::Rc;
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::{tr, tr_args};
 use orbit_services::{
-    Event, Privileged, Run,
+    Event, Privileged,
     updates::{self, AUTO_MODES},
 };
 
@@ -102,55 +102,25 @@ impl Page {
         self.progress.set_visible(true);
         self.progress.set_fraction(0.0);
         crate::say(&self.message, "");
-        let (tx, rx) = async_channel::unbounded::<Result<Event, (bool, bool)>>();
-        std::thread::spawn(move || {
-            let mut run = match Run::spawn(&steps, false) {
-                Ok(run) => run,
-                Err(e) => {
-                    let _ = tx.send_blocking(Ok(Event::Error(e.to_string())));
-                    let _ = tx.send_blocking(Err((true, false)));
-                    return;
+        let (page, bar) = (self.clone(), self.progress.clone());
+        crate::helper::run(
+            steps,
+            move |event| match event {
+                Event::Step(text) => bar.set_text(Some(text)),
+                Event::Progress(p, text) => {
+                    bar.set_fraction(f64::from(*p) / 100.0);
+                    bar.set_text(Some(text));
                 }
-            };
-            while let Some(event) = run.next_event() {
-                let _ = tx.send_blocking(Ok(event));
-            }
-            let ended = run
-                .wait()
-                .map(|s| (!matches!(s.code(), Some(126 | 127)), s.success()))
-                .unwrap_or((true, false));
-            let _ = tx.send_blocking(Err(ended));
-        });
-        let page = self.clone();
-        glib::spawn_future_local(async move {
-            let mut error = None;
-            while let Ok(msg) = rx.recv().await {
-                match msg {
-                    Ok(Event::Step(text)) => page.progress.set_text(Some(&text)),
-                    Ok(Event::Progress(p, text)) => {
-                        page.progress.set_fraction(f64::from(p) / 100.0);
-                        page.progress.set_text(Some(&text));
-                    }
-                    Ok(Event::Error(e)) => error = Some(e),
-                    Ok(_) => {}
-                    Err((authorised, ok)) => {
-                        let text = if !authorised {
-                            tr("settings-svc-cancelled")
-                        } else if ok {
-                            String::new()
-                        } else {
-                            error.take().unwrap_or_else(|| tr("settings-upd-failed"))
-                        };
-                        crate::say(&page.message, &text);
-                        break;
-                    }
-                }
-            }
-            page.progress.set_visible(false);
-            page.check.set_sensitive(true);
-            page.read();
-            page.fill_history();
-        });
+                _ => {}
+            },
+            move |error| {
+                crate::say(&page.message, &error.unwrap_or_default());
+                page.progress.set_visible(false);
+                page.check.set_sensitive(true);
+                page.read();
+                page.fill_history();
+            },
+        );
     }
 }
 

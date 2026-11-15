@@ -394,7 +394,7 @@ impl Row {
                         row.say(&tr("settings-svc-undone"));
                     }
                     Msg::Event(Event::Error(e)) => row.say(&e),
-                    Msg::Event(Event::Done) => {}
+                    Msg::Event(Event::Done | Event::Info(_)) => {}
                     Msg::Ended { authorised, ok } => {
                         if let Some(id) = countdown.take() {
                             id.remove();
