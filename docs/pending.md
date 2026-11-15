@@ -30,7 +30,8 @@ built, the local repository synced, the public one pushed, offered as an
   serves stays open to the local network (`50-this-machine.nft`; on the
   think: rpcbind and Syncthing). Tested live on the think from a network
   namespace (a LAN and a public source) and installed, upgraded, removed and
-  purged in a clean `debian:trixie`.
+  purged in a clean `debian:trixie`. Published 2026-11-15 (d6bc50c, with
+  `orbit-desktop` and `orbit-remote-server`), from the CI's debs.
 - [x] `60-desktop.nft` in it: mDNS, and the unicast answers to SSDP and
   WS-Discovery searches; `orbit-desktop` depends on `orbit-firewall`.
 - [x] `10-remote.nft` (TCP 7311) shipped by `orbit-remote-server` already.
