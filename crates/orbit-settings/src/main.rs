@@ -4,6 +4,8 @@
 //!
 //!   orbit-settings [PAGE[/SECTION]]   the window, on that page (`services`,
 //!                                     `monitors`, `wallpaper`…)
+//!   orbit-settings agent              removable media and the location
+//!                                     service, in the background (`agent`)
 //!   orbit-settings menu X Y OUTPUT    the menu of a right click on the
 //!                                     desktop (orbit-core's
 //!                                     `desktop_menu`), at X Y of OUTPUT
@@ -12,6 +14,7 @@
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod about;
+mod agent;
 mod appearance;
 mod apps_page;
 mod bluetooth;
@@ -73,10 +76,11 @@ fn main() -> glib::ExitCode {
             menu::run(config, (x, y), output)
         }
         Some("housekeeping") => housekeeping::run(),
+        Some("agent") => agent::run(config),
         Some("drives") if args.get(1).is_some_and(|a| a == "--mount") => drives::mount_at_login(config),
         Some("-h" | "--help") => {
             let ids: Vec<&str> = pages::PAGES.iter().map(|p| p.id).collect();
-            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping | drives --mount", ids.join("|"));
+            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping | drives --mount | agent", ids.join("|"));
             glib::ExitCode::SUCCESS
         }
         _ => window(config),
@@ -164,10 +168,10 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "apps" => apps_page::page(dir),
             "users" => users::page(),
             "lock" => lock_page::page(dir),
-            "privacy" => privacy::page(),
+            "privacy" => privacy::page(dir),
             "updates" => updates_page::page(),
             "drives" => drives::page(dir),
-            "storage" => storage::page(),
+            "storage" => storage::page(dir),
             "printers" => printers::page(),
             "boot" => boot::page(),
             "datetime" => datetime::page(),

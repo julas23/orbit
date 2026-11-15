@@ -11,3 +11,6 @@ login:
   # NetworkManager's secret agent: asks a new Wi-Fi's password when the
   # panel's network module connects to it.
   - nm-applet --indicator
+  # Pen drives and cameras opened when plugged in, and the location
+  # service's agent (Orbit-Settings' Storage and Privacy pages).
+  - orbit-settings agent

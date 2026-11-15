@@ -2,14 +2,23 @@
 //! not, for how long, cleared), the trash and temporary files emptied of
 //! old ones (GNOME's privacy settings, which GTK and its portal read, and
 //! `orbit-housekeeping.timer`, which acts on them), and what sandboxed
-//! applications were allowed through the portals (the permission store).
+//! applications were allowed through the portals (the permission store);
+//! and the location service (geoclue, its agent `orbit-settings agent`,
+//! the switch and the precision in GNOME's org.gnome.system.location).
 
 use std::process::Command;
 
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::{tr, tr_args};
+use orbit_common::ConfigDir;
+use orbit_services::Privileged;
 
-use crate::housekeeping::TIMER;
+use crate::{agent, housekeeping::TIMER};
+
+/// The precision apps may get, in GSettings' names.
+const ACCURACY: [&str; 5] = ["country", "city", "neighborhood", "street", "exact"];
+/// What D-Bus starts geoclue from: there when it is installed.
+const GEOCLUE_SERVICE: &str = "/usr/share/dbus-1/system-services/org.freedesktop.GeoClue2.service";
 
 const SCHEMA: &str = "org.gnome.desktop.privacy";
 /// Days kept, for recent files (-1: forever) and old trash.
@@ -126,7 +135,61 @@ fn dim(text: &str) -> gtk::Label {
     gtk::Label::builder().label(text).xalign(0.0).wrap(true).css_classes(["dim"]).build()
 }
 
-pub fn page() -> gtk::Widget {
+/// The location service's card, or none without its schema.
+fn location_card(dir: &ConfigDir, message: &gtk::Label) -> Option<gtk::Box> {
+    gio::SettingsSchemaSource::default()?.lookup("org.gnome.system.location", true)?;
+    let settings = gio::Settings::new("org.gnome.system.location");
+    let card = crate::power_card(&tr("settings-privacy-location-service"));
+    card.append(&dim(&tr("settings-privacy-location-tip")));
+    let installed = std::path::Path::new(GEOCLUE_SERVICE).exists();
+    let on = gtk::Switch::builder().active(settings.boolean("enabled")).halign(gtk::Align::End).valign(gtk::Align::Center).sensitive(installed).build();
+    on.connect_active_notify({
+        let (settings, dir, message) = (settings.clone(), dir.clone(), message.clone());
+        move |s| {
+            let mut result = settings.set_boolean("enabled", s.is_active()).map_err(anyhow::Error::from);
+            if s.is_active() && result.is_ok() {
+                result = agent::ensure(&dir);
+            }
+            crate::say(&message, &result.err().map(|e| format!("{e:#}")).unwrap_or_default());
+        }
+    });
+    card.append(&crate::row(&tr("settings-privacy-location-on"), &on));
+    let labels: Vec<String> = ACCURACY.iter().map(|a| tr(&format!("settings-privacy-accuracy-{a}"))).collect();
+    let level = gtk::DropDown::from_strings(&labels.iter().map(String::as_str).collect::<Vec<_>>());
+    let now = settings.string("max-accuracy-level");
+    level.set_selected(ACCURACY.iter().position(|a| *a == now.as_str()).unwrap_or(4) as u32);
+    level.connect_selected_notify({
+        let (settings, message) = (settings.clone(), message.clone());
+        move |d| {
+            let name = ACCURACY.get(d.selected() as usize).copied().unwrap_or("exact");
+            crate::say(&message, &settings.set_string("max-accuracy-level", name).err().map(|e| e.to_string()).unwrap_or_default());
+        }
+    });
+    on.bind_property("active", &level, "sensitive").sync_create().build();
+    card.append(&crate::row(&tr("settings-privacy-accuracy"), &level));
+    if !installed {
+        card.append(&dim(&tr("settings-privacy-no-geoclue")));
+        let install = gtk::Button::with_label(&tr("settings-privacy-install-geoclue"));
+        install.set_halign(gtk::Align::End);
+        let (message, on) = (message.clone(), on.clone());
+        install.connect_clicked(move |b| {
+            b.set_sensitive(false);
+            crate::say(&message, &tr("settings-installing"));
+            let (b, message, on) = (b.clone(), message.clone(), on.clone());
+            crate::helper::run(vec![Privileged::Install("geoclue-2.0".into())], |_| {}, move |error| {
+                let ok = std::path::Path::new(GEOCLUE_SERVICE).exists();
+                on.set_sensitive(ok);
+                b.set_visible(!ok);
+                b.set_sensitive(true);
+                crate::say(&message, &error.unwrap_or_default());
+            });
+        });
+        card.append(&install);
+    }
+    Some(card)
+}
+
+pub fn page(dir: &ConfigDir) -> gtk::Widget {
     let message = crate::message();
     let body = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -219,6 +282,10 @@ pub fn page() -> gtk::Widget {
     });
     old.append(&empty);
     body.append(&old);
+
+    if let Some(card) = location_card(dir, &message) {
+        body.append(&card);
+    }
 
     let apps = crate::power_card(&tr("settings-privacy-apps"));
     apps.append(&dim(&tr("settings-privacy-apps-tip")));

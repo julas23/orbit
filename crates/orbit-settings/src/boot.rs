@@ -3,8 +3,10 @@
 //! snapshots (snapper's, root's), read and changed by orbit-services-helper
 //! (the ESP and snapper are root's: reading asks for the password too, so
 //! the page reads when asked). Restarting into the boot menu needs no
-//! password (logind). Going back to a snapshot comes with Orbit Linux's
-//! boot hook (docs/PLANO-DISTRO.md §6.4), not yet.
+//! password (logind). The boot theme is Plymouth's: the themes installed
+//! are read here, choosing one goes through the helper (the initramfs is
+//! made again). Going back to a snapshot comes with Orbit Linux's boot hook
+//! (docs/PLANO-DISTRO.md §6.4), not yet.
 
 use std::rc::Rc;
 
@@ -137,6 +139,67 @@ impl Page {
     }
 }
 
+const THEMES: &str = "/usr/share/plymouth/themes";
+
+/// Plymouth's themes installed, by name.
+fn themes() -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(THEMES)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            e.path().join(format!("{name}.plymouth")).is_file().then_some(name)
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The theme in use (`plymouth-set-default-theme` with no argument).
+fn theme() -> Option<String> {
+    let out = std::process::Command::new("plymouth-set-default-theme").output().ok()?;
+    let name = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+    (out.status.success() && !name.is_empty()).then_some(name)
+}
+
+/// The boot theme's card, or none without Plymouth.
+fn theme_card(message: &gtk::Label) -> Option<gtk::Box> {
+    let all = themes();
+    if all.is_empty() {
+        return None;
+    }
+    let card = crate::power_card(&tr("settings-boot-theme"));
+    let now = theme();
+    let pick = crate::short_dropdown(&all);
+    pick.set_selected(now.as_ref().and_then(|n| all.iter().position(|t| t == n)).unwrap_or(0) as u32);
+    let busy = gtk::Spinner::new();
+    let line = gtk::Box::builder().spacing(10).build();
+    line.append(&busy);
+    line.append(&pick);
+    let message = message.clone();
+    let chosen = std::cell::RefCell::new(now);
+    pick.connect_selected_notify(move |d| {
+        let Some(name) = all.get(d.selected() as usize).cloned() else { return };
+        if chosen.borrow().as_ref() == Some(&name) {
+            return;
+        }
+        *chosen.borrow_mut() = Some(name.clone());
+        d.set_sensitive(false);
+        busy.start();
+        crate::say(&message, &tr("settings-boot-theme-making"));
+        let (d, busy, message) = (d.clone(), busy.clone(), message.clone());
+        crate::helper::run(vec![Privileged::BootTheme(name)], |_| {}, move |error| {
+            d.set_sensitive(true);
+            busy.stop();
+            crate::say(&message, &error.unwrap_or_default());
+        });
+    });
+    card.append(&crate::row(&tr("settings-boot-theme-row"), &line));
+    card.append(&dim(&tr("settings-boot-theme-tip")));
+    Some(card)
+}
+
 fn dim(text: &str) -> gtk::Label {
     gtk::Label::builder().label(text).xalign(0.0).wrap(true).css_classes(["dim"]).build()
 }
@@ -188,6 +251,9 @@ pub fn page() -> gtk::Widget {
     buttons.append(&page.read);
     top.append(&buttons);
     body.append(&top);
+    if let Some(card) = theme_card(&page.message) {
+        body.append(&card);
+    }
     body.append(&page.content);
     body.append(&page.message);
     page.read.connect_clicked({

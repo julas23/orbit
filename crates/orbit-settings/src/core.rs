@@ -165,6 +165,34 @@ pub fn save_effects(dir: &ConfigDir, value: &str) -> anyhow::Result<()> {
     dir.save_app_keys("core", &["effects"], &format!("effects: {value}\n"))
 }
 
+/// The lock screen's own picture (`wallpaper.lock`); empty: the wallpaper.
+pub fn lock_picture(dir: &ConfigDir) -> String {
+    read(dir)
+        .get("wallpaper")
+        .and_then(|w| w.get("lock"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// Writes `wallpaper.lock` (empty: taken away), the section's other keys
+/// kept.
+pub fn save_lock_picture(dir: &ConfigDir, path: &str) -> anyhow::Result<()> {
+    let mut section = read(dir)
+        .get("wallpaper")
+        .and_then(Value::as_mapping)
+        .cloned()
+        .unwrap_or_default();
+    if path.is_empty() {
+        section.remove("lock");
+    } else {
+        section.insert("lock".into(), path.into());
+    }
+    let mut block = Mapping::new();
+    block.insert("wallpaper".into(), Value::Mapping(section));
+    dir.save_app_keys("core", &["wallpaper"], &serde_yaml_ng::to_string(&block)?)
+}
+
 /// The picture of monitor `name` alone, when it has one of its own.
 pub fn output_wallpaper(dir: &ConfigDir, name: &str) -> Option<String> {
     output_entry(&read(dir), name)

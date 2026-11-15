@@ -28,6 +28,8 @@
 //!   video: ~/Vídeos/mar.mp4      # over all of it: a video or an animated
 //!                                # GIF (orbit-wallpaper), silent, looping,
 //!                                # laid as `mode` says (not tile)
+//!   lock: ~/Imagens/trava.jpg    # behind the greet, sharp, in place of the
+//!                                # wallpaper blurred; empty: the wallpaper
 //! outputs:
 //!   HDMI-A-1:
 //!     wallpaper: ~/Imagens/outro.png   # this monitor's own
@@ -68,6 +70,8 @@ use crate::{render::OutputElement, state::Orbit};
 
 /// How much the locked screen darkens the picture behind the greet.
 const LOCKED_VEIL: f32 = 0.4;
+/// And a lock picture of its own, shown sharp.
+const LOCKED_VEIL_OWN: f32 = 0.25;
 /// How much it blurs it, in pixels of the monitor at scale 1.
 const LOCKED_BLUR: f32 = 24.0;
 
@@ -99,6 +103,9 @@ pub struct Wallpaper {
     /// With the `scope` effect, what is playing over it: the cover, the
     /// song and the lyrics (`orbit-wallpaper --music`).
     pub music: bool,
+    /// A picture of its own behind the greet, shown sharp under a lighter
+    /// veil; empty: the wallpaper, blurred.
+    pub lock: String,
 }
 
 impl Default for Wallpaper {
@@ -114,6 +121,7 @@ impl Default for Wallpaper {
             video: String::new(),
             sound: false,
             screensaver: 300,
+            lock: String::new(),
             music: true,
         }
     }
@@ -245,11 +253,51 @@ impl Orbit {
             .get(&name)
             .and_then(|o| o.wallpaper.clone())
             .unwrap_or_else(|| config.image.clone());
+        self.picture_element(output, renderer, scale, alpha, blurred, &name, &image, elements);
+        let mut cache = self.wallpapers.borrow_mut();
+        let rgb = parse_rgb(&config.color).unwrap_or([0x1b, 0x1f, 0x27]);
+        let id = match cache.colors.get(&name) {
+            Some((id, last)) if *last == rgb => id.clone(),
+            _ => {
+                let id = Id::new();
+                cache.colors.insert(name.clone(), (id.clone(), rgb));
+                id
+            }
+        };
+        let [r, g, b] = rgb.map(|c| c as f32 / 255.0);
+        elements.push(OutputElement::Solid(SolidColorRenderElement::new(
+            id,
+            Rectangle::from_size(size),
+            CommitCounter::default(),
+            [r * alpha, g * alpha, b * alpha, alpha],
+            Kind::Unspecified,
+        )));
+    }
+
+    /// `image` over `output`, kept in the cache as `slot` (its name, or its
+    /// name and `/lock`); none, and its slot let go, when `image` is empty.
+    #[allow(clippy::too_many_arguments)]
+    fn picture_element(
+        &self,
+        output: &Output,
+        renderer: &mut GlesRenderer,
+        scale: Scale<f64>,
+        alpha: f32,
+        blurred: bool,
+        slot: &str,
+        image: &str,
+        elements: &mut Vec<OutputElement>,
+    ) {
+        let Some(geo) = self.space.output_geometry(output) else {
+            return;
+        };
+        let size = geo.size.to_physical_precise_round(scale);
+        let name = slot.to_owned();
         let mut cache = self.wallpapers.borrow_mut();
         if !image.trim().is_empty() {
             let key = Key {
                 path: expand_home(image.trim()),
-                mode: config.mode,
+                mode: self.config.wallpaper.mode,
                 size,
             };
             let current = cache.slots.get(&name).is_some_and(|s| s.key == key);
@@ -282,23 +330,6 @@ impl Orbit {
         } else {
             cache.slots.remove(&name);
         }
-        let rgb = parse_rgb(&config.color).unwrap_or([0x1b, 0x1f, 0x27]);
-        let id = match cache.colors.get(&name) {
-            Some((id, last)) if *last == rgb => id.clone(),
-            _ => {
-                let id = Id::new();
-                cache.colors.insert(name.clone(), (id.clone(), rgb));
-                id
-            }
-        };
-        let [r, g, b] = rgb.map(|c| c as f32 / 255.0);
-        elements.push(OutputElement::Solid(SolidColorRenderElement::new(
-            id,
-            Rectangle::from_size(size),
-            CommitCounter::default(),
-            [r * alpha, g * alpha, b * alpha, alpha],
-            Kind::Unspecified,
-        )));
     }
 
     /// Behind the greet while locked, at `alpha`: the wallpaper under a
@@ -315,14 +346,20 @@ impl Orbit {
             return;
         };
         let size = geo.size.to_physical_precise_round(scale);
-        let has_picture = self.effect_program(output).is_some()
+        let lock = self.config.wallpaper.lock.trim().to_owned();
+        let has_picture = !lock.is_empty()
+            || self.effect_program(output).is_some()
             || !self.config.wallpaper.image.trim().is_empty()
             || self
                 .config
                 .outputs
                 .get(&*output.name())
                 .is_some_and(|o| o.wallpaper.as_deref().is_some_and(|w| !w.trim().is_empty()));
-        let veil = if has_picture { LOCKED_VEIL * alpha } else { alpha };
+        let veil = match (lock.is_empty(), has_picture) {
+            (false, _) => LOCKED_VEIL_OWN * alpha,
+            (true, true) => LOCKED_VEIL * alpha,
+            (true, false) => alpha,
+        };
         let id = self
             .wallpapers
             .borrow_mut()
@@ -337,7 +374,12 @@ impl Orbit {
             [0.0, 0.0, 0.0, veil],
             Kind::Unspecified,
         )));
-        if has_picture {
+        if !lock.is_empty() {
+            let slot = format!("{}/lock", output.name());
+            // Until it is made, or when it cannot be read: the black under
+            // everything.
+            self.picture_element(output, renderer, scale, alpha, false, &slot, &lock, elements);
+        } else if has_picture {
             self.wallpaper_elements(output, renderer, scale, alpha, true, elements);
         }
     }

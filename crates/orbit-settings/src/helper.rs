@@ -9,6 +9,17 @@ use orbit_services::{Event, Privileged, Run};
 /// Runs `steps`; `event` sees each event on the main loop, `end` the error
 /// (`None`: all went through).
 pub fn run(steps: Vec<Privileged>, event: impl Fn(&Event) + 'static, end: impl FnOnce(Option<String>) + 'static) {
+    run_with(steps, None, event, end);
+}
+
+/// As [`run`], with `input` sent to the helper first, a line (a password a
+/// step reads).
+pub fn run_with(
+    steps: Vec<Privileged>,
+    input: Option<String>,
+    event: impl Fn(&Event) + 'static,
+    end: impl FnOnce(Option<String>) + 'static,
+) {
     let (tx, rx) = async_channel::unbounded::<Result<Event, (bool, bool)>>();
     std::thread::spawn(move || {
         let mut run = match Run::spawn(&steps, false) {
@@ -19,6 +30,9 @@ pub fn run(steps: Vec<Privileged>, event: impl Fn(&Event) + 'static, end: impl F
                 return;
             }
         };
+        if let Some(line) = input {
+            run.send(&line);
+        }
         while let Some(event) = run.next_event() {
             let _ = tx.send_blocking(Ok(event));
         }

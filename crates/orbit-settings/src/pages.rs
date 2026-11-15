@@ -146,7 +146,7 @@ pub const PAGES: &[Page] = &[
         title: "settings-lock",
         icon: "system-lock-screen-symbolic",
         keywords: "settings-lock-keywords",
-        options: &["settings-power-lock-after", "settings-lock-screen-off", "settings-lock-people", "settings-lock-now"],
+        options: &["settings-power-lock-after", "settings-lock-screen-off", "settings-lock-people", "settings-lock-now", "settings-lock-picture"],
     },
     Page {
         id: "privacy",
@@ -154,7 +154,7 @@ pub const PAGES: &[Page] = &[
         title: "settings-privacy",
         icon: "preferences-system-privacy-symbolic",
         keywords: "settings-privacy-keywords",
-        options: &["settings-privacy-remember", "settings-privacy-clear-recent", "settings-privacy-old-trash", "settings-privacy-empty-trash", "settings-privacy-apps"],
+        options: &["settings-privacy-remember", "settings-privacy-clear-recent", "settings-privacy-old-trash", "settings-privacy-empty-trash", "settings-privacy-apps", "settings-privacy-location-service", "settings-privacy-accuracy"],
     },
     Page {
         id: "datetime",
@@ -278,7 +278,7 @@ pub const PAGES: &[Page] = &[
         title: "settings-drives",
         icon: "folder-remote-symbolic",
         keywords: "settings-drives-keywords",
-        options: &["settings-drives-add", "settings-drives-at-login-long", "settings-drives-smb", "settings-drives-nfs", "settings-drives-sftp"],
+        options: &["settings-drives-add", "settings-drives-at-login-long", "settings-drives-smb", "settings-drives-nfs", "settings-drives-sftp", "settings-drives-system"],
     },
     Page {
         id: "printers",
@@ -294,7 +294,7 @@ pub const PAGES: &[Page] = &[
         title: "settings-storage",
         icon: "drive-harddisk-symbolic",
         keywords: "settings-storage-keywords",
-        options: &["settings-storage-disks", "settings-storage-home"],
+        options: &["settings-storage-disks", "settings-storage-home", "settings-media", "settings-media-disks", "settings-media-cameras"],
     },
     Page {
         id: "updates",
@@ -310,7 +310,7 @@ pub const PAGES: &[Page] = &[
         title: "settings-boot",
         icon: "system-reboot-symbolic",
         keywords: "settings-boot-keywords",
-        options: &["settings-boot-timeout", "settings-boot-default", "settings-boot-snapshots", "settings-boot-restart-menu"],
+        options: &["settings-boot-timeout", "settings-boot-default", "settings-boot-snapshots", "settings-boot-restart-menu", "settings-boot-theme"],
     },
     Page {
         id: "about",

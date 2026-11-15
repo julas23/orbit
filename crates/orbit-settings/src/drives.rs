@@ -8,8 +8,11 @@
 //! core.yaml's `login:` while there is one, mounts them at the first
 //! unlock, with the passwords the keyring holds.
 //!
-//! For every user, at boot (systemd mounts through the root helper): not
-//! yet.
+//! For every user, at boot: an SMB share or an NFS export as a systemd
+//! automount under /mnt, written by orbit-services-helper
+//! (`orbit_services::drives`); an SMB password goes to the helper on its
+//! standard input, never on a command line, and is kept in a file only root
+//! reads.
 
 use std::{cell::Cell, path::PathBuf, rc::Rc, time::Duration};
 
@@ -17,6 +20,8 @@ use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::tr;
 use orbit_common::ConfigDir;
 use serde_yaml_ng::Value;
+
+use orbit_services::{Privileged, drives::{self as system, SystemDrive}};
 
 use crate::apps_page;
 
@@ -306,6 +311,110 @@ impl Page {
     }
 }
 
+/// The card of the drives for every user: the list, and a form to add one.
+fn system_card(message: &gtk::Label) -> gtk::Box {
+    let card = crate::power_card(&tr("settings-drives-system"));
+    card.append(&gtk::Label::builder().label(tr("settings-drives-system-tip")).xalign(0.0).wrap(true).css_classes(["dim"]).build());
+    let list = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(5).build();
+    card.append(&list);
+    let fill: Rc<dyn Fn()> = Rc::new({
+        let (list, message) = (list.clone(), message.clone());
+        move || fill_system(&list, &message)
+    });
+    fill_system(&list, message);
+
+    let kinds = [tr("settings-drives-smb"), tr("settings-drives-nfs")];
+    let kind = gtk::DropDown::from_strings(&kinds.iter().map(String::as_str).collect::<Vec<_>>());
+    card.append(&crate::row(&tr("settings-drives-kind"), &kind));
+    let entry = |placeholder: &str| gtk::Entry::builder().placeholder_text(tr(placeholder)).hexpand(true).build();
+    let server = entry("settings-drives-server-tip");
+    let folder = entry("settings-drives-folder-tip");
+    let user = entry("settings-drives-system-user-tip");
+    let password = gtk::PasswordEntry::builder().show_peek_icon(true).hexpand(true).build();
+    card.append(&crate::row(&tr("settings-drives-server"), &server));
+    card.append(&crate::row(&tr("settings-drives-folder"), &folder));
+    let user_row = crate::row(&tr("settings-drives-user"), &user);
+    let password_row = crate::row(&tr("settings-drives-password"), &password);
+    card.append(&user_row);
+    card.append(&password_row);
+    kind.connect_selected_notify({
+        let (user_row, password_row) = (user_row.clone(), password_row.clone());
+        move |d| {
+            user_row.set_visible(d.selected() == 0);
+            password_row.set_visible(d.selected() == 0);
+        }
+    });
+    let go = gtk::Button::with_label(&tr("settings-drives-system-add"));
+    go.set_halign(gtk::Align::End);
+    let message = message.clone();
+    go.connect_clicked(move |b| {
+        let smb = kind.selected() == 0;
+        let who = user.text().trim().to_owned();
+        let at = if smb && !who.is_empty() { format!("{who}@") } else { String::new() };
+        let scheme = if smb { "smb" } else { "nfs" };
+        let typed = format!("{scheme}://{at}{}/{}", server.text().trim().trim_end_matches('/'), folder.text().trim().trim_start_matches('/'));
+        let drive = match SystemDrive::parse(&typed) {
+            Ok(d) => d,
+            Err(_) => return crate::say(&message, &tr("settings-drives-system-bad")),
+        };
+        let input = drive.user.is_some().then(|| password.text().to_string());
+        b.set_sensitive(false);
+        crate::say(&message, &tr("settings-drives-connecting"));
+        let (b, message, fill) = (b.clone(), message.clone(), fill.clone());
+        let (server, folder, user, password) = (server.clone(), folder.clone(), user.clone(), password.clone());
+        crate::helper::run_with(vec![Privileged::SystemDrive(drive.address())], input, |_| {}, move |error| {
+            b.set_sensitive(true);
+            if error.is_none() {
+                for e in [server.upcast_ref::<gtk::Editable>(), folder.upcast_ref(), user.upcast_ref(), password.upcast_ref()] {
+                    e.set_text("");
+                }
+            }
+            crate::say(&message, &error.unwrap_or_default());
+            fill();
+        });
+    });
+    card.append(&go);
+    card
+}
+
+fn fill_system(list: &gtk::Box, message: &gtk::Label) {
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    let drives = system::list(std::path::Path::new(system::UNIT_DIR));
+    if drives.is_empty() {
+        list.append(&gtk::Label::builder().label(tr("settings-drives-none")).xalign(0.0).css_classes(["dim"]).build());
+    }
+    for drive in drives {
+        let line = gtk::Box::builder().spacing(10).css_classes(["row"]).build();
+        let names = gtk::Box::builder().orientation(gtk::Orientation::Vertical).hexpand(true).build();
+        let point = drive.mount_point();
+        names.append(&gtk::Label::builder().label(drive.address()).xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::Middle).build());
+        names.append(&gtk::Label::builder().label(point.display().to_string()).xalign(0.0).css_classes(["dim"]).build());
+        line.append(&names);
+        let open = gtk::Button::builder().icon_name("folder-open-symbolic").tooltip_text(tr("settings-drives-open")).css_classes(["flat"]).valign(gtk::Align::Center).build();
+        let m = message.clone();
+        open.connect_clicked(move |_| {
+            if let Err(e) = gio::AppInfo::launch_default_for_uri(&gio::File::for_path(&point).uri(), gio::AppLaunchContext::NONE) {
+                crate::say(&m, &e.to_string());
+            }
+        });
+        line.append(&open);
+        let remove = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text(tr("settings-kb-remove")).css_classes(["flat"]).valign(gtk::Align::Center).build();
+        let (list2, m) = (list.clone(), message.clone());
+        remove.connect_clicked(move |b| {
+            b.set_sensitive(false);
+            let (list, m) = (list2.clone(), m.clone());
+            crate::helper::run(vec![Privileged::SystemDriveRemove(drive.address())], |_| {}, move |error| {
+                crate::say(&m, &error.unwrap_or_default());
+                fill_system(&list, &m);
+            });
+        });
+        line.append(&remove);
+        list.append(&line);
+    }
+}
+
 pub fn page(dir: &ConfigDir) -> gtk::Widget {
     let page = Rc::new(Page {
         dir: dir.clone(),
@@ -348,6 +457,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     });
     add.append(&go);
     body.append(&add);
+    body.append(&system_card(&page.message));
 
     body.append(&page.message);
     page.fill();

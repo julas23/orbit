@@ -913,7 +913,7 @@ fn expand(path: &str) -> PathBuf {
 }
 
 /// `path` with the home folder as `~`, as core.yaml is written by hand.
-fn short(path: &Path) -> String {
+pub fn short(path: &Path) -> String {
     match path.strip_prefix(home()) {
         Ok(rest) => format!("~/{}", rest.display()),
         Err(_) => path.display().to_string(),

@@ -8,7 +8,12 @@
 //! disabled), or `logind KEY VALUE` (what the lid and the power key do,
 //! in /etc/systemd/logind.conf.d/50-orbit.conf, logind reloaded),
 //! `refresh` and `upgrade` (apt's lists, every update), or `auto-updates
-//! off|security|all` (unattended-upgrades, installed when turned on). Every step is checked against the catalogue before any is
+//! off|security|all` (unattended-upgrades, installed when turned on),
+//! `boot-info`, `boot-timeout N`, `boot-default ID`, `snapshot TEXT` and
+//! `boot-theme NAME` (systemd-boot, snapper, Plymouth), or `system-drive
+//! ADDRESS` and `system-drive-remove ADDRESS` (a network drive for every
+//! user, mounted at boot; an SMB share's password is the first line of the
+//! standard input). Every step is checked against the catalogue before any is
 //! run; a step that fails undoes the unit steps already done. With
 //! `--trial`, the unit steps done are undone after SECONDS unless a line
 //! `keep` comes on the standard input first (`undo` undoes them at once).
@@ -106,6 +111,9 @@ fn describe(step: &Privileged) -> String {
         Privileged::BootTimeout(n) => format!("Boot menu: {n} s"),
         Privileged::BootDefault(id) => format!("Booting {id} by default"),
         Privileged::Snapshot(_) => "Taking a snapshot".into(),
+        Privileged::BootTheme(t) => format!("Boot theme: {t}"),
+        Privileged::SystemDrive(a) => format!("Adding {a} for every user"),
+        Privileged::SystemDriveRemove(a) => format!("Removing {a}"),
     }
 }
 
@@ -129,7 +137,76 @@ fn run(step: &Privileged) -> Result<(), String> {
         Privileged::Snapshot(description) => {
             tool("snapper", &["-c", "root", "create", "-c", "number", "-d", description]).map(|_| ())
         }
+        Privileged::BootTheme(theme) => {
+            let file = format!("/usr/share/plymouth/themes/{theme}/{theme}.plymouth");
+            if !std::path::Path::new(&file).is_file() {
+                return Err(format!("no boot theme {theme} installed"));
+            }
+            // -R makes the initramfs again, where the theme is read from.
+            tool("plymouth-set-default-theme", &["-R", theme]).map(|_| ())
+        }
+        Privileged::SystemDrive(address) => system_drive(address),
+        Privileged::SystemDriveRemove(address) => system_drive_remove(address),
     }
+}
+
+/// A drive for every user: the tools for its kind installed, its password
+/// kept (root's only), its units written and the automount started.
+fn system_drive(address: &str) -> Result<(), String> {
+    use orbit_services::drives::{self, Kind, SystemDrive};
+    let drive = SystemDrive::parse(address)?;
+    let (tool_path, package) = match drive.kind {
+        Kind::Smb => ("/usr/sbin/mount.cifs", "cifs-utils"),
+        Kind::Nfs => ("/usr/sbin/mount.nfs", "nfs-common"),
+    };
+    if !std::path::Path::new(tool_path).exists() {
+        let _ = apt(&["update"]);
+        apt(&["install", package])?;
+    }
+    if let Some(user) = &drive.user {
+        let mut password = String::new();
+        std::io::stdin().lock().read_line(&mut password).map_err(|e| format!("the password: {e}"))?;
+        let password = password.trim_end_matches(['\r', '\n']);
+        if password.contains('\n') {
+            return Err("the password: one line".into());
+        }
+        std::fs::create_dir_all(drives::CRED_DIR).map_err(|e| format!("{}: {e}", drives::CRED_DIR))?;
+        write_private(&drive.credentials(), &drives::credentials_text(user, password))?;
+    }
+    std::fs::create_dir_all(drive.mount_point()).map_err(|e| format!("{}: {e}", drive.mount_point().display()))?;
+    let unit = drive.unit();
+    let dir = std::path::Path::new(drives::UNIT_DIR);
+    for (suffix, text) in [("mount", drive.mount_unit()), ("automount", drive.automount_unit())] {
+        let path = dir.join(format!("{unit}.{suffix}"));
+        std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    systemctl(&["daemon-reload"])?;
+    systemctl(&["enable", "--now", &format!("{unit}.automount")])
+}
+
+fn system_drive_remove(address: &str) -> Result<(), String> {
+    use orbit_services::drives::{self, SystemDrive};
+    let drive = SystemDrive::parse(address)?;
+    let unit = drive.unit();
+    let _ = systemctl(&["disable", "--now", &format!("{unit}.automount")]);
+    let _ = systemctl(&["stop", &format!("{unit}.mount")]);
+    let dir = std::path::Path::new(drives::UNIT_DIR);
+    for suffix in ["mount", "automount"] {
+        let _ = std::fs::remove_file(dir.join(format!("{unit}.{suffix}")));
+    }
+    let _ = std::fs::remove_file(drive.credentials());
+    // Only an empty folder: never what someone left in it unmounted.
+    let _ = std::fs::remove_dir(drive.mount_point());
+    systemctl(&["daemon-reload"])
+}
+
+/// A file only root reads, written whole.
+fn write_private(path: &std::path::Path, text: &str) -> Result<(), String> {
+    use std::{io::Write, os::unix::fs::OpenOptionsExt};
+    let err = |e: std::io::Error| format!("{}: {e}", path.display());
+    let mut file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path).map_err(err)?;
+    std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o600)).map_err(err)?;
+    file.write_all(text.as_bytes()).map_err(err)
 }
 
 /// systemd-boot's loader.conf, where bootctl finds the ESP.
@@ -371,6 +448,11 @@ mod tests {
         assert!(parse(&words("boot-default ../../x")).is_err());
         assert_eq!(with_timeout("default @saved\ntimeout 0\n", 5), "default @saved\ntimeout 5\n");
         assert_eq!(with_timeout("", 3), "timeout 3\n");
+        let (_, steps) = parse(&words("boot-theme orbit -- system-drive nfs://nas/export")).unwrap();
+        assert_eq!(steps[0], Privileged::BootTheme("orbit".into()));
+        assert_eq!(steps[1], Privileged::SystemDrive("nfs://nas/export".into()));
+        assert!(parse(&words("boot-theme ../x")).is_err());
+        assert!(parse(&words("system-drive smb://nas/../etc")).is_err());
     }
 
     #[test]

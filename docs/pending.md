@@ -372,7 +372,28 @@ with Step 2; the phases then run alongside the steps above.
   and taken; reading asks for the password, so the page reads when asked;
   restart into the boot menu through logind). Left: going back to a
   snapshot (the distro's UKI hook of PLANO-DISTRO §6.4 comes first), the
-  boot theme (Plymouth). Phase B's "done when" (an SMB folder at login, a
+  boot theme (Plymouth). B6 done 2026-11-15, what B1–B5 left: the lock
+  screen's own picture (core.yaml `wallpaper.lock`: the core shows it sharp
+  under a lighter veil instead of the wallpaper blurred; Lock screen page,
+  "Picture"); the location service (Privacy: on or off and how precise,
+  GNOME's org.gnome.system.location; geoclue installed from the page when
+  missing, now a Recommends; its agent is `orbit-settings agent`, let in by
+  /etc/geoclue/conf.d/90-orbit.conf); what a pen drive, a disk, a camera
+  or a phone does when plugged in (Storage: open in Files, only connect,
+  nothing, in media.yaml, done by `orbit-settings agent`, kept in
+  core.yaml's `login:` by the pages and in the new users' skel; udiskie in
+  `login:` is pointed out and can be left out); network drives for every
+  user at boot (Network drives: SMB or NFS as a systemd automount under
+  /mnt, the helper's `system-drive` and `system-drive-remove` steps, the
+  SMB password on the helper's standard input into a root-only file under
+  /etc/orbit/drives, cifs-utils or nfs-common installed when missing);
+  the boot theme (Boot: Plymouth's themes, the helper's `boot-theme`, the
+  initramfs made again). The helper's `install` also takes a short list of
+  packages the pages need (`EXTRA_PACKAGES`: geoclue, orca, wvkbd, fwupd…).
+  Seen nested: the pages, the lock picture made for the lock. Not tried: a
+  real pen drive or phone, geoclue with an app asking, an SMB or NFS drive
+  at boot, changing the boot theme (root). Left: going back to a snapshot
+  (the UKI hook first). Phase B's "done when" (an SMB folder at login, a
   network printer added, an update installed, all from Orbit-Settings) is
   for the user to try.
 - [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,

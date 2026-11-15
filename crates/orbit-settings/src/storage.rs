@@ -1,14 +1,17 @@
 //! The Storage page (docs/PLANO-SETTINGS.md §3.4): each disk in use
 //! (local and network file systems, once per device) with its space, and,
 //! when asked, what the home folder's folders take (measured in a thread:
-//! a home over NFS takes a while). What to do when a pen drive, a camera or
-//! a phone is plugged in is not here yet: nothing of Orbit's mounts or
-//! opens them by itself.
+//! a home over NFS takes a while); and what is done when a pen drive, a
+//! disk, a camera or a phone is plugged in (`media.yaml`, carried out by
+//! `orbit-settings agent`).
 
 use std::{collections::HashSet, os::unix::fs::MetadataExt, path::Path, rc::Rc};
 
 use gtk::{gio, glib, prelude::*};
 use orbit_app::i18n::{tr, tr_args};
+use orbit_common::ConfigDir;
+
+use crate::{agent, apps_page};
 
 /// The file systems shown: on a disk or over the network.
 const KINDS: [&str; 14] = [
@@ -91,7 +94,46 @@ fn bar(used: f64) -> gtk::LevelBar {
     bar
 }
 
-pub fn page() -> gtk::Widget {
+/// What to do when removable media is plugged in, by kind.
+fn media_card(dir: &ConfigDir, message: &gtk::Label) -> gtk::Box {
+    let card = crate::power_card(&tr("settings-media"));
+    let labels: Vec<String> = agent::MEDIA_ACTIONS.iter().map(|a| tr(&format!("settings-media-{a}"))).collect();
+    for kind in agent::MEDIA_KINDS {
+        let pick = gtk::DropDown::from_strings(&labels.iter().map(String::as_str).collect::<Vec<_>>());
+        let now = agent::media_action(dir, kind);
+        pick.set_selected(agent::MEDIA_ACTIONS.iter().position(|a| *a == now).unwrap_or(0) as u32);
+        let (dir, message) = (dir.clone(), message.clone());
+        pick.connect_selected_notify(move |d| {
+            let action = agent::MEDIA_ACTIONS.get(d.selected() as usize).copied().unwrap_or("open");
+            let result = agent::save_media_action(&dir, kind, action).and_then(|()| agent::ensure(&dir));
+            crate::say(&message, &result.err().map(|e| format!("{e:#}")).unwrap_or_default());
+        });
+        card.append(&crate::row(&tr(&format!("settings-media-{kind}")), &pick));
+    }
+    // udiskie mounts by itself too: said, and offered to be left out.
+    let udiskie: Vec<String> = apps_page::login_items(dir).into_iter().filter(|c| c.trim_start().starts_with("udiskie")).collect();
+    if !udiskie.is_empty() {
+        let note = gtk::Label::builder().label(tr("settings-media-udiskie")).xalign(0.0).wrap(true).css_classes(["dim"]).build();
+        let stop = gtk::Button::with_label(&tr("settings-media-udiskie-stop"));
+        stop.set_halign(gtk::Align::End);
+        let (dir, message, note2) = (dir.clone(), message.clone(), note.clone());
+        stop.connect_clicked(move |b| {
+            let result = udiskie
+                .iter()
+                .try_for_each(|line| apps_page::ensure_login(&dir, line, false))
+                .and_then(|()| agent::ensure(&dir));
+            let _ = std::process::Command::new("pkill").args(["-x", "udiskie"]).status();
+            crate::say(&message, &result.err().map(|e| format!("{e:#}")).unwrap_or_default());
+            b.set_visible(false);
+            note2.set_visible(false);
+        });
+        card.append(&note);
+        card.append(&stop);
+    }
+    card
+}
+
+pub fn page(dir: &ConfigDir) -> gtk::Widget {
     let message = crate::message();
     let body = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -143,6 +185,7 @@ pub fn page() -> gtk::Widget {
         card.append(&line);
     }
     body.append(&card);
+    body.append(&media_card(dir, &message));
 
     let home = crate::power_card(&tr("settings-storage-home"));
     home.append(&gtk::Label::builder().label(tr("settings-storage-home-tip")).xalign(0.0).wrap(true).css_classes(["dim"]).build());

@@ -25,11 +25,28 @@ use std::{
 use serde::Serialize;
 
 pub mod accounts;
+pub mod drives;
 pub mod updates;
 
 /// The boot menu's times Orbit offers, in seconds (0: hidden behind a
 /// key, as Orbit Linux installs it).
 pub const BOOT_TIMEOUTS: [(u32, &str); 5] = [(0, "0"), (3, "3"), (5, "5"), (10, "10"), (30, "30")];
+
+/// Packages Orbit-Settings' pages install when asked besides the
+/// services': what a page needs and Debian does not always bring.
+pub const EXTRA_PACKAGES: [&str; 11] = [
+    "geoclue-2.0",
+    "orca",
+    "wvkbd",
+    "fwupd",
+    "bolt",
+    "colord",
+    "switcheroo-control",
+    "iio-sensor-proxy",
+    "plymouth",
+    "cifs-utils",
+    "nfs-common",
+];
 
 /// The helper, run as root by `pkexec`.
 pub const HELPER: &str = "/usr/libexec/orbit-services-helper";
@@ -452,6 +469,15 @@ pub enum Privileged {
     BootDefault(String),
     /// A snapshot of the system now, with this description.
     Snapshot(String),
+    /// Plymouth's theme for the boot (a theme installed), the initramfs
+    /// made again.
+    BootTheme(String),
+    /// A network drive for every user, mounted at boot (an address
+    /// [`drives::SystemDrive`] takes); an SMB share's password comes on
+    /// the helper's standard input, a line.
+    SystemDrive(String),
+    /// That drive taken away: unmounted, its units and password deleted.
+    SystemDriveRemove(String),
 }
 
 impl Privileged {
@@ -470,6 +496,9 @@ impl Privileged {
             Privileged::BootTimeout(_) => vec!["boot-timeout", self.number()],
             Privileged::BootDefault(id) => vec!["boot-default", id],
             Privileged::Snapshot(d) => vec!["snapshot", d],
+            Privileged::BootTheme(t) => vec!["boot-theme", t],
+            Privileged::SystemDrive(a) => vec!["system-drive", a],
+            Privileged::SystemDriveRemove(a) => vec!["system-drive-remove", a],
         }
     }
 
@@ -504,7 +533,7 @@ impl Privileged {
     /// The step from its words, refused unless its package or unit is one
     /// of the catalogue's.
     pub fn parse(verb: &str, arg: &str) -> Result<Self, String> {
-        let package = || SERVICES.iter().any(|s| s.package == arg);
+        let package = || SERVICES.iter().any(|s| s.package == arg) || EXTRA_PACKAGES.contains(&arg);
         let unit = || {
             SERVICES
                 .iter()
@@ -522,6 +551,10 @@ impl Privileged {
             "boot-default" => Err(format!("not a boot entry: {arg}")),
             "snapshot" if arg.chars().count() <= 80 && !arg.chars().any(char::is_control) => Ok(Privileged::Snapshot(arg.to_owned())),
             "snapshot" => Err("a snapshot's description: one line, at most 80 characters".into()),
+            "boot-theme" if arg.len() <= 64 && entry() && !arg.starts_with('.') => Ok(Privileged::BootTheme(arg.to_owned())),
+            "boot-theme" => Err(format!("not a boot theme: {arg}")),
+            "system-drive" => drives::SystemDrive::parse(arg).map(|d| Privileged::SystemDrive(d.address())),
+            "system-drive-remove" => drives::SystemDrive::parse(arg).map(|d| Privileged::SystemDriveRemove(d.address())),
             "auto-updates" if updates::AUTO_MODES.contains(&arg) => Ok(Privileged::AutoUpdates(arg.to_owned())),
             "auto-updates" => Err(format!("not a mode of the automatic updates: {arg}")),
             "install" if package() => Ok(Privileged::Install(arg.to_owned())),
@@ -688,6 +721,12 @@ impl Run {
     /// Undoes what was applied on trial, without waiting for its time.
     pub fn undo(&mut self) {
         self.say("undo");
+    }
+
+    /// A line on the helper's standard input: the password a
+    /// [`Privileged::SystemDrive`] step reads.
+    pub fn send(&mut self, line: &str) {
+        self.say(line);
     }
 
     fn say(&mut self, word: &str) {

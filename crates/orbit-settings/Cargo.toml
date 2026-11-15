@@ -14,12 +14,13 @@ section = "x11"
 priority = "optional"
 extended-description = "Orbit-Settings: the wallpaper (a picture, how it meets the screen, or a colour) and the monitors (resolution, refresh rate, scale, rotation), written to core.yaml; and the menu a right click on the desktop opens. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto, accountsservice, passwd"
-recommends = "power-profiles-daemon, nm-connection-editor"
+recommends = "power-profiles-daemon, nm-connection-editor, geoclue-2.0"
 assets = [
     ["target/release/orbit-settings", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Settings.desktop", "usr/share/applications/", "644"],
     ["../../data/systemd-user/orbit-housekeeping.service", "usr/lib/systemd/user/", "644"],
     ["../../data/systemd-user/orbit-housekeeping.timer", "usr/lib/systemd/user/", "644"],
+    ["../../data/geoclue/90-orbit.conf", "etc/geoclue/conf.d/", "644"],
 ]
 
 [dependencies]
