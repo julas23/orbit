@@ -540,7 +540,8 @@ a página que os liga.
 | **Finalidade** (revisto) | O `orbit-install` pergunta "Desktop / Servidor", já marcado pelo hardware detectado (6.6), e liga na instalação o conjunto de serviços da finalidade: o Desktop só o firewall; o Servidor o firewall, o Fail2Ban, o Unbound, o dnsmasq (no modo que a rede pede), o WireGuard, o remote server, o storage quando há discos para ele, e o kit multimídia se marcado. Depois disso tudo se ajusta na página |
 | **ISO e nomes** (revisto) | Uma ISO só; a finalidade é uma pergunta do instalador, não outra imagem. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
 | **Storage** (revisto) | Os discos além do do sistema, se vazios, viram storage na instalação: btrfs (RAID1 com dois ou mais) em `/srv` (6.6). Serviços: compartilhar pastas pelo Samba (Windows, macOS, Android) e pelo NFS (Linux), a saúde dos discos (smartmontools, com aviso) e a sincronização pelo **Syncthing** (1.29.5 no Debian 13), que o usuário já usa entre as máquinas. ZFS fora (contrib, DKMS a cada kernel). Snapshots dos dados e backup (restic, borg) fora por enquanto |
-| **Sistemas fechados** (revisto) | Nenhum trabalho específico para iOS nem para Windows: o que funcionar com os padrões abertos que o Orbit já usa funciona, sem app, serviço ou teste próprio para eles. Fora do plano: o Möbius Sync (Syncthing pago de terceiros no iOS), o backup do iPhone pelo `libimobiledevice` e o Immich (fotos, mas só por Docker) |
+| **Sistemas fechados** (revisto) | Nenhum trabalho específico para iOS nem para Windows: o que funcionar com os padrões abertos que o Orbit já usa funciona, sem app, serviço ou teste próprio para eles. Fora do plano: o Möbius Sync (Syncthing pago de terceiros no iOS) e o backup do iPhone pelo `libimobiledevice` |
+| **Fotos** (revisto) | **Immich** (`orbit-immich`), opcional como o Navidrome e o Jellyfin: o "Google Fotos" próprio, com o app de Android (APK nas releases dele e no F-Droid) fazendo backup das fotos em segundo plano, pelo túnel fora de casa. A única **exceção à regra da seção 1**: o Immich não tem `.deb` nem repositório apt, só imagens de contêiner com um `docker-compose.yml` por release (v3.4.1 em 2026-11-15). Roda pelo **Podman** do Debian 13 (5.4.2) com Quadlet — cada contêiner vira uma unidade do systemd, sem daemon —, e não pelo Docker, cujo daemon e regras próprias de NAT ficariam fora do controle do `orbit-firewall` |
 | **Servidor sem sessão gráfica** (revisto) | Permitido: `orbit-base` em vez do `orbit-desktop`, login no console, SSH por chave só para a LAN e o túnel, gerência pelo `orbitctl services` ou pelo Orbit-Settings de um desktop por SSH (6.6, 12.2) |
 | **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
@@ -571,6 +572,7 @@ página do serviço:
 | Acesso remoto | Estações pela rede (LTSP) | `orbit-ltsp` (o `distro/ltsp/` empacotado) | as imagens (PC, Pi 4), o servidor que mostram |
 | Mídia | Música (Navidrome) | `orbit-navidrome` | a pasta, o endereço para os apps (LAN e túnel) |
 | Mídia | Vídeos (Jellyfin) | `orbit-jellyfin` | as bibliotecas, o endereço para os apps, o plugin DLNA |
+| Mídia | Fotos (Immich) | `orbit-immich` | a pasta das fotos, o reconhecimento (ligado ou não), a versão e a atualização, o endereço para o app |
 | Storage | Pastas compartilhadas (Samba) | `orbit-samba` | as pastas, quem acessa (os usuários do Orbit, com a senha deles no Samba) |
 | Storage | Pastas compartilhadas (NFS) | `orbit-nfs` | as pastas e as redes que as montam |
 | Storage | Saúde dos discos | `orbit-smart` | os discos, os testes agendados, o histórico |
@@ -621,6 +623,7 @@ página do serviço:
 | `orbit-ltsp` | a página | `ltsp`, o `distro/ltsp/`, `30-ltsp.nft` |
 | `orbit-navidrome` | a página | `navidrome`, a configuração, `50-navidrome.nft` |
 | `orbit-jellyfin` | a página | `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), a configuração, `51-jellyfin.nft` |
+| `orbit-immich` | a página | `podman`, as unidades Quadlet geradas do `docker-compose.yml` da release fixada (servidor, reconhecimento, PostgreSQL com a extensão de vetores, Valkey), `55-immich.nft` |
 | `orbit-samba` | a página | `samba`, a configuração, `52-samba.nft` |
 | `orbit-nfs` | a página | `nfs-kernel-server`, `/etc/exports.d/orbit.exports`, `53-nfs.nft` |
 | `orbit-smart` | a página | `smartmontools`, o aviso pelo orbit-notify |
@@ -651,6 +654,7 @@ mais a `wg0`):
 | `52-samba.nft` | `orbit-samba` | TCP 445 |
 | `53-nfs.nft` | `orbit-nfs` | TCP 2049 (NFSv4 só) |
 | `54-syncthing.nft` | `orbit-syncthing` | TCP/UDP 22000 (sincronização), UDP 21027 (descoberta na rede) |
+| `55-immich.nft` | `orbit-immich` | TCP 2283 |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.5 Cada serviço
@@ -696,6 +700,20 @@ mais a `wg0`):
   a descoberta global e os relays (a infraestrutura pública do Syncthing)
   ficam desligados por padrão, como o relatório de uso: ligá-los é uma
   escolha, para quem sincroniza sem o túnel.
+- **Immich:** as unidades Quadlet (`/etc/containers/systemd/`) feitas a
+  partir do `docker-compose.yml` e do `example.env` de uma release fixada,
+  com as imagens pela versão exata (nunca `release`/`latest`). Ligar baixa
+  as imagens (alguns GB: a única instalação da página que precisa de
+  internet além do repositório do Orbit). As fotos em `/srv/@photos`, o
+  banco em `/var/lib/orbit-immich`. O reconhecimento de rostos e objetos é
+  um contêiner à parte, o que mais pesa (2 a 4 GB de RAM com ele): a página
+  liga e desliga. A aceleração (`hwaccel.transcoding.yml`, VA-API) segue a
+  GPU detectada. **Atualizar** é trocar a release fixada: a página mostra a
+  nova, com o link das notas, e só atualiza quando o usuário pede, porque o
+  Immich muda o banco entre versões. A porta do servidor é publicada só nos
+  endereços da `@lan` e da `wg0`: uma porta de contêiner publicada passa
+  pelo NAT do Podman e não pela cadeia `input`, então o firewall sozinho
+  não a seguraria.
 - **Celulares:** Android pelo Syncthing-Fork (o fork da comunidade; o app
   oficial foi descontinuado no fim de 2024), sincronizando as pastas do
   usuário (fotos, downloads, documentos, a mídia dos mensageiros) com o
@@ -723,7 +741,7 @@ página "Serviços".
 3. `orbit-wireguard`, com a configuração entregue no pareamento.
 4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
 5. `orbit-fail2ban`, com a jail do Orbit.
-6. `orbit-navidrome` e `orbit-jellyfin`.
+6. `orbit-navidrome` e `orbit-jellyfin`; depois o `orbit-immich`.
 7. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`, `orbit-syncthing`.
 8. O `orbit-base`, o `orbit-ssh`, o `orbitctl services` e a gerência de
    outra máquina pelo SSH: o servidor sem sessão gráfica.
@@ -749,6 +767,9 @@ app do Jellyfin toca um vídeo.
   repositório do próprio Jellyfin e baixa o `.deb` do Navidrome.
 - O WebRTC usa portas UDP aleatórias: sem uma faixa fixa no remote server, o
   firewall teria de abrir todo UDP da LAN.
+- O Immich vem de fora do Debian e de fora do repositório do Orbit (as
+  imagens do registro dele) e muda o banco entre versões: atualizar só por
+  pedido, com as notas à vista, e um snapshot do banco antes.
 - O auxiliar com root é a peça sensível da página: comandos tipados, cada
   valor validado, nada de caminho ou texto livre que chegue a um arquivo de
   root sem passar por um formato conhecido.

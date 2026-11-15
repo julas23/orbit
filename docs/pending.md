@@ -390,8 +390,14 @@ Reviewed with the user, item by item (2026-11-15):
 - [x] Phones: Android through Syncthing-Fork (the community fork; the
   official app was discontinued at the end of 2024), one folder per device
   on the server with Syncthing's versioning on. No specific work for iOS or
-  Windows (the user, 2026-11-15): Möbius Sync, iPhone backups through
-  libimobiledevice and Immich (Docker only) left out.
+  Windows (the user, 2026-11-15): Möbius Sync and iPhone backups through
+  libimobiledevice left out.
+- [x] Immich (`orbit-immich`), optional like Navidrome and Jellyfin: photo
+  backups from the Android app in the background, through the tunnel. The
+  one exception to "Debian or an upstream .deb": it ships only container
+  images, so it runs on Debian's Podman (5.4.2) through Quadlet units made
+  from a pinned release's `docker-compose.yml` (v3.4.1 on 2026-11-15), not
+  on Docker, whose daemon and NAT would sit outside `orbit-firewall`.
 - [x] A server may have no graphical session: `orbit-base` (the firewall,
   PackageKit, the helper, `orbitctl`) instead of `orbit-desktop`, a console
   login, SSH by key on the LAN and the tunnel only (`orbit-ssh`), run
@@ -468,6 +474,13 @@ Work, in this order (PLANO-DISTRO §12.7):
   `home.sh`, `finish-install.d/`) for both to share; the purpose's services
   switched on through `orbit-services-helper`; the router role's NAT and
   `forward` chain in `orbit-firewall`.
+- [ ] `orbit-immich`: the Quadlet units from the pinned compose file (server,
+  machine learning, PostgreSQL with its vector extension, Valkey), images
+  by exact version; photos in `/srv/@photos`; machine learning switchable
+  (2–4 GB of RAM); VA-API by the detected GPU; updates only when asked, with
+  the release notes shown and a snapshot of the database first; port 2283
+  published only on the LAN and tunnel addresses (a published container
+  port goes through Podman's NAT, not the `input` chain).
 - [ ] The panel's `network` module: the firewall's and the tunnel's state,
   a click opening the page.
 - [ ] Done when: on a VM installed from the ISO each service switches on,
