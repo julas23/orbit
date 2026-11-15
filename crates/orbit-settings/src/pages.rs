@@ -198,6 +198,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-dock-launchers", "settings-dock-add", "settings-dock-icon-size", "settings-dock-align"],
     },
     Page {
+        id: "notifications",
+        group: Group::Orbit,
+        title: "settings-notify",
+        icon: "preferences-system-notifications-symbolic",
+        keywords: "settings-notify-keywords",
+        options: &["settings-notify-dnd", "settings-notify-bubbles", "settings-notify-history", "settings-notify-never"],
+    },
+    Page {
         id: "windows",
         group: Group::Orbit,
         title: "settings-win",

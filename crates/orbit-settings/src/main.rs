@@ -23,6 +23,7 @@ mod menu;
 mod monitors;
 mod mouse;
 mod network;
+mod notify_page;
 mod pages;
 mod panel_page;
 mod power;
@@ -145,6 +146,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "appearance" => appearance::page(dir),
             "panel" => panel_page::page(dir),
             "dock" => dock_page::page(dir),
+            "notifications" => notify_page::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

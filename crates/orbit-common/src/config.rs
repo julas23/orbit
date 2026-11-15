@@ -240,6 +240,11 @@ pub const PANEL_MODULES: &[&str] = &[
 /// Modules that may be listed more than once, each showing something else.
 pub const PANEL_REPEATABLE: &[&str] = &["disk"];
 
+/// The programs whose notifications are never kept when `notify.yaml`
+/// does not say (orbit-notify's `no_history`): the panel's volume and
+/// microphone changes.
+pub const NOTIFY_NO_HISTORY: &[&str] = &["volume", "microfone"];
+
 /// `panel.yaml`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]

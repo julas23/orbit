@@ -37,7 +37,7 @@ impl Default for Config {
             max_popups: 5,
             timeout: Timeouts::default(),
             history_limit: 200,
-            no_history: vec!["volume".into(), "microfone".into()],
+            no_history: orbit_common::config::NOTIFY_NO_HISTORY.iter().map(|s| (*s).to_owned()).collect(),
         }
     }
 }
