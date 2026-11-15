@@ -355,18 +355,32 @@ Debian 13 (checked 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2,
 wireguard-tools, crowdsec 1.4.6 with crowdsec-firewall-bouncer 0.0.25,
 snapserver and snapclient 0.31, minidlna 1.3.3, rygel 0.44).
 
-Decided with the user (2026-11-15), to be adjusted before starting:
+Proposed on 2026-11-15 and being reviewed with the user item by item
+(reviewed so far: the firewall, DHCP and local names, the resolver):
 
 - [x] *Orbit Linux* is the common ISO; the *server* profile is the desktop
   plus `orbit-server`; *station* stays the network-booted thin client.
 - [x] One ISO; `orbit-server` is a choice among the installer's metapackages.
-- [x] nftables on every install (`orbit-firewall`, pulled by `orbit-desktop`).
+- [x] Reviewed: plain nftables on every install (`orbit-firewall`, pulled by
+  `orbit-desktop`), chosen over firewalld and ufw: no daemon, the layer
+  around it ours. Only the `inet orbit` table is deleted and reloaded,
+  never Debian's default `flush ruleset`. OpenSnitch optional.
 - [x] CrowdSec alone (nftables bouncer), only in `orbit-server`; Fail2Ban
   left out unless Debian's old CrowdSec falls short. Local only by default:
   the central API off, sharing an explicit choice.
-- [x] dnsmasq for DHCP, TFTP (LTSP's proxy DHCP) and local names, forwarding
-  to Unbound (recursive, DNSSEC, `127.0.0.1#5335`); taking over the LAN's
-  DHCP only by choice.
+- [x] Reviewed: dnsmasq on the server profile only, in two modes. *Proxy*
+  (the default): the router keeps DHCP, dnsmasq does PXE's proxy DHCP and
+  TFTP, no DNS (`port=0`). *Network* (by choice): the server's DHCP, names
+  from the leases and fixed reservations, answering only for `home.lan` on
+  `127.0.0.1:5300`. Domain `home.lan`, configurable; IPv4 only for now;
+  `bind-dynamic`, LAN and tunnel interfaces only. Chosen over Kea and
+  systemd-networkd's DHCP.
+- [x] Reviewed: Unbound is the network's resolver, on port 53 of the LAN
+  and the tunnel: its own recursion by default (DNS-over-TLS forwarding an
+  option), DNSSEC; `home.lan` and `10.in-addr.arpa` forwarded to dnsmasq.
+  RPZ blocklists (ads, trackers) optional, off by default.
+- [x] Reviewed: desktops run neither dnsmasq nor Unbound; their names come
+  from mDNS (Avahi), their DNS from the network.
 - [x] WireGuard as the way in from outside, in place of §9's step 5: only
   UDP 51820 public, port 7311 never; the pairing hands out the tunnel's
   config (QR for phones).
@@ -383,7 +397,8 @@ Work, in this order (PLANO-DISTRO §12.6):
 - [ ] `orbit-remote-server`: a fixed UDP port range for WebRTC, so the
   firewall need not open every UDP port.
 - [ ] WireGuard in `orbit-server`, the tunnel's config handed out at pairing.
-- [ ] dnsmasq + Unbound, LTSP's dnsmasq folded in.
+- [ ] Unbound + dnsmasq in both modes, LTSP's dnsmasq folded in; the
+  reservations and the RPZ lists in Orbit-Settings.
 - [ ] CrowdSec: sshd and nginx collections, and an Orbit one for wrong
   pairing codes; its LAPI moved off port 8080.
 - [ ] `orbit-share` and `snapclient`; DLNA browsing in Orbit-Play.

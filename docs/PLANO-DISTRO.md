@@ -417,8 +417,10 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 
 ## 12. Segurança e mídia por finalidade (2026-11-15)
 
-Status: **planejado** — decidido com o usuário em 2026-11-15, a ajustar antes
-de começar. Acompanhamento em `docs/pending.md` §15.
+Status: **em revisão** — proposto em 2026-11-15 e sendo revisto com o
+usuário item a item antes de começar. Revistos: firewall, DHCP e nomes
+locais, resolvedor. A rever: WireGuard, CrowdSec, mídia, nomes e ISO.
+Acompanhamento em `docs/pending.md` §15.
 
 A ideia: os serviços de rede vêm conforme a finalidade da máquina. Um
 servidor exposto à rede precisa de mais do que um desktop atrás do roteador
@@ -432,11 +434,13 @@ vê-los.
 |---|---|
 | **Nomes** | *Orbit Linux* é a ISO comum (o desktop). *Perfil servidor* é o desktop com o `orbit-server`. *Estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
 | **ISO** | Uma só. O remote server compartilha a sessão do desktop, então um servidor é um desktop com mais coisa: o instalador oferece o `orbit-server` entre os metapacotes. Uma imagem para construir e testar |
-| **Firewall** | nftables em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`): entrada bloqueada por padrão |
+| **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`): entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (API para o Orbit-Settings, polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e do CrowdSec: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora dos metapacotes |
+| **DHCP e nomes locais** (revisto) | dnsmasq, só no perfil servidor, em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): o servidor assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome) do Orbit-Settings. Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
+| **Nomes no desktop** (revisto) | mDNS pelo Avahi (`think.local`), que funciona com qualquer roteador; o desktop não roda dnsmasq nem Unbound e usa o DNS que a rede entrega |
+| **Resolvedor** (revisto) | Unbound é o resolvedor da rede, na porta 53 da LAN e do túnel: recursão própria (direto aos servidores raiz e autoritativos) por padrão, DNSSEC, cache, ACL, limite de taxa, `prefetch`. Encaminhar por DNS-over-TLS (Quad9, Cloudflare) é opção. A zona `home.lan` e o reverso `10.in-addr.arpa` vão ao dnsmasq (`forward-zone` + `domain-insecure`), que no modo Rede responde só por ela em `127.0.0.1:5300` (a 5353 é do mDNS). No modo Proxy o Unbound serve o próprio servidor, os clientes do túnel e quem apontar o DNS do roteador para ele, com os nomes fixos em `local-data`. Bloqueio de anúncios e rastreadores por listas RPZ: opção, desligado por padrão, listas escolhidas no Orbit-Settings |
 | **Banimento** | CrowdSec sozinho, pelo bouncer de nftables (`crowdsec-firewall-bouncer`). Fail2Ban fica de fora, porque faz o mesmo trabalho; volta só se o CrowdSec do Debian (1.4.6, o upstream está na 1.6) não der conta |
 | **Telemetria do CrowdSec** | Só local por padrão: a API central (`online_client`) desligada. Compartilhar os ataques vistos em troca da blocklist comunitária é uma escolha explícita do usuário |
 | **CrowdSec no desktop** | Só no `orbit-server`. Atrás do roteador um desktop não serve nada para a internet; o daemon não compensa. Pode ser instalado à parte |
-| **DNS e DHCP** | Um papel cada. dnsmasq: DHCP, TFTP (o proxy DHCP do LTSP, que já existe) e os nomes locais, encaminhando o resto ao Unbound. Unbound: resolvedor recursivo com DNSSEC em `127.0.0.1#5335`. Assumir o DHCP da rede no lugar do roteador só por escolha, nunca por padrão |
 | **Acesso de fora** | WireGuard. Substitui o passo 5 da latência no `pending.md` §9 (TLS, STUN/TURN, porta TCP pública): só a UDP 51820 fica aberta, as estações e os celulares entram pelo túnel, e a 7311 do remote server nunca fica pública. O pareamento entrega à estação a configuração do túnel (QR para celular) |
 | **Mídia** | Quem tem a biblioteca serve, quem está na sala toca. No servidor: `snapserver` (alimentado por um sink do PipeWire) e o servidor DLNA. No desktop e nas estações: `snapclient` (o Pi 4 vira caixa de som de um cômodo) e o Orbit-Play navegando nos servidores DLNA |
 | **Nome do pacote de mídia** | `orbit-media` já é o metapacote de música, vídeo e jogos (seção 4). O novo é `orbit-share` (nome provisório) |
@@ -467,7 +471,7 @@ privadas das interfaces, mais a `wg0`):
 | `10-remote.nft` | `orbit-remote-server` | TCP 7311 e a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`) |
 | `20-wireguard.nft` | `orbit-server` | UDP 51820, de qualquer lugar (a única porta pública) |
 | `30-ltsp.nft` | o servidor de estações | UDP 67, 69 e 4011 (proxy DHCP, TFTP), NFS TCP 2049 |
-| `40-dns.nft` | `orbit-server` | UDP/TCP 53, e UDP 67 se o DHCP da rede for assumido |
+| `40-dns.nft` | `orbit-server` | UDP/TCP 53 (Unbound), e UDP 67 no modo Rede do dnsmasq |
 | `50-share.nft` | `orbit-share` | SSDP UDP 1900, DLNA TCP 8200, Snapcast TCP 1704, 1705 e 1780 |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
@@ -477,10 +481,14 @@ privadas das interfaces, mais a `wg0`):
   com a chave do servidor; cada estação ou celular é um peer. O pareamento
   do remote server (o código de seis dígitos) passa a entregar também a
   configuração do túnel; para celular, um QR.
-- **dnsmasq + Unbound:** o dnsmasq na `@lan` e na `wg0`, com `port=53`,
-  repassando ao Unbound (`server=127.0.0.1#5335`); os nomes das estações
-  resolvidos localmente. O proxy DHCP do LTSP (`distro/ltsp/`) entra no
-  mesmo dnsmasq em vez de um segundo.
+- **Unbound + dnsmasq:** o Unbound na porta 53 da `@lan` e da `wg0`
+  (`access-control` só para elas), recursivo; `forward-zone` de `home.lan`
+  e `10.in-addr.arpa` para `127.0.0.1@5300`. O dnsmasq com `port=0` no modo
+  Proxy (sem DNS: só o proxy DHCP e o TFTP) e `port=5300` em `127.0.0.1` no
+  modo Rede, com `domain=home.lan`, `expand-hosts` e as reservas. O proxy
+  DHCP do LTSP (`distro/ltsp/`) entra no mesmo dnsmasq em vez de um
+  segundo. Os peers do WireGuard recebem o servidor como DNS, e resolvem
+  `home.lan` de fora de casa.
 - **CrowdSec:** as coleções de sshd (pelo journald) e do nginx (se
   instalado), e uma coleção do Orbit: o log do `orbit-remote-server` com os
   códigos de pareamento errados, para banir quem tenta adivinhar. A LAPI
