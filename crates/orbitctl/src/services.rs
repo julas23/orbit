@@ -172,13 +172,11 @@ fn privileged(steps: &[orbit_services::Privileged], trial: bool) -> bool {
                     last = p;
                 }
             }
-            Event::Trial(seconds) => {
-                if confirm_within(seconds) {
-                    run.keep();
-                } else {
-                    println!("Not confirmed: undoing it.");
-                }
-            }
+            Event::Trial(seconds) => match confirm_within(seconds) {
+                Some(true) => run.keep(),
+                Some(false) => run.undo(),
+                None => println!("Not confirmed: undoing it."),
+            },
             Event::Kept => println!("Kept."),
             Event::Undone => {
                 println!("Undone.");
@@ -217,11 +215,12 @@ fn ask(question: &str) -> bool {
     matches!(answer.trim(), "y" | "Y" | "yes" | "s" | "S" | "sim")
 }
 
-/// Whether the user keeps what was just applied, within `seconds`.
-fn confirm_within(seconds: u32) -> bool {
+/// Whether the user keeps what was just applied (`Some(true)`), says no
+/// (`Some(false)`), or does not answer within `seconds` (`None`).
+fn confirm_within(seconds: u32) -> Option<bool> {
     if !std::io::stdin().is_terminal() {
         eprintln!("Applied on trial, but nobody here to keep it.");
-        return false;
+        return Some(false);
     }
     print!("Applied. Keep it? [y/N] (undone in {seconds} s) ");
     let _ = std::io::stdout().flush();
@@ -231,9 +230,9 @@ fn confirm_within(seconds: u32) -> bool {
         let _ = std::io::stdin().read_line(&mut answer);
         let _ = tx.send(matches!(answer.trim(), "y" | "Y" | "yes" | "s" | "S" | "sim"));
     });
-    let kept = rx.recv_timeout(Duration::from_secs(seconds.into())).unwrap_or(false);
-    if !kept {
+    let answer = rx.recv_timeout(Duration::from_secs(seconds.into())).ok();
+    if answer.is_none() {
         println!();
     }
-    kept
+    answer
 }

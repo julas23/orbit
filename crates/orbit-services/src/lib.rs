@@ -600,8 +600,17 @@ impl Run {
 
     /// Keeps what was applied on trial.
     pub fn keep(&mut self) {
+        self.say("keep");
+    }
+
+    /// Undoes what was applied on trial, without waiting for its time.
+    pub fn undo(&mut self) {
+        self.say("undo");
+    }
+
+    fn say(&mut self, word: &str) {
         if let Some(stdin) = self.stdin.as_mut() {
-            let _ = writeln!(stdin, "keep");
+            let _ = writeln!(stdin, "{word}");
         }
     }
 

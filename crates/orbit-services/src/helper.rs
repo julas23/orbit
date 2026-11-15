@@ -8,7 +8,7 @@
 //! disabled). Every step is checked against the catalogue before any is
 //! run; a step that fails undoes the unit steps already done. With
 //! `--trial`, the unit steps done are undone after SECONDS unless a line
-//! `keep` comes on the standard input first.
+//! `keep` comes on the standard input first (`undo` undoes them at once).
 //!
 //! It says what it does on the standard output, a line each: `step TEXT`,
 //! `progress N TEXT` (apt's, 0–100), `trial SECONDS`, `kept`, `undone`,
@@ -119,22 +119,24 @@ fn undo(done: &[Privileged]) {
     }
 }
 
-/// Whether `keep` comes on the standard input within `seconds`.
+/// Whether `keep` comes on the standard input within `seconds`; `undo`,
+/// or the input closing, is no at once.
 fn kept(seconds: u32) -> bool {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         for line in std::io::stdin().lock().lines() {
-            match line {
-                Ok(l) if l.trim() == "keep" => {
-                    let _ = tx.send(());
+            match line.as_deref().map(str::trim) {
+                Ok("keep") => {
+                    let _ = tx.send(true);
                     return;
                 }
+                Ok("undo") | Err(_) => break,
                 Ok(_) => continue,
-                Err(_) => return,
             }
         }
+        let _ = tx.send(false);
     });
-    rx.recv_timeout(Duration::from_secs(seconds.into())).is_ok()
+    rx.recv_timeout(Duration::from_secs(seconds.into())).unwrap_or(false)
 }
 
 fn systemctl(args: &[&str]) -> Result<(), String> {

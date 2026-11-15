@@ -5013,6 +5013,7 @@ name = "orbit-settings"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "env_logger",
  "gtk4",
  "gtk4-layer-shell",
@@ -5020,6 +5021,7 @@ dependencies = [
  "orbit-app",
  "orbit-common",
  "orbit-ipc",
+ "orbit-services",
  "serde",
  "serde_json",
  "serde_yaml_ng",

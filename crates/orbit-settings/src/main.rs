@@ -1,17 +1,21 @@
-//! Orbit-Settings: the wallpaper and the monitors, in one window, written
-//! to `core.yaml` and told to the core at once; and the desktop's menu.
+//! Orbit-Settings: every setting of the desktop, in one window
+//! (docs/PLANO-SETTINGS.md): the pages in groups with a search over all of
+//! them (`pages.rs`); and the desktop's menu.
 //!
-//!   orbit-settings [wallpaper|monitors]   the window, on that page
-//!   orbit-settings menu X Y OUTPUT        the menu of a right click on the
-//!                                         desktop (orbit-core's
-//!                                         `desktop_menu`), at X Y of OUTPUT
+//!   orbit-settings [PAGE[/SECTION]]   the window, on that page (`services`,
+//!                                     `monitors`, `wallpaper`…)
+//!   orbit-settings menu X Y OUTPUT    the menu of a right click on the
+//!                                     desktop (orbit-core's
+//!                                     `desktop_menu`), at X Y of OUTPUT
 //!
 //! The window is single: started again, the running one comes forward on
-//! the page asked for.
+//! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod core;
 mod menu;
 mod monitors;
+mod pages;
+mod services;
 mod wallpaper;
 
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
@@ -40,7 +44,8 @@ fn main() -> glib::ExitCode {
             menu::run(config, (x, y), output)
         }
         Some("-h" | "--help") => {
-            println!("Usage: orbit-settings [-c DIR] [wallpaper|monitors] | menu X Y OUTPUT");
+            let ids: Vec<&str> = pages::PAGES.iter().map(|p| p.id).collect();
+            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT", ids.join("|"));
             glib::ExitCode::SUCCESS
         }
         _ => window(config),
@@ -69,9 +74,9 @@ fn window(config: PathBuf) -> glib::ExitCode {
             .arguments()
             .iter()
             .skip(1)
-            .filter_map(|a| a.to_str().map(str::to_owned))
-            .find(|a| a == "wallpaper" || a == "monitors")
-            .unwrap_or_else(|| "wallpaper".into());
+            .filter_map(|a| a.to_str().and_then(pages::find))
+            .next()
+            .map_or("wallpaper", |p| p.id);
         if keep.borrow().is_none() {
             *keep.borrow_mut() = style(&config);
         }
@@ -84,7 +89,7 @@ fn window(config: PathBuf) -> glib::ExitCode {
                 made
             }
         };
-        stack.set_visible_child_name(&page);
+        stack.set_visible_child_name(page);
         if let Some(window) = app.windows().first() {
             window.present();
         }
@@ -101,16 +106,25 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
         .default_height(640)
         .css_classes(["orbit-settings"])
         .build();
+    // Each page as wide as it needs, not as the widest one: the window fits
+    // the tile the core gives it.
     let stack = gtk::Stack::builder()
         .transition_type(gtk::StackTransitionType::Crossfade)
         .hexpand(true)
+        .hhomogeneous(false)
+        .vhomogeneous(false)
         .build();
-    stack.add_titled(&wallpaper::page(dir), Some("wallpaper"), &tr("settings-wallpaper"));
-    stack.add_titled(&monitors::page(dir), Some("monitors"), &tr("settings-monitors"));
-    let sidebar = gtk::StackSidebar::builder()
-        .stack(&stack)
-        .css_classes(["sidebar"])
-        .build();
+    for page in pages::PAGES {
+        let widget = match page.id {
+            "wallpaper" => wallpaper::page(dir),
+            "monitors" => monitors::page(dir),
+            "services" => services::page(),
+            _ => continue,
+        };
+        stack.add_titled(&widget, Some(page.id), &tr(page.title));
+    }
+    let (sidebar, search) = pages::sidebar(&stack);
+    search.set_key_capture_widget(Some(&window));
     let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     body.append(&sidebar);
     body.append(&stack);
@@ -119,8 +133,16 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
     close.connect_key_pressed({
         let window = window.clone();
         move |_, key, _, mods| {
-            let ctrl_w = mods.contains(gdk::ModifierType::CONTROL_MASK) && key == gdk::Key::w;
-            if key == gdk::Key::Escape || ctrl_w {
+            let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
+            if ctrl && key == gdk::Key::f {
+                search.grab_focus();
+                return glib::Propagation::Stop;
+            }
+            if key == gdk::Key::Escape && !search.text().is_empty() {
+                search.set_text("");
+                return glib::Propagation::Stop;
+            }
+            if key == gdk::Key::Escape || (ctrl && key == gdk::Key::w) {
                 window.close();
                 return glib::Propagation::Stop;
             }

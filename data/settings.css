@@ -7,7 +7,7 @@ window.orbit-settings {
   color: @orbit_fg;
 }
 window.orbit-settings .sidebar {
-  min-width: 180px;
+  min-width: 220px;
   background-color: mix(@orbit_window, @orbit_fg, 0.05);
   border-right: 1px solid @orbit_border;
 }
@@ -82,4 +82,24 @@ window.orbit-desktop-menu .item {
 }
 window.orbit-desktop-menu .item:hover {
   background-color: alpha(@orbit_accent, 0.2);
+}
+
+/* The sidebar's search and its groups; the Services page's rows. */
+window.orbit-settings .sidebar .search {
+  margin: 10px 10px 5px 10px;
+}
+window.orbit-settings .sidebar .pages {
+  background: none;
+}
+window.orbit-settings .sidebar .group {
+  margin: 10px 10px 0 10px;
+  font-size: smaller;
+  font-weight: bold;
+  color: @orbit_muted;
+}
+window.orbit-settings .sidebar .pages row {
+  padding: 5px 10px;
+}
+window.orbit-settings .service .name {
+  font-weight: bold;
 }

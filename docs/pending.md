@@ -58,11 +58,21 @@ built, the local repository synced, the public one pushed, offered as an
   bring. `orbit-desktop` depends on it. Tried as root on the think (a trial
   undone after 5 s, a kept one, apt's progress, a unit refused); pkexec
   itself to try once published.
-- [ ] Orbit-Settings' base (`docs/PLANO-SETTINGS.md` §4): the search over
-  every option, the sidebar in groups, each page's option index and address
-  (`orbit-settings <page>[/<section>]`).
-- [ ] Orbit-Settings, "Services": the groups and rows of PLANO-DISTRO §12.2;
-  over `orbit-services`; the dependencies between services; firewall, WireGuard and
+- [x] Orbit-Settings' base (`docs/PLANO-SETTINGS.md` §4, 2026-11-15): the
+  pages in a registry (`pages.rs`: group, title, icon, keywords, the option
+  messages the search finds), the sidebar in groups with the search on top
+  (accents ignored; typing anywhere or Ctrl+F searches; Enter opens the
+  first found), each page's address (`orbit-settings services`, with an
+  optional `/section`). Pages as wide as each needs (the stack was as wide
+  as the widest, so the window overflowed its tile).
+- [x] Orbit-Settings, "Services" (2026-11-15): a card per group, a row per
+  service (its name, what it does, the ports its firewall file opens, its
+  state), a switch, Remove for what can go; the helper in a thread, its
+  progress on the row; turning off what lets things in, and removing, ask
+  first; a trial shows a bar to keep it, counting down, Undo undoing at
+  once (the helper takes `undo` too); the firewall's row lists what each
+  file opens. Seen on the think; pkexec to try once published.
+- [ ] The rest of the page: the dependencies between services; firewall, WireGuard and
   dnsmasq-mode changes undone after 30 s without confirmation; bans,
   failed services and new pairings as notifications.
 - [x] `orbitctl services` (list, `--json`, `on`, `off`, `remove ID`,
