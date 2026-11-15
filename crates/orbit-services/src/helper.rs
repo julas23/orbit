@@ -282,6 +282,9 @@ fn rollback(target: &str) -> Result<(), String> {
     if !out.status.success() {
         return Err(last_line(&out.stderr).unwrap_or_else(|| "snapper rollback failed".into()));
     }
+    // snapperd keeps its own list: done without it, the new snapshots
+    // would not show (nor be the default) until it reads them again.
+    let _ = systemctl(&["try-restart", "snapperd.service"]);
     let new = String::from_utf8_lossy(&out.stdout)
         .lines()
         .rev()
