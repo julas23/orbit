@@ -32,6 +32,7 @@ mod pages;
 mod panel_page;
 mod passwd;
 mod power;
+mod printers;
 mod privacy;
 mod region;
 mod services;
@@ -165,6 +166,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "updates" => updates_page::page(),
             "drives" => drives::page(dir),
             "storage" => storage::page(),
+            "printers" => printers::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

@@ -281,6 +281,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-drives-add", "settings-drives-at-login-long", "settings-drives-smb", "settings-drives-nfs", "settings-drives-sftp"],
     },
     Page {
+        id: "printers",
+        group: Group::System,
+        title: "settings-print",
+        icon: "printer-symbolic",
+        keywords: "settings-print-keywords",
+        options: &["settings-print-add", "settings-print-make-default", "settings-print-test", "settings-print-scanners"],
+    },
+    Page {
         id: "storage",
         group: Group::System,
         title: "settings-storage",
