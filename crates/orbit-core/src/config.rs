@@ -32,6 +32,9 @@
 //! # idle_lock: { default: 600, think: 0, julas: 0 }
 //! idle_off: 900          # seconds without input before the monitors switch
 //!                        # off (locked: a minute at most); 0: never
+//! idle_suspend: 0        # seconds without input before the machine
+//!                        # suspends, on mains; 0: never (by machine too)
+//! idle_suspend_battery: 0  # the same on battery
 //! touchpad: { tap: true, natural_scroll: true, speed: 0.0, disable_while_typing: true,
 //!             middle_emulation: false, click: clickfinger, scroll: two_finger, left_handed: false }
 //! mouse: { natural_scroll: false, speed: 0.0, profile: adaptive, left_handed: false }
@@ -128,6 +131,10 @@ pub struct Config {
     /// Seconds with no input before the monitors switch off (0: never;
     /// locked, after a minute at most); a video playing keeps them on.
     pub idle_off: PerHost<u64>,
+    /// Seconds with no input before the machine suspends, on mains and on
+    /// battery (0: never); a video playing or a fullscreen window holds it.
+    pub idle_suspend: PerHost<u64>,
+    pub idle_suspend_battery: PerHost<u64>,
     /// The touchpads and mice (libinput), see `devices`.
     pub touchpad: crate::devices::Touchpad,
     pub mouse: crate::devices::Mouse,
@@ -328,6 +335,8 @@ impl Default for Config {
             effects: Effects::Auto,
             idle_lock: PerHost::All(600),
             idle_off: PerHost::All(900),
+            idle_suspend: PerHost::All(0),
+            idle_suspend_battery: PerHost::All(0),
             touchpad: Default::default(),
             mouse: Default::default(),
             gestures: true,

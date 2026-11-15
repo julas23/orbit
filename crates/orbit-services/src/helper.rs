@@ -3,9 +3,10 @@
 //!
 //!   orbit-services-helper [--trial SECONDS] STEP ARG [-- STEP ARG]…
 //!
-//! STEP is `install` or `remove` (a package of the catalogue), or `unit-on`
+//! STEP is `install` or `remove` (a package of the catalogue), `unit-on`
 //! or `unit-off` (one of its units: enabled and started, or stopped and
-//! disabled). Every step is checked against the catalogue before any is
+//! disabled), or `logind KEY VALUE` (what the lid and the power key do,
+//! in /etc/systemd/logind.conf.d/50-orbit.conf, logind reloaded). Every step is checked against the catalogue before any is
 //! run; a step that fails undoes the unit steps already done. With
 //! `--trial`, the unit steps done are undone after SECONDS unless a line
 //! `keep` comes on the standard input first (`undo` undoes them at once).
@@ -77,6 +78,7 @@ fn parse(args: &[String]) -> Result<(Option<u32>, Vec<Privileged>), String> {
     let mut steps = Vec::new();
     for words in rest.split(|a| a == "--") {
         match words {
+            [verb, key, value] if verb == "logind" => steps.push(Privileged::logind(key, value)?),
             [verb, arg] => steps.push(Privileged::parse(verb, arg)?),
             _ => return Err(format!("a step is a verb and its argument, not {words:?}")),
         }
@@ -93,6 +95,7 @@ fn describe(step: &Privileged) -> String {
         Privileged::Remove(p) => format!("Removing {p}"),
         Privileged::UnitOn(u) => format!("Starting {u}"),
         Privileged::UnitOff(u) => format!("Stopping {u}"),
+        Privileged::Logind(k, v) => format!("Setting {k} to {v}"),
     }
 }
 
@@ -106,7 +109,38 @@ fn run(step: &Privileged) -> Result<(), String> {
         Privileged::Remove(package) => apt(&["remove", package]),
         Privileged::UnitOn(unit) => systemctl(&["enable", "--now", unit]),
         Privileged::UnitOff(unit) => systemctl(&["disable", "--now", unit]),
+        Privileged::Logind(key, value) => logind(key, value),
     }
+}
+
+/// Orbit's logind drop-in: `key=value` set, the others it holds kept.
+const LOGIND_FILE: &str = "/etc/systemd/logind.conf.d/50-orbit.conf";
+
+fn logind(key: &str, value: &str) -> Result<(), String> {
+    let old = std::fs::read_to_string(LOGIND_FILE).unwrap_or_default();
+    std::fs::create_dir_all("/etc/systemd/logind.conf.d").map_err(|e| e.to_string())?;
+    std::fs::write(LOGIND_FILE, logind_text(&old, key, value)).map_err(|e| e.to_string())?;
+    systemctl(&["reload", "systemd-logind"])
+}
+
+/// The drop-in with `key=value`: its other settings kept, the comment and
+/// the section written again.
+fn logind_text(old: &str, key: &str, value: &str) -> String {
+    let mut settings: Vec<(String, String)> = old
+        .lines()
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
+        .filter(|(k, _)| orbit_services::LOGIND_KEYS.contains(&k.as_str()))
+        .collect();
+    match settings.iter_mut().find(|(k, _)| k == key) {
+        Some(entry) => entry.1 = value.to_owned(),
+        None => settings.push((key.to_owned(), value.to_owned())),
+    }
+    let mut text = String::from("# Orbit-Settings' Power page (orbit-services-helper): what the lid and\n# the power key do.\n[Login]\n");
+    for (k, v) in settings {
+        text.push_str(&format!("{k}={v}\n"));
+    }
+    text
 }
 
 /// Undoes the unit steps of `done`, the last first.
@@ -217,5 +251,21 @@ mod tests {
         assert!(parse(&words("--trial 9999 unit-on orbit-firewall.service")).is_err());
         assert!(parse(&words("install")).is_err());
         assert!(parse(&[]).is_err());
+        let (_, steps) = parse(&words("logind HandleLidSwitch lock")).unwrap();
+        assert_eq!(steps, vec![Privileged::Logind("HandleLidSwitch".into(), "lock".into())]);
+        assert!(parse(&words("logind HandleLidSwitch reboot")).is_err());
+    }
+
+    #[test]
+    fn logind_drop_in() {
+        let first = logind_text("", "HandleLidSwitch", "suspend");
+        assert_eq!(first.lines().last(), Some("HandleLidSwitch=suspend"));
+        let second = logind_text(&first, "HandlePowerKey", "poweroff");
+        assert!(second.contains("HandleLidSwitch=suspend\nHandlePowerKey=poweroff\n"));
+        let third = logind_text(&second, "HandleLidSwitch", "lock");
+        assert!(third.contains("HandleLidSwitch=lock"));
+        assert!(!third.contains("HandleLidSwitch=suspend"));
+        // A setting not Orbit's, put there by hand, is not carried over.
+        assert!(!logind_text("[Login]\nKillUserProcesses=yes\n", "HandlePowerKey", "ignore").contains("Kill"));
     }
 }

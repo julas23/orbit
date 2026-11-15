@@ -415,6 +415,12 @@ impl Action {
     }
 }
 
+/// The logind settings the helper may set (`logind KEY VALUE`): what the
+/// lid does on battery and on mains, and what the power key does.
+pub const LOGIND_KEYS: [&str; 3] = ["HandleLidSwitch", "HandleLidSwitchExternalPower", "HandlePowerKey"];
+/// The values they may take.
+pub const LOGIND_VALUES: [&str; 6] = ["suspend", "hibernate", "poweroff", "lock", "ignore", "suspend-then-hibernate"];
+
 /// A step that needs root, as the helper takes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Privileged {
@@ -422,17 +428,31 @@ pub enum Privileged {
     Remove(String),
     UnitOn(String),
     UnitOff(String),
+    /// One of [`LOGIND_KEYS`] set to one of [`LOGIND_VALUES`].
+    Logind(String, String),
 }
 
 impl Privileged {
     /// Its words on the helper's command line.
-    pub fn args(&self) -> [&str; 2] {
+    pub fn args(&self) -> Vec<&str> {
         match self {
-            Privileged::Install(p) => ["install", p],
-            Privileged::Remove(p) => ["remove", p],
-            Privileged::UnitOn(u) => ["unit-on", u],
-            Privileged::UnitOff(u) => ["unit-off", u],
+            Privileged::Install(p) => vec!["install", p],
+            Privileged::Remove(p) => vec!["remove", p],
+            Privileged::UnitOn(u) => vec!["unit-on", u],
+            Privileged::UnitOff(u) => vec!["unit-off", u],
+            Privileged::Logind(k, v) => vec!["logind", k, v],
         }
+    }
+
+    /// `logind KEY VALUE`, refused unless both are known.
+    pub fn logind(key: &str, value: &str) -> Result<Self, String> {
+        if !LOGIND_KEYS.contains(&key) {
+            return Err(format!("not a logind setting Orbit sets: {key}"));
+        }
+        if !LOGIND_VALUES.contains(&value) {
+            return Err(format!("not a value for {key}: {value}"));
+        }
+        Ok(Privileged::Logind(key.to_owned(), value.to_owned()))
     }
 
     /// The step from its words, refused unless its package or unit is one
@@ -730,6 +750,9 @@ mod tests {
         assert!(Privileged::parse("unit-on", "ssh.service").is_err());
         assert!(Privileged::parse("unit-on", "orbit-firewall.service").is_ok());
         assert!(Privileged::parse("rm", "-rf").is_err());
+        assert!(Privileged::logind("HandleLidSwitch", "suspend").is_ok());
+        assert!(Privileged::logind("HandleLidSwitch", "rm -rf /").is_err());
+        assert!(Privileged::logind("KillUserProcesses", "yes").is_err());
     }
 
     #[test]

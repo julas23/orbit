@@ -99,33 +99,57 @@ const IDLE_OFF_DEFAULT: u64 = 900;
 /// `idle_off` is one number for every machine, or `{ default: …, HOST: … }`,
 /// read as the core reads it.
 pub fn idle_off(dir: &ConfigDir) -> u64 {
-    match read(dir).get("idle_off") {
-        None => IDLE_OFF_DEFAULT,
-        Some(Value::Mapping(map)) => map
-            .get(hostname().as_str())
-            .or_else(|| map.get("default"))
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        Some(value) => value.as_u64().unwrap_or(IDLE_OFF_DEFAULT),
-    }
+    per_host(dir, "idle_off", IDLE_OFF_DEFAULT)
 }
 
 /// Writes this machine's `idle_off` as `HOST: seconds` (the file is synced):
 /// a single number becomes the other machines' `default`.
 pub fn save_idle_off(dir: &ConfigDir, seconds: u64) -> anyhow::Result<()> {
-    let mut map = match read(dir).get("idle_off") {
+    save_per_host(dir, "idle_off", seconds, IDLE_OFF_DEFAULT)
+}
+
+/// The core's defaults for the other idle times (`config.rs`).
+pub const IDLE_LOCK_DEFAULT: u64 = 600;
+
+/// This machine's value of a number the core reads by host (`idle_lock`,
+/// `idle_suspend`…): `key: N`, or `key: { HOST: N, default: N }`.
+pub fn per_host(dir: &ConfigDir, key: &str, default: u64) -> u64 {
+    match read(dir).get(key) {
+        None => default,
+        Some(Value::Mapping(map)) => map
+            .get(hostname().as_str())
+            .or_else(|| map.get("default"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        Some(value) => value.as_u64().unwrap_or(default),
+    }
+}
+
+/// Writes this machine's `key` as `HOST: value` (the file is synced): a
+/// single number becomes the other machines' `default`.
+pub fn save_per_host(dir: &ConfigDir, key: &str, value: u64, default: u64) -> anyhow::Result<()> {
+    let mut map = match read(dir).get(key) {
         Some(Value::Mapping(map)) => map.clone(),
         other => {
             let mut map = Mapping::new();
-            let all = other.and_then(Value::as_u64).unwrap_or(IDLE_OFF_DEFAULT);
+            let all = other.and_then(Value::as_u64).unwrap_or(default);
             map.insert("default".into(), all.into());
             map
         }
     };
-    map.insert(hostname().into(), seconds.into());
+    map.insert(hostname().into(), value.into());
     let mut block = Mapping::new();
-    block.insert("idle_off".into(), Value::Mapping(map));
-    dir.save_app_keys("core", &["idle_off"], &serde_yaml_ng::to_string(&block)?)
+    block.insert(key.into(), Value::Mapping(map));
+    dir.save_app_keys("core", &[key], &serde_yaml_ng::to_string(&block)?)
+}
+
+/// `effects:` — `on`, `off` or `auto` (off on battery).
+pub fn effects(dir: &ConfigDir) -> String {
+    text(&read(dir), "effects").unwrap_or_else(|| "auto".into())
+}
+
+pub fn save_effects(dir: &ConfigDir, value: &str) -> anyhow::Result<()> {
+    dir.save_app_keys("core", &["effects"], &format!("effects: {value}\n"))
 }
 
 /// The picture of monitor `name` alone, when it has one of its own.

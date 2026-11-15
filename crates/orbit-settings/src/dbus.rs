@@ -59,3 +59,43 @@ pub async fn call(proxy: &gio::DBusProxy, method: &str, args: glib::Variant) -> 
             }
         })
 }
+
+/// The proxy of `path` on the system bus's `name`, interface `interface`
+/// (for the services whose objects do not follow the name: logind's
+/// Manager, UPower's devices).
+pub fn system_at(name: &str, path: &str, interface: &str) -> Option<gio::DBusProxy> {
+    gio::DBusProxy::for_bus_sync(
+        gio::BusType::System,
+        gio::DBusProxyFlags::NONE,
+        None,
+        name,
+        path,
+        interface,
+        gio::Cancellable::NONE,
+    )
+    .map_err(|e| log::warn!("{name} {path}: {e}"))
+    .ok()
+}
+
+/// Sets a property through org.freedesktop.DBus.Properties; polkit may ask
+/// for a password.
+pub async fn set_property(proxy: &gio::DBusProxy, property: &str, value: glib::Variant) -> Result<(), String> {
+    let (Some(name), Some(interface)) = (proxy.name(), Some(proxy.interface_name())) else {
+        return Err("no name".into());
+    };
+    proxy
+        .connection()
+        .call_future(
+            Some(&name),
+            &proxy.object_path(),
+            "org.freedesktop.DBus.Properties",
+            "Set",
+            Some(&(interface.as_str(), property, value).to_variant()),
+            None,
+            gio::DBusCallFlags::ALLOW_INTERACTIVE_AUTHORIZATION,
+            -1,
+        )
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}

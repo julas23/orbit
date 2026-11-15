@@ -14,6 +14,7 @@ section = "x11"
 priority = "optional"
 extended-description = "Orbit-Settings: the wallpaper (a picture, how it meets the screen, or a colour) and the monitors (resolution, refresh rate, scale, rotation), written to core.yaml; and the menu a right click on the desktop opens. Part of the Orbit desktop (https://github.com/julas23/orbit)."
 depends = "$auto"
+recommends = "power-profiles-daemon, nm-connection-editor"
 assets = [
     ["target/release/orbit-settings", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Settings.desktop", "usr/share/applications/", "644"],

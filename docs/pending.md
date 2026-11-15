@@ -235,6 +235,18 @@ with Step 2; the phases then run alongside the steps above.
   user's connection: no administrator's password, and the key never on a
   command line where `ps` would show it. Seen on the think; joining a new
   network and disconnecting the one in use left for the user to try.
+- [x] Batch A3, Power (2026-11-15): the profile (power-profiles-daemon,
+  now a Recommends of orbit-settings; the think has none and the page says
+  so); idleness: locking, suspending on mains and on battery (new in the
+  core: `idle_suspend`, `idle_suspend_battery`, by machine, a video or a
+  fullscreen window holding it, logind's Suspend from a thread), and the
+  effects (on, off on battery, off); the battery when there is one
+  (UPower: charge, state, time left, health, the charge limit through
+  EnableChargeThreshold); the power key and, with a lid, closing it on
+  battery and on mains (logind, through the helper's new `logind KEY
+  VALUE` step: /etc/systemd/logind.conf.d/50-orbit.conf, logind
+  reloaded). Seen on the think (no battery, no lid); the battery, the lid
+  and suspending when idle to try on the hp.
   Next: A3 Bluetooth, Sound,
   Power, A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
   Dock, Notifications, Default apps, A6 Users, A7 the panel's modules.

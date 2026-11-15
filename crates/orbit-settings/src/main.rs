@@ -19,6 +19,7 @@ mod menu;
 mod monitors;
 mod network;
 mod pages;
+mod power;
 mod region;
 mod services;
 mod wallpaper;
@@ -125,6 +126,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "wallpaper" => wallpaper::page(dir),
             "monitors" => monitors::page(dir),
             "network" => network::page(),
+            "power" => power::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

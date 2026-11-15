@@ -9,6 +9,10 @@
 //! instead (`screensaver`), and count the same; so does any fullscreen
 //! window shown, on any monitor (a video, a game). Super+L and `lock`
 //! (IPC) lock always.
+//!
+//! After `idle_suspend` seconds (on mains) or `idle_suspend_battery` (on
+//! battery), the machine suspends, through logind; the same programs and
+//! fullscreen windows hold it, and `sleep.rs` locks before it sleeps.
 
 use std::time::{Duration, Instant};
 
@@ -82,8 +86,49 @@ impl Orbit {
         (seconds > 0).then(|| Duration::from_secs(seconds))
     }
 
+    /// Seconds with no input before the machine suspends, on mains or on
+    /// battery as it is now.
+    fn suspend_timeout(&self) -> Option<Duration> {
+        let host = crate::config::hostname();
+        let mains = crate::config::on_mains(std::path::Path::new("/sys/class/power_supply"));
+        let seconds = if mains {
+            self.config.idle_suspend.get(&host)
+        } else {
+            self.config.idle_suspend_battery.get(&host)
+        };
+        (seconds > 0).then(|| Duration::from_secs(seconds))
+    }
+
+    /// Suspends, through logind, when idle long enough; the idle time
+    /// starts again, so waking up does not suspend once more.
+    fn suspend_check(&mut self) {
+        let Some(timeout) = self.suspend_timeout() else { return };
+        if self.kept_awake() || self.idle.last_input.elapsed() < timeout {
+            return;
+        }
+        tracing::info!("idle for {} s: suspending", self.idle.last_input.elapsed().as_secs());
+        self.idle.last_input = Instant::now();
+        // The call waits for logind; the loop must not.
+        std::thread::spawn(|| {
+            let result = zbus::blocking::Connection::system().and_then(|bus| {
+                bus.call_method(
+                    Some("org.freedesktop.login1"),
+                    "/org/freedesktop/login1",
+                    Some("org.freedesktop.login1.Manager"),
+                    "Suspend",
+                    &(false,),
+                )
+                .map(|_| ())
+            });
+            if let Err(err) = result {
+                tracing::warn!("suspend: {err}");
+            }
+        });
+    }
+
     fn power_check(&mut self) -> TimeoutAction {
         let every = Duration::from_secs(5);
+        self.suspend_check();
         if crate::udev::any_off(self) {
             return TimeoutAction::ToDuration(every);
         }
