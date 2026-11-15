@@ -352,12 +352,14 @@ Apps other desktops have and Orbit does not:
 Services chosen by what the machine is for; the plan, with its tables of
 packages and ports, is `docs/PLANO-DISTRO.md` §12. Everything comes from
 Debian 13 (checked 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2,
-wireguard-tools, fail2ban 1.1.0 (crowdsec 1.4.6 left out),
-snapserver and snapclient 0.31, minidlna 1.3.3, rygel 0.44).
+wireguard-tools, fail2ban 1.1.0 (crowdsec 1.4.6 left out); not in Debian:
+Navidrome 0.64.2 from its GitHub releases, Jellyfin from its own apt
+repository for trixie).
 
 Proposed on 2026-11-15 and being reviewed with the user item by item
 (reviewed so far: the firewall, DHCP and local names, the resolver,
-banning; WireGuard kept as it is, to be looked at again: CGNAT, Tailscale):
+banning, media; WireGuard kept as it is, to be looked at again: CGNAT,
+Tailscale; Alexa decided later):
 
 - [x] *Orbit Linux* is the common ISO; the *server* profile is the desktop
   plus `orbit-server`; *station* stays the network-booted thin client.
@@ -389,9 +391,17 @@ banning; WireGuard kept as it is, to be looked at again: CGNAT, Tailscale):
 - [x] WireGuard as the way in from outside, in place of §9's step 5: only
   UDP 51820 public, port 7311 never; the pairing hands out the tunnel's
   config (QR for phones).
-- [x] Media: `snapserver` and the DLNA server on the server profile
-  (`orbit-share`, a provisional name: `orbit-media` is taken);
-  `snapclient` and Orbit-Play browsing DLNA on desktops and stations.
+- [x] Reviewed: the user's own music and videos, from anywhere, in the
+  apps they already use; no synchronised multi-room sound (Snapcast and
+  standalone DLNA dropped). Navidrome for music (Subsonic API: Feishin,
+  Symfonium, Tempo, Ultrasonic, Amperfy), Jellyfin for videos (TV and
+  phone apps, GPU transcoding, DLNA by plugin), in `orbit-media-server`
+  (a provisional name: `orbit-media` is the desktop's). Navidrome's
+  official .deb through `github.list`, Jellyfin's apt repository through
+  `vendors.list`.
+- [ ] Alexa, later: a Subsonic skill needs a public HTTPS endpoint; "My
+  Media for Alexa" is a third party's; Bluetooth from the phone exposes
+  nothing but takes no voice.
 
 Work, in this order (PLANO-DISTRO §12.6):
 
@@ -409,11 +419,15 @@ Work, in this order (PLANO-DISTRO §12.6):
   each wrong pairing code (`remote: <peer> gave a wrong code (n of 5)`);
   short bans (10 min). The remote server also logs to the journal (today
   only `~/.local/state/orbit/remote.log`), for the jail to read.
-- [ ] `orbit-share` and `snapclient`; DLNA browsing in Orbit-Play.
+- [ ] `orbit-media-server`: Navidrome (`github.list`) and Jellyfin
+  (`vendors.list`, its dependencies named) mirrored; both on the LAN and
+  the tunnel only; the media folders (`/srv/media` by default, the home
+  by choice) from Orbit-Settings; Jellyfin in the `render` group.
 - [ ] Orbit-Settings, "Network and security" (firewall, WireGuard peers,
   the addresses Fail2Ban banned, with unbanning; a ban as a notification); the panel's `network` module
   showing the firewall and the tunnel.
 - [ ] Done when: each profile installs from the ISO in a VM; nmap from the
   LAN sees only the planned ports, from outside only the server's UDP
   51820; a station on another network reaches the server through the
-  tunnel; a `snapclient` plays what the server plays.
+  tunnel; Feishin and a Subsonic app on a phone (through the tunnel,
+  away from home) play Navidrome's music, a Jellyfin app plays a video.

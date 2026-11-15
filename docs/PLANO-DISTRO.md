@@ -80,8 +80,8 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-dev` | Desenvolvimento: VS Code/VSCodium, toolchain Rust, DBeaver, Git, contêineres |
 | `orbit-media` | Música, vídeo e jogos: Feishin, Steam/Proton, codecs |
 | `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
-| `orbit-server` | O perfil servidor (seção 12): orbit-remote-server, WireGuard, dnsmasq + Unbound, Fail2Ban, `orbit-share` |
-| `orbit-share` | Mídia servida para a casa (seção 12): Snapcast e DLNA. Nome provisório |
+| `orbit-server` | O perfil servidor (seção 12): orbit-remote-server, WireGuard, dnsmasq + Unbound, Fail2Ban, `orbit-media-server` |
+| `orbit-media-server` | A música e os vídeos do usuário servidos para os apps dele (seção 12): Navidrome e Jellyfin. Nome provisório |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
 O `orbit-desktop` passa a puxar o `orbit-firewall` (seção 12.3).
@@ -419,8 +419,8 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 
 Status: **em revisão** — proposto em 2026-11-15 e sendo revisto com o
 usuário item a item antes de começar. Revistos: firewall, DHCP e nomes
-locais, resolvedor, banimento; o WireGuard fica como está, a analisar
-depois (CGNAT, Tailscale). A rever: mídia, nomes e ISO.
+locais, resolvedor, banimento, mídia; o WireGuard fica como está, a
+analisar depois (CGNAT, Tailscale), e a Alexa também. A rever: nomes e ISO.
 Acompanhamento em `docs/pending.md` §15.
 
 A ideia: os serviços de rede vêm conforme a finalidade da máquina. Um
@@ -443,8 +443,10 @@ vê-los.
 | **CrowdSec** (revisto) | Fora dos metapacotes; documentado como opção para quem expõe serviços e quer as listas da comunidade. Só se paga com elas (que exigem enviar à API central os ataques vistos, contra o "sem telemetria") e com várias máquinas; sem elas é um Fail2Ban mais pesado (agente, API e bouncer, uns 100 MB), numa versão velha no Debian (1.4.6; o upstream está na 1.6 ou depois, e as coleções do hub podem não servir) ou vindo do repositório deles. A máquina mais exposta, a VPS do repositório (nginx e SSH públicos), é onde ele faria mais sentido, mas ela roda Ubuntu, fora do Orbit Linux |
 | **Banimento no desktop** | Nenhum: atrás do roteador um desktop não serve nada para a internet |
 | **Acesso de fora** | WireGuard. Substitui o passo 5 da latência no `pending.md` §9 (TLS, STUN/TURN, porta TCP pública): só a UDP 51820 fica aberta, as estações e os celulares entram pelo túnel, e a 7311 do remote server nunca fica pública. O pareamento entrega à estação a configuração do túnel (QR para celular) |
-| **Mídia** | Quem tem a biblioteca serve, quem está na sala toca. No servidor: `snapserver` (alimentado por um sink do PipeWire) e o servidor DLNA. No desktop e nas estações: `snapclient` (o Pi 4 vira caixa de som de um cômodo) e o Orbit-Play navegando nos servidores DLNA |
-| **Nome do pacote de mídia** | `orbit-media` já é o metapacote de música, vídeo e jogos (seção 4). O novo é `orbit-share` (nome provisório) |
+| **Mídia** (revisto) | O usuário consome a música e os vídeos dele, de qualquer lugar, nos apps que já usa; sem som sincronizado entre cômodos (Snapcast e o DLNA avulso saíram). **Navidrome** para a música: um binário em Go, SQLite, uns 50 MB, API Subsonic/OpenSubsonic e interface web; clientes Feishin (no `orbit-media`), Symfonium, Tempo e Ultrasonic no Android, Amperfy no iPhone. **Jellyfin** para os vídeos (e música, para quem preferir): apps para TV e celular, conversão de formato na GPU (`jellyfin-ffmpeg`, VA-API), DLNA por plugin para as TVs que só falam isso; mais pesado (uns 300 MB ou mais). O Feishin fala com os dois |
+| **Origem dos pacotes** | Nenhum dos dois está no Debian. Navidrome: o `.deb` oficial das releases do GitHub (amd64 e arm64), uma linha no `distro/repo/github.list`, como o Feishin. Jellyfin: o repositório apt oficial (`repo.jellyfin.org/debian`, suíte `trixie`, amd64 e arm64), uma linha no `distro/repo/vendors.list`, como o Firefox e o VS Code. Nada compilado nem modificado (seção 1) |
+| **Alexa** | A decidir depois. A Alexa só toca o que um *skill* entrega, e quem fala com o skill é a nuvem da Amazon: um skill próprio para Subsonic exige conta de desenvolvedor e um endereço HTTPS público (fura o "só o WireGuard é público"); o "My Media for Alexa" é de terceiros, proprietário e com servidor deles; a Echo como caixa Bluetooth do celular não expõe nada, mas não atende a voz |
+| **Nome do pacote de mídia** | `orbit-media` já é o metapacote de música, vídeo e jogos do desktop (seção 4). O do servidor é `orbit-media-server` (nome provisório) |
 
 ### 12.2 Pacotes
 
@@ -452,8 +454,7 @@ vê-los.
 |---|---|---|
 | `orbit-firewall` | `orbit-desktop` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
 | `orbit-server` | escolha no instalador | `orbit-remote-server`, `wireguard-tools`, `dnsmasq`, `unbound`, `fail2ban`, e as configurações abaixo |
-| `orbit-share` | `orbit-server` | `snapserver`, o servidor DLNA (minidlna ou Rygel, a decidir na hora) |
-| `snapclient` | `orbit-desktop` (Recommends) e a imagem da estação | o lado que toca |
+| `orbit-media-server` | `orbit-server` | `navidrome`, `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), as pastas de mídia e as configurações abaixo |
 
 ### 12.3 Firewall
 
@@ -473,7 +474,7 @@ privadas das interfaces, mais a `wg0`):
 | `20-wireguard.nft` | `orbit-server` | UDP 51820, de qualquer lugar (a única porta pública) |
 | `30-ltsp.nft` | o servidor de estações | UDP 67, 69 e 4011 (proxy DHCP, TFTP), NFS TCP 2049 |
 | `40-dns.nft` | `orbit-server` | UDP/TCP 53 (Unbound), e UDP 67 no modo Rede do dnsmasq |
-| `50-share.nft` | `orbit-share` | SSDP UDP 1900, DLNA TCP 8200, Snapcast TCP 1704, 1705 e 1780 |
+| `50-media.nft` | `orbit-media-server` | Navidrome TCP 4533; Jellyfin TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.4 Servidor
@@ -500,7 +501,17 @@ privadas das interfaces, mais a `wg0`):
   escrever também no journald (com o identificador `orbit-remote-server`),
   para a jail ler como as outras. O contador de erros é um só para todos os
   endereços, então quem erra de propósito força trocas do código para
-  todos; o ban do Fail2Ban é o que impede isso. Os endereços da `@lan` de confiança
+  todos; o ban do Fail2Ban é o que impede isso.
+- **Navidrome e Jellyfin:** cada um como serviço do sistema, com o usuário
+  dele, ouvindo só na `@lan` e na `wg0`; fora de casa, o celular entra pelo
+  WireGuard e o app conecta como em casa. As pastas de mídia escolhidas no
+  Orbit-Settings e escritas na configuração dos dois (`MusicFolder` do
+  Navidrome; as bibliotecas do Jellyfin pela API dele). Os serviços precisam
+  ler as pastas: o padrão é `/srv/media` (`music/`, `videos/`), com um grupo
+  de leitura; pastas no `/home` do usuário (que em algumas máquinas é NFS)
+  só por escolha, com ACL. O Jellyfin no grupo `render`, para a conversão
+  na GPU. O primeiro usuário de cada um é o do Orbit, criado na instalação
+  com uma senha própria do serviço (os apps Subsonic não falam PAM). Os endereços da `@lan` de confiança
   ficam em `ignoreip` só se o usuário pedir.
 
 ### 12.5 No desktop
@@ -510,7 +521,6 @@ privadas das interfaces, mais a `wg0`):
   mostrar o QR, remover); os endereços banidos pelo Fail2Ban (com a opção
   de liberar um). Um ban novo chega como notificação pelo orbit-notify.
 - **Painel:** o módulo `network` mostra o estado do firewall e do túnel.
-- **Orbit-Play:** navegar nos servidores DLNA da rede (GUPnP) como pastas.
 
 ### 12.6 Ordem
 
@@ -518,13 +528,14 @@ privadas das interfaces, mais a `wg0`):
 2. WireGuard no `orbit-server`, com a configuração entregue no pareamento.
 3. dnsmasq + Unbound, absorvendo o dnsmasq do LTSP.
 4. Fail2Ban, com a jail do Orbit.
-5. `orbit-share` e o `snapclient`; o DLNA no Orbit-Play.
+5. `orbit-media-server`: Navidrome e Jellyfin, as pastas de mídia.
 6. A página do Orbit-Settings e o painel.
 
 **Pronto quando:** a ISO, numa VM, instala cada perfil; um nmap da LAN só vê
 as portas das tabelas acima, e um de fora só vê a UDP 51820 do servidor; uma
-estação em outra rede chega ao servidor pelo túnel e mostra a sessão; um
-`snapclient` toca o que o servidor toca.
+estação em outra rede chega ao servidor pelo túnel e mostra a sessão; o
+Feishin no desktop e um app Subsonic no celular, este pelo túnel fora de
+casa, tocam a música do Navidrome, e um app do Jellyfin toca um vídeo.
 
 ### 12.7 Riscos
 
