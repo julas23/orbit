@@ -96,16 +96,33 @@ built, the local repository synced, the public one pushed, offered as an
   stations (`orbit-ltsp`) moved to Later: their server, the Julas VM, no
   longer exists (the user, 2026-11-15).
 
-### Step 3 — WireGuard
+### Step 3 — WireGuard, as a client on the desktop
 
-- [ ] `orbit-wireguard`: `wg0` made when switched on, `20-wireguard.nft` (UDP
-  51820, the only public port), peers added and removed on its page with
-  a QR for phones; the remote server's pairing hands a station its tunnel
-  config.
-- [ ] Before it, look again at CGNAT (no public IP: the VPS as the hub) and
-  Tailscale, which the user already runs (§15).
-- [ ] Done when: a laptop on another network (the hp on a phone's hotspot)
-  reaches the think through the tunnel and shows its session.
+Revised with the user on 2026-11-15. The home has a public IPv4 (PPPoE,
+no CGNAT) and its router, `azimuth`, already serves WireGuard (`wghome`,
+10.80.0.1/24): the desktop only connects to a server that exists; serving
+the tunnel is the server's, managed from its web panel (the Azimuth
+project's). Tailscale left out (the user uses it only in specific cases).
+
+- [x] Orbit-Settings, a Network page (`orbit-settings network`, the start of
+  PLANO-SETTINGS' "Network and Wi-Fi"), its VPN part: the WireGuard
+  tunnels NetworkManager knows (connect and disconnect without a password;
+  connect at start; remove), added from the `.conf` the server made for
+  this machine, imported or pasted, left disconnected; all through
+  `nmcli`, in a thread. Tried on the think with a made-up tunnel (imported
+  as root, listed, connected and disconnected as the user, shown on the
+  page, removed).
+- [ ] Show whether the server answered (the last handshake): "Connected"
+  today is NetworkManager's, also for a server that does not exist; the
+  handshake needs root (`wg show`).
+- [ ] Done when: the hp, on a phone's hotspot, imports its `wghome`
+  configuration from the router's panel, connects, and reaches the think.
+- [ ] To decide (the user is thinking it over): Azimuth, the user's own
+  home server project (firewall, NAT, dnsmasq, WireGuard, DDNS, Fail2Ban,
+  NFS, Samba, media, a web panel with transactional rollback), already
+  does the server side Steps 4–7 plan for Orbit. Proposed: Orbit the
+  desktop and client, Azimuth the server, the installer's "Server"
+  installing Azimuth; until decided, Steps 4–7 stay as they are.
 
 ### Step 4 — Unbound and dnsmasq
 

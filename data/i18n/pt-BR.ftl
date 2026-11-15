@@ -1055,6 +1055,25 @@ settings-svc-keep-question = Aplicado. Manter? Desfaz em { $seconds } s
 settings-svc-undo = Desfazer
 settings-svc-undone = Não confirmado: desfeito.
 settings-svc-cancelled = Não autorizado
+settings-network = Rede
+settings-network-keywords = vpn, wireguard, túnel, internet, conexão
+settings-net-vpn = VPN (WireGuard)
+settings-net-vpn-tip = Para chegar a um servidor WireGuard (o do roteador, o de um servidor de casa), importe o arquivo .conf que ele gerou para esta máquina, ou cole o texto dele. Adicionar ou remover um túnel pede a senha de um administrador; conectar, não.
+settings-net-none = Nenhum túnel ainda.
+settings-net-import = Importar arquivo…
+settings-net-paste = Colar configuração…
+settings-net-paste-tip = O texto do arquivo .conf que o servidor gerou para esta máquina, de [Interface] até o fim.
+settings-net-name = Nome
+settings-net-add = Adicionar
+settings-net-connected = Conectado
+settings-net-disconnected = Desconectado
+settings-net-autoconnect = Conectar quando a máquina iniciar
+settings-net-remove = Remover
+settings-net-remove-question = Remover o túnel { $name }?
+settings-net-remove-detail = A configuração e as chaves saem desta máquina; o servidor fica com a parte dele.
+settings-net-conf-files = Configurações do WireGuard
+settings-net-bad-name = O nome: de 1 a 15 letras, números, - _ ou . (é a interface do túnel).
+settings-net-not-wireguard = Isto não é uma configuração do WireGuard: ela precisa de um [Interface] e de um [Peer].
 
 ## Módulos do painel configurados pelos próprios cliques.
 panel-zone-search = Procure uma cidade ou fuso

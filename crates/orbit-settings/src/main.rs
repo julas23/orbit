@@ -14,6 +14,7 @@
 mod core;
 mod menu;
 mod monitors;
+mod network;
 mod pages;
 mod services;
 mod wallpaper;
@@ -118,6 +119,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
         let widget = match page.id {
             "wallpaper" => wallpaper::page(dir),
             "monitors" => monitors::page(dir),
+            "network" => network::page(),
             "services" => services::page(),
             _ => continue,
         };

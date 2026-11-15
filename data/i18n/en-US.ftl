@@ -1063,6 +1063,25 @@ settings-svc-keep-question = Applied. Keep it? Undone in { $seconds } s
 settings-svc-undo = Undo
 settings-svc-undone = Not kept: undone.
 settings-svc-cancelled = Not authorised
+settings-network = Network
+settings-network-keywords = vpn, wireguard, tunnel, internet, connection
+settings-net-vpn = VPN (WireGuard)
+settings-net-vpn-tip = To reach a WireGuard server (a router's, a home server's), import the .conf file it made for this machine, or paste its text. Adding or removing a tunnel asks for an administrator's password; connecting does not.
+settings-net-none = No tunnel yet.
+settings-net-import = Import a file…
+settings-net-paste = Paste a configuration…
+settings-net-paste-tip = The text of the .conf file the server made for this machine, from [Interface] to the end.
+settings-net-name = Name
+settings-net-add = Add
+settings-net-connected = Connected
+settings-net-disconnected = Disconnected
+settings-net-autoconnect = Connect when the machine starts
+settings-net-remove = Remove
+settings-net-remove-question = Remove the tunnel { $name }?
+settings-net-remove-detail = Its configuration and keys are deleted from this machine; the server keeps its side.
+settings-net-conf-files = WireGuard configurations
+settings-net-bad-name = The name: 1 to 15 letters, digits, - _ or . (it is the tunnel's interface).
+settings-net-not-wireguard = This is not a WireGuard configuration: it needs an [Interface] and a [Peer].
 
 ## Panel modules set up from their own clicks (settings.rs, weather.rs,
 ## calendar.rs, agenda.rs, clock.rs, spectrum.rs, media.rs).

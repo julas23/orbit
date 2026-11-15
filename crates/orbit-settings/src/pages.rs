@@ -46,6 +46,14 @@ pub struct Page {
 /// Every page, in the sidebar's order within its group.
 pub const PAGES: &[Page] = &[
     Page {
+        id: "network",
+        group: Group::System,
+        title: "settings-network",
+        icon: "network-workgroup-symbolic",
+        keywords: "settings-network-keywords",
+        options: &["settings-net-vpn", "settings-net-import", "settings-net-paste"],
+    },
+    Page {
         id: "monitors",
         group: Group::System,
         title: "settings-monitors",
