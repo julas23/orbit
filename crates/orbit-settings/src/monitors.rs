@@ -310,7 +310,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     body.append(&page.message);
     gtk::ScrolledWindow::builder()
         .child(&body)
-        .hscrollbar_policy(gtk::PolicyType::Never)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
         .build()
         .upcast()
 }

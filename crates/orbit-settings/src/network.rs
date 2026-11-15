@@ -195,7 +195,7 @@ pub fn page() -> gtk::Widget {
     body.append(&card);
     gtk::ScrolledWindow::builder()
         .child(&body)
-        .hscrollbar_policy(gtk::PolicyType::Never)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
         .build()
         .upcast()
 }

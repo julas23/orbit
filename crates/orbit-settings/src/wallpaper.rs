@@ -332,7 +332,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     let scroll = gtk::ScrolledWindow::builder()
         .child(&grid)
         .vexpand(true)
-        .hscrollbar_policy(gtk::PolicyType::Never)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
         .build();
     let body = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -414,7 +414,15 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
 
     page.load();
     thumbnails(&page, &grid);
-    body.upcast()
+    // The whole page scrolls sideways when the window is narrower than the
+    // preview and its controls (a tile of half a screen); the pictures'
+    // grid scrolls down on its own.
+    gtk::ScrolledWindow::builder()
+        .child(&body)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .build()
+        .upcast()
 }
 
 impl Page {
