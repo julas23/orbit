@@ -382,12 +382,16 @@ Reviewed with the user, item by item (2026-11-15):
   one, NAT). One question, "Desktop / Server", preselected from what was
   found; a "Multimedia kit (Navidrome and Jellyfin)" box for servers. A
   disk with data is never formatted without an explicit choice.
-- [x] Storage, in part: Samba and NFS shares, disk health (smartmontools,
-  warnings through orbit-notify); ZFS left out.
-- [ ] To decide: a server installed from the ISO without the graphical
-  session, run through `orbitctl services` or a desktop's Orbit-Settings
-  over the tunnel; the rest of storage (snapshots of the data, restic or
-  borg backups, Syncthing).
+- [x] Storage: Samba and NFS shares, disk health (smartmontools, warnings
+  through orbit-notify) and Syncthing (1.29.5 in Debian, which the user
+  already runs between machines; global discovery, relays and usage
+  reports off by default). ZFS left out; snapshots of the data and
+  backups (restic, borg) left out for now.
+- [x] A server may have no graphical session: `orbit-base` (the firewall,
+  PackageKit, the helper, `orbitctl`) instead of `orbit-desktop`, a console
+  login, SSH by key on the LAN and the tunnel only (`orbit-ssh`), run
+  through `orbitctl services` or from a desktop's Orbit-Settings over SSH,
+  which runs `orbitctl services --json` there: no new daemon listening.
 - [x] Plain nftables on every install (`orbit-firewall`, pulled by
   `orbit-desktop`, on by default), chosen over firewalld and ufw. Only the
   `inet orbit` table is deleted and reloaded, never Debian's default
@@ -446,7 +450,11 @@ Work, in this order (PLANO-DISTRO §12.7):
   (`/srv/media` by default, the home by choice); Jellyfin in the `render`
   group; the first user created with a password of its own.
 - [ ] Storage: `orbit-samba` (TCP 445), `orbit-nfs` (NFSv4, TCP 2049),
-  `orbit-smart`.
+  `orbit-smart`, `orbit-syncthing` (`syncthing@USER`, TCP/UDP 22000 and UDP
+  21027, configured through its API on `127.0.0.1:8384`).
+- [ ] `orbit-base` and `orbit-ssh`; the "Without a graphical session" box in
+  `orbit-install`, which drops the desktop packages from the copied Live;
+  Orbit-Settings managing another machine over SSH.
 - [ ] `orbitctl services`: the page in a terminal (list, on, off, configure),
   for VPSs (a Debian cloud image plus the `orbit-<service>` packages) and
   servers without a session.

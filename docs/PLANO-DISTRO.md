@@ -320,8 +320,17 @@ assistente de várias páginas) foi descartado por isso.
     compartilhar; uma caixa oferece compartilhá-los.
   - *Servidor:* o firewall, o Fail2Ban, o Unbound, o dnsmasq no modo da
     tabela, o WireGuard e o remote server; com storage, o Samba, o NFS e a
-    saúde dos discos (smartmontools, com aviso pelo orbit-notify). Uma
-    caixa **"Kit multimídia (Navidrome e Jellyfin)"**.
+    saúde dos discos (smartmontools, com aviso pelo orbit-notify) e o
+    Syncthing. Uma caixa **"Kit multimídia (Navidrome e Jellyfin)"** e outra
+    **"Sem sessão gráfica"** (desmarcada).
+- **Servidor sem sessão gráfica** (um NAS no armário, uma máquina sem
+  monitor): instala o `orbit-base` (seção 12.3) em vez do `orbit-desktop` —
+  sem orbit-core, greet, painel nem apps; login no console. Liga o SSH (só
+  para a LAN e o túnel, por chave; a do usuário pedida na tela, ou a senha
+  só até a primeira chave). Gerenciado pelo `orbitctl services` (no console
+  ou por SSH) ou pelo Orbit-Settings de um desktop, pelo túnel (12.2). O
+  remote server não é oferecido, porque não há sessão para compartilhar. A
+  instalação copia a Live como sempre e tira os pacotes do desktop, offline.
 - **Disco com dados nunca é formatado sem escolha explícita.** A regra do
   `/home` da 6.4 continua acima de tudo: um disco com `/home` é mantido e
   usado como `/home`. Para storage só entram direto os discos vazios; um
@@ -353,10 +362,6 @@ Orbit, os pacotes `orbit-<serviço>` pelo apt e o `orbitctl services` (a
 página "Serviços" no terminal: listar, ligar, desligar, configurar), que
 serve também a qualquer servidor sem sessão gráfica.
 
-**A decidir:** se um servidor instalado pela ISO pode ficar sem a sessão
-gráfica (um NAS no armário), gerenciado pelo `orbitctl services` ou pelo
-Orbit-Settings de um desktop, pelo túnel; e o que mais entra no storage
-(snapshots dos dados, backup com restic ou borg, Syncthing).
 
 ## 7. Infraestrutura
 
@@ -512,9 +517,9 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 Status: **em revisão** — proposto em 2026-11-15 e revisto com o usuário
 item a item antes de começar. Revistos: o modelo (os serviços como
 interruptores), a finalidade escolhida na instalação, a ISO e os nomes,
-firewall, DHCP e nomes locais, resolvedor, banimento, mídia, e o storage em
-parte. Ficam como estão, a analisar depois: o WireGuard (CGNAT, Tailscale),
-a Alexa, o servidor sem sessão gráfica e o resto do storage.
+firewall, DHCP e nomes locais, resolvedor, banimento, mídia, storage, o
+servidor sem sessão gráfica. Ficam como estão, a analisar depois: o
+WireGuard (CGNAT, Tailscale) e a Alexa.
 Acompanhamento em `docs/pending.md` §15.
 
 A ideia: cada serviço de rede, de mídia e de storage é um **interruptor na
@@ -534,7 +539,8 @@ a página que os liga.
 | **Modelo** (revisto) | Cada serviço é um pacote `orbit-<serviço>` (depende do pacote do Debian ou do upstream e traz a configuração padrão do Orbit e o arquivo do firewall), instalado e configurado pela página "Serviços". Nenhum metapacote os puxa; não há `orbit-server` |
 | **Finalidade** (revisto) | O `orbit-install` pergunta "Desktop / Servidor", já marcado pelo hardware detectado (6.6), e liga na instalação o conjunto de serviços da finalidade: o Desktop só o firewall; o Servidor o firewall, o Fail2Ban, o Unbound, o dnsmasq (no modo que a rede pede), o WireGuard, o remote server, o storage quando há discos para ele, e o kit multimídia se marcado. Depois disso tudo se ajusta na página |
 | **ISO e nomes** (revisto) | Uma ISO só; a finalidade é uma pergunta do instalador, não outra imagem. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
-| **Storage** (revisto, em parte) | Os discos além do do sistema, se vazios, viram storage na instalação: btrfs (RAID1 com dois ou mais) em `/srv` (6.6). Serviços: compartilhar pastas pelo Samba (Windows, macOS, Android) e pelo NFS (Linux), e a saúde dos discos (smartmontools, com aviso). ZFS fora (contrib, DKMS a cada kernel). A decidir: snapshots dos dados, backup (restic ou borg), Syncthing |
+| **Storage** (revisto) | Os discos além do do sistema, se vazios, viram storage na instalação: btrfs (RAID1 com dois ou mais) em `/srv` (6.6). Serviços: compartilhar pastas pelo Samba (Windows, macOS, Android) e pelo NFS (Linux), a saúde dos discos (smartmontools, com aviso) e a sincronização pelo **Syncthing** (1.29.5 no Debian 13), que o usuário já usa entre as máquinas. ZFS fora (contrib, DKMS a cada kernel). Snapshots dos dados e backup (restic, borg) fora por enquanto |
+| **Servidor sem sessão gráfica** (revisto) | Permitido: `orbit-base` em vez do `orbit-desktop`, login no console, SSH por chave só para a LAN e o túnel, gerência pelo `orbitctl services` ou pelo Orbit-Settings de um desktop por SSH (6.6, 12.2) |
 | **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
 | **Nomes sem esses serviços** (revisto) | mDNS pelo Avahi (`think.local`), que funciona com qualquer roteador; a máquina usa o DNS que a rede entrega |
@@ -556,6 +562,7 @@ página do serviço:
 |---|---|---|---|
 | Segurança | Firewall | `orbit-firewall` (já instalado) | o que cada arquivo abre; liberar uma porta à mão |
 | Segurança | Banimento (Fail2Ban) | `orbit-fail2ban` | os endereços banidos, liberar um; endereços de confiança (`ignoreip`) |
+| Segurança | Terminal remoto (SSH) | `orbit-ssh` | as chaves aceitas; senha permitida ou não (por padrão só chave) |
 | Rede | Acesso de fora (WireGuard) | `orbit-wireguard` | os peers: adicionar (com o QR), remover |
 | Rede | Resolvedor (Unbound) | `orbit-unbound` | recursão ou DNS-over-TLS; as listas RPZ |
 | Rede | DHCP e nomes locais (dnsmasq) | `orbit-dnsmasq` | o modo (Proxy ou Rede), o domínio, a faixa de IPs, as reservas |
@@ -566,6 +573,7 @@ página do serviço:
 | Storage | Pastas compartilhadas (Samba) | `orbit-samba` | as pastas, quem acessa (os usuários do Orbit, com a senha deles no Samba) |
 | Storage | Pastas compartilhadas (NFS) | `orbit-nfs` | as pastas e as redes que as montam |
 | Storage | Saúde dos discos | `orbit-smart` | os discos, os testes agendados, o histórico |
+| Storage | Sincronização (Syncthing) | `orbit-syncthing` | as pastas, os aparelhos (pelo ID ou QR), a descoberta fora da rede |
 
 - **Instalar e remover:** pelo PackageKit (`packagekit`, puxado pelo
   `orbit-desktop`), com a senha pedida pelo polkit (o orbit-polkit) e o
@@ -588,14 +596,22 @@ página do serviço:
   como os monitores.
 - Um ban novo, um serviço que caiu e uma estação que pareou chegam como
   notificação pelo orbit-notify.
+- **Outra máquina:** a página pode gerenciar outra máquina Orbit (um
+  servidor sem sessão gráfica, por exemplo) pelo SSH, pelo túnel: ela roda
+  lá o `orbitctl services --json` e mostra o resultado como se fosse local.
+  Nenhum daemon novo ouvindo na rede; a autenticação é a chave do SSH.
+- **`orbitctl services`** é a mesma página no terminal (listar, ligar,
+  desligar, configurar), sobre o mesmo auxiliar; funciona sem o orbit-core.
 
 ### 12.3 Pacotes
 
 | Pacote | Puxado por | Traz |
 |---|---|---|
-| `orbit-firewall` | `orbit-desktop` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
-| `packagekit` | `orbit-desktop` | o que a página usa para instalar e remover |
-| `orbit-services-helper` | `orbit-settings` | o auxiliar da configuração e a ação polkit |
+| `orbit-base` | `orbit-desktop`; sozinho no servidor sem sessão gráfica | `orbit-firewall`, `packagekit`, `orbit-services-helper`, `orbitctl` |
+| `orbit-firewall` | `orbit-base` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
+| `packagekit` | `orbit-base` | o que a página usa para instalar e remover |
+| `orbit-services-helper` | `orbit-base` | o auxiliar da configuração e a ação polkit |
+| `orbit-ssh` | a página; ligado no servidor sem sessão gráfica | `openssh-server`, só chave por padrão, `15-ssh.nft` |
 | `orbit-fail2ban` | a página | `fail2ban`, as jails, o filtro `orbit-remote` |
 | `orbit-wireguard` | a página | `wireguard-tools`, a `wg0`, `20-wireguard.nft` |
 | `orbit-unbound` | a página | `unbound`, a configuração, `40-dns.nft` |
@@ -607,6 +623,7 @@ página do serviço:
 | `orbit-samba` | a página | `samba`, a configuração, `52-samba.nft` |
 | `orbit-nfs` | a página | `nfs-kernel-server`, `/etc/exports.d/orbit.exports`, `53-nfs.nft` |
 | `orbit-smart` | a página | `smartmontools`, o aviso pelo orbit-notify |
+| `orbit-syncthing` | a página | `syncthing`, o serviço por usuário, `54-syncthing.nft` |
 
 ### 12.4 Firewall
 
@@ -623,6 +640,7 @@ mais a `wg0`):
 | Arquivo | Pacote | Abre |
 |---|---|---|
 | `10-remote.nft` | `orbit-remote-server` | TCP 7311 e a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`) |
+| `15-ssh.nft` | `orbit-ssh` | TCP 22 |
 | `20-wireguard.nft` | `orbit-wireguard` | UDP 51820, de qualquer lugar (a única porta pública) |
 | `30-ltsp.nft` | `orbit-ltsp` | UDP 69 e 4011 (TFTP, proxy DHCP), NFS TCP 2049 |
 | `40-dns.nft` | `orbit-unbound` | UDP/TCP 53 |
@@ -631,6 +649,7 @@ mais a `wg0`):
 | `51-jellyfin.nft` | `orbit-jellyfin` | TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
 | `52-samba.nft` | `orbit-samba` | TCP 445 |
 | `53-nfs.nft` | `orbit-nfs` | TCP 2049 (NFSv4 só) |
+| `54-syncthing.nft` | `orbit-syncthing` | TCP/UDP 22000 (sincronização), UDP 21027 (descoberta na rede) |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.5 Cada serviço
@@ -670,6 +689,15 @@ mais a `wg0`):
   ACL. O Jellyfin no grupo `render`, para a conversão na GPU. O primeiro
   usuário de cada um é o do Orbit, criado ao ligar, com uma senha própria
   do serviço (os apps Subsonic não falam PAM).
+- **Syncthing:** um serviço por usuário do Orbit (`syncthing@USUÁRIO`), com
+  a interface e a API em `127.0.0.1:8384`, que a página usa; no servidor, as
+  pastas em `/srv` (`@shares`). Os aparelhos se acham na LAN e pelo túnel;
+  a descoberta global e os relays (a infraestrutura pública do Syncthing)
+  ficam desligados por padrão, como o relatório de uso: ligá-los é uma
+  escolha, para quem sincroniza sem o túnel.
+- **SSH:** `openssh-server` só com chave (`PasswordAuthentication no` depois
+  da primeira chave), só na `@lan` e na `wg0`; a jail `sshd` do Fail2Ban
+  cobre o que sobrar.
 
 ### 12.6 Painel
 
@@ -687,8 +715,9 @@ página "Serviços".
 4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
 5. `orbit-fail2ban`, com a jail do Orbit.
 6. `orbit-navidrome` e `orbit-jellyfin`.
-7. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`.
-8. O `orbitctl services`, a página no terminal.
+7. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`, `orbit-syncthing`.
+8. O `orbit-base`, o `orbit-ssh`, o `orbitctl services` e a gerência de
+   outra máquina pelo SSH: o servidor sem sessão gráfica.
 9. O painel.
 
 **Pronto quando:** numa VM instalada pela ISO, cada serviço liga, configura,
