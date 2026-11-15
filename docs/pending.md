@@ -33,6 +33,9 @@ built, the local repository synced, the public one pushed, offered as an
   `orbitctl`), pulled by `orbit-desktop`.
 - [ ] `orbit-services-helper`: run by `pkexec` under its own polkit action,
   only typed and validated commands, never free text into a root-owned file.
+- [ ] Orbit-Settings' base (`docs/PLANO-SETTINGS.md` §4): the search over
+  every option, the sidebar in groups, each page's option index and address
+  (`orbit-settings <page>[/<section>]`).
 - [ ] Orbit-Settings, "Services": the groups and rows of PLANO-DISTRO §12.2;
   install and remove through PackageKit, start and stop through systemd's
   D-Bus API; the dependencies between services; firewall, WireGuard and
@@ -146,6 +149,26 @@ built, the local repository synced, the public one pushed, offered as an
 
 - [ ] The `network` module showing the firewall's and the tunnel's state, a
   click opening the "Services" page.
+
+### The Orbit-Settings track
+
+Every setting of a desktop in Orbit-Settings, covering what GNOME 48, KDE
+Plasma 6, XFCE and Unity offer, minus what is exclusive to one of them (no
+KDE Connect, no online accounts): `docs/PLANO-SETTINGS.md`. Its base comes
+with Step 2; the phases then run alongside the steps above.
+
+- [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
+  Appearance, Keyboard, Mouse and touchpad, Date and time, Region and
+  language, Users and groups, Panel, Dock, Windows and areas, Shortcuts,
+  Notifications, Default apps and startup, About; the panel's modules
+  opening their pages on a right click. Done when nothing daily on the hp
+  and the think needs a hand-edited YAML or an outside tool.
+- [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,
+  Updates, Lock screen and login, Boot. Done when an SMB folder mounted at
+  login, a network printer added and an update installed all go through
+  Orbit-Settings.
+- [ ] Phase C: Accessibility (with the orbit-core work it needs), Devices,
+  the advanced YAML editor.
 
 ### Later
 
@@ -490,7 +513,7 @@ Orbit-Calc: currency conversion; the history of calculations shown.
 Orbit-Safe (Seahorse, KeePassXC): SSH and GPG keys; filling passwords into Pathfinder. (QR codes: §8.)
 
 Apps other desktops have and Orbit does not:
-- [ ] ★ Settings: monitors, sound, network, Bluetooth, users, default apps, look and wallpaper — today scattered in YAML files. Started 2026-11-03: `orbit-settings` with the wallpaper (picture from the usual folders or any file, fit, colour; all monitors or one; written to core.yaml and reloaded at once, with a preview of what the core draws) and the monitors.
+- [ ] ★ Settings: monitors, sound, network, Bluetooth, users, default apps, look and wallpaper — today scattered in YAML files. Planned in full on 2026-11-15: `docs/PLANO-SETTINGS.md`, the track in §0. Started 2026-11-03: `orbit-settings` with the wallpaper (picture from the usual folders or any file, fit, colour; all monitors or one; written to core.yaml and reloaded at once, with a preview of what the core draws) and the monitors.
 - [ ] ★ A system monitor: processes, ending one, use per app.
 - [ ] Updates in a window (`apt upgrade`), as everything ships as debs.
 - [ ] Disks (Popsicle only writes images), printers, scanner.

@@ -940,8 +940,9 @@ The plans (in Portuguese) are in [`docs/`](docs): the panel
 ([`PLANO-PAINEL.md`](docs/PLANO-PAINEL.md)), the compositor
 ([`PLANO-CORE.md`](docs/PLANO-CORE.md)), notifications
 ([`PLANO-NOTIFY.md`](docs/PLANO-NOTIFY.md)), the browser
-([`PLANO-PATHFINDER.md`](docs/PLANO-PATHFINDER.md)) and the distribution
-([`PLANO-DISTRO.md`](docs/PLANO-DISTRO.md)). What is done and what is
+([`PLANO-PATHFINDER.md`](docs/PLANO-PATHFINDER.md)), the distribution
+([`PLANO-DISTRO.md`](docs/PLANO-DISTRO.md)) and the settings
+([`PLANO-SETTINGS.md`](docs/PLANO-SETTINGS.md)). What is done and what is
 pending, component by component, is in [`docs/pending.md`](docs/pending.md),
 and the day by day in [`docs/WORKLOG.md`](docs/WORKLOG.md).
 
