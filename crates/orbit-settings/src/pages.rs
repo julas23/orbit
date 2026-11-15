@@ -273,6 +273,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-svc-firewall", "settings-svc-remote", "settings-svc-open-files"],
     },
     Page {
+        id: "updates",
+        group: Group::System,
+        title: "settings-upd",
+        icon: "software-update-available-symbolic",
+        keywords: "settings-upd-keywords",
+        options: &["settings-upd-check", "settings-upd-install", "settings-upd-auto", "settings-upd-repos", "settings-upd-history"],
+    },
+    Page {
         id: "about",
         group: Group::Orbit,
         title: "settings-about",

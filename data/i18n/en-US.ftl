@@ -1499,6 +1499,34 @@ settings-privacy-location = Location
 settings-privacy-screenshot = Screenshots
 settings-privacy-notifications = Notifications
 settings-privacy-background = Running in the background
+settings-upd = Updates
+settings-upd-keywords = updates, upgrade, apt, packages, security, unattended, automatic updates, repositories, sources, history
+settings-upd-now = Updates
+settings-upd-reading = Looking…
+settings-upd-none = Everything is up to date.
+settings-upd-count = { $count ->
+    [one] One update to install.
+   *[other] { $count } updates to install.
+}
+settings-upd-check = Check now
+settings-upd-install = Install all
+settings-upd-which = Which
+settings-upd-failed = The update did not go through.
+settings-upd-auto = Automatic updates
+settings-upd-auto-what = Installed alone
+settings-upd-auto-off = Nothing
+settings-upd-auto-security = The security updates
+settings-upd-auto-all = Everything
+settings-upd-auto-tip = unattended-upgrades installs them in the background once a day (installed when turned on). "Everything" takes every repository's, Orbit's too.
+settings-upd-repos = Repositories
+settings-upd-off = off
+settings-upd-history = Lately
+settings-upd-did-install = { $count } installed
+settings-upd-did-upgrade = { $count } updated
+settings-upd-did-remove = { $count } removed
+settings-upd-did-purge = { $count } purged
+settings-upd-did-downgrade = { $count } downgraded
+settings-upd-did-reinstall = { $count } reinstalled
 settings-time = Date and time
 settings-time-keywords = clock, time zone, timezone, hour, ntp, network time
 settings-time-zone = Time zone

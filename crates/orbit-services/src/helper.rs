@@ -6,7 +6,9 @@
 //! STEP is `install` or `remove` (a package of the catalogue), `unit-on`
 //! or `unit-off` (one of its units: enabled and started, or stopped and
 //! disabled), or `logind KEY VALUE` (what the lid and the power key do,
-//! in /etc/systemd/logind.conf.d/50-orbit.conf, logind reloaded). Every step is checked against the catalogue before any is
+//! in /etc/systemd/logind.conf.d/50-orbit.conf, logind reloaded),
+//! `refresh` and `upgrade` (apt's lists, every update), or `auto-updates
+//! off|security|all` (unattended-upgrades, installed when turned on). Every step is checked against the catalogue before any is
 //! run; a step that fails undoes the unit steps already done. With
 //! `--trial`, the unit steps done are undone after SECONDS unless a line
 //! `keep` comes on the standard input first (`undo` undoes them at once).
@@ -80,6 +82,7 @@ fn parse(args: &[String]) -> Result<(Option<u32>, Vec<Privileged>), String> {
         match words {
             [verb, key, value] if verb == "logind" => steps.push(Privileged::logind(key, value)?),
             [verb, arg] => steps.push(Privileged::parse(verb, arg)?),
+            [verb] => steps.push(Privileged::word(verb)?),
             _ => return Err(format!("a step is a verb and its argument, not {words:?}")),
         }
     }
@@ -96,6 +99,9 @@ fn describe(step: &Privileged) -> String {
         Privileged::UnitOn(u) => format!("Starting {u}"),
         Privileged::UnitOff(u) => format!("Stopping {u}"),
         Privileged::Logind(k, v) => format!("Setting {k} to {v}"),
+        Privileged::Refresh => "Fetching the package lists".into(),
+        Privileged::Upgrade => "Installing the updates".into(),
+        Privileged::AutoUpdates(m) => format!("Automatic updates: {m}"),
     }
 }
 
@@ -110,7 +116,24 @@ fn run(step: &Privileged) -> Result<(), String> {
         Privileged::UnitOn(unit) => systemctl(&["enable", "--now", unit]),
         Privileged::UnitOff(unit) => systemctl(&["disable", "--now", unit]),
         Privileged::Logind(key, value) => logind(key, value),
+        Privileged::Refresh => apt(&["update"]),
+        Privileged::Upgrade => apt(&["dist-upgrade"]),
+        Privileged::AutoUpdates(mode) => auto_updates(mode),
     }
+}
+
+/// unattended-upgrades on (installed first) or off, and which updates.
+fn auto_updates(mode: &str) -> Result<(), String> {
+    use orbit_services::updates;
+    if mode != "off" && !updates::installed("unattended-upgrades") {
+        apt(&["install", "unattended-upgrades"])?;
+    }
+    let (periodic, origins) = updates::auto_files(mode);
+    std::fs::write(updates::PERIODIC, periodic).map_err(|e| format!("{}: {e}", updates::PERIODIC))?;
+    if let Some(origins) = origins {
+        std::fs::write(updates::ORIGINS, origins).map_err(|e| format!("{}: {e}", updates::ORIGINS))?;
+    }
+    Ok(())
 }
 
 /// Orbit's logind drop-in: `key=value` set, the others it holds kept.
@@ -254,6 +277,10 @@ mod tests {
         let (_, steps) = parse(&words("logind HandleLidSwitch lock")).unwrap();
         assert_eq!(steps, vec![Privileged::Logind("HandleLidSwitch".into(), "lock".into())]);
         assert!(parse(&words("logind HandleLidSwitch reboot")).is_err());
+        let (_, steps) = parse(&words("refresh -- upgrade -- auto-updates security")).unwrap();
+        assert_eq!(steps, vec![Privileged::Refresh, Privileged::Upgrade, Privileged::AutoUpdates("security".into())]);
+        assert!(parse(&words("auto-updates sometimes")).is_err());
+        assert!(parse(&words("reboot")).is_err());
     }
 
     #[test]

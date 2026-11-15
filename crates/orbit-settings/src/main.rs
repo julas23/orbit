@@ -36,6 +36,7 @@ mod region;
 mod services;
 mod shortcuts;
 mod sound;
+mod updates_page;
 mod users;
 mod wallpaper;
 mod wifi;
@@ -158,6 +159,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "users" => users::page(),
             "lock" => lock_page::page(dir),
             "privacy" => privacy::page(),
+            "updates" => updates_page::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

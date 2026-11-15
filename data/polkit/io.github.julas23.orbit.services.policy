@@ -3,16 +3,17 @@
  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <!-- Orbit's services (orbit-services-helper): installing, removing,
-     starting and stopping them, from Orbit-Settings or orbitctl. An
+     starting and stopping them, and the system's updates, from
+     Orbit-Settings or orbitctl. An
      administrator's password, kept for a few minutes. -->
 <policyconfig>
   <vendor>Orbit</vendor>
   <vendor_url>https://github.com/julas23/orbit</vendor_url>
   <action id="io.github.julas23.orbit.services">
-    <description>Change this machine's services</description>
-    <description xml:lang="pt_BR">Alterar os serviços desta máquina</description>
-    <message>Turning a service of this machine on or off needs an administrator's password</message>
-    <message xml:lang="pt_BR">Ligar ou desligar um serviço desta máquina pede a senha de um administrador</message>
+    <description>Change this machine's services and updates</description>
+    <description xml:lang="pt_BR">Alterar os serviços e as atualizações desta máquina</description>
+    <message>Changing this machine's services or updates needs an administrator's password</message>
+    <message xml:lang="pt_BR">Mudar os serviços ou as atualizações desta máquina pede a senha de um administrador</message>
     <icon_name>preferences-system</icon_name>
     <defaults>
       <allow_any>auth_admin</allow_any>

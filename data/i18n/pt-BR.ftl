@@ -1491,6 +1491,34 @@ settings-privacy-location = Localização
 settings-privacy-screenshot = Capturas de tela
 settings-privacy-notifications = Notificações
 settings-privacy-background = Rodar em segundo plano
+settings-upd = Atualizações
+settings-upd-keywords = atualizações, atualizar, apt, pacotes, segurança, automáticas, unattended, repositórios, fontes, histórico
+settings-upd-now = Atualizações
+settings-upd-reading = Procurando…
+settings-upd-none = Tudo está atualizado.
+settings-upd-count = { $count ->
+    [one] Uma atualização para instalar.
+   *[other] { $count } atualizações para instalar.
+}
+settings-upd-check = Procurar agora
+settings-upd-install = Instalar tudo
+settings-upd-which = Quais
+settings-upd-failed = A atualização não foi concluída.
+settings-upd-auto = Atualizações automáticas
+settings-upd-auto-what = Instalar sozinho
+settings-upd-auto-off = Nada
+settings-upd-auto-security = As de segurança
+settings-upd-auto-all = Tudo
+settings-upd-auto-tip = O unattended-upgrades instala em segundo plano uma vez por dia (é instalado ao ligar). "Tudo" pega as de todos os repositórios, inclusive as do Orbit.
+settings-upd-repos = Repositórios
+settings-upd-off = desligado
+settings-upd-history = Últimas
+settings-upd-did-install = { $count } instalados
+settings-upd-did-upgrade = { $count } atualizados
+settings-upd-did-remove = { $count } removidos
+settings-upd-did-purge = { $count } expurgados
+settings-upd-did-downgrade = { $count } rebaixados
+settings-upd-did-reinstall = { $count } reinstalados
 settings-time = Data e hora
 settings-time-keywords = relógio, fuso horário, fuso, hora, ntp, hora da rede
 settings-time-zone = Fuso horário

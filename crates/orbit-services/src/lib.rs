@@ -25,6 +25,7 @@ use std::{
 use serde::Serialize;
 
 pub mod accounts;
+pub mod updates;
 
 /// The helper, run as root by `pkexec`.
 pub const HELPER: &str = "/usr/libexec/orbit-services-helper";
@@ -432,6 +433,13 @@ pub enum Privileged {
     UnitOff(String),
     /// One of [`LOGIND_KEYS`] set to one of [`LOGIND_VALUES`].
     Logind(String, String),
+    /// apt's lists fetched again.
+    Refresh,
+    /// Every update installed (`apt-get dist-upgrade`).
+    Upgrade,
+    /// What unattended-upgrades installs alone: one of
+    /// [`updates::AUTO_MODES`].
+    AutoUpdates(String),
 }
 
 impl Privileged {
@@ -443,6 +451,18 @@ impl Privileged {
             Privileged::UnitOn(u) => vec!["unit-on", u],
             Privileged::UnitOff(u) => vec!["unit-off", u],
             Privileged::Logind(k, v) => vec!["logind", k, v],
+            Privileged::Refresh => vec!["refresh"],
+            Privileged::Upgrade => vec!["upgrade"],
+            Privileged::AutoUpdates(m) => vec!["auto-updates", m],
+        }
+    }
+
+    /// The steps of one word: `refresh`, `upgrade`.
+    pub fn word(verb: &str) -> Result<Self, String> {
+        match verb {
+            "refresh" => Ok(Privileged::Refresh),
+            "upgrade" => Ok(Privileged::Upgrade),
+            _ => Err(format!("unknown step: {verb}")),
         }
     }
 
@@ -467,6 +487,8 @@ impl Privileged {
                 .any(|s| matches!(s.kind, Kind::System { unit } if unit == arg))
         };
         match verb {
+            "auto-updates" if updates::AUTO_MODES.contains(&arg) => Ok(Privileged::AutoUpdates(arg.to_owned())),
+            "auto-updates" => Err(format!("not a mode of the automatic updates: {arg}")),
             "install" if package() => Ok(Privileged::Install(arg.to_owned())),
             "remove" if package() => Ok(Privileged::Remove(arg.to_owned())),
             "unit-on" if unit() => Ok(Privileged::UnitOn(arg.to_owned())),

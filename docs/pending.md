@@ -343,7 +343,14 @@ with Step 2; the phases then run alongside the steps above.
   deletion date; GNOME's org.gnome.desktop.privacy keys hold the choices;
   the portals' permission store listed and revoked). Left: a lock-screen
   picture of its own (core work: the greet shows the wallpaper), the
-  location service (geoclue not installed).
+  location service (geoclue not installed). B2 done 2026-11-15: Updates
+  (what an upgrade would bring, from apt's simulation without root;
+  orbit-services-helper's new `refresh`, `upgrade` and `auto-updates
+  off|security|all` steps, apt's progress on a bar; unattended-upgrades
+  installed when turned on, its origins in
+  /etc/apt/apt.conf.d/52orbit-unattended-upgrades; the repositories and
+  apt's recent history, read only). No PackageKit: apt through the helper,
+  as the Services page installs.
 - [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,
   Updates, Lock screen and login, Boot. Done when an SMB folder mounted at
   login, a network printer added and an update installed all go through
