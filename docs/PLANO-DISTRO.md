@@ -680,7 +680,7 @@ mais a `wg0`):
 
 | Arquivo | Pacote | Abre |
 |---|---|---|
-| `10-remote.nft` | `orbit-remote-server` | TCP 7311 (feito em 2026-11-15); a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`), que hoje passa como resposta porque o servidor manda primeiro |
+| `10-remote.nft` | `orbit-remote-server` | TCP 7311 e a faixa UDP 7320–7339 do WebRTC, de onde o ICE do servidor tira as portas (`ICE_PORTS`, feito em 2026-11-15) |
 | `15-ssh.nft` | `orbit-ssh` | TCP 22 |
 | `20-wireguard.nft` | `orbit-wireguard` | UDP 51820, de qualquer lugar (a única porta pública) |
 | `30-ltsp.nft` | `orbit-ltsp` | UDP 69 e 4011 (TFTP, proxy DHCP), NFS TCP 2049 |

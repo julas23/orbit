@@ -80,10 +80,17 @@ built, the local repository synced, the public one pushed, offered as an
   `--yes`), the same page in a terminal, without orbit-core: asks before
   turning off what lets things in, and to keep a trial within 30 s
   (2026-11-15). Configuring comes with each service's page.
-- [ ] The first rows, for what exists already: the firewall (what each file
-  opens); Orbit Remote Server (`10-remote.nft`; a fixed UDP port range for
-  WebRTC; its log in the journal too, for Fail2Ban); network-booted
-  stations (`orbit-ltsp`: `distro/ltsp/` packaged, `30-ltsp.nft`).
+- [x] The first rows, for what exists already: the firewall (what each file
+  opens) and Orbit Remote Server (2026-11-15).
+- [x] Orbit Remote Server: ICE takes its ports from UDP 7320–7339
+  (`ICE_PORTS`, webrtcbin's agent's `min-rtp-port`/`max-rtp-port`; checked
+  that the candidates land there), apart from the page's TCP 7311, which
+  ICE-TCP's candidates would otherwise share; `10-remote.nft` opens that
+  range to the local network. Its warnings and errors also go to the
+  journal as `orbit-remote-server` (`journal.rs`, the native protocol), for
+  Fail2Ban; the session's log file stays.
+- [ ] Network-booted stations (`orbit-ltsp`: `distro/ltsp/` packaged,
+  `30-ltsp.nft`).
 - [ ] Done when: the remote server and the LTSP server switch on, off and
   are removed from the page and from `orbitctl services` (the Julas VM).
 

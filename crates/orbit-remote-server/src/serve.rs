@@ -52,6 +52,10 @@ use crate::{
 const PAGE: &str = include_str!("../web/index.html");
 /// Wrong codes before a new one is made.
 const TRIES: u32 = 5;
+/// The ports ICE takes its candidates from (UDP, and ICE-TCP's too): the
+/// range orbit-firewall opens to the local network
+/// (data/firewall/10-remote.nft), apart from the page's TCP 7311.
+const ICE_PORTS: (u32, u32) = (7320, 7339);
 
 /// What a client is shown.
 pub enum Screen {
@@ -416,6 +420,9 @@ fn stream(ws: &mut WebSocket<TcpStream>, shared: &Shared, screen: Option<(u32, u
         .property_from_str("bundle-policy", "max-bundle")
         .build()
         .context("no webrtcbin (gstreamer1.0-plugins-bad, gstreamer1.0-nice)")?;
+    let ice = webrtc.property::<gst::glib::Object>("ice-agent");
+    ice.set_property("min-rtp-port", ICE_PORTS.0);
+    ice.set_property("max-rtp-port", ICE_PORTS.1);
     // What goes to the browser, from GStreamer's threads.
     let (out, outbox) = mpsc::channel::<Value>();
     {

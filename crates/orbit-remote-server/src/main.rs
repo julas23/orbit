@@ -14,9 +14,12 @@ mod audio;
 mod capture;
 mod encode;
 mod input;
+mod journal;
 mod lanes;
 mod pads;
 mod serve;
+
+use std::io::Write;
 
 /// The port of the page and its WebSocket.
 const PORT: u16 = 7311;
@@ -29,7 +32,16 @@ fn main() {
         // Safety: nothing else runs yet, so nothing reads the environment.
         unsafe { std::env::set_var("GST_GL_WINDOW", "surfaceless") };
     }
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    // As env_logger writes, and the warnings and errors to the journal too
+    // (`journal.rs`).
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format(|buf, record| {
+            if record.level() <= log::Level::Warn {
+                journal::send(record.level(), &record.args().to_string());
+            }
+            writeln!(buf, "[{} {:<5} {}] {}", buf.timestamp(), record.level(), record.target(), record.args())
+        })
+        .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["capture"] => capture::measure(None),
