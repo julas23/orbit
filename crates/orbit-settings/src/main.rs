@@ -12,6 +12,7 @@
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod about;
+mod bluetooth;
 mod core;
 mod datetime;
 mod dbus;
@@ -127,6 +128,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "monitors" => monitors::page(dir),
             "network" => network::page(),
             "power" => power::page(dir),
+            "bluetooth" => bluetooth::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

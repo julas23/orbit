@@ -62,6 +62,14 @@ pub const PAGES: &[Page] = &[
         ],
     },
     Page {
+        id: "bluetooth",
+        group: Group::System,
+        title: "settings-bt",
+        icon: "bluetooth-symbolic",
+        keywords: "settings-bt-keywords",
+        options: &["settings-bt-visible", "settings-bt-mine", "settings-bt-nearby", "settings-bt-pair"],
+    },
+    Page {
         id: "power",
         group: Group::System,
         title: "settings-power",

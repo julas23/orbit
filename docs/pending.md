@@ -247,7 +247,15 @@ with Step 2; the phases then run alongside the steps above.
   VALUE` step: /etc/systemd/logind.conf.d/50-orbit.conf, logind
   reloaded). Seen on the think (no battery, no lid); the battery, the lid
   and suspending when idle to try on the hp.
-  Next: A3 Bluetooth, Sound,
+- [x] Batch A3, Bluetooth (2026-11-15): the adapter (on, visible), my
+  devices (connect, disconnect, remove, battery) and devices nearby (with
+  a name; searched for while the page is shown, the search stopped when it
+  goes), pairing then trusting and connecting; the page's own BlueZ agent
+  (not the default, so it answers only its own pairings) asks to confirm
+  a passkey or for a PIN; the lists follow BlueZ's signals. Seen on the
+  think (the search found devices, stopped on closing); pairing a real
+  device left for the user to try.
+  Next: A3 Sound,
   Power, A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
   Dock, Notifications, Default apps, A6 Users, A7 the panel's modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
