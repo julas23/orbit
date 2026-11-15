@@ -1,0 +1,32 @@
+[package]
+name = "orbit-services"
+description = "orbit-services: the services Orbit turns on and off, and the helper that does it as root"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+maintainer = "Juliano <julianoas@gmail.com>"
+section = "admin"
+priority = "optional"
+extended-description = "orbit-services: the helper Orbit-Settings' Services page and `orbitctl services` turn this machine's services on and off with (install, remove, start, stop), run as root by pkexec after polkit asks for the password; it takes only the packages and units of Orbit's catalogue. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, pkexec, polkitd, apt"
+assets = [
+    ["target/release/orbit-services-helper", "usr/libexec/", "755"],
+    ["../../data/polkit/io.github.julas23.orbit.services.policy", "usr/share/polkit-1/actions/", "644"],
+]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "orbit-services-helper"
+path = "src/helper.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true

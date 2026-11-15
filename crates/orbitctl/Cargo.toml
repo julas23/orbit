@@ -20,4 +20,5 @@ assets = [
 
 [dependencies]
 orbit-ipc.workspace = true
+orbit-services.workspace = true
 serde_json.workspace = true

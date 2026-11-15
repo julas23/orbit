@@ -43,20 +43,32 @@ built, the local repository synced, the public one pushed, offered as an
 
 ### Step 2 — the "Services" page and its base
 
-- [ ] `orbit-base` (`orbit-firewall`, `packagekit`, `orbit-services-helper`,
-  `orbitctl`), pulled by `orbit-desktop`.
-- [ ] `orbit-services-helper`: run by `pkexec` under its own polkit action,
-  only typed and validated commands, never free text into a root-owned file.
+- [ ] `orbit-base` (`orbit-firewall`, `orbit-services`, `orbitctl`), pulled
+  by `orbit-desktop`.
+- [x] `orbit-services` (2026-11-15): the catalogue (a package and a way of
+  being on each: a systemd unit, or a program the session starts when its
+  YAML says `start: true`), each service's state, its ports read from its
+  firewall file, and what on, off and remove take; and
+  `/usr/libexec/orbit-services-helper`, run by `pkexec` under the polkit
+  action `io.github.julas23.orbit.services`, taking only typed steps for the
+  catalogue's packages and units (`install` and `remove` through apt-get,
+  with its progress; `unit-on`, `unit-off`), one password for a list, a
+  failed step undoing the ones before, `--trial` undoing unless kept.
+  apt-get rather than PackageKit: one daemon less, which Debian doesn't
+  bring. `orbit-desktop` depends on it. Tried as root on the think (a trial
+  undone after 5 s, a kept one, apt's progress, a unit refused); pkexec
+  itself to try once published.
 - [ ] Orbit-Settings' base (`docs/PLANO-SETTINGS.md` §4): the search over
   every option, the sidebar in groups, each page's option index and address
   (`orbit-settings <page>[/<section>]`).
 - [ ] Orbit-Settings, "Services": the groups and rows of PLANO-DISTRO §12.2;
-  install and remove through PackageKit, start and stop through systemd's
-  D-Bus API; the dependencies between services; firewall, WireGuard and
+  over `orbit-services`; the dependencies between services; firewall, WireGuard and
   dnsmasq-mode changes undone after 30 s without confirmation; bans,
   failed services and new pairings as notifications.
-- [ ] `orbitctl services` (list, on, off, configure, `--json`), the same page
-  in a terminal, working without orbit-core.
+- [x] `orbitctl services` (list, `--json`, `on`, `off`, `remove ID`,
+  `--yes`), the same page in a terminal, without orbit-core: asks before
+  turning off what lets things in, and to keep a trial within 30 s
+  (2026-11-15). Configuring comes with each service's page.
 - [ ] The first rows, for what exists already: the firewall (what each file
   opens); Orbit Remote Server (`10-remote.nft`; a fixed UDP port range for
   WebRTC; its log in the journal too, for Fail2Ban); network-booted
@@ -542,15 +554,16 @@ only decides which switches start on. No `orbit-server` metapackage, one
 ISO. The plan, with the page, the packages
 and the ports, is `docs/PLANO-DISTRO.md` §12. From Debian 13 (checked
 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2, wireguard-tools,
-fail2ban 1.1.0, packagekit 1.3.1, podman 5.4.2); the four applications run
+fail2ban 1.1.0, podman 5.4.2); the four applications run
 in containers from their projects' official images.
 
 Reviewed with the user, item by item (2026-11-15):
 
 - [x] The model: one `orbit-<service>` package per service (the Debian or
-  upstream package, Orbit's defaults, its firewall file), installed through
-  PackageKit and polkit, started through systemd's D-Bus API, configured by
-  a small `orbit-services-helper` that takes only typed, validated commands.
+  upstream package, Orbit's defaults, its firewall file), installed, started
+  and configured by a small `orbit-services-helper` under pkexec and polkit
+  that takes only typed, validated commands (apt-get rather than PackageKit,
+  revised the same day).
 - [x] One ISO. Its boot menu: *Orbit Live* (the essential, from the medium)
   and *Install Orbit* (the Live opening `orbit-install` full screen); the
   debian-installer moves to the advanced options until `orbit-install`
@@ -581,7 +594,7 @@ Reviewed with the user, item by item (2026-11-15):
   background, through the tunnel; its units made from a pinned release's
   `docker-compose.yml` (v3.4.1 on 2026-11-15).
 - [x] A server may have no graphical session: `orbit-base` (the firewall,
-  PackageKit, the helper, `orbitctl`) instead of `orbit-desktop`, a console
+  `orbit-services`, `orbitctl`) instead of `orbit-desktop`, a console
   login, SSH by key on the LAN and the tunnel only (`orbit-ssh`), run
   through `orbitctl services` or from a desktop's Orbit-Settings over SSH,
   which runs `orbitctl services --json` there: no new daemon listening.

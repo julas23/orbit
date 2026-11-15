@@ -8,13 +8,24 @@
 //!
 //! `-t TYPE` picks the message (`command` by default), `-r` prints the raw
 //! JSON reply, `-m` keeps printing the events subscribed to.
+//!
+//!   orbitctl services [on|off|remove ID]
+//!
+//! is Orbit-Settings' Services page instead (`services.rs`): it needs no
+//! orbit-core.
+
+mod services;
 
 use std::process::ExitCode;
 
 use orbit_ipc::{Connection, RUN_COMMAND, SUBSCRIBE, message_type};
 
 fn main() -> ExitCode {
-    let mut args = std::env::args().skip(1);
+    let all: Vec<String> = std::env::args().skip(1).collect();
+    if all.first().is_some_and(|a| a == "services") {
+        return services::main(&all[1..]);
+    }
+    let mut args = all.into_iter();
     let mut kind = RUN_COMMAND;
     let (mut raw, mut monitor) = (false, false);
     let mut words: Vec<String> = Vec::new();

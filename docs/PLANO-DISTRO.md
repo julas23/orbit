@@ -82,7 +82,7 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
-O `orbit-desktop` passa a puxar o `orbit-firewall` e o `packagekit`. Os serviços
+O `orbit-desktop` passa a puxar o `orbit-firewall` e o `orbit-services`. Os serviços
 de rede e de mídia não são metapacotes: cada um é um interruptor na página
 "Serviços" do Orbit-Settings (seção 12).
 
@@ -592,17 +592,25 @@ página do serviço:
 | Storage | Saúde dos discos | `orbit-smart` | os discos, os testes agendados, o histórico |
 | Storage | Sincronização (Syncthing) | `orbit-syncthing` | as pastas, os aparelhos (pelo ID ou QR), a descoberta fora da rede |
 
-- **Instalar e remover:** pelo PackageKit (`packagekit`, puxado pelo
-  `orbit-desktop`), com a senha pedida pelo polkit (o orbit-polkit) e o
-  progresso na própria linha. Remover mantém os dados (músicas, vídeos,
-  chaves do túnel) e diz onde ficaram.
-- **Iniciar e parar:** o systemd pela API D-Bus dele, autorizado pelo
-  polkit; nenhum `systemctl` com root.
-- **Configurar:** a configuração em `/etc` é escrita por um auxiliar
-  pequeno (`orbit-services-helper`, por `pkexec`, com uma ação polkit
-  própria) que só aceita comandos tipados e validados (`dns-mode proxy`,
-  `wg-add-peer NOME`, `media-folder music /srv/media/music`…), nunca
-  texto livre para arquivos de root.
+- **Tudo o que pede root passa por um auxiliar só**
+  (`/usr/libexec/orbit-services-helper`, do pacote `orbit-services`, por
+  `pkexec`, com a ação polkit `io.github.julas23.orbit.services`: a senha
+  de um administrador, guardada por alguns minutos), que só aceita passos
+  tipados e só para os pacotes e unidades do catálogo: `install` e `remove`
+  (pelo `apt-get`, com o progresso dele na própria linha), `unit-on` e
+  `unit-off` (`systemctl enable --now` e `disable --now`); depois virão os
+  de configuração (`dns-mode proxy`, `wg-add-peer NOME`…), nunca texto livre
+  para arquivos de root. Uma lista de passos pede a senha uma vez; um passo
+  que falha desfaz os anteriores. Escolhido sobre o PackageKit (revisto em
+  2026-11-15): mais um daemon, que o Debian não traz, para o que o `apt-get`
+  do auxiliar já faz.
+- Remover mantém os dados (músicas, vídeos, chaves do túnel) e diz onde
+  ficaram.
+- **O catálogo** (`crates/orbit-services`): cada serviço é um pacote e um
+  jeito de estar ligado — uma unidade do systemd (o firewall), ou um
+  programa que a sessão do usuário inicia quando o YAML dele diz `start:
+  true` (o remote server, como o `orbit-session` já faz). As portas de cada
+  um são lidas do arquivo de firewall do pacote dele: ditas num lugar só.
 - **Dependências entre serviços:** o modo Rede do dnsmasq liga o Unbound
   junto; a jail `orbit-remote` do Fail2Ban só existe com o remote server
   ligado; os peers do WireGuard recebem esta máquina como DNS só com o
@@ -624,10 +632,9 @@ página do serviço:
 
 | Pacote | Puxado por | Traz |
 |---|---|---|
-| `orbit-base` | `orbit-desktop`; sozinho no servidor sem sessão gráfica | `orbit-firewall`, `packagekit`, `orbit-services-helper`, `orbitctl` |
+| `orbit-base` | `orbit-desktop`; sozinho no servidor sem sessão gráfica | `orbit-firewall`, `orbit-services`, `orbitctl` |
 | `orbit-firewall` | `orbit-base` (hoje o `orbit-desktop`) | `nftables`; o `orbit-firewall` (`start`, `stop`, `status`, `check`, `snapshot`) e o `orbit-firewall.service`; a regra base (`/usr/share/orbit/firewall/base.nft`); os arquivos dos serviços em `/usr/share/orbit/firewall.d/` (dos pacotes, recarregados por um trigger do dpkg) e `/etc/orbit/firewall.d/` (da máquina); `60-desktop.nft` |
-| `packagekit` | `orbit-base` | o que a página usa para instalar e remover |
-| `orbit-services-helper` | `orbit-base` | o auxiliar da configuração e a ação polkit |
+| `orbit-services` | `orbit-base` (hoje o `orbit-desktop`) | o `orbit-services-helper` e a ação polkit |
 | `orbit-ssh` | a página; ligado no servidor sem sessão gráfica | `openssh-server`, só chave por padrão, `15-ssh.nft` |
 | `orbit-fail2ban` | a página | `fail2ban`, as jails, o filtro `orbit-remote` |
 | `orbit-wireguard` | a página | `wireguard-tools`, a `wg0`, `20-wireguard.nft` |
@@ -787,8 +794,8 @@ Em dez etapas, cada uma com o seu "pronto quando", no plano de ação do
 `docs/pending.md` §0:
 
 1. `orbit-firewall`, em toda instalação: o que mais protege.
-2. A página "Serviços" e a base (`orbit-base`, PackageKit,
-   `orbit-services-helper`, `orbitctl services`), com o que já existe: o
+2. A página "Serviços" e a base (`orbit-base`, `orbit-services` e o
+   auxiliar, `orbitctl services`), com o que já existe: o
    firewall, o remote server e as estações (`orbit-ltsp`).
 3. `orbit-wireguard`, com a configuração entregue no pareamento.
 4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
