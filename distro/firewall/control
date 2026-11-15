@@ -1,0 +1,12 @@
+Description: Orbit's firewall: incoming connections dropped, each service opening its own
+ Loads one nftables table, inet orbit, and leaves every other alone
+ (Docker's, libvirt's, Tailscale's): what comes in is dropped but for
+ answers to this machine, the loopback, ICMP, its own VMs and containers,
+ and the ports each service's file opens, to the local network and the
+ tunnels only. Each Orbit service brings its file to
+ /usr/share/orbit/firewall.d; this machine's own go in
+ /etc/orbit/firewall.d. Installed on a machine already in use, it keeps
+ what the machine already served open to the local network. orbit-firewall
+ status says what is open.
+Section: net
+Depends: nftables, iproute2

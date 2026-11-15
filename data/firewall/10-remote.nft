@@ -1,0 +1,5 @@
+# Orbit-Remote-Server (orbit-firewall): its page and pairing, to the local
+# network and the tunnels. The video and sound go over WebRTC, whose UDP
+# ports the server opens towards the client first, so they come back as
+# answers.
+add rule inet orbit lan_in tcp dport 7311 accept comment "Orbit Remote Server"

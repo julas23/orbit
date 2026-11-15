@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # build-debs.sh — builds Orbit's packages: one .deb per program (cargo-deb,
 # from each crate's [package.metadata.deb]), the metapackages in
-# distro/meta/ and orbit-defaults (distro/defaults/), into target/debian/.
+# distro/meta/, orbit-defaults (distro/defaults/) and orbit-firewall
+# (distro/firewall/), into target/debian/.
 # With --arm64, also the arm64 ones (distro/ci/build-arm64.sh, in Docker,
 # its toolchain and build kept in ~/.cache/orbit-arm64). With --upload
 # HOST, puts them in the repository server's incoming folder
@@ -138,6 +139,34 @@ cp "$ROOT/data/portals/orbit-portals.conf" "$dir/usr/share/xdg-desktop-portal/"
 cp -r "$ROOT/examples" "$dir/usr/share/doc/orbit/examples"
 chmod -R u=rwX,go=rX "$dir/usr"
 dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-defaults_${VERSION}_all.deb" >/dev/null
+rm -rf "$dir"
+fi
+# orbit-firewall: the inet orbit table, its loader and service, and the
+# desktop's openings (distro/firewall/).
+FW="$ROOT/distro/firewall"
+if want orbit-firewall; then
+dir=$(mktemp -d)
+mkdir -p "$dir/DEBIAN" "$dir/usr/sbin" "$dir/usr/lib/systemd/system" "$dir/usr/share/orbit/firewall" \
+    "$dir/usr/share/orbit/firewall.d" "$dir/usr/share/doc/orbit-firewall"
+{
+    echo "Package: orbit-firewall"
+    echo "Version: $VERSION"
+    echo "Architecture: all"
+    echo "Maintainer: Juliano <julianoas@gmail.com>"
+    echo "Priority: optional"
+    echo "Homepage: https://github.com/julas23/orbit"
+    cat "$FW/control"
+} > "$dir/DEBIAN/control"
+cp "$FW/postinst" "$FW/prerm" "$FW/postrm" "$FW/triggers" "$dir/DEBIAN/"
+cp "$FW/orbit-firewall" "$dir/usr/sbin/"
+cp "$FW/orbit-firewall.service" "$dir/usr/lib/systemd/system/"
+cp "$FW/base.nft" "$dir/usr/share/orbit/firewall/"
+cp "$FW/60-desktop.nft" "$dir/usr/share/orbit/firewall.d/"
+cp "$ROOT/LICENSE" "$dir/usr/share/doc/orbit-firewall/copyright"
+chmod -R u=rwX,go=rX "$dir/usr"
+chmod 644 "$dir/usr/share/doc/orbit-firewall/copyright"
+chmod 755 "$dir" "$dir/usr/sbin/orbit-firewall" "$dir/DEBIAN/postinst" "$dir/DEBIAN/prerm" "$dir/DEBIAN/postrm"
+dpkg-deb --root-owner-group -Zxz --build "$dir" "$OUT/orbit-firewall_${VERSION}_all.deb" >/dev/null
 rm -rf "$dir"
 fi
 # orbit-release: Orbit Linux's name, version and logo (distro/release/),

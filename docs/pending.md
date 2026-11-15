@@ -16,16 +16,29 @@ built, the local repository synced, the public one pushed, offered as an
 
 ### Step 1 — `orbit-firewall`, on every install
 
-- [ ] The package: `/etc/nftables.conf` including `/etc/nftables.d/*.nft`;
-  the `inet orbit` table, `input` chain only, policy drop; established
-  traffic, loopback and the ICMP/ICMPv6 that is needed accepted; the `@lan`
-  set (the interfaces' private subnets and `wg0`) and an empty set for
-  Fail2Ban's bans. A reload deletes and loads only `inet orbit`, never
-  Debian's `flush ruleset`.
-- [ ] `60-desktop.nft` (mDNS UDP 5353), pulled by `orbit-desktop`.
-- [ ] Done when: after an `apt upgrade` on the hp and the think, nmap from
-  the LAN sees only mDNS; Docker, libvirt and Tailscale still work; a
-  reload leaves their tables alone.
+- [x] The package (`distro/firewall/`, 2026-11-15): its own
+  `orbit-firewall.service` and `orbit-firewall` command (`start`, `stop`,
+  `status`, `check`, `snapshot`), not `/etc/nftables.conf` (the nftables
+  package's conffile, with its `flush ruleset`); the `inet orbit` table,
+  `input` only, policy drop; the private ranges and the tunnels (`wg*`,
+  `tailscale*`) as the local network, CGNAT left out; the VM and container
+  bridges accepted (an `accept` in libvirt's or Tailscale's table does not
+  save a packet from this one's drop); sets for Fail2Ban's bans; a refused
+  file keeps the rules in place, or falls back to the base. Service files in
+  `/usr/share/orbit/firewall.d/` (reloaded by a dpkg trigger) and
+  `/etc/orbit/firewall.d/`. On the first install, what the machine already
+  serves stays open to the local network (`50-this-machine.nft`; on the
+  think: rpcbind and Syncthing). Tested live on the think from a network
+  namespace (a LAN and a public source) and installed, upgraded, removed and
+  purged in a clean `debian:trixie`.
+- [x] `60-desktop.nft` in it: mDNS, and the unicast answers to SSDP and
+  WS-Discovery searches; `orbit-desktop` depends on `orbit-firewall`.
+- [x] `10-remote.nft` (TCP 7311) shipped by `orbit-remote-server` already.
+- [ ] Done when: after an `apt upgrade` on the hp, the think and the Julas
+  VM, nmap from the LAN sees only what each one serves; Docker, libvirt,
+  Tailscale, Syncthing, NFS, LTSP and the remote server still work; a
+  reload leaves the other tables alone. (Not yet: the other machines were
+  unreachable on 2026-11-15.)
 
 ### Step 2 — the "Services" page and its base
 

@@ -1,0 +1,138 @@
+#!/bin/sh
+# orbit-firewall — Orbit's firewall: the `inet orbit` table of nftables.
+#
+#   orbit-firewall start      load it (again): base.nft and every service
+#                             file, in one transaction
+#   orbit-firewall stop       take the table away (everything comes in)
+#   orbit-firewall status     whether it is loaded, and what each file opens
+#   orbit-firewall check      check the files without loading them
+#   orbit-firewall snapshot   print rules opening, to the local network, the
+#                             ports this machine already listens on
+#
+# The service files: /usr/share/orbit/firewall.d/*.nft, one per Orbit
+# service, from its package; /etc/orbit/firewall.d/*.nft, this machine's
+# own. Each holds `add rule inet orbit lan_in …` (the local network and the
+# tunnels) or `… any_in …` (anyone) lines. A file nft refuses never leaves
+# the machine open: start keeps the table it had, or loads the base and
+# the packages' files without the machine's own, or the base alone.
+set -eu
+
+BASE=${ORBIT_FIREWALL_BASE:-/usr/share/orbit/firewall/base.nft}
+PACKAGES=${ORBIT_FIREWALL_PACKAGES:-/usr/share/orbit/firewall.d}
+LOCAL=${ORBIT_FIREWALL_LOCAL:-/etc/orbit/firewall.d}
+
+say() { echo "orbit-firewall: $*" >&2; }
+
+# The ruleset to load: the base, then the files of the folders given.
+ruleset() {
+    printf 'include "%s"\n' "$BASE"
+    for dir in "$@"; do
+        for file in "$dir"/*.nft; do
+            [ -f "$file" ] && printf 'include "%s"\n' "$file"
+        done
+    done
+}
+
+# Loads (or with -c, checks) the ruleset of the folders given.
+load() {
+    check=""
+    if [ "$1" = -c ]; then check=-c; shift; fi
+    tmp=$(mktemp)
+    ruleset "$@" > "$tmp"
+    if nft $check -f "$tmp"; then rm -f "$tmp"; return 0; fi
+    rm -f "$tmp"
+    return 1
+}
+
+loaded() { nft list table inet orbit >/dev/null 2>&1; }
+
+start() {
+    if load "$PACKAGES" "$LOCAL"; then
+        return 0
+    fi
+    if loaded; then
+        say "a file above was refused: the rules in place are kept"
+        return 1
+    fi
+    if load "$PACKAGES"; then
+        say "a file of $LOCAL was refused: loaded without this machine's files"
+        return 1
+    fi
+    load
+    say "a file of $PACKAGES was refused: loaded the base alone"
+    return 1
+}
+
+stop() {
+    if loaded; then nft delete table inet orbit; fi
+}
+
+status() {
+    if loaded; then
+        echo "Loaded: incoming connections are dropped, but for what these files open."
+    else
+        echo "Not loaded: nothing is filtered by Orbit."
+    fi
+    for dir in "$PACKAGES" "$LOCAL"; do
+        for file in "$dir"/*.nft; do
+            [ -f "$file" ] || continue
+            echo
+            echo "$file"
+            sed -n 's/^add rule inet orbit \(lan_in\|any_in\) \(.*\)/\1 \2/p' "$file" |
+                sed 's/^lan_in /  local network: /; s/^any_in /  anyone: /; s/ accept\( comment\)\?/ —/; s/ —$//'
+        done
+    done
+}
+
+# The ports this machine listens on, beyond its loopback, as rules opening
+# them to the local network; the ephemeral range is left out (a program's
+# passing sockets), but for NFS's helpers, whose ports land there.
+snapshot() {
+    # Not `read`: dash reads byte by byte, and a sysctl file gives nothing
+    # past the first byte that way.
+    range=$(cat /proc/sys/net/ipv4/ip_local_port_range)
+    low=${range%%[[:space:]]*}
+    high=${range##*[[:space:]]}
+    echo "# What this machine already served to the network when orbit-firewall was"
+    echo "# installed ($(date +%Y-%m-%d)), kept open to the local network and the"
+    echo "# tunnels. Edit or delete freely (then: systemctl reload orbit-firewall);"
+    echo "# Orbit's own services bring their own files."
+    ss -Hlntup 2>/dev/null | awk -v low="$low" -v high="$high" '
+        {
+            proto = $1; local = $5; proc = ""
+            if (match($0, /users:\(\("[^"]+"/)) proc = substr($0, RSTART + 9, RLENGTH - 10)
+            port = local; sub(/.*:/, "", port)
+            addr = local; sub(/:[^:]*$/, "", addr)
+            if (addr ~ /^127\./ || addr ~ /^\[::1\]/ || addr ~ /%lo$/ || addr ~ /%lo\]$/) next
+            if (port !~ /^[0-9]+$/) next
+            if (proto == "udp" && (port == 68 || port == 546 || port == 5353)) next
+            if (port + 0 >= low && port + 0 <= high && proc !~ /^rpc\./) next
+            key = proto " " port
+            if (key in seen) next
+            seen[key] = 1
+            name = proc == "" ? "the kernel" : proc
+            printf "add rule inet orbit lan_in %s dport %s accept comment \"%s\"\n", proto, port, name
+            # A DHCP server hears clients that have no address yet.
+            if (proto == "udp" && port == 67)
+                printf "add rule inet orbit any_in ip saddr 0.0.0.0 udp dport 67 accept comment \"%s\"\n", name
+        }'
+    # Installing over SSH from outside the local network: that address keeps
+    # its way in.
+    if [ -n "${SSH_CONNECTION:-}" ]; then
+        set -- $SSH_CONNECTION
+        case "$1" in
+            10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|169.254.*|fe80:*|fc*|fd*|127.*|::1) ;;
+            *:*) echo "add rule inet orbit any_in ip6 saddr $1 tcp dport $4 accept comment \"the SSH session that installed orbit-firewall\"" ;;
+            *) echo "add rule inet orbit any_in ip saddr $1 tcp dport $4 accept comment \"the SSH session that installed orbit-firewall\"" ;;
+        esac
+    fi
+}
+
+case "${1:-}" in
+    start|reload) start ;;
+    stop) stop ;;
+    status) status ;;
+    check) load -c "$PACKAGES" "$LOCAL" && echo "The files are valid." ;;
+    snapshot) snapshot ;;
+    *) sed -n '2,13s/^# \{0,1\}//p' "$0" >&2; exit 2 ;;
+esac

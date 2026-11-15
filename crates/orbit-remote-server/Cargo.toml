@@ -20,6 +20,7 @@ assets = [
     ["../../data/remote.yaml", "etc/orbit/", "644"],
     ["../../data/udev/71-orbit-remote-uinput.rules", "usr/lib/udev/rules.d/", "644"],
     ["../../data/modules-load/orbit-remote.conf", "usr/lib/modules-load.d/", "644"],
+    ["../../data/firewall/10-remote.nft", "usr/share/orbit/firewall.d/", "644"],
 ]
 conf-files = ["/etc/orbit/remote.yaml"]
 maintainer-scripts = "debian/"

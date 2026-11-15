@@ -557,7 +557,7 @@ a página que os liga.
 | **HTTPS** (revisto) | Por uma **CA local**, com o **Caddy** do Debian 13 (2.6.2) na frente dos quatro contêineres (`orbit-proxy`, puxado pelo `orbit-containers`): ele é o proxy reverso e a própria CA (`tls internal`), emitindo e renovando sozinho o certificado da máquina, para os nomes dela (`<nome>.home.lan`, `<nome>.local`) e os endereços da LAN e do túnel. Cada serviço fica no seu número de porta de sempre, agora em HTTPS pelo Caddy; os contêineres não publicam porta nenhuma, só falam com o Caddy pela rede `orbit` (o que também acaba com o NAT do Podman passando por fora da cadeia `input`). A raiz da CA vai para o repositório de certificados de cada máquina Orbit e para o Firefox por política, e a página a mostra como arquivo e QR para os celulares |
 | **Samba** (revisto) | Mantido: além do Windows e do macOS, é o que os gerenciadores de arquivos do Android e muitas TVs falam (SMB, não NFS) |
 | **Servidor sem sessão gráfica** (revisto) | Permitido: `orbit-base` em vez do `orbit-desktop`, login no console, SSH por chave só para a LAN e o túnel, gerência pelo `orbitctl services` ou pelo Orbit-Settings de um desktop por SSH (6.6, 12.2) |
-| **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
+| **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. Não mexe no `/etc/nftables.conf` (arquivo de configuração do pacote `nftables`, e com o `flush ruleset` que apagaria as tabelas do Docker, do libvirt e de outros): o `orbit-firewall.service` próprio carrega só a tabela `inet orbit`, que é a única apagada e recarregada. Instalado numa máquina em uso, o que ela já servia fica aberto para a rede local (`/etc/orbit/firewall.d/50-this-machine.nft`, escrito só na primeira instalação). Feito em 2026-11-15 O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
 | **Nomes sem esses serviços** (revisto) | mDNS pelo Avahi (`think.local`), que funciona com qualquer roteador; a máquina usa o DNS que a rede entrega |
 | **Resolvedor** (revisto) | Unbound (`orbit-unbound`) é o resolvedor da rede, na porta 53 da LAN e do túnel: recursão própria (direto aos servidores raiz e autoritativos) por padrão, DNSSEC, cache, ACL, limite de taxa, `prefetch`. Encaminhar por DNS-over-TLS (Quad9, Cloudflare) é opção. A zona `home.lan` e o reverso `10.in-addr.arpa` vão ao dnsmasq (`forward-zone` + `domain-insecure`), que no modo Rede responde só por ela em `127.0.0.1:5300` (a 5353 é do mDNS). No modo Proxy o Unbound serve a própria máquina, os clientes do túnel e quem apontar o DNS do roteador para ele, com os nomes fixos em `local-data`. Bloqueio de anúncios e rastreadores por listas RPZ: opção, desligado por padrão, listas escolhidas na página |
@@ -625,7 +625,7 @@ página do serviço:
 | Pacote | Puxado por | Traz |
 |---|---|---|
 | `orbit-base` | `orbit-desktop`; sozinho no servidor sem sessão gráfica | `orbit-firewall`, `packagekit`, `orbit-services-helper`, `orbitctl` |
-| `orbit-firewall` | `orbit-base` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
+| `orbit-firewall` | `orbit-base` (hoje o `orbit-desktop`) | `nftables`; o `orbit-firewall` (`start`, `stop`, `status`, `check`, `snapshot`) e o `orbit-firewall.service`; a regra base (`/usr/share/orbit/firewall/base.nft`); os arquivos dos serviços em `/usr/share/orbit/firewall.d/` (dos pacotes, recarregados por um trigger do dpkg) e `/etc/orbit/firewall.d/` (da máquina); `60-desktop.nft` |
 | `packagekit` | `orbit-base` | o que a página usa para instalar e remover |
 | `orbit-services-helper` | `orbit-base` | o auxiliar da configuração e a ação polkit |
 | `orbit-ssh` | a página; ligado no servidor sem sessão gráfica | `openssh-server`, só chave por padrão, `15-ssh.nft` |
@@ -649,10 +649,23 @@ página do serviço:
 ### 12.4 Firewall
 
 A tabela `inet orbit` só tem a cadeia `input` (prioridade `filter`,
-política `drop`): aceita o tráfego estabelecido, o loopback e o ICMP/ICMPv6
-necessário (vizinhança, PMTU). A cadeia `forward` não é tocada, para não
-quebrar o Docker e o libvirt, que têm as próprias tabelas; a máquina só
-encaminha se o usuário pedir (rotear a LAN pelo túnel, mais adiante).
+política `drop`): aceita o tráfego estabelecido, o loopback, o ICMPv6, o
+ping (com limite) e as respostas do DHCP da própria máquina. A cadeia
+`forward` não é tocada, para não quebrar o Docker e o libvirt, que têm as
+próprias tabelas; a máquina só encaminha se o usuário pedir (rotear a LAN
+pelo túnel, mais adiante).
+
+Cada cadeia base de cada tabela vê cada pacote: um `accept` na tabela do
+Tailscale ou do libvirt não livra o pacote do `drop` desta. Por isso a
+própria tabela aceita o que vem das pontes das VMs e contêineres da máquina
+(`virbr*`, `docker*`, `br-*`, `podman*`, `cni-*`, `lxcbr*`, `incusbr*`: o
+DHCP e o DNS delas são servidos daqui) e trata os túneis (`wg*`,
+`tailscale*`) como rede local. A "rede local" são as faixas privadas
+(`10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `fc00::/7`, `fe80::/10`);
+o `100.64.0.0/10` do CGNAT fica de fora de propósito, porque numa máquina
+com o endereço do provedor ele é dos outros clientes dele. Um arquivo que o
+nft recusa nunca deixa a máquina aberta: ficam as regras em vigor, ou a base
+com os arquivos dos pacotes, ou a base sozinha.
 
 Cada serviço abre a própria porta num arquivo do seu pacote, **só para a LAN
 e para o túnel** (o conjunto `@lan`: as sub-redes privadas das interfaces,
@@ -660,7 +673,7 @@ mais a `wg0`):
 
 | Arquivo | Pacote | Abre |
 |---|---|---|
-| `10-remote.nft` | `orbit-remote-server` | TCP 7311 e a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`) |
+| `10-remote.nft` | `orbit-remote-server` | TCP 7311 (feito em 2026-11-15); a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`), que hoje passa como resposta porque o servidor manda primeiro |
 | `15-ssh.nft` | `orbit-ssh` | TCP 22 |
 | `20-wireguard.nft` | `orbit-wireguard` | UDP 51820, de qualquer lugar (a única porta pública) |
 | `30-ltsp.nft` | `orbit-ltsp` | UDP 69 e 4011 (TFTP, proxy DHCP), NFS TCP 2049 |
@@ -673,7 +686,7 @@ mais a `wg0`):
 | `54-syncthing.nft` | `orbit-syncthing` | TCP/UDP 22000 (sincronização), UDP 21027 (descoberta na rede) |
 | `55-immich.nft` | `orbit-immich` | TCP 2283 (HTTPS pelo Caddy) |
 | `56-nextcloud.nft` | `orbit-nextcloud` | TCP 8380 (HTTPS pelo Caddy) |
-| `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
+| `60-desktop.nft` | `orbit-firewall` | mDNS UDP 5353; as respostas às buscas por multicast, que voltam de cada aparelho sem casar com conexão nenhuma: SSDP (origem UDP 1900: UPnP, DLNA, roteadores) e WS-Discovery (origem UDP 3702: compartilhamentos do Windows no Orbit-Files) |
 
 ### 12.5 Cada serviço
 

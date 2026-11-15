@@ -1,0 +1,88 @@
+# Orbit's firewall: the `inet orbit` table, and only it. Loaded by
+# `orbit-firewall start` with the files of /usr/share/orbit/firewall.d/ (one
+# per Orbit service, from its package) and /etc/orbit/firewall.d/ (this
+# machine's own), in one transaction: every other table (Docker's,
+# libvirt's, Tailscale's, nftables.service's) is left alone. Never
+# `flush ruleset`.
+#
+# What comes in is dropped unless something below lets it: answers to what
+# this machine asked for, the loopback, ICMP, the machine's own VMs and
+# containers, and the ports each service file opens — to the local network
+# and the tunnels (`lan_in`), or to anyone (`any_in`, WireGuard alone).
+#
+# Each base chain of every table sees each packet, so an `accept` in another
+# table does not save it from the drop here: what must reach this machine
+# (a tunnel, a VM's DHCP) is let in here too.
+
+table inet orbit
+delete table inet orbit
+
+table inet orbit {
+	# The local network: the private ranges. 100.64.0.0/10 (CGNAT) is left
+	# out on purpose: on a machine that holds the ISP's address itself, it
+	# is the provider's other customers.
+	set lan4 {
+		type ipv4_addr
+		flags interval
+		elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
+	}
+	set lan6 {
+		type ipv6_addr
+		flags interval
+		elements = { fc00::/7, fe80::/10 }
+	}
+
+	# Addresses banned for a while (Fail2Ban, the Services page).
+	set banned4 {
+		type ipv4_addr
+		flags timeout
+	}
+	set banned6 {
+		type ipv6_addr
+		flags timeout
+	}
+
+	# What the service files open: to the local network and the tunnels,
+	# or to anyone.
+	chain lan_in {
+	}
+	chain any_in {
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif lo accept
+		ip saddr @banned4 drop
+		ip6 saddr @banned6 drop
+		ct state established,related accept
+		ct state invalid drop
+
+		# This machine's own VMs and containers (libvirt, Docker, Podman,
+		# LXC, Incus): their DHCP and DNS are served from here.
+		iifname "virbr*" accept
+		iifname "docker*" accept
+		iifname "br-*" accept
+		iifname "podman*" accept
+		iifname "cni-*" accept
+		iifname "lxcbr*" accept
+		iifname "incusbr*" accept
+
+		# ICMPv6 carries IPv6 itself (neighbours, routers, path MTU); ping
+		# answered, at a pace.
+		meta l4proto ipv6-icmp accept
+		icmp type echo-request limit rate 10/second burst 20 packets accept
+		icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+
+		# This machine's own DHCP leases.
+		udp sport 67 udp dport 68 accept
+		ip6 saddr fe80::/10 udp sport 547 udp dport 546 accept
+
+		jump any_in
+		ip saddr @lan4 jump lan_in
+		ip6 saddr @lan6 jump lan_in
+		# The tunnels: WireGuard's and Tailscale's peers are the user's own.
+		iifname "wg*" jump lan_in
+		iifname "tailscale*" jump lan_in
+	}
+}

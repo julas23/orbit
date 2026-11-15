@@ -1,0 +1,13 @@
+#!/bin/sh
+# Purged: the file the first install wrote goes too; files someone else
+# put in /etc/orbit/firewall.d stay.
+set -e
+if [ "$1" = purge ]; then
+    rm -f /etc/orbit/firewall.d/50-this-machine.nft
+    rmdir /etc/orbit/firewall.d 2>/dev/null || true
+    rm -f /etc/systemd/system/sysinit.target.wants/orbit-firewall.service
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+exit 0

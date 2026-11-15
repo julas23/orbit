@@ -16,8 +16,8 @@ something it is made from changed between that commit and HEAD:
   them), but a crate counts as changed only when a message it uses
   changed: one of its prefix (`settings-…`) found in its sources, or any
   message whose prefix no source names;
-- the metapackages (distro/meta/NAME), orbit-defaults and orbit-release,
-  from their own files.
+- the metapackages (distro/meta/NAME), orbit-defaults, orbit-release and
+  orbit-firewall, from their own files.
 
 Also built: whatever is not published yet, or was built from a commit this
 clone does not have. Prints one line per package to build, `NAME<TAB>why`;
@@ -44,6 +44,7 @@ SPECIAL = {
         ":(glob)data/io.github.julas23.Orbit.*.desktop",
     ],
     "orbit-release": ["distro/release", "data/brand/orbit-mark.svg", "LICENSE"],
+    "orbit-firewall": ["distro/firewall", "LICENSE"],
 }
 I18N = "data/i18n"
 DATA_REF = re.compile(r'"((?:\.\./)+)((?:data|scripts|distro|examples)/[^"*{}]+)')

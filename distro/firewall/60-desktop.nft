@@ -1,0 +1,11 @@
+# What a desktop needs from its local network, opened to it alone.
+
+# mDNS (Avahi): the names of the network (`think.local`), its printers,
+# shares and screens to cast to.
+add rule inet orbit lan_in udp dport 5353 accept comment "mDNS"
+
+# Answers to discovery searches this machine sends by multicast, which each
+# device sends back unicast, so they match no connection: SSDP (UPnP and
+# DLNA servers, routers) and WS-Discovery (Windows shares in Orbit-Files).
+add rule inet orbit lan_in udp sport 1900 accept comment "SSDP answers"
+add rule inet orbit lan_in udp sport 3702 accept comment "WS-Discovery answers"

@@ -1,0 +1,20 @@
+[Unit]
+Description=Orbit's firewall (the inet orbit table of nftables)
+Documentation=man:nft(8)
+# Up before the network is, as nftables.service; after it, so that its
+# `flush ruleset` (if someone turns it on) cannot take this table away.
+DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target shutdown.target
+After=local-fs.target nftables.service
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/orbit-firewall start
+ExecReload=/usr/sbin/orbit-firewall start
+ExecStop=/usr/sbin/orbit-firewall stop
+
+[Install]
+WantedBy=sysinit.target

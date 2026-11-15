@@ -1,0 +1,47 @@
+#!/bin/sh
+# On the first install, what the machine already serves to the network
+# stays open to the local network (/etc/orbit/firewall.d/50-this-machine.nft):
+# installing the firewall on a machine in use must not cut what it does.
+# Then the firewall is turned on and loaded; a package bringing a service
+# file (the trigger) has it loaded again.
+set -e
+LOCAL=/etc/orbit/firewall.d
+
+running() { [ -d /run/systemd/system ]; }
+
+case "$1" in
+configure)
+    mkdir -p "$LOCAL"
+    if [ -z "$2" ] && [ ! -e "$LOCAL/50-this-machine.nft" ]; then
+        /usr/sbin/orbit-firewall snapshot > "$LOCAL/50-this-machine.nft" || rm -f "$LOCAL/50-this-machine.nft"
+        if grep -q '^add rule' "$LOCAL/50-this-machine.nft" 2>/dev/null; then
+            echo "orbit-firewall: kept open to the local network what this machine already served:"
+            sed -n 's/^add rule inet orbit [a-z_]* \(.*\) accept comment "\(.*\)"$/  \1 (\2)/p' "$LOCAL/50-this-machine.nft"
+            echo "  (in $LOCAL/50-this-machine.nft)"
+        else
+            rm -f "$LOCAL/50-this-machine.nft"
+        fi
+    fi
+    if running; then
+        systemctl daemon-reload || true
+        systemctl enable orbit-firewall.service >/dev/null 2>&1 || true
+        if systemctl is-active -q orbit-firewall.service; then
+            systemctl reload orbit-firewall.service || true
+        else
+            systemctl start orbit-firewall.service || true
+        fi
+    else
+        # In a chroot (the ISO's build, an install): turned on for the
+        # next boot.
+        systemctl enable orbit-firewall.service >/dev/null 2>&1 ||
+            { mkdir -p /etc/systemd/system/sysinit.target.wants &&
+              ln -sf /usr/lib/systemd/system/orbit-firewall.service /etc/systemd/system/sysinit.target.wants/; }
+    fi
+    ;;
+triggered)
+    if running && systemctl is-active -q orbit-firewall.service; then
+        systemctl reload orbit-firewall.service || true
+    fi
+    ;;
+esac
+exit 0
