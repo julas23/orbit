@@ -350,7 +350,17 @@ with Step 2; the phases then run alongside the steps above.
   installed when turned on, its origins in
   /etc/apt/apt.conf.d/52orbit-unattended-upgrades; the repositories and
   apt's recent history, read only). No PackageKit: apt through the helper,
-  as the Services page installs.
+  as the Services page installs. B3 done 2026-11-15: Network drives (the
+  GTK bookmarks with a remote address, so Orbit-Files and every file
+  dialog share them; SMB, SFTP, NFS, WebDAV, FTP added from server,
+  folder and user; connected through GVfs with its own password dialog
+  and the keyring; connect at login listed in drives.yaml and mounted by
+  `orbit-settings drives --mount`, which the page keeps in core.yaml's
+  `login:` while one is listed) and Storage (each disk's space, the home
+  folder's folders measured when asked). Left: drives for every user at
+  boot (systemd mounts through the helper), and what to do when a pen
+  drive, camera or phone is plugged in (nothing of Orbit's automounts yet;
+  udiskie does on the user's machines).
 - [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,
   Updates, Lock screen and login, Boot. Done when an SMB folder mounted at
   login, a network printer added and an update installed all go through

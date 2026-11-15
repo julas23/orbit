@@ -20,6 +20,7 @@ mod datetime;
 mod housekeeping;
 mod dbus;
 mod dock_page;
+mod drives;
 mod keyboard;
 mod lock_page;
 mod menu;
@@ -36,6 +37,7 @@ mod region;
 mod services;
 mod shortcuts;
 mod sound;
+mod storage;
 mod updates_page;
 mod users;
 mod wallpaper;
@@ -68,9 +70,10 @@ fn main() -> glib::ExitCode {
             menu::run(config, (x, y), output)
         }
         Some("housekeeping") => housekeeping::run(),
+        Some("drives") if args.get(1).is_some_and(|a| a == "--mount") => drives::mount_at_login(config),
         Some("-h" | "--help") => {
             let ids: Vec<&str> = pages::PAGES.iter().map(|p| p.id).collect();
-            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping", ids.join("|"));
+            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping | drives --mount", ids.join("|"));
             glib::ExitCode::SUCCESS
         }
         _ => window(config),
@@ -160,6 +163,8 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "lock" => lock_page::page(dir),
             "privacy" => privacy::page(),
             "updates" => updates_page::page(),
+            "drives" => drives::page(dir),
+            "storage" => storage::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

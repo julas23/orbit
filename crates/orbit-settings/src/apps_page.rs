@@ -133,6 +133,56 @@ fn add_login(text: &str, block: &LoginBlock, command: &str) -> String {
     out.join("\n") + "\n"
 }
 
+/// core.yaml's `login:` list.
+pub fn login_items(dir: &ConfigDir) -> Vec<String> {
+    match core::get(dir, "login") {
+        Some(Value::Sequence(s)) => s.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The `login:` list changed: line by line (`line`, the comments kept)
+/// when the file allows and the result reads as `whole` says it should,
+/// the whole list written again otherwise.
+fn edit_login(
+    dir: &ConfigDir,
+    line: impl FnOnce(&str, &LoginBlock) -> String,
+    whole: impl FnOnce(&mut Vec<String>),
+) -> anyhow::Result<()> {
+    let path = dir.path().join("core.yaml");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let now = login_items(dir);
+    let mut want = now.clone();
+    whole(&mut want);
+    if let Some(b) = login_block(&text).filter(|b| b.items.len() == now.len() && !b.items.is_empty()) {
+        let new = line(&text, &b);
+        let read: Option<Vec<String>> = serde_yaml_ng::from_str::<Value>(&new)
+            .ok()
+            .and_then(|v| v.get("login").cloned())
+            .and_then(|v| serde_yaml_ng::from_value(v).ok());
+        if read.as_ref() == Some(&want) && !want.is_empty() {
+            let temp = path.with_extension("yaml.new");
+            std::fs::write(&temp, new)?;
+            std::fs::rename(&temp, &path)?;
+            return Ok(());
+        }
+    }
+    core::save(dir, "login", Value::Sequence(want.into_iter().map(Value::from).collect()))
+}
+
+/// `command` in the `login:` list or not, as `present` says (another
+/// page's own line: the network drives' mounting).
+pub fn ensure_login(dir: &ConfigDir, command: &str, present: bool) -> anyhow::Result<()> {
+    let items = login_items(dir);
+    match (items.iter().position(|c| c == command), present) {
+        (None, true) => edit_login(dir, |text, b| add_login(text, b, command), |l| l.push(command.to_owned())),
+        (Some(i), false) => edit_login(dir, |text, b| remove_login(text, b, i), |l| {
+            l.remove(i);
+        }),
+        _ => Ok(()),
+    }
+}
+
 struct Page {
     dir: ConfigDir,
     list: gtk::Box,
@@ -140,54 +190,12 @@ struct Page {
 }
 
 impl Page {
-    fn text(&self) -> String {
-        std::fs::read_to_string(self.dir.path().join("core.yaml")).unwrap_or_default()
-    }
-
     fn login(&self) -> Vec<String> {
-        match core::get(&self.dir, "login") {
-            Some(Value::Sequence(s)) => s.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect(),
-            _ => Vec::new(),
-        }
+        login_items(&self.dir)
     }
 
-    fn write(&self, text: &str) -> anyhow::Result<()> {
-        let path = self.dir.path().join("core.yaml");
-        let temp = path.with_extension("yaml.new");
-        std::fs::write(&temp, text)?;
-        std::fs::rename(&temp, &path)?;
-        Ok(())
-    }
-
-    /// The list changed as `edit` says: line by line when the file allows,
-    /// the whole list written again otherwise.
     fn change(self: &Rc<Self>, line: impl FnOnce(&str, &LoginBlock) -> String, whole: impl FnOnce(&mut Vec<String>)) {
-        let text = self.text();
-        let now = self.login();
-        let block = login_block(&text).filter(|b| b.items.len() == now.len() && !b.items.is_empty());
-        let result = match block {
-            Some(b) => {
-                let new = line(&text, &b);
-                // Checked: what the line editing gave reads as the list
-                // should, or the whole list is written.
-                let mut want = now.clone();
-                whole(&mut want);
-                let read: Option<Vec<String>> = serde_yaml_ng::from_str::<Value>(&new)
-                    .ok()
-                    .and_then(|v| v.get("login").cloned())
-                    .and_then(|v| serde_yaml_ng::from_value(v).ok());
-                if read.as_ref() == Some(&want) && !want.is_empty() {
-                    self.write(&new)
-                } else {
-                    core::save(&self.dir, "login", Value::Sequence(want.into_iter().map(Value::from).collect()))
-                }
-            }
-            None => {
-                let mut want = now;
-                whole(&mut want);
-                core::save(&self.dir, "login", Value::Sequence(want.into_iter().map(Value::from).collect()))
-            }
-        };
+        let result = edit_login(&self.dir, line, whole);
         crate::say(&self.message, &result.err().map(|e| e.to_string()).unwrap_or_default());
         self.fill();
     }

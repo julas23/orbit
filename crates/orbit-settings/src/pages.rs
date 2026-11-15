@@ -273,6 +273,22 @@ pub const PAGES: &[Page] = &[
         options: &["settings-svc-firewall", "settings-svc-remote", "settings-svc-open-files"],
     },
     Page {
+        id: "drives",
+        group: Group::System,
+        title: "settings-drives",
+        icon: "folder-remote-symbolic",
+        keywords: "settings-drives-keywords",
+        options: &["settings-drives-add", "settings-drives-at-login-long", "settings-drives-smb", "settings-drives-nfs", "settings-drives-sftp"],
+    },
+    Page {
+        id: "storage",
+        group: Group::System,
+        title: "settings-storage",
+        icon: "drive-harddisk-symbolic",
+        keywords: "settings-storage-keywords",
+        options: &["settings-storage-disks", "settings-storage-home"],
+    },
+    Page {
         id: "updates",
         group: Group::System,
         title: "settings-upd",
