@@ -387,6 +387,11 @@ Reviewed with the user, item by item (2026-11-15):
   already runs between machines; global discovery, relays and usage
   reports off by default). ZFS left out; snapshots of the data and
   backups (restic, borg) left out for now.
+- [x] Phones: Android through Syncthing-Fork (the community fork; the
+  official app was discontinued at the end of 2024), one folder per device
+  on the server with Syncthing's versioning on. No specific work for iOS or
+  Windows (the user, 2026-11-15): Möbius Sync, iPhone backups through
+  libimobiledevice and Immich (Docker only) left out.
 - [x] A server may have no graphical session: `orbit-base` (the firewall,
   PackageKit, the helper, `orbitctl`) instead of `orbit-desktop`, a console
   login, SSH by key on the LAN and the tunnel only (`orbit-ssh`), run

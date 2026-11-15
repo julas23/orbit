@@ -540,6 +540,7 @@ a página que os liga.
 | **Finalidade** (revisto) | O `orbit-install` pergunta "Desktop / Servidor", já marcado pelo hardware detectado (6.6), e liga na instalação o conjunto de serviços da finalidade: o Desktop só o firewall; o Servidor o firewall, o Fail2Ban, o Unbound, o dnsmasq (no modo que a rede pede), o WireGuard, o remote server, o storage quando há discos para ele, e o kit multimídia se marcado. Depois disso tudo se ajusta na página |
 | **ISO e nomes** (revisto) | Uma ISO só; a finalidade é uma pergunta do instalador, não outra imagem. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
 | **Storage** (revisto) | Os discos além do do sistema, se vazios, viram storage na instalação: btrfs (RAID1 com dois ou mais) em `/srv` (6.6). Serviços: compartilhar pastas pelo Samba (Windows, macOS, Android) e pelo NFS (Linux), a saúde dos discos (smartmontools, com aviso) e a sincronização pelo **Syncthing** (1.29.5 no Debian 13), que o usuário já usa entre as máquinas. ZFS fora (contrib, DKMS a cada kernel). Snapshots dos dados e backup (restic, borg) fora por enquanto |
+| **Sistemas fechados** (revisto) | Nenhum trabalho específico para iOS nem para Windows: o que funcionar com os padrões abertos que o Orbit já usa funciona, sem app, serviço ou teste próprio para eles. Fora do plano: o Möbius Sync (Syncthing pago de terceiros no iOS), o backup do iPhone pelo `libimobiledevice` e o Immich (fotos, mas só por Docker) |
 | **Servidor sem sessão gráfica** (revisto) | Permitido: `orbit-base` em vez do `orbit-desktop`, login no console, SSH por chave só para a LAN e o túnel, gerência pelo `orbitctl services` ou pelo Orbit-Settings de um desktop por SSH (6.6, 12.2) |
 | **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
@@ -695,6 +696,14 @@ mais a `wg0`):
   a descoberta global e os relays (a infraestrutura pública do Syncthing)
   ficam desligados por padrão, como o relatório de uso: ligá-los é uma
   escolha, para quem sincroniza sem o túnel.
+- **Celulares:** Android pelo Syncthing-Fork (o fork da comunidade; o app
+  oficial foi descontinuado no fim de 2024), sincronizando as pastas do
+  usuário (fotos, downloads, documentos, a mídia dos mensageiros) com o
+  servidor pelo túnel, também fora de casa. No servidor, uma pasta por
+  aparelho (`/srv/@shares/<usuário>/<aparelho>`), com o versionamento do
+  Syncthing ligado, para um arquivo apagado no celular não sumir do
+  servidor. É cópia dos arquivos, não do aparelho: dados e configurações
+  dos apps o Android não deixa ler sem root.
 - **SSH:** `openssh-server` só com chave (`PasswordAuthentication no` depois
   da primeira chave), só na `@lan` e na `wg0`; a jail `sshd` do Fail2Ban
   cobre o que sobrar.
