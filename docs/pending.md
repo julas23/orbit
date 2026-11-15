@@ -352,11 +352,12 @@ Apps other desktops have and Orbit does not:
 Services chosen by what the machine is for; the plan, with its tables of
 packages and ports, is `docs/PLANO-DISTRO.md` §12. Everything comes from
 Debian 13 (checked 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2,
-wireguard-tools, crowdsec 1.4.6 with crowdsec-firewall-bouncer 0.0.25,
+wireguard-tools, fail2ban 1.1.0 (crowdsec 1.4.6 left out),
 snapserver and snapclient 0.31, minidlna 1.3.3, rygel 0.44).
 
 Proposed on 2026-11-15 and being reviewed with the user item by item
-(reviewed so far: the firewall, DHCP and local names, the resolver):
+(reviewed so far: the firewall, DHCP and local names, the resolver,
+banning; WireGuard kept as it is, to be looked at again: CGNAT, Tailscale):
 
 - [x] *Orbit Linux* is the common ISO; the *server* profile is the desktop
   plus `orbit-server`; *station* stays the network-booted thin client.
@@ -365,9 +366,13 @@ Proposed on 2026-11-15 and being reviewed with the user item by item
   `orbit-desktop`), chosen over firewalld and ufw: no daemon, the layer
   around it ours. Only the `inet orbit` table is deleted and reloaded,
   never Debian's default `flush ruleset`. OpenSnitch optional.
-- [x] CrowdSec alone (nftables bouncer), only in `orbit-server`; Fail2Ban
-  left out unless Debian's old CrowdSec falls short. Local only by default:
-  the central API off, sharing an explicit choice.
+- [x] Reviewed: Fail2Ban in `orbit-server` by default (current in Debian,
+  light, local only, banning straight in nftables): the `sshd` jail and an
+  `orbit-remote` one for wrong pairing codes. With WireGuard the only public
+  port there is little to ban. CrowdSec out of the metapackages, documented
+  as an option: it pays only with the community lists (which send the
+  attacks seen to its central API) and several machines, and Debian's is
+  old. Desktops ban nothing.
 - [x] Reviewed: dnsmasq on the server profile only, in two modes. *Proxy*
   (the default): the router keeps DHCP, dnsmasq does PXE's proxy DHCP and
   TFTP, no DNS (`port=0`). *Network* (by choice): the server's DHCP, names
@@ -399,11 +404,13 @@ Work, in this order (PLANO-DISTRO §12.6):
 - [ ] WireGuard in `orbit-server`, the tunnel's config handed out at pairing.
 - [ ] Unbound + dnsmasq in both modes, LTSP's dnsmasq folded in; the
   reservations and the RPZ lists in Orbit-Settings.
-- [ ] CrowdSec: sshd and nginx collections, and an Orbit one for wrong
-  pairing codes; its LAPI moved off port 8080.
+- [ ] Fail2Ban: `backend = systemd`, `nftables-allports` in the Orbit table;
+  the `orbit-remote` filter for the line the remote server already logs at
+  each wrong pairing code (`remote: <peer> gave a wrong code (n of 5)`);
+  short bans (10 min).
 - [ ] `orbit-share` and `snapclient`; DLNA browsing in Orbit-Play.
 - [ ] Orbit-Settings, "Network and security" (firewall, WireGuard peers,
-  CrowdSec bans; a ban as a notification); the panel's `network` module
+  the addresses Fail2Ban banned, with unbanning; a ban as a notification); the panel's `network` module
   showing the firewall and the tunnel.
 - [ ] Done when: each profile installs from the ISO in a VM; nmap from the
   LAN sees only the planned ports, from outside only the server's UDP
