@@ -393,9 +393,29 @@ with Step 2; the phases then run alongside the steps above.
   Seen nested: the pages, the lock picture made for the lock. Not tried: a
   real pen drive or phone, geoclue with an app asking, an SMB or NFS drive
   at boot, changing the boot theme (root). Left: going back to a snapshot
-  (the UKI hook first). Phase B's "done when" (an SMB folder at login, a
-  network printer added, an update installed, all from Orbit-Settings) is
-  for the user to try.
+  (the UKI hook first). B7 done 2026-11-15, going back to a snapshot:
+  the helper's `rollback N` (snapper's own, `--ambit classic`: a
+  read-only copy of the system now, a writable one of N made the btrfs
+  default), then the ESP's UKIs made again by kernel-install from the
+  kernels inside the new default (those it lacks removed first, for room:
+  a UKI is ~150 MB on a 1 GiB ESP), and the system left behind gets
+  `orbit-previous.efi` (ukify; its running kernel, `rootflags=subvol=` of
+  its subvolume, sorted after the others by IMAGE_ID) as the way back
+  from the boot menu. Started from that entry, the Boot page says so and
+  offers `rollback current` (keep this one). A failure after the default
+  changed puts the old default and its UKIs back. A `snapper rollback` by
+  hand does the same through the snapper plugin
+  `/usr/lib/snapper/plugins/50-orbit-boot` (helper `uki-sync N`, only for
+  the default). Boot page: a "go back" button a snapshot, which one
+  starts, a restart offered after. Tried on the think: boot-info (running
+  and default `/@`), the refusals, ukify making the previous UKI (1 s);
+  not yet a real rollback and restart. Left from §6.4: snapshots booted
+  read-only from the menu (overlay in memory), the greet's "go back".
+  Found on the think meanwhile: systemd-boot does not count tries there
+  (the UKIs stay `+3`, `systemd-bless-boot status`: "Couldn't determine
+  boot state"), so §6.3's fallback to the older kernel is not working.
+  Phase B's "done when" (an SMB folder at login, a network printer added,
+  an update installed, all from Orbit-Settings) is for the user to try.
 - [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,
   Updates, Lock screen and login, Boot. Done when an SMB folder mounted at
   login, a network printer added and an update installed all go through
@@ -442,6 +462,27 @@ with Step 2; the phases then run alongside the steps above.
   the core applies none to a monitor yet), the on-screen keyboard over the
   greet (only the greet is drawn while locked), X programs' bells, sticky
   keys turned off by two modifiers pressed together.
+  - C4, done 2026-11-15, what C1–C3 left: colour profiles (core.yaml
+    `outputs: NAME: { profile: FILE }`, the new `icc.rs` reads the ICC's
+    calibration curves, `vcgt` table or formula, into the monitor's gamma
+    ramp; a night light holding the ramp gives it back to the profile's;
+    Monitors page: a profile a monitor, the display ones of
+    ~/.local/share/icc, colord's store and /usr/share/color/icc, or one
+    from a file copied there; programs that manage colour are not told,
+    colord is not involved); the on-screen keyboard over the lock (a layer
+    surface of wvkbd/squeekboard is marked when made, drawn over the greet
+    or the locker and given the pointer and touch while locked, its keys
+    reaching the greet; touch while locked reaches it alone); X programs'
+    bells (XWayland 24.1 has no xdg-system-bell: a connection of the
+    core's own takes XKB's BellNotify); sticky keys off by two modifiers
+    pressed together (`accessibility: sticky_keys_two_off`, on by default
+    as GNOME's; off until the config is read again, a notification says
+    so; a switch on the Accessibility page). Seen nested: wvkbd drawn over
+    the locked greet, the bell from `xkbbell` and from an xterm's `\a`,
+    the profile row and core.yaml's `profile` read back, `--check` taking
+    it; unit tests for vcgt, the two keys and the profile files. Not
+    tried: a profile on a real monitor (DRM), typing the password on wvkbd
+    with a real click or touch, the two keys with a real keyboard.
 
 ### Later
 

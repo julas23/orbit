@@ -141,7 +141,12 @@ fn ms_labels(values: &[u64]) -> Vec<String> {
 
 /// A row with a switch for an `accessibility:` key.
 fn core_switch(dir: &ConfigDir, key: &'static str, label: &str, tip: &str, message: &gtk::Label) -> gtk::Box {
-    let s = switch(get(dir, key).and_then(|v| v.as_bool()).unwrap_or(false));
+    core_switch_or(dir, key, false, label, tip, message)
+}
+
+/// As [`core_switch`], `default` when core.yaml has no such key.
+fn core_switch_or(dir: &ConfigDir, key: &'static str, default: bool, label: &str, tip: &str, message: &gtk::Label) -> gtk::Box {
+    let s = switch(get(dir, key).and_then(|v| v.as_bool()).unwrap_or(default));
     let (dir, message) = (dir.clone(), message.clone());
     s.connect_active_notify(move |s| told(&message, set(&dir, key, s.is_active().into())));
     let row = crate::row(&tr(label), &s);
@@ -251,6 +256,7 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     // Typing.
     let typing = crate::power_card(&tr("settings-a11y-typing"));
     typing.append(&core_switch(dir, "sticky_keys", "settings-a11y-sticky", "settings-a11y-sticky-tip", &message));
+    typing.append(&core_switch_or(dir, "sticky_keys_two_off", true, "settings-a11y-sticky-two", "settings-a11y-sticky-two-tip", &message));
     for (key, values, label, tip) in [
         ("slow_keys", &SLOW[..], "settings-a11y-slow", "settings-a11y-slow-tip"),
         ("bounce_keys", &BOUNCE[..], "settings-a11y-bounce", "settings-a11y-bounce-tip"),

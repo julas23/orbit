@@ -9,8 +9,9 @@
 //! in /etc/systemd/logind.conf.d/50-orbit.conf, logind reloaded),
 //! `refresh` and `upgrade` (apt's lists, every update), or `auto-updates
 //! off|security|all` (unattended-upgrades, installed when turned on),
-//! `boot-info`, `boot-timeout N`, `boot-default ID`, `snapshot TEXT` and
-//! `boot-theme NAME` (systemd-boot, snapper, Plymouth), or `system-drive
+//! `boot-info`, `boot-timeout N`, `boot-default ID`, `snapshot TEXT`,
+//! `rollback N|current`, `uki-sync N` and `boot-theme NAME` (systemd-boot,
+//! snapper, Plymouth), or `system-drive
 //! ADDRESS` and `system-drive-remove ADDRESS` (a network drive for every
 //! user, mounted at boot; an SMB share's password is the first line of the
 //! standard input). Every step is checked against the catalogue before any is
@@ -24,6 +25,7 @@
 
 use std::{
     io::{BufRead, BufReader},
+    path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
     sync::mpsc,
     thread,
@@ -111,6 +113,9 @@ fn describe(step: &Privileged) -> String {
         Privileged::BootTimeout(n) => format!("Boot menu: {n} s"),
         Privileged::BootDefault(id) => format!("Booting {id} by default"),
         Privileged::Snapshot(_) => "Taking a snapshot".into(),
+        Privileged::Rollback(n) if n == "current" => "Keeping this system as the one that starts".into(),
+        Privileged::Rollback(n) => format!("Going back to snapshot {n}"),
+        Privileged::UkiSync(n) => format!("Making the boot images of snapshot {n}"),
         Privileged::BootTheme(t) => format!("Boot theme: {t}"),
         Privileged::SystemDrive(a) => format!("Adding {a} for every user"),
         Privileged::SystemDriveRemove(a) => format!("Removing {a}"),
@@ -137,6 +142,8 @@ fn run(step: &Privileged) -> Result<(), String> {
         Privileged::Snapshot(description) => {
             tool("snapper", &["-c", "root", "create", "-c", "number", "-d", description]).map(|_| ())
         }
+        Privileged::Rollback(target) => rollback(target),
+        Privileged::UkiSync(number) => after_rollback(number),
         Privileged::BootTheme(theme) => {
             let file = format!("/usr/share/plymouth/themes/{theme}/{theme}.plymouth");
             if !std::path::Path::new(&file).is_file() {
@@ -231,9 +238,220 @@ fn boot_info() -> Result<(), String> {
         "timeout": timeout,
         "entries": json(tool("bootctl", &["list", "--json=short", "--no-pager"])),
         "snapshots": json(tool("snapper", &["--jsonout", "-c", "root", "list"])),
+        "root": root_info(),
     });
     println!("info {info}");
     Ok(())
+}
+
+/// `snapper rollback` to a snapshot (or, `current`, of the system running
+/// now), then the UKIs made again for the new default. Done by snapper
+/// itself in the client (`--no-dbus`), so its plugin sees
+/// ORBIT_SERVICES_HELPER and leaves the UKIs to this. A failure after the
+/// default changed puts the old default back and the UKIs with it.
+fn rollback(target: &str) -> Result<(), String> {
+    use orbit_services::boot;
+    if !Path::new("/etc/snapper/configs/root").is_file() {
+        return Err("snapper has no config for the root".into());
+    }
+    if target != "current" {
+        let root = PathBuf::from(format!("/.snapshots/{target}/snapshot"));
+        if !root.is_dir() {
+            return Err(format!("there is no snapshot {target}"));
+        }
+        if boot::kernels(&root).is_empty() {
+            return Err(format!("snapshot {target} holds no kernel to start"));
+        }
+    }
+    // The UKIs' place, asked before anything changes: no UKI layout, no
+    // going back.
+    uki_place(Path::new("/"))?;
+    let old = default_id()?;
+    let mut args = vec!["--no-dbus", "--ambit", "classic", "rollback", "--print-number"];
+    if target != "current" {
+        args.push(target);
+    }
+    let out = Command::new("snapper")
+        .args(&args)
+        .env("PATH", PATH)
+        .env("LC_ALL", "C.UTF-8")
+        .env("ORBIT_SERVICES_HELPER", "1")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("snapper: {e}"))?;
+    if !out.status.success() {
+        return Err(last_line(&out.stderr).unwrap_or_else(|| "snapper rollback failed".into()));
+    }
+    let new = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_digit()))
+        .map(str::to_owned)
+        .ok_or("snapper did not say the new snapshot's number")?;
+    if let Err(e) = after_rollback(&new) {
+        println!("error {e}");
+        println!("step Putting the system that started back");
+        tool("btrfs", &["subvolume", "set-default", &old, "/"])?;
+        sync_ukis(Path::new("/"))?;
+        let _ = std::fs::remove_file(previous_path()?);
+        return Err(format!("the system stays as it was: {e}"));
+    }
+    Ok(())
+}
+
+/// The subvolume btrfs mounts as the root, by ID.
+fn default_id() -> Result<String, String> {
+    // "ID 256 gen 5165 top level 5 path @"
+    let text = tool("btrfs", &["subvolume", "get-default", "/"])?;
+    text.split_whitespace().nth(1).map(str::to_owned).ok_or_else(|| format!("btrfs: {}", text.trim()))
+}
+
+/// A subvolume's ID and UUIDs (its own and its parent's), from `btrfs
+/// subvolume show`.
+fn subvolume(path: &Path) -> Result<(String, String, String), String> {
+    let text = tool("btrfs", &["subvolume", "show", &path.to_string_lossy()])?;
+    let field = |name: &str| {
+        text.lines()
+            .find_map(|l| l.trim().strip_prefix(name).map(|v| v.trim().to_owned()))
+            .unwrap_or_default()
+    };
+    Ok((field("Subvolume ID:"), field("UUID:"), field("Parent UUID:")))
+}
+
+/// After the default became snapshot `number`: the system running now
+/// gets its UKI (unless the new default is a copy of it), and the ESP's
+/// UKIs are made from the new default's kernels.
+fn after_rollback(number: &str) -> Result<(), String> {
+    let root = PathBuf::from(format!("/.snapshots/{number}/snapshot"));
+    let (id, _, parent) = subvolume(&root)?;
+    if default_id()? != id {
+        return Err(format!("snapshot {number} is not the one that starts"));
+    }
+    let (_, running, _) = subvolume(Path::new("/"))?;
+    if parent == running {
+        // A copy of this system: no other to go back to.
+        let _ = std::fs::remove_file(previous_path()?);
+    } else {
+        make_previous()?;
+    }
+    sync_ukis(&root)
+}
+
+/// Where kernel-install puts UKIs, and its entry token, for a root's
+/// newest kernel.
+fn uki_place(root: &Path) -> Result<(PathBuf, String), String> {
+    let kernels = orbit_services::boot::kernels(root);
+    let version = kernels.last().ok_or("no kernel to start in /boot")?;
+    let image = root.join(format!("boot/vmlinuz-{version}"));
+    let text = tool("kernel-install", &["inspect", "--json=short", version, &image.to_string_lossy()])?;
+    let info: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("kernel-install inspect: {e}"))?;
+    if info["Layout"].as_str() != Some("uki") {
+        return Err("going back to a snapshot needs systemd-boot with UKIs (layout=uki)".into());
+    }
+    let (Some(boot), Some(token)) = (info["BootRoot"].as_str(), info["EntryToken"].as_str()) else {
+        return Err("kernel-install did not say where the UKIs go".into());
+    };
+    Ok((Path::new(boot).join("EFI/Linux"), token.to_owned()))
+}
+
+fn previous_path() -> Result<PathBuf, String> {
+    let (dir, token) = uki_place(Path::new("/"))?;
+    Ok(dir.join(format!("{token}-{}.efi", orbit_services::boot::PREVIOUS)))
+}
+
+/// The UKI that starts the system running now from its subvolume, by its
+/// running kernel (or its newest one, if that was removed since).
+fn make_previous() -> Result<(), String> {
+    use orbit_services::boot;
+    let (dir, token) = uki_place(Path::new("/"))?;
+    let kernels = boot::kernels(Path::new("/"));
+    let running = std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default().trim().to_owned();
+    let version = kernels.iter().find(|v| **v == running).or(kernels.last()).ok_or("no kernel to start in /boot")?;
+    let fsroot = tool("findmnt", &["-no", "FSROOT", "/"])?.trim().to_owned();
+    let cmdline = std::fs::read_to_string("/etc/kernel/cmdline").map_err(|e| format!("/etc/kernel/cmdline: {e}"))?;
+    let cmdline = boot::cmdline_with_subvol(cmdline.trim(), &fsroot);
+    let os_release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let release = Path::new("/run/orbit-previous-os-release");
+    std::fs::write(release, boot::previous_os_release(&os_release, &token)).map_err(|e| e.to_string())?;
+    let target = dir.join(format!("{token}-{}.efi", boot::PREVIOUS));
+    let partial = dir.join(format!("{token}-{}.efi.new", boot::PREVIOUS));
+    let made = tool(
+        "ukify",
+        &[
+            "build",
+            &format!("--linux=/boot/vmlinuz-{version}"),
+            &format!("--initrd=/boot/initrd.img-{version}"),
+            &format!("--cmdline={cmdline}"),
+            &format!("--os-release=@{}", release.display()),
+            &format!("--uname={version}"),
+            &format!("--output={}", partial.display()),
+        ],
+    );
+    let _ = std::fs::remove_file(release);
+    if let Err(e) = made {
+        let _ = std::fs::remove_file(&partial);
+        return Err(format!("ukify: {e}"));
+    }
+    std::fs::rename(&partial, &target).map_err(|e| format!("{}: {e}", target.display()))
+}
+
+/// The ESP's UKIs made again from `root`'s kernels (kernel-install, as an
+/// upgrade makes them): one per kernel it holds, the others removed. The
+/// previous system's UKI is left alone.
+fn sync_ukis(root: &Path) -> Result<(), String> {
+    use orbit_services::boot;
+    let kernels = boot::kernels(root);
+    if kernels.is_empty() {
+        return Err(format!("{} holds no kernel to start", root.display()));
+    }
+    let (dir, token) = uki_place(root)?;
+    // The versions the root has not go first, so the ESP (a UKI is some
+    // 150 MB) has room; meanwhile the previous system's UKI still starts.
+    remove_ukis(&dir, &token, |version, _| !kernels.iter().any(|k| k == version))?;
+    let started = std::time::SystemTime::now() - Duration::from_secs(2);
+    for version in &kernels {
+        let image = root.join(format!("boot/vmlinuz-{version}"));
+        let initrd = root.join(format!("boot/initrd.img-{version}"));
+        tool("kernel-install", &["add", version, &image.to_string_lossy(), &initrd.to_string_lossy()])
+            .map_err(|e| format!("kernel-install {version}: {e}"))?;
+    }
+    // Older names of a version just made (a boot counter that changed).
+    remove_ukis(&dir, &token, |_, made| made < started)
+}
+
+/// Removes the UKIs in `dir` (the previous system's aside) that `gone`
+/// says, by version and time made.
+fn remove_ukis(dir: &Path, token: &str, gone: impl Fn(&str, std::time::SystemTime) -> bool) -> Result<(), String> {
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?.flatten() {
+        let Some(version) = entry.file_name().to_str().and_then(|n| orbit_services::boot::uki_version(n, token)) else {
+            continue;
+        };
+        let made = entry.metadata().and_then(|m| m.modified()).map_err(|e| e.to_string())?;
+        if gone(&version, made) {
+            let path = entry.path();
+            std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Which subvolume runs and which starts (they differ after starting the
+/// system from before going back), whether that one's UKI is there, and
+/// whether going back can be done here at all.
+fn root_info() -> serde_json::Value {
+    let running = tool("findmnt", &["-no", "FSROOT", "/"]).map(|t| t.trim().to_owned()).ok();
+    // "ID 256 gen 5165 top level 5 path @"
+    let default = tool("btrfs", &["subvolume", "get-default", "/"])
+        .ok()
+        .and_then(|t| t.split_once(" path ").map(|(_, p)| format!("/{}", p.trim())));
+    let rollback = Path::new("/etc/snapper/configs/root").is_file() && uki_place(Path::new("/")).is_ok();
+    serde_json::json!({
+        "running": running,
+        "default": default,
+        "previous": previous_path().is_ok_and(|p| p.is_file()),
+        "rollback": rollback,
+    })
 }
 
 /// loader.conf's `timeout` set, its other lines kept.
@@ -452,6 +670,13 @@ mod tests {
         assert_eq!(steps[0], Privileged::BootTheme("orbit".into()));
         assert_eq!(steps[1], Privileged::SystemDrive("nfs://nas/export".into()));
         assert!(parse(&words("boot-theme ../x")).is_err());
+        let (_, steps) = parse(&words("rollback 91 -- rollback current -- uki-sync 93")).unwrap();
+        assert_eq!(steps[0], Privileged::Rollback("91".into()));
+        assert_eq!(steps[1].args(), vec!["rollback", "current"]);
+        assert_eq!(steps[2], Privileged::UkiSync("93".into()));
+        for bad in ["rollback 0", "rollback ../1", "rollback 091", "uki-sync current", "rollback 1234567"] {
+            assert!(parse(&words(bad)).is_err(), "{bad}");
+        }
         assert!(parse(&words("system-drive smb://nas/../etc")).is_err());
     }
 

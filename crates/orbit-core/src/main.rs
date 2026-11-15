@@ -43,6 +43,7 @@ mod gamma;
 mod grab;
 mod greet;
 mod handlers;
+mod icc;
 mod idle;
 mod input;
 mod ipc;

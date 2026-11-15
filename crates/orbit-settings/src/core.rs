@@ -265,6 +265,14 @@ fn output_entry(file: &Mapping, name: &str) -> Mapping {
         .unwrap_or_default()
 }
 
+/// Monitor `name`'s colour profile (an ICC file), if it has one.
+pub fn output_profile(dir: &ConfigDir, name: &str) -> Option<String> {
+    output_entry(&read(dir), name)
+        .get("profile")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
 /// Takes monitor `name`'s own picture away, if it has one.
 pub fn drop_output_wallpaper(dir: &ConfigDir, name: &str) -> anyhow::Result<()> {
     if output_wallpaper(dir, name).is_none() {

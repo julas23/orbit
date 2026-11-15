@@ -58,6 +58,8 @@
 //!   DP-2: { transform: 90 }             # turned a quarter clockwise (sway's
 //!                                       # names: normal, 90, 180, 270, flipped,
 //!                                       # flipped-90, flipped-180, flipped-270)
+//!   DP-3: { profile: ~/.local/share/icc/dp3.icc }  # a colour profile's
+//!                                       # calibration curves (vcgt) loaded
 //!   julas/HDMI-A-1: { mode: 3840x2160@60, scale: 2 }   # on the machine julas
 //!                                       # only, over a plain HDMI-A-1 there
 //! ```
@@ -234,6 +236,9 @@ pub struct OutputConfig {
     /// Variable refresh (FreeSync, G-Sync compatible), when the monitor
     /// can (sway's `adaptive_sync`).
     pub adaptive_sync: bool,
+    /// An ICC profile whose calibration curves go into the monitor's gamma
+    /// ramp (`icc`).
+    pub profile: Option<String>,
 }
 
 /// Smithay's `Transform` by sway's name for it.

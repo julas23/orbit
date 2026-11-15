@@ -226,6 +226,7 @@ pub fn output_elements(
         return elements;
     }
     if state.locked() {
+        osk_elements(output, renderer, scale, &mut elements);
         crate::session_lock::face_elements(state, output, renderer, scale, 1.0, &mut elements);
         state.locked_backdrop(output, renderer, scale, 1.0, &mut elements);
         return elements;
@@ -378,6 +379,25 @@ pub fn session_elements(
 }
 
 /// The layer surfaces of `layers` on `output`, topmost first.
+/// The on-screen keyboard over the lock (only its layers).
+fn osk_elements(output: &Output, renderer: &mut GlesRenderer, scale: Scale<f64>, elements: &mut Vec<OutputElement>) {
+    let map = layer_map_for_output(output);
+    for layer in [WlrLayer::Overlay, WlrLayer::Top, WlrLayer::Bottom] {
+        for surface in map.layers_on(layer).rev().filter(|l| crate::input::is_on_screen_keyboard(l)) {
+            let Some(at) = map.layer_geometry(surface).map(|g| g.loc.to_physical_precise_round(scale)) else {
+                continue;
+            };
+            elements.extend(
+                AsRenderElements::<GlesRenderer>::render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
+                    surface, renderer, at, scale, 1.0,
+                )
+                .into_iter()
+                .map(OutputElement::Surface),
+            );
+        }
+    }
+}
+
 fn layer_elements(
     output: &Output,
     renderer: &mut GlesRenderer,

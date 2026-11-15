@@ -1,0 +1,11 @@
+#!/bin/sh
+# Orbit Linux's snapper plugin (docs/PLANO-DISTRO.md §6.4): after
+# `snapper rollback`, the boot loader's UKIs are made again from the
+# kernels inside the new default, and the system left behind gets an entry
+# of its own in the boot menu. orbit-services-helper's own rollback does
+# this itself, and says so in ORBIT_SERVICES_HELPER.
+#   $1 action, $2 subvolume, $3 fstype, $4 old number, $5 new number
+[ "$1" = rollback-post ] && [ "$2" = / ] || exit 0
+[ -n "$ORBIT_SERVICES_HELPER" ] && exit 0
+[ -x /usr/libexec/orbit-services-helper ] || exit 0
+exec /usr/libexec/orbit-services-helper uki-sync "$5"

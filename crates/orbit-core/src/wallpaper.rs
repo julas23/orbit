@@ -796,7 +796,7 @@ fn blur(pixels: &[u8], size: Size<i32, Physical>, sigma: f32) -> Vec<u8> {
     image::imageops::fast_blur(&picture, sigma).into_raw()
 }
 
-fn expand_home(path: &str) -> PathBuf {
+pub fn expand_home(path: &str) -> PathBuf {
     match path.strip_prefix('~') {
         Some(rest) => std::env::var_os("HOME")
             .map(PathBuf::from)

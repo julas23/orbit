@@ -120,7 +120,16 @@ impl Orbit {
             // Locked, the wheel reaches no one.
             InputEvent::PointerAxis { .. } if self.locked() => {}
             InputEvent::PointerAxis { event, .. } => self.wheel::<I>(event),
-            _ if self.locked() => {}
+            // Locked, a touch reaches only the on-screen keyboard.
+            _ if self.locked()
+                && !matches!(
+                    event,
+                    InputEvent::TouchDown { .. }
+                        | InputEvent::TouchMotion { .. }
+                        | InputEvent::TouchUp { .. }
+                        | InputEvent::TouchCancel { .. }
+                        | InputEvent::TouchFrame { .. }
+                ) => {}
             InputEvent::GestureSwipeBegin { event, .. } => {
                 let pointer = self.seat.get_pointer();
                 if self.config.gestures && event.fingers() >= 3 {
@@ -232,8 +241,12 @@ impl Orbit {
             }
             InputEvent::TouchDown { event, .. } => {
                 let Some(pos) = self.touch_position(&event) else { return };
-                self.focus_at(pos);
-                let under = self.surface_under(pos);
+                let under = if self.locked() {
+                    self.osk_under(pos)
+                } else {
+                    self.focus_at(pos);
+                    self.surface_under(pos)
+                };
                 if let Some(touch) = self.seat.get_touch() {
                     touch.down(
                         self,
@@ -249,7 +262,7 @@ impl Orbit {
             }
             InputEvent::TouchMotion { event, .. } => {
                 let Some(pos) = self.touch_position(&event) else { return };
-                let under = self.surface_under(pos);
+                let under = if self.locked() { self.osk_under(pos) } else { self.surface_under(pos) };
                 if let Some(touch) = self.seat.get_touch() {
                     touch.motion(
                         self,
@@ -876,6 +889,38 @@ pub fn remote_server(
         );
     }
     allowed
+}
+
+/// Marks an on-screen keyboard's layer surface (its surface's data map):
+/// the one client drawn and given the pointer and touch while locked, so
+/// whoever needs it can type the password (`osk_under`, render).
+pub struct OnScreenKeyboard;
+
+/// Whether a layer surface is an on-screen keyboard's.
+pub fn is_on_screen_keyboard(layer: &smithay::desktop::LayerSurface) -> bool {
+    smithay::wayland::compositor::with_states(layer.wl_surface(), |states| {
+        states.data_map.get::<OnScreenKeyboard>().is_some()
+    })
+}
+
+impl Orbit {
+    /// The on-screen keyboard's surface at `pos`, if one is there.
+    pub fn osk_under(&self, pos: Point<f64, Logical>) -> Option<(smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, Point<f64, Logical>)> {
+        let output = self.output_at(pos)?;
+        let out = self.space.output_geometry(&output)?;
+        let map = layer_map_for_output(&output);
+        let rel = pos - out.loc.to_f64();
+        for layer in [WlrLayer::Overlay, WlrLayer::Top, WlrLayer::Bottom] {
+            let Some(surface) = map.layer_under(layer, rel).filter(|l| is_on_screen_keyboard(l)) else {
+                continue;
+            };
+            let at = map.layer_geometry(surface).map(|g| g.loc).unwrap_or_default();
+            if let Some((s, loc)) = surface.surface_under(rel - at.to_f64(), WindowSurfaceType::ALL) {
+                return Some((s, (loc + at + out.loc).to_f64()));
+            }
+        }
+        None
+    }
 }
 
 /// On-screen keyboards installed on the system (the accessibility's), also

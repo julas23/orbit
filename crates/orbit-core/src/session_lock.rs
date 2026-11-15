@@ -137,6 +137,9 @@ impl Orbit {
 
     /// The face's surface under `pos`, and where its origin is.
     pub fn face_surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+        if let Some(under) = self.osk_under(pos) {
+            return Some(under);
+        }
         if self.locker.is_none() {
             return self.greet_surface_under(pos);
         }

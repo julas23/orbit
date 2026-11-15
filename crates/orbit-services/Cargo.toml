@@ -19,6 +19,7 @@ assets = [
     ["../../data/polkit/io.github.julas23.orbit.services.policy", "usr/share/polkit-1/actions/", "644"],
     ["target/release/orbit-accounts-helper", "usr/libexec/", "755"],
     ["../../data/polkit/io.github.julas23.orbit.accounts.policy", "usr/share/polkit-1/actions/", "644"],
+    ["../../data/snapper/50-orbit-boot", "usr/lib/snapper/plugins/", "755"],
 ]
 
 [lib]

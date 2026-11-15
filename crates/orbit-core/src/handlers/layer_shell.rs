@@ -20,6 +20,8 @@ use smithay::{
     },
 };
 
+use smithay::reexports::wayland_server::Resource;
+
 use crate::state::Orbit;
 
 /// Orbit-Panel's layer-shell namespace.
@@ -46,6 +48,14 @@ impl WlrLayerShellHandler for Orbit {
             return;
         };
         tracing::info!("layer surface {namespace} on {}", output.name());
+        // An on-screen keyboard's: shown and touched over the lock too.
+        if let Some(client) = surface.wl_surface().client()
+            && crate::input::on_screen_keyboard(&self.display_handle, &client)
+        {
+            smithay::wayland::compositor::with_states(surface.wl_surface(), |states| {
+                states.data_map.insert_if_missing(|| crate::input::OnScreenKeyboard);
+            });
+        }
         let mut map = layer_map_for_output(&output);
         if let Err(err) = map.map_layer(&LayerSurface::new(surface, namespace.clone())) {
             tracing::warn!("layer surface {namespace}: {err}");

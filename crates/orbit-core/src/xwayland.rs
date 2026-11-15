@@ -82,6 +82,7 @@ impl Orbit {
                                 tracing::warn!("XWayland cursor: {err}");
                             }
                             state.xwm = Some(wm);
+                            state.watch_x11_bells(display_number);
                             tracing::info!("XWayland ready on :{display_number}");
                         }
                         Err(err) => tracing::error!("X window manager: {err}"),

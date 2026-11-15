@@ -165,6 +165,7 @@ impl Orbit {
             output.change_current_state(None, None, None, Some((x, y).into()));
             self.space.map_output(output, (x, y));
         }
+        self.apply_profiles();
     }
 
     /// A monitor came: it takes its place and shows the focused area.

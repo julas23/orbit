@@ -25,6 +25,7 @@ use std::{
 use serde::Serialize;
 
 pub mod accounts;
+pub mod boot;
 pub mod drives;
 pub mod updates;
 
@@ -469,6 +470,14 @@ pub enum Privileged {
     BootDefault(String),
     /// A snapshot of the system now, with this description.
     Snapshot(String),
+    /// The system goes back to a snapshot (its number), or `current`: the
+    /// system running now kept as the one that starts (after starting the
+    /// one from before going back). The UKIs follow ([`boot`]).
+    Rollback(String),
+    /// The UKIs made again from the kernels of a snapshot, which must be
+    /// the default subvolume already (snapper's plugin, after a
+    /// `snapper rollback` by hand).
+    UkiSync(String),
     /// Plymouth's theme for the boot (a theme installed), the initramfs
     /// made again.
     BootTheme(String),
@@ -496,6 +505,8 @@ impl Privileged {
             Privileged::BootTimeout(_) => vec!["boot-timeout", self.number()],
             Privileged::BootDefault(id) => vec!["boot-default", id],
             Privileged::Snapshot(d) => vec!["snapshot", d],
+            Privileged::Rollback(n) => vec!["rollback", n],
+            Privileged::UkiSync(n) => vec!["uki-sync", n],
             Privileged::BootTheme(t) => vec!["boot-theme", t],
             Privileged::SystemDrive(a) => vec!["system-drive", a],
             Privileged::SystemDriveRemove(a) => vec!["system-drive-remove", a],
@@ -551,6 +562,9 @@ impl Privileged {
             "boot-default" => Err(format!("not a boot entry: {arg}")),
             "snapshot" if arg.chars().count() <= 80 && !arg.chars().any(char::is_control) => Ok(Privileged::Snapshot(arg.to_owned())),
             "snapshot" => Err("a snapshot's description: one line, at most 80 characters".into()),
+            "rollback" if arg == "current" || snapshot_number(arg) => Ok(Privileged::Rollback(arg.to_owned())),
+            "uki-sync" if snapshot_number(arg) => Ok(Privileged::UkiSync(arg.to_owned())),
+            "rollback" | "uki-sync" => Err(format!("not a snapshot's number: {arg}")),
             "boot-theme" if arg.len() <= 64 && entry() && !arg.starts_with('.') => Ok(Privileged::BootTheme(arg.to_owned())),
             "boot-theme" => Err(format!("not a boot theme: {arg}")),
             "system-drive" => drives::SystemDrive::parse(arg).map(|d| Privileged::SystemDrive(d.address())),
@@ -576,6 +590,11 @@ impl Privileged {
             _ => None,
         }
     }
+}
+
+/// A snapper snapshot's number: 1 to 999999, digits only.
+fn snapshot_number(arg: &str) -> bool {
+    (1..=6).contains(&arg.len()) && arg.chars().all(|c| c.is_ascii_digit()) && !arg.starts_with('0')
 }
 
 /// What turning a service on, off or away takes.

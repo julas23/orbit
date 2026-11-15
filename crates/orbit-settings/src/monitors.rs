@@ -5,6 +5,12 @@
 //! show leaves it dark — they go back to what they were.
 //!
 //! Where each monitor sits is the panel's monitors module's (drag them).
+//!
+//! A monitor's colour profile (`profile`, an ICC file) is written at once
+//! and the core reloads: it loads the profile's calibration curves into
+//! the monitor's gamma ramp. Profiles are the display ones found in
+//! ~/.local/share/icc, colord's store and /usr/share/color/icc; one from
+//! elsewhere is copied into ~/.local/share/icc.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -360,6 +366,142 @@ fn power_card(page: &Rc<Page>) -> gtk::Box {
     card
 }
 
+/// The folders display profiles are looked for in, the user's first.
+fn profile_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs = vec![glib::user_data_dir().join("icc")];
+    dirs.extend(["/var/lib/colord/icc", "/usr/share/color/icc"].map(std::path::PathBuf::from));
+    dirs
+}
+
+/// Whether `path` is an ICC profile of a display (class `mntr`).
+fn display_profile(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let mut head = [0u8; 40];
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut head)).is_ok() && &head[12..16] == b"mntr" && &head[36..40] == b"acsp"
+}
+
+/// The display profiles installed, as paths.
+fn profiles() -> Vec<String> {
+    let mut out = Vec::new();
+    for dir in profile_dirs() {
+        let mut found: Vec<String> = walk(&dir, 3)
+            .into_iter()
+            .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("icc") || e.eq_ignore_ascii_case("icm")))
+            .filter(|p| display_profile(p))
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        out.extend(found);
+    }
+    out
+}
+
+fn walk(dir: &std::path::Path, depth: u32) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() && depth > 0 {
+            out.extend(walk(&path, depth - 1));
+        } else if path.is_file() {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// A profile's name for the list: its file name, with its folder when not
+/// the user's.
+fn profile_label(path: &str) -> String {
+    let p = std::path::Path::new(path);
+    let name = p.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_owned());
+    if p.starts_with(glib::user_data_dir()) {
+        name
+    } else {
+        format!("{name} ({})", p.parent().map(|d| d.display().to_string()).unwrap_or_default())
+    }
+}
+
+/// Monitor `name`'s colour profile: none, one installed, or one imported.
+fn profile_row(dir: &ConfigDir, name: &str, message: &gtk::Label) -> gtk::Box {
+    let now = core::output_profile(dir, name);
+    let mut paths: Vec<Option<String>> = vec![None];
+    paths.extend(profiles().into_iter().map(Some));
+    if let Some(now) = &now
+        && !paths.iter().any(|p| p.as_ref() == Some(now))
+    {
+        paths.push(Some(now.clone()));
+    }
+    let labels: Vec<String> = paths.iter().map(|p| p.as_deref().map_or_else(|| tr("settings-profile-none"), profile_label)).collect();
+    let pick = crate::short_dropdown(&labels);
+    pick.set_selected(paths.iter().position(|p| *p == now).unwrap_or(0) as u32);
+    let import = gtk::Button::builder().icon_name("document-open-symbolic").tooltip_text(tr("settings-profile-import")).build();
+    let line = gtk::Box::builder().spacing(6).build();
+    line.append(&pick);
+    line.append(&import);
+    let save = {
+        let (dir, name, message) = (dir.clone(), name.to_owned(), message.clone());
+        move |path: Option<String>| {
+            let told = core::save_output(&dir, &name, |entry| {
+                match &path {
+                    Some(p) => entry.insert("profile".into(), p.clone().into()),
+                    None => entry.remove("profile"),
+                };
+            })
+            .and_then(|()| core::command("reload"));
+            match told {
+                Ok(()) => crate::say(&message, ""),
+                Err(err) => crate::say(&message, &format!("{}: {err:#}", tr("settings-not-told"))),
+            }
+        }
+    };
+    let save = Rc::new(save);
+    pick.connect_selected_notify({
+        let save = save.clone();
+        move |d| {
+            if let Some(path) = paths.get(d.selected() as usize) {
+                save(path.clone());
+            }
+        }
+    });
+    import.connect_clicked({
+        let message = message.clone();
+        move |b| {
+            let filter = gtk::FileFilter::new();
+            filter.add_suffix("icc");
+            filter.add_suffix("icm");
+            filter.set_name(Some(&tr("settings-profile-files")));
+            let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
+            filters.append(&filter);
+            let chooser = gtk::FileDialog::builder().title(tr("settings-profile-import")).filters(&filters).modal(true).build();
+            let window = b.root().and_downcast::<gtk::Window>();
+            let (save, message) = (save.clone(), message.clone());
+            chooser.open(window.as_ref(), gtk::gio::Cancellable::NONE, move |file| {
+                let Some(source) = file.ok().and_then(|f| f.path()) else { return };
+                if !display_profile(&source) {
+                    crate::say(&message, &tr("settings-profile-not-display"));
+                    return;
+                }
+                let folder = glib::user_data_dir().join("icc");
+                let target = folder.join(source.file_name().unwrap_or_default());
+                let copied = std::fs::create_dir_all(&folder).and_then(|()| {
+                    if source != target {
+                        std::fs::copy(&source, &target)?;
+                    }
+                    Ok(())
+                });
+                match copied {
+                    // The list shows it when the page is drawn again.
+                    Ok(()) => save(Some(target.to_string_lossy().into_owned())),
+                    Err(err) => crate::say(&message, &format!("{}: {err}", target.display())),
+                }
+            });
+        }
+    });
+    let row = crate::row(&tr("settings-profile"), &line);
+    row.set_tooltip_text(Some(&tr("settings-profile-tip")));
+    row
+}
+
 impl Page {
     /// The monitors as the core has them now.
     fn refresh(&self) {
@@ -375,7 +517,11 @@ impl Page {
         };
         let rows: Vec<Rc<Row>> = outputs.into_iter().map(Row::new).collect();
         for row in &rows {
-            self.list.append(&row.widget());
+            let card = row.widget();
+            if let Some(card) = card.downcast_ref::<gtk::Box>() {
+                card.append(&profile_row(&self.dir, &row.output.name, &self.message));
+            }
+            self.list.append(&card);
         }
         *self.rows.borrow_mut() = rows;
     }
@@ -482,6 +628,27 @@ impl Page {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn display_profiles_only() {
+        let dir = std::env::temp_dir().join(format!("orbit-icc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = |name: &str, class: &[u8; 4]| {
+            let mut head = vec![0u8; 128];
+            head[12..16].copy_from_slice(class);
+            head[36..40].copy_from_slice(b"acsp");
+            let path = dir.join(name);
+            std::fs::write(&path, head).unwrap();
+            path
+        };
+        assert!(display_profile(&file("screen.icc", b"mntr")));
+        assert!(!display_profile(&file("printer.icc", b"prtr")));
+        std::fs::write(dir.join("short.icc"), b"acsp").unwrap();
+        assert!(!display_profile(&dir.join("short.icc")));
+        let found: Vec<_> = walk(&dir, 0).into_iter().filter(|p| display_profile(p)).collect();
+        assert_eq!(found, [dir.join("screen.icc")]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn commands_only_for_what_changed() {

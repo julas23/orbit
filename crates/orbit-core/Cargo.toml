@@ -29,6 +29,7 @@ orbit-protocols = { workspace = true, features = ["server"] }
 serde_json.workspace = true
 regex.workspace = true
 smithay-drm-extras.workspace = true
+x11rb = { workspace = true, features = ["xkb"] }
 xcursor.workspace = true
 glam.workspace = true
 tracing-subscriber.workspace = true

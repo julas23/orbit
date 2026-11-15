@@ -7,6 +7,8 @@
 //!   sticky_keys: false   # a modifier pressed and let go alone stays held
 //!                        # for the next key; pressed twice, held until
 //!                        # pressed again
+//!   sticky_keys_two_off: true  # two modifiers pressed together turn
+//!                        # sticky keys off until the config is read again
 //!   slow_keys: 0         # ms a key is held before it counts (0: off); let
 //!                        # go sooner, it never happened
 //!   bounce_keys: 0       # ms after a key is let go in which the same key
@@ -59,6 +61,7 @@ use crate::state::Orbit;
 #[serde(default, deny_unknown_fields)]
 pub struct Accessibility {
     pub sticky_keys: bool,
+    pub sticky_keys_two_off: bool,
     pub slow_keys: u64,
     pub bounce_keys: u64,
     pub mouse_keys: bool,
@@ -70,6 +73,7 @@ impl Default for Accessibility {
     fn default() -> Self {
         Self {
             sticky_keys: false,
+            sticky_keys_two_off: true,
             slow_keys: 0,
             bounce_keys: 0,
             mouse_keys: false,
@@ -158,6 +162,12 @@ impl Sticky {
         let mut out = vec![(code, false)];
         out.extend(self.used());
         out
+    }
+
+    /// Whether a modifier other than `code` is down for real now (someone
+    /// who can press two together, as GNOME's "two keys off" reads it).
+    pub fn other_down(&self, code: u32) -> bool {
+        self.mods.iter().any(|(c, h)| *c != code && matches!(h, Held::Down { .. }))
     }
 
     /// The modifiers held for real went with another key or a click.
@@ -438,6 +448,9 @@ const BELL: Duration = Duration::from_millis(150);
 #[derive(Debug)]
 pub struct A11y {
     pub sticky: Sticky,
+    /// Sticky keys turned off by two modifiers pressed together, until
+    /// the config is read again.
+    pub sticky_off: bool,
     pub bounce: Bounce,
     pub slow: Slow,
     pub mouse: MouseKeys,
@@ -456,6 +469,7 @@ impl A11y {
         let zoom = clamp_zoom(config.zoom);
         Self {
             sticky: Sticky::default(),
+            sticky_off: false,
             bounce: Bounce::default(),
             slow: Slow::default(),
             mouse: MouseKeys::default(),
@@ -517,7 +531,19 @@ impl Orbit {
                 return;
             }
         }
-        let keys = if config.sticky_keys {
+        let sticky = config.sticky_keys && !self.a11y.sticky_off;
+        if sticky && config.sticky_keys_two_off && pressed && is_modifier(raw) && self.a11y.sticky.other_down(raw) {
+            // Two modifiers together: whoever types does not need it.
+            tracing::info!("sticky keys off: two modifiers pressed together");
+            self.a11y.sticky_off = true;
+            for (raw, _) in self.a11y.sticky.release_all() {
+                self.feed_key(Keycode::new(raw), KeyState::Released, time, source, remote);
+            }
+            self.feed_key(code, KeyState::Pressed, time, source, remote);
+            self.spawn("notify-send -a Orbit -i preferences-desktop-accessibility 'Sticky keys off' 'Two modifier keys were pressed together. Orbit-Settings, Accessibility, turns them on again.'");
+            return;
+        }
+        let keys = if sticky {
             self.a11y.sticky.key(raw, pressed)
         } else {
             vec![(raw, pressed)]
@@ -601,6 +627,7 @@ impl Orbit {
     /// The config was read again: what changed applies.
     pub fn a11y_reload(&mut self) {
         let config = self.config.accessibility.clone();
+        self.a11y.sticky_off = false;
         if !config.sticky_keys {
             let time = InputTime::now();
             for (raw, _) in self.a11y.sticky.release_all() {
@@ -671,14 +698,45 @@ impl Orbit {
 
 impl XdgSystemBellHandler for Orbit {
     fn ring(&mut self, surface: Option<WlSurface>) {
+        let window = surface.and_then(|s| self.window_for(&s));
+        self.bell(window);
+    }
+}
+
+impl Orbit {
+    /// X programs' bells: XWayland (24.1) has no xdg-system-bell, so a
+    /// connection of its own asks XKB for BellNotify and rings the X
+    /// window's monitor. It ends with XWayland.
+    pub fn watch_x11_bells(&mut self, display: u32) {
+        use smithay::reexports::calloop::channel::{Event, channel};
+        let (tx, rx) = channel::<u32>();
+        let inserted = self.loop_handle.insert_source(rx, |event, _, state| {
+            if let Event::Msg(id) = event {
+                let window = state.space.elements().find(|w| w.x11_surface().is_some_and(|x| x.window_id() == id)).cloned();
+                state.bell(window);
+            }
+        });
+        if let Err(err) = inserted {
+            tracing::warn!("X bells: {err}");
+            return;
+        }
+        std::thread::spawn(move || {
+            if let Err(err) = x11_bells(display, &tx) {
+                tracing::warn!("X bells: {err}");
+            }
+        });
+    }
+
+    /// The visual bell on `window`'s monitor (or the pointer's).
+    fn bell(&mut self, window: Option<smithay::desktop::Window>) {
         if !self.config.accessibility.visual_bell {
             return;
         }
-        let output = surface
-            .and_then(|s| self.window_for(&s))
+        let output = window
             .and_then(|w| self.space.outputs_for_element(&w).into_iter().next())
             .or_else(|| self.output());
         let Some(output) = output else { return };
+        tracing::debug!("visual bell on {}", output.name());
         self.a11y.bell = Some((output.name(), Instant::now()));
         self.request_render();
         let inserted = self
@@ -693,6 +751,35 @@ impl XdgSystemBellHandler for Orbit {
     }
 }
 
+/// XKB's BellNotify on XWayland `display`, each one's window sent on.
+fn x11_bells(display: u32, tx: &smithay::reexports::calloop::channel::Sender<u32>) -> Result<(), Box<dyn std::error::Error>> {
+    use x11rb::{
+        connection::Connection,
+        protocol::{
+            Event,
+            xkb::{self, ConnectionExt as _},
+        },
+    };
+    let (conn, _) = x11rb::rust_connection::RustConnection::connect(Some(&format!(":{display}")))?;
+    conn.xkb_use_extension(1, 0)?.reply()?;
+    conn.xkb_select_events(
+        xkb::ID::USE_CORE_KBD.into(),
+        xkb::EventType::from(0u16),
+        xkb::EventType::BELL_NOTIFY,
+        xkb::MapPart::from(0u16),
+        xkb::MapPart::from(0u16),
+        &xkb::SelectEventsAux::new(),
+    )?
+    .check()?;
+    loop {
+        if let Event::XkbBellNotify(bell) = conn.wait_for_event()?
+            && tx.send(bell.window).is_err()
+        {
+            return Ok(());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -700,6 +787,17 @@ mod tests {
     const SHIFT: u32 = xkb(42);
     const CTRL: u32 = xkb(29);
     const A: u32 = xkb(30);
+
+    #[test]
+    fn sticky_two_down() {
+        let mut s = Sticky::default();
+        let (ctrl, alt) = (xkb(29), xkb(56));
+        s.key(ctrl, true);
+        assert!(!s.other_down(ctrl));
+        assert!(s.other_down(alt));
+        s.key(ctrl, false); // latched, not down
+        assert!(!s.other_down(alt));
+    }
 
     #[test]
     fn sticky_latches_for_one_key() {

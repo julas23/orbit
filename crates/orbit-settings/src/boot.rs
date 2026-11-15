@@ -5,8 +5,10 @@
 //! the page reads when asked). Restarting into the boot menu needs no
 //! password (logind). The boot theme is Plymouth's: the themes installed
 //! are read here, choosing one goes through the helper (the initramfs is
-//! made again). Going back to a snapshot comes with Orbit Linux's boot hook
-//! (docs/PLANO-DISTRO.md §6.4), not yet.
+//! made again). Going back to a snapshot is the helper's `rollback`
+//! (snapper's, the UKIs made again from the snapshot's kernels, and an
+//! entry in the boot menu for the system left behind; docs/PLANO-DISTRO.md
+//! §6.4); started from that entry, the page offers keeping it.
 
 use std::rc::Rc;
 
@@ -25,8 +27,13 @@ impl Page {
     /// Reads the boot settings and the snapshots (the helper), and shows
     /// them.
     fn read(self: &Rc<Self>, more: Vec<Privileged>) {
+        self.read_then(more, &tr("settings-boot-reading"), || {});
+    }
+
+    /// `more` and then the reading, `after` told once it went well.
+    fn read_then(self: &Rc<Self>, more: Vec<Privileged>, doing: &str, after: impl FnOnce() + 'static) {
         self.read.set_sensitive(false);
-        crate::say(&self.message, &tr("settings-boot-reading"));
+        crate::say(&self.message, doing);
         let info: Rc<std::cell::RefCell<Option<Value>>> = Rc::default();
         let mut steps = more;
         steps.push(Privileged::BootInfo);
@@ -40,9 +47,13 @@ impl Page {
             },
             move |error| {
                 page.read.set_sensitive(true);
+                let ok = error.is_none();
                 crate::say(&page.message, &error.unwrap_or_default());
                 if let Some(info) = info.borrow().as_ref() {
                     page.show(info);
+                }
+                if ok {
+                    after();
                 }
             },
         );
@@ -99,6 +110,27 @@ impl Page {
 
         let snapshots = crate::power_card(&tr("settings-boot-snapshots"));
         snapshots.append(&dim(&tr("settings-boot-snapshots-tip")));
+        let root = &info["root"];
+        let can_go_back = root["rollback"].as_bool() == Some(true);
+        let elsewhere = root["running"].is_string() && root["default"].is_string() && root["running"] != root["default"];
+        if elsewhere {
+            // Started from the boot menu's entry for the system from before
+            // going back (or a subvolume by hand).
+            let note = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).css_classes(["card"]).build();
+            note.append(&gtk::Label::builder().label(tr("settings-boot-elsewhere")).xalign(0.0).wrap(true).build());
+            if can_go_back {
+                let keep = gtk::Button::builder().label(tr("settings-boot-keep-this")).halign(gtk::Align::End).build();
+                let page = self.clone();
+                keep.connect_clicked(move |b| page.go_back(b, "current", None));
+                note.append(&keep);
+            }
+            snapshots.append(&note);
+        } else if root["previous"].as_bool() == Some(true) {
+            snapshots.append(&dim(&tr("settings-boot-previous")));
+        }
+        if !can_go_back && !info["snapshots"].is_null() {
+            snapshots.append(&dim(&tr("settings-boot-no-rollback")));
+        }
         let list: Vec<&Value> = info["snapshots"]["root"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
         let shown: Vec<&&Value> = list.iter().filter(|s| s["number"].as_u64().unwrap_or(0) > 0).collect();
         if shown.is_empty() {
@@ -110,15 +142,29 @@ impl Page {
             line.append(&gtk::Label::builder().label(s["date"].as_str().unwrap_or("")).xalign(0.0).build());
             let what = s["description"].as_str().unwrap_or("");
             let kind = s["type"].as_str().unwrap_or("");
+            let mut text = format!("{what} · {kind}");
+            if s["default"].as_bool() == Some(true) {
+                text = format!("{text} · {}", tr("settings-boot-starts"));
+            }
             line.append(
                 &gtk::Label::builder()
-                    .label(format!("{what} · {kind}"))
+                    .label(text)
                     .xalign(0.0)
                     .hexpand(true)
                     .ellipsize(gtk::pango::EllipsizeMode::End)
                     .css_classes(["dim"])
                     .build(),
             );
+            if can_go_back && s["default"].as_bool() != Some(true) {
+                let back = gtk::Button::builder()
+                    .icon_name("edit-undo-symbolic")
+                    .tooltip_text(tr("settings-boot-go-back"))
+                    .css_classes(["flat"])
+                    .build();
+                let (page, number, date) = (self.clone(), s["number"].to_string(), s["date"].as_str().unwrap_or("").to_owned());
+                back.connect_clicked(move |b| page.go_back(b, &number, Some(&date)));
+                line.append(&back);
+            }
             snapshots.append(&line);
         }
         let description = gtk::Entry::builder().placeholder_text(tr("settings-boot-snapshot-what")).hexpand(true).max_length(80).build();
@@ -136,6 +182,39 @@ impl Page {
             page.read(vec![Privileged::Snapshot(text)]);
         });
         self.content.append(&snapshots);
+    }
+}
+
+impl Page {
+    /// The system back to snapshot `number` (or `current`: this one kept),
+    /// asked first; a restart offered after.
+    fn go_back(self: &Rc<Self>, over: &gtk::Button, number: &str, date: Option<&str>) {
+        let (message, detail) = match date {
+            Some(date) => (
+                tr_args("settings-boot-go-back-ask", &[("number", number.into())]),
+                tr_args("settings-boot-go-back-detail", &[("date", date.into())]),
+            ),
+            None => (tr("settings-boot-keep-ask"), tr("settings-boot-keep-detail")),
+        };
+        let ask = gtk::AlertDialog::builder()
+            .message(message)
+            .detail(detail)
+            .buttons([tr("settings-svc-cancel"), tr(if date.is_some() { "settings-boot-go-back" } else { "settings-boot-keep-this" })])
+            .cancel_button(0)
+            .default_button(0)
+            .modal(true)
+            .build();
+        let window = over.root().and_downcast::<gtk::Window>();
+        let (page, number) = (self.clone(), number.to_owned());
+        glib::spawn_future_local(async move {
+            if ask.choose_future(window.as_ref()).await != Ok(1) {
+                return;
+            }
+            let done = page.clone();
+            page.read_then(vec![Privileged::Rollback(number)], &tr("settings-boot-going-back"), move || {
+                restart_asking(&done.read, &done.message, &tr("settings-boot-gone-back"), &["reboot"]);
+            });
+        });
     }
 }
 
@@ -206,9 +285,14 @@ fn dim(text: &str) -> gtk::Label {
 
 /// Restarts into the boot menu, asked first (logind: no password).
 fn restart_to_menu(over: &gtk::Button, message: &gtk::Label) {
+    restart_asking(over, message, &tr("settings-boot-restart-detail"), &["reboot", "--boot-loader-menu=30"]);
+}
+
+/// Restarts (`systemctl` with `how`), asked first; `detail` says why.
+fn restart_asking(over: &gtk::Button, message: &gtk::Label, detail: &str, how: &'static [&'static str]) {
     let ask = gtk::AlertDialog::builder()
         .message(tr("settings-boot-restart-ask"))
-        .detail(tr("settings-boot-restart-detail"))
+        .detail(detail)
         .buttons([tr("settings-svc-cancel"), tr("settings-boot-restart")])
         .cancel_button(0)
         .default_button(0)
@@ -220,9 +304,7 @@ fn restart_to_menu(over: &gtk::Button, message: &gtk::Label) {
         if ask.choose_future(window.as_ref()).await != Ok(1) {
             return;
         }
-        let result = gio::spawn_blocking(|| {
-            std::process::Command::new("systemctl").args(["reboot", "--boot-loader-menu=30"]).output()
-        })
+        let result = gio::spawn_blocking(move || std::process::Command::new("systemctl").args(how).output())
         .await;
         if let Ok(Ok(out)) = result
             && !out.status.success()
