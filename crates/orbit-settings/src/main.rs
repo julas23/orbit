@@ -25,6 +25,7 @@ mod pages;
 mod power;
 mod region;
 mod services;
+mod shortcuts;
 mod sound;
 mod wallpaper;
 mod wifi;
@@ -137,6 +138,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "keyboard" => keyboard::page(dir),
             "mouse" => mouse::page(dir),
             "windows" => windows::page(dir),
+            "shortcuts" => shortcuts::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

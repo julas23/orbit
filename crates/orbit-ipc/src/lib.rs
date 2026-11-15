@@ -9,6 +9,8 @@
 //! The socket is `$ORBIT_SOCK` under Orbit-Core, `$SWAYSOCK` under sway (the
 //! core exports all three names).
 
+pub mod keys;
+
 use std::{
     io::{self, Read, Write},
     os::unix::net::UnixStream,

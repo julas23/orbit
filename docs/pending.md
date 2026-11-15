@@ -264,8 +264,23 @@ with Step 2; the phases then run alongside the steps above.
   think with its real devices (volumes not touched). orbit-app's catalogs
   test now also refuses a message written twice (the page's title first
   took the wallpaper's `settings-sound`).
-  Next: A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
-  Dock, Notifications, Default apps, A6 Users, A7 the panel's modules.
+- [x] Batch A4 (2026-11-15), all written to core.yaml or keys.yaml (only the
+  keys changed, the rest kept) with the core reloaded: Keyboard (layouts
+  from XKB's list in order, switching, Compose, repeat; from
+  /etc/default/keyboard when core.yaml has none); Mouse and touchpad
+  (speed, acceleration, natural scrolling, left hand; with a touchpad, by
+  udev: tapping, off while typing, right click, scrolling, middle click,
+  three-finger swipes); Windows and areas (layout and the master's share
+  and count, focus following the mouse, gaps, border, corners, border
+  colours, shadows, animations, the areas' grid, window rules listed,
+  removed, added for a program typed or open now); Shortcuts (the
+  modifier; every shortcut in force with what it does in words, a new
+  combination pressed, one taken asking first, restore, remove, add). The
+  default shortcuts moved from orbit-core to orbit-ipc (`keys::DEFAULT`),
+  where both read them. Seen on the think, core.yaml and keys.yaml checked
+  untouched by just opening the pages; changing them left for the user.
+  Next: A5 Appearance, Panel, Dock, Notifications, Default apps, A6
+  Users, A7 the panel's modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
   Appearance, Keyboard, Mouse and touchpad, Date and time, Region and
   language, Users and groups, Panel, Dock, Windows and areas, Shortcuts,

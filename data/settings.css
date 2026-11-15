@@ -103,3 +103,6 @@ window.orbit-settings .sidebar .pages row {
 window.orbit-settings .service .name {
   font-weight: bold;
 }
+window.orbit-settings button.shortcut {
+  min-width: 160px;
+}

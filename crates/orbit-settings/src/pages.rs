@@ -185,6 +185,14 @@ pub const PAGES: &[Page] = &[
         ],
     },
     Page {
+        id: "shortcuts",
+        group: Group::Orbit,
+        title: "settings-keys",
+        icon: "preferences-desktop-keyboard-shortcuts-symbolic",
+        keywords: "settings-keys-keywords",
+        options: &["settings-keys-mod", "settings-keys-add"],
+    },
+    Page {
         id: "services",
         group: Group::Orbit,
         title: "settings-services",
