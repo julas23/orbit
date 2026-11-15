@@ -279,8 +279,29 @@ with Step 2; the phases then run alongside the steps above.
   default shortcuts moved from orbit-core to orbit-ipc (`keys::DEFAULT`),
   where both read them. Seen on the think, core.yaml and keys.yaml checked
   untouched by just opening the pages; changing them left for the user.
-  Next: A5 Appearance, Panel, Dock, Notifications, Default apps, A6
-  Users, A7 the panel's modules.
+  A5 done 2026-11-15: Appearance (light or dark, accent, GTK theme, icons,
+  cursor and size, the three fonts, scale, smoothing, hinting, through
+  GSettings' org.gnome.desktop.interface; the cursor into core.yaml too);
+  Panel (edge, monitor, reserved space, the layout grid; modules moved,
+  sent to another part, removed, added; the module list now
+  `orbit_common::config::PANEL_MODULES`, shared with the panel's editor);
+  Dock (edge, alignment, monitor, icon size, reserved space; launchers
+  moved, removed, an installed application or a separator added); both
+  restart through orbit-session. Notifications (do not disturb over
+  orbit-notify's D-Bus; seconds on screen by urgency, bubbles at once,
+  history size, monitor, the never-kept programs, whose default moved to
+  `orbit_common::config::NOTIFY_NO_HISTORY`; orbit-notify is restarted to
+  read its file, its history stays on disk). Default apps and startup
+  (browser, mail, files, text, PDF, images, music, video and any type by
+  extension, through GIO into mimeapps.list; the terminal in core.yaml;
+  the `login:` list, removed and added line by line so its comments stay,
+  an added command optionally only on this machine and after a delay).
+  Pages now scroll sideways in a narrow tile instead of cutting the title
+  bar (the window's minimum width 267 px), and `short_dropdown` keeps long
+  names from widening a page. Left from the plan's rows: do not disturb on
+  a schedule and per-program notification options (orbit-notify work
+  first), and XDG autostart (`~/.config/autostart`), which orbit-core does
+  not run yet. Next: A6 Users, A7 the panel's modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
   Appearance, Keyboard, Mouse and touchpad, Date and time, Region and
   language, Users and groups, Panel, Dock, Windows and areas, Shortcuts,
