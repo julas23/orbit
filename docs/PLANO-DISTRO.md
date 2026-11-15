@@ -80,11 +80,11 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-dev` | Desenvolvimento: VS Code/VSCodium, toolchain Rust, DBeaver, Git, contêineres |
 | `orbit-media` | Música, vídeo e jogos: Feishin, Steam/Proton, codecs |
 | `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
-| `orbit-server` | O perfil servidor (seção 12): orbit-remote-server, WireGuard, dnsmasq + Unbound, Fail2Ban |
-| `orbit-navidrome`, `orbit-jellyfin` | A música e os vídeos do usuário servidos para os apps dele (seção 12). Opcionais: nenhum metapacote os puxa; instalados e configurados pelo Orbit-Settings |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
-O `orbit-desktop` passa a puxar o `orbit-firewall` (seção 12.3).
+O `orbit-desktop` passa a puxar o `orbit-firewall` e o `packagekit`. Os serviços
+de rede e de mídia não são metapacotes: cada um é um interruptor na página
+"Serviços" do Orbit-Settings (seção 12).
 
 ## 5. ArtCraft no Orbit
 
@@ -415,152 +415,192 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 | **Papel de parede** | Um padrão próprio no tema espacial, o mesmo no greet e na sessão |
 
 
-## 12. Segurança e mídia por finalidade (2026-11-15)
+## 12. Serviços (2026-11-15)
 
-Status: **em revisão** — proposto em 2026-11-15 e sendo revisto com o
-usuário item a item antes de começar. Revistos: firewall, DHCP e nomes
-locais, resolvedor, banimento, mídia; o WireGuard fica como está, a
-analisar depois (CGNAT, Tailscale), e a Alexa também. A rever: nomes e ISO.
-Acompanhamento em `docs/pending.md` §15.
+Status: **em revisão** — proposto em 2026-11-15 e revisto com o usuário
+item a item antes de começar. Revistos: o modelo (os serviços como
+interruptores), a ISO e os nomes, firewall, DHCP e nomes locais, resolvedor,
+banimento, mídia. Ficam como estão, a analisar depois: o WireGuard (CGNAT,
+Tailscale) e a Alexa. Acompanhamento em `docs/pending.md` §15.
 
-A ideia: os serviços de rede vêm conforme a finalidade da máquina. Um
-servidor exposto à rede precisa de mais do que um desktop atrás do roteador
-de casa. Tudo vem do Debian 13 (seção 1: nunca um fork); o trabalho do Orbit
-são os metapacotes, a configuração padrão de cada serviço e as telas para
-vê-los.
+A ideia: os serviços de rede não vêm com a instalação nem com um perfil;
+cada um é um **interruptor na página "Serviços" do Orbit-Settings**, em
+qualquer instalação. Ligar instala, configura e inicia; desligar para;
+remover desinstala. Um servidor é só uma máquina Orbit com serviços ligados.
+Tudo vem do Debian 13 ou do pacote oficial do upstream (seção 1: nunca um
+fork); o trabalho do Orbit são os pacotes de configuração de cada serviço e
+a página que os liga.
 
 ### 12.1 Decisões
 
 | Item | Decisão |
 |---|---|
-| **Nomes** | *Orbit Linux* é a ISO comum (o desktop). *Perfil servidor* é o desktop com o `orbit-server`. *Estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
-| **ISO** | Uma só. O remote server compartilha a sessão do desktop, então um servidor é um desktop com mais coisa: o instalador oferece o `orbit-server` entre os metapacotes. Uma imagem para construir e testar |
-| **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`): entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (API para o Orbit-Settings, polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e do CrowdSec: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora dos metapacotes |
-| **DHCP e nomes locais** (revisto) | dnsmasq, só no perfil servidor, em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): o servidor assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome) do Orbit-Settings. Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
-| **Nomes no desktop** (revisto) | mDNS pelo Avahi (`think.local`), que funciona com qualquer roteador; o desktop não roda dnsmasq nem Unbound e usa o DNS que a rede entrega |
-| **Resolvedor** (revisto) | Unbound é o resolvedor da rede, na porta 53 da LAN e do túnel: recursão própria (direto aos servidores raiz e autoritativos) por padrão, DNSSEC, cache, ACL, limite de taxa, `prefetch`. Encaminhar por DNS-over-TLS (Quad9, Cloudflare) é opção. A zona `home.lan` e o reverso `10.in-addr.arpa` vão ao dnsmasq (`forward-zone` + `domain-insecure`), que no modo Rede responde só por ela em `127.0.0.1:5300` (a 5353 é do mDNS). No modo Proxy o Unbound serve o próprio servidor, os clientes do túnel e quem apontar o DNS do roteador para ele, com os nomes fixos em `local-data`. Bloqueio de anúncios e rastreadores por listas RPZ: opção, desligado por padrão, listas escolhidas no Orbit-Settings |
-| **Banimento** (revisto) | Fail2Ban no `orbit-server`, por padrão: atual no Debian 13 (1.1.0), leve, só local, lendo do journald e banindo direto no nftables (`nftables-allports`, na tabela `inet orbit`). Duas jails: `sshd` e `orbit-remote`, para os códigos de pareamento errados no log do remote server. Com o WireGuard como única porta pública quase não sobra o que banir — ele descarta em silêncio o que não vem de uma chave conhecida —, então o que conta é o SSH aberto por alguém no roteador, um serviço web exposto e quem tenta adivinhar o pareamento pela LAN |
-| **CrowdSec** (revisto) | Fora dos metapacotes; documentado como opção para quem expõe serviços e quer as listas da comunidade. Só se paga com elas (que exigem enviar à API central os ataques vistos, contra o "sem telemetria") e com várias máquinas; sem elas é um Fail2Ban mais pesado (agente, API e bouncer, uns 100 MB), numa versão velha no Debian (1.4.6; o upstream está na 1.6 ou depois, e as coleções do hub podem não servir) ou vindo do repositório deles. A máquina mais exposta, a VPS do repositório (nginx e SSH públicos), é onde ele faria mais sentido, mas ela roda Ubuntu, fora do Orbit Linux |
-| **Banimento no desktop** | Nenhum: atrás do roteador um desktop não serve nada para a internet |
-| **Acesso de fora** | WireGuard. Substitui o passo 5 da latência no `pending.md` §9 (TLS, STUN/TURN, porta TCP pública): só a UDP 51820 fica aberta, as estações e os celulares entram pelo túnel, e a 7311 do remote server nunca fica pública. O pareamento entrega à estação a configuração do túnel (QR para celular) |
-| **Mídia** (revisto) | O usuário consome a música e os vídeos dele, de qualquer lugar, nos apps que já usa; sem som sincronizado entre cômodos (Snapcast e o DLNA avulso saíram). **Navidrome** para a música: um binário em Go, SQLite, uns 50 MB, API Subsonic/OpenSubsonic e interface web; clientes Feishin (no `orbit-media`), Symfonium, Tempo e Ultrasonic no Android, Amperfy no iPhone. **Jellyfin** para os vídeos (e música, para quem preferir): apps para TV e celular, conversão de formato na GPU (`jellyfin-ffmpeg`, VA-API), DLNA por plugin para as TVs que só falam isso; mais pesado (uns 300 MB ou mais). O Feishin fala com os dois |
-| **Origem dos pacotes** | Nenhum dos dois está no Debian. Navidrome: o `.deb` oficial das releases do GitHub (amd64 e arm64), uma linha no `distro/repo/github.list`, como o Feishin. Jellyfin: o repositório apt oficial (`repo.jellyfin.org/debian`, suíte `trixie`, amd64 e arm64), uma linha no `distro/repo/vendors.list`, como o Firefox e o VS Code. Nada compilado nem modificado (seção 1) |
+| **Modelo** (revisto) | Cada serviço é um pacote `orbit-<serviço>` (depende do pacote do Debian ou do upstream e traz a configuração padrão do Orbit e o arquivo do firewall), instalado e configurado pela página "Serviços". Nenhum metapacote os puxa; não há `orbit-server` |
+| **ISO e nomes** (revisto) | Uma ISO só, sem perfis: o instalador não pergunta por serviços. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede); "servidor" deixa de ser um nome de edição |
+| **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
+| **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
+| **Nomes sem esses serviços** (revisto) | mDNS pelo Avahi (`think.local`), que funciona com qualquer roteador; a máquina usa o DNS que a rede entrega |
+| **Resolvedor** (revisto) | Unbound (`orbit-unbound`) é o resolvedor da rede, na porta 53 da LAN e do túnel: recursão própria (direto aos servidores raiz e autoritativos) por padrão, DNSSEC, cache, ACL, limite de taxa, `prefetch`. Encaminhar por DNS-over-TLS (Quad9, Cloudflare) é opção. A zona `home.lan` e o reverso `10.in-addr.arpa` vão ao dnsmasq (`forward-zone` + `domain-insecure`), que no modo Rede responde só por ela em `127.0.0.1:5300` (a 5353 é do mDNS). No modo Proxy o Unbound serve a própria máquina, os clientes do túnel e quem apontar o DNS do roteador para ele, com os nomes fixos em `local-data`. Bloqueio de anúncios e rastreadores por listas RPZ: opção, desligado por padrão, listas escolhidas na página |
+| **Banimento** (revisto) | Fail2Ban (`orbit-fail2ban`): atual no Debian 13 (1.1.0), leve, só local, lendo do journald e banindo direto no nftables (`nftables-allports`, na tabela `inet orbit`). Jails: `sshd`, e `orbit-remote` quando o remote server está ligado (os códigos de pareamento errados). Com o WireGuard como única porta pública quase não sobra o que banir — ele descarta em silêncio o que não vem de uma chave conhecida —, então o que conta é o SSH aberto por alguém no roteador, um serviço web exposto e quem tenta adivinhar o pareamento pela LAN |
+| **CrowdSec** (revisto) | Fora da página; documentado como opção para quem expõe serviços e quer as listas da comunidade. Só se paga com elas (que exigem enviar à API central os ataques vistos, contra o "sem telemetria") e com várias máquinas; sem elas é um Fail2Ban mais pesado (agente, API e bouncer, uns 100 MB), numa versão velha no Debian (1.4.6; o upstream está na 1.6 ou depois, e as coleções do hub podem não servir) ou vindo do repositório deles. A máquina mais exposta, a VPS do repositório (nginx e SSH públicos), é onde ele faria mais sentido, mas ela roda Ubuntu, fora do Orbit Linux |
+| **Acesso de fora** | WireGuard (`orbit-wireguard`), como está; a analisar depois: o CGNAT (sem IP público, não há porta de entrada; a VPS como ponto central resolveria) e o Tailscale, que o usuário já usa. Substitui o passo 5 da latência no `pending.md` §9 (TLS, STUN/TURN, porta TCP pública): só a UDP 51820 fica aberta, as estações e os celulares entram pelo túnel, e a 7311 do remote server nunca fica pública. O pareamento entrega à estação a configuração do túnel (QR para celular) |
+| **Mídia** (revisto) | O usuário consome a música e os vídeos dele, de qualquer lugar, nos apps que já usa; sem som sincronizado entre cômodos (Snapcast e o DLNA avulso saíram). **Navidrome** (`orbit-navidrome`) para a música: um binário em Go, SQLite, uns 50 MB, API Subsonic/OpenSubsonic e interface web; clientes Feishin (no `orbit-media`), Symfonium, Tempo e Ultrasonic no Android, Amperfy no iPhone. **Jellyfin** (`orbit-jellyfin`) para os vídeos (e música, para quem preferir): apps para TV e celular, conversão de formato na GPU (`jellyfin-ffmpeg`, VA-API), DLNA por plugin para as TVs que só falam isso; mais pesado (uns 300 MB ou mais). O Feishin fala com os dois |
+| **Origem dos pacotes de mídia** | Nenhum dos dois está no Debian. Navidrome: o `.deb` oficial das releases do GitHub (amd64 e arm64), uma linha no `distro/repo/github.list`, como o Feishin. Jellyfin: o repositório apt oficial (`repo.jellyfin.org/debian`, suíte `trixie`, amd64 e arm64), uma linha no `distro/repo/vendors.list`, como o Firefox e o VS Code. Nada compilado nem modificado |
 | **Alexa** | A decidir depois. A Alexa só toca o que um *skill* entrega, e quem fala com o skill é a nuvem da Amazon: um skill próprio para Subsonic exige conta de desenvolvedor e um endereço HTTPS público (fura o "só o WireGuard é público"); o "My Media for Alexa" é de terceiros, proprietário e com servidor deles; a Echo como caixa Bluetooth do celular não expõe nada, mas não atende a voz |
-| **Opcional** (revisto) | Nenhum metapacote instala o Navidrome ou o Jellyfin, nem o `orbit-server`. Cada um é um interruptor no Orbit-Settings, página "Servidor de mídia": ligar instala (pelo PackageKit, com a senha pedida pelo polkit), configura (pastas, primeiro usuário, porta no firewall) e inicia; desligar para o serviço, e remover desinstala, mantendo as músicas e os vídeos. Funciona em qualquer instalação, não só no perfil servidor |
-| **Pacotes** | `orbit-navidrome` e `orbit-jellyfin`, um para cada: dependem do pacote do upstream e trazem a configuração padrão do Orbit e o arquivo do firewall. `orbit-media` continua sendo o metapacote de música, vídeo e jogos do desktop (seção 4) |
 
-### 12.2 Pacotes
+### 12.2 A página "Serviços"
+
+Uma lista em grupos; cada linha tem o interruptor, o estado (instalado,
+rodando, parado, com erro), as portas que abre e um "Configurar…" com a
+página do serviço:
+
+| Grupo | Serviço | Pacote | Configurar… |
+|---|---|---|---|
+| Segurança | Firewall | `orbit-firewall` (já instalado) | o que cada arquivo abre; liberar uma porta à mão |
+| Segurança | Banimento (Fail2Ban) | `orbit-fail2ban` | os endereços banidos, liberar um; endereços de confiança (`ignoreip`) |
+| Rede | Acesso de fora (WireGuard) | `orbit-wireguard` | os peers: adicionar (com o QR), remover |
+| Rede | Resolvedor (Unbound) | `orbit-unbound` | recursão ou DNS-over-TLS; as listas RPZ |
+| Rede | DHCP e nomes locais (dnsmasq) | `orbit-dnsmasq` | o modo (Proxy ou Rede), o domínio, a faixa de IPs, as reservas |
+| Acesso remoto | Orbit Remote Server | `orbit-remote-server` | a tela virtual ou o espelho; as estações pareadas |
+| Acesso remoto | Estações pela rede (LTSP) | `orbit-ltsp` (o `distro/ltsp/` empacotado) | as imagens (PC, Pi 4), o servidor que mostram |
+| Mídia | Música (Navidrome) | `orbit-navidrome` | a pasta, o endereço para os apps (LAN e túnel) |
+| Mídia | Vídeos (Jellyfin) | `orbit-jellyfin` | as bibliotecas, o endereço para os apps, o plugin DLNA |
+
+- **Instalar e remover:** pelo PackageKit (`packagekit`, puxado pelo
+  `orbit-desktop`), com a senha pedida pelo polkit (o orbit-polkit) e o
+  progresso na própria linha. Remover mantém os dados (músicas, vídeos,
+  chaves do túnel) e diz onde ficaram.
+- **Iniciar e parar:** o systemd pela API D-Bus dele, autorizado pelo
+  polkit; nenhum `systemctl` com root.
+- **Configurar:** a configuração em `/etc` é escrita por um auxiliar
+  pequeno (`orbit-services-helper`, por `pkexec`, com uma ação polkit
+  própria) que só aceita comandos tipados e validados (`dns-mode proxy`,
+  `wg-add-peer NOME`, `media-folder music /srv/media/music`…), nunca
+  texto livre para arquivos de root.
+- **Dependências entre serviços:** o modo Rede do dnsmasq liga o Unbound
+  junto; a jail `orbit-remote` do Fail2Ban só existe com o remote server
+  ligado; os peers do WireGuard recebem esta máquina como DNS só com o
+  Unbound ligado; as Estações pela rede usam o dnsmasq (modo Proxy). A
+  página avisa antes de ligar ou desligar um serviço do qual outro depende.
+- **Mudanças que podem trancar a máquina** (firewall, WireGuard, modo do
+  dnsmasq): aplicadas e desfeitas sozinhas depois de 30 s sem confirmação,
+  como os monitores.
+- Um ban novo, um serviço que caiu e uma estação que pareou chegam como
+  notificação pelo orbit-notify.
+
+### 12.3 Pacotes
 
 | Pacote | Puxado por | Traz |
 |---|---|---|
 | `orbit-firewall` | `orbit-desktop` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
-| `orbit-server` | escolha no instalador | `orbit-remote-server`, `wireguard-tools`, `dnsmasq`, `unbound`, `fail2ban`, e as configurações abaixo |
-| `orbit-navidrome` | o Orbit-Settings, por escolha | `navidrome`, a configuração padrão, `50-navidrome.nft` |
-| `orbit-jellyfin` | o Orbit-Settings, por escolha | `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), a configuração padrão, `51-jellyfin.nft` |
-| `packagekit` | `orbit-desktop` | o que o Orbit-Settings usa para instalar e remover |
+| `packagekit` | `orbit-desktop` | o que a página usa para instalar e remover |
+| `orbit-services-helper` | `orbit-settings` | o auxiliar da configuração e a ação polkit |
+| `orbit-fail2ban` | a página | `fail2ban`, as jails, o filtro `orbit-remote` |
+| `orbit-wireguard` | a página | `wireguard-tools`, a `wg0`, `20-wireguard.nft` |
+| `orbit-unbound` | a página | `unbound`, a configuração, `40-dns.nft` |
+| `orbit-dnsmasq` | a página | `dnsmasq`, os dois modos, `41-dhcp.nft` |
+| `orbit-remote-server` | a página | (o pacote que já existe) e `10-remote.nft` |
+| `orbit-ltsp` | a página | `ltsp`, o `distro/ltsp/`, `30-ltsp.nft` |
+| `orbit-navidrome` | a página | `navidrome`, a configuração, `50-navidrome.nft` |
+| `orbit-jellyfin` | a página | `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), a configuração, `51-jellyfin.nft` |
 
-### 12.3 Firewall
+### 12.4 Firewall
 
 A tabela `inet orbit` só tem a cadeia `input` (prioridade `filter`,
 política `drop`): aceita o tráfego estabelecido, o loopback e o ICMP/ICMPv6
 necessário (vizinhança, PMTU). A cadeia `forward` não é tocada, para não
-quebrar o Docker e o libvirt, que têm as próprias tabelas; o servidor só
+quebrar o Docker e o libvirt, que têm as próprias tabelas; a máquina só
 encaminha se o usuário pedir (rotear a LAN pelo túnel, mais adiante).
 
-Cada serviço do Orbit abre a própria porta num arquivo do pacote que precisa
-dela, **só para a LAN e para o túnel** (o conjunto `@lan`: as sub-redes
-privadas das interfaces, mais a `wg0`):
+Cada serviço abre a própria porta num arquivo do seu pacote, **só para a LAN
+e para o túnel** (o conjunto `@lan`: as sub-redes privadas das interfaces,
+mais a `wg0`):
 
 | Arquivo | Pacote | Abre |
 |---|---|---|
 | `10-remote.nft` | `orbit-remote-server` | TCP 7311 e a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`) |
-| `20-wireguard.nft` | `orbit-server` | UDP 51820, de qualquer lugar (a única porta pública) |
-| `30-ltsp.nft` | o servidor de estações | UDP 67, 69 e 4011 (proxy DHCP, TFTP), NFS TCP 2049 |
-| `40-dns.nft` | `orbit-server` | UDP/TCP 53 (Unbound), e UDP 67 no modo Rede do dnsmasq |
+| `20-wireguard.nft` | `orbit-wireguard` | UDP 51820, de qualquer lugar (a única porta pública) |
+| `30-ltsp.nft` | `orbit-ltsp` | UDP 69 e 4011 (TFTP, proxy DHCP), NFS TCP 2049 |
+| `40-dns.nft` | `orbit-unbound` | UDP/TCP 53 |
+| `41-dhcp.nft` | `orbit-dnsmasq` | UDP 67 (o proxy DHCP no modo Proxy, o DHCP no modo Rede) |
 | `50-navidrome.nft` | `orbit-navidrome` | TCP 4533 |
 | `51-jellyfin.nft` | `orbit-jellyfin` | TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
-### 12.4 Servidor
+### 12.5 Cada serviço
 
-- **WireGuard:** a interface `wg0` criada na instalação do `orbit-server`,
-  com a chave do servidor; cada estação ou celular é um peer. O pareamento
-  do remote server (o código de seis dígitos) passa a entregar também a
-  configuração do túnel; para celular, um QR.
+- **WireGuard:** a interface `wg0` criada ao ligar, com a chave da máquina;
+  cada estação ou celular é um peer. O pareamento do remote server (o
+  código de seis dígitos) passa a entregar também a configuração do túnel;
+  para celular, um QR.
 - **Unbound + dnsmasq:** o Unbound na porta 53 da `@lan` e da `wg0`
   (`access-control` só para elas), recursivo; `forward-zone` de `home.lan`
   e `10.in-addr.arpa` para `127.0.0.1@5300`. O dnsmasq com `port=0` no modo
   Proxy (sem DNS: só o proxy DHCP e o TFTP) e `port=5300` em `127.0.0.1` no
   modo Rede, com `domain=home.lan`, `expand-hosts` e as reservas. O proxy
-  DHCP do LTSP (`distro/ltsp/`) entra no mesmo dnsmasq em vez de um
-  segundo. Os peers do WireGuard recebem o servidor como DNS, e resolvem
-  `home.lan` de fora de casa.
+  DHCP do LTSP entra no mesmo dnsmasq em vez de um segundo. Os peers do
+  WireGuard recebem a máquina como DNS, e resolvem `home.lan` de fora de
+  casa.
 - **Fail2Ban:** `backend = systemd`, `banaction = nftables-allports` na
-  tabela do Orbit (o `orbit-firewall` reserva nela o conjunto dos banidos).
-  A jail `sshd` vem do Debian; a `orbit-remote` é nossa: um filtro para a
-  linha que o remote server já escreve a cada código de pareamento errado
-  (`remote: <endereço> gave a wrong code (n of 5)`); depois de cinco erros
-  o servidor já troca o código. Essa linha vai hoje para
-  `~/.local/state/orbit/remote.log`, fora do journald: o servidor passa a
-  escrever também no journald (com o identificador `orbit-remote-server`),
-  para a jail ler como as outras. O contador de erros é um só para todos os
-  endereços, então quem erra de propósito força trocas do código para
-  todos; o ban do Fail2Ban é o que impede isso.
-- **Navidrome e Jellyfin** (quando ligados no Orbit-Settings, em qualquer
-  instalação): cada um como serviço do sistema, com o usuário
+  tabela do Orbit (o `orbit-firewall` reserva nela o conjunto dos banidos);
+  bans curtos (10 min). A jail `sshd` vem do Debian; a `orbit-remote` é
+  nossa: um filtro para a linha que o remote server já escreve a cada
+  código de pareamento errado (`remote: <endereço> gave a wrong code (n of
+  5)`); depois de cinco erros o servidor já troca o código. Essa linha vai
+  hoje para `~/.local/state/orbit/remote.log`, fora do journald: o servidor
+  passa a escrever também no journald (com o identificador
+  `orbit-remote-server`), para a jail ler como as outras. O contador de
+  erros é um só para todos os endereços, então quem erra de propósito força
+  trocas do código para todos; o ban do Fail2Ban é o que impede isso. Os
+  endereços da `@lan` de confiança ficam em `ignoreip` só se o usuário
+  pedir.
+- **Navidrome e Jellyfin:** cada um como serviço do sistema, com o usuário
   dele, ouvindo só na `@lan` e na `wg0`; fora de casa, o celular entra pelo
-  WireGuard e o app conecta como em casa. As pastas de mídia escolhidas no
-  Orbit-Settings e escritas na configuração dos dois (`MusicFolder` do
-  Navidrome; as bibliotecas do Jellyfin pela API dele). Os serviços precisam
-  ler as pastas: o padrão é `/srv/media` (`music/`, `videos/`), com um grupo
-  de leitura; pastas no `/home` do usuário (que em algumas máquinas é NFS)
-  só por escolha, com ACL. O Jellyfin no grupo `render`, para a conversão
-  na GPU. O primeiro usuário de cada um é o do Orbit, criado na instalação
-  com uma senha própria do serviço (os apps Subsonic não falam PAM). Os endereços da `@lan` de confiança
-  ficam em `ignoreip` só se o usuário pedir.
+  WireGuard e o app conecta como em casa. As pastas escritas na
+  configuração dos dois (`MusicFolder` do Navidrome; as bibliotecas do
+  Jellyfin pela API dele). Os serviços precisam ler as pastas: o padrão é
+  `/srv/media` (`music/`, `videos/`), com um grupo de leitura; pastas no
+  `/home` do usuário (que em algumas máquinas é NFS) só por escolha, com
+  ACL. O Jellyfin no grupo `render`, para a conversão na GPU. O primeiro
+  usuário de cada um é o do Orbit, criado ao ligar, com uma senha própria
+  do serviço (os apps Subsonic não falam PAM).
 
-### 12.5 No desktop
+### 12.6 Painel
 
-- **Orbit-Settings, página "Rede e segurança":** o firewall ligado ou
-  desligado e o que cada arquivo abre; os peers do WireGuard (adicionar,
-  mostrar o QR, remover); os endereços banidos pelo Fail2Ban (com a opção
-  de liberar um). Um ban novo chega como notificação pelo orbit-notify.
-- **Orbit-Settings, página "Servidor de mídia":** um interruptor para o
-  Navidrome e outro para o Jellyfin (instalar e iniciar, parar, remover),
-  as pastas de cada um, o endereço para pôr nos apps (o da LAN e o do
-  túnel) e o estado do serviço. O progresso da instalação vem do
-  PackageKit.
-- **Painel:** o módulo `network` mostra o estado do firewall e do túnel.
+O módulo `network` mostra o estado do firewall e do túnel; um clique leva à
+página "Serviços".
 
-### 12.6 Ordem
+### 12.7 Ordem
 
-1. `orbit-firewall`: serve às duas edições e é o que mais protege.
-2. WireGuard no `orbit-server`, com a configuração entregue no pareamento.
-3. dnsmasq + Unbound, absorvendo o dnsmasq do LTSP.
-4. Fail2Ban, com a jail do Orbit.
-5. `orbit-navidrome` e `orbit-jellyfin`, e a página "Servidor de mídia"
-   do Orbit-Settings que os instala e configura.
-6. A página do Orbit-Settings e o painel.
+1. `orbit-firewall`: em toda instalação, e o que mais protege.
+2. A página "Serviços" com o PackageKit e o `orbit-services-helper`, e os
+   serviços que já existem: o remote server e as estações (`orbit-ltsp`).
+3. `orbit-wireguard`, com a configuração entregue no pareamento.
+4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
+5. `orbit-fail2ban`, com a jail do Orbit.
+6. `orbit-navidrome` e `orbit-jellyfin`.
+7. O painel.
 
-**Pronto quando:** a ISO, numa VM, instala cada perfil; um nmap da LAN só vê
-as portas das tabelas acima, e um de fora só vê a UDP 51820 do servidor; uma
-estação em outra rede chega ao servidor pelo túnel e mostra a sessão; o
-Feishin no desktop e um app Subsonic no celular, este pelo túnel fora de
-casa, tocam a música do Navidrome, e um app do Jellyfin toca um vídeo.
+**Pronto quando:** numa VM instalada pela ISO, cada serviço liga, configura,
+desliga e sai pela página; um nmap da LAN só vê as portas dos serviços
+ligados, e um de fora só vê a UDP 51820; uma estação em outra rede chega à
+máquina pelo túnel e mostra a sessão; o Feishin no desktop e um app Subsonic
+no celular, este pelo túnel fora de casa, tocam a música do Navidrome, e um
+app do Jellyfin toca um vídeo.
 
-### 12.7 Riscos
+### 12.8 Riscos
 
 - Um ban do Fail2Ban vindo da LAN pode trancar a própria casa (um código de
-  pareamento digitado errado cinco vezes numa estação): o ban é curto (10
-  min) e o Orbit-Settings libera o endereço.
+  pareamento digitado errado cinco vezes numa estação): o ban é curto e a
+  página libera o endereço.
 - O repositório público só carrega pacotes do Orbit (`public.exclude`):
   para quem instala de fora, o `orbit-navidrome` e o `orbit-jellyfin` não
   achariam o `navidrome` e o `jellyfin`. Os dois são software livre
   (GPL-3 e GPL-2) e podem ser redistribuídos: a decidir se o repositório
-  público passa a levá-los, ou se o Orbit-Settings acrescenta o
+  público passa a levá-los (a recomendação), ou se a página acrescenta o
   repositório do próprio Jellyfin e baixa o `.deb` do Navidrome.
 - O WebRTC usa portas UDP aleatórias: sem uma faixa fixa no remote server, o
   firewall teria de abrir todo UDP da LAN.
-- Uma regra errada no `orbit-firewall` corta o acesso a uma máquina remota.
-  Ao aplicar uma mudança pelo Orbit-Settings, voltar à regra anterior depois
-  de 30 s sem confirmação, como os monitores fazem.
+- O auxiliar com root é a peça sensível da página: comandos tipados, cada
+  valor validado, nada de caminho ou texto livre que chegue a um arquivo de
+  root sem passar por um formato conhecido.

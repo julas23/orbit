@@ -347,96 +347,86 @@ Apps other desktops have and Orbit does not:
 - [ ] Updates in a window (`apt upgrade`), as everything ships as debs.
 - [ ] Disks (Popsicle only writes images), printers, scanner.
 
-## 15. Security and media in Orbit Linux (planned 2026-11-15)
+## 15. Services in Orbit Linux (planned 2026-11-15)
 
-Services chosen by what the machine is for; the plan, with its tables of
-packages and ports, is `docs/PLANO-DISTRO.md` §12. Everything comes from
-Debian 13 (checked 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2,
-wireguard-tools, fail2ban 1.1.0 (crowdsec 1.4.6 left out); not in Debian:
-Navidrome 0.64.2 from its GitHub releases, Jellyfin from its own apt
-repository for trixie).
+Every network and media service is a switch on Orbit-Settings' "Services"
+page, on any install: switching it on installs, configures and starts it;
+off stops it; remove uninstalls it, keeping its data. No profiles, no
+`orbit-server` metapackage, one ISO. The plan, with the page, the packages
+and the ports, is `docs/PLANO-DISTRO.md` §12. From Debian 13 (checked
+2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2, wireguard-tools,
+fail2ban 1.1.0, packagekit 1.3.1); not in Debian: Navidrome 0.64.2 from its
+GitHub releases, Jellyfin from its own apt repository for trixie.
 
-Proposed on 2026-11-15 and being reviewed with the user item by item
-(reviewed so far: the firewall, DHCP and local names, the resolver,
-banning, media; WireGuard kept as it is, to be looked at again: CGNAT,
-Tailscale; Alexa decided later):
+Reviewed with the user, item by item (2026-11-15):
 
-- [x] *Orbit Linux* is the common ISO; the *server* profile is the desktop
-  plus `orbit-server`; *station* stays the network-booted thin client.
-- [x] One ISO; `orbit-server` is a choice among the installer's metapackages.
-- [x] Reviewed: plain nftables on every install (`orbit-firewall`, pulled by
-  `orbit-desktop`), chosen over firewalld and ufw: no daemon, the layer
-  around it ours. Only the `inet orbit` table is deleted and reloaded,
-  never Debian's default `flush ruleset`. OpenSnitch optional.
-- [x] Reviewed: Fail2Ban in `orbit-server` by default (current in Debian,
-  light, local only, banning straight in nftables): the `sshd` jail and an
-  `orbit-remote` one for wrong pairing codes. With WireGuard the only public
-  port there is little to ban. CrowdSec out of the metapackages, documented
-  as an option: it pays only with the community lists (which send the
-  attacks seen to its central API) and several machines, and Debian's is
-  old. Desktops ban nothing.
-- [x] Reviewed: dnsmasq on the server profile only, in two modes. *Proxy*
-  (the default): the router keeps DHCP, dnsmasq does PXE's proxy DHCP and
-  TFTP, no DNS (`port=0`). *Network* (by choice): the server's DHCP, names
-  from the leases and fixed reservations, answering only for `home.lan` on
-  `127.0.0.1:5300`. Domain `home.lan`, configurable; IPv4 only for now;
-  `bind-dynamic`, LAN and tunnel interfaces only. Chosen over Kea and
-  systemd-networkd's DHCP.
-- [x] Reviewed: Unbound is the network's resolver, on port 53 of the LAN
-  and the tunnel: its own recursion by default (DNS-over-TLS forwarding an
-  option), DNSSEC; `home.lan` and `10.in-addr.arpa` forwarded to dnsmasq.
-  RPZ blocklists (ads, trackers) optional, off by default.
-- [x] Reviewed: desktops run neither dnsmasq nor Unbound; their names come
-  from mDNS (Avahi), their DNS from the network.
-- [x] WireGuard as the way in from outside, in place of §9's step 5: only
-  UDP 51820 public, port 7311 never; the pairing hands out the tunnel's
-  config (QR for phones).
-- [x] Reviewed: the user's own music and videos, from anywhere, in the
-  apps they already use; no synchronised multi-room sound (Snapcast and
-  standalone DLNA dropped). Navidrome for music (Subsonic API: Feishin,
-  Symfonium, Tempo, Ultrasonic, Amperfy), Jellyfin for videos (TV and
-  phone apps, GPU transcoding, DLNA by plugin). Navidrome's official .deb
-  through `github.list`, Jellyfin's apt repository through `vendors.list`.
-- [x] Reviewed: both optional, on any install. No metapackage pulls them;
-  each is a switch on Orbit-Settings' "Media server" page that installs
-  (through PackageKit, the password asked by polkit), configures and
-  starts it, or stops and removes it, keeping the media. Packages
-  `orbit-navidrome` and `orbit-jellyfin`: the upstream package, Orbit's
-  defaults and the firewall file.
-- [ ] To decide: the public repository carries only Orbit's packages, so
-  outside the author's network `navidrome` and `jellyfin` would not be
-  found. Both are free software: carry them in the public repository, or
-  have Orbit-Settings add Jellyfin's repository and fetch Navidrome's .deb.
+- [x] The model: one `orbit-<service>` package per service (the Debian or
+  upstream package, Orbit's defaults, its firewall file), installed through
+  PackageKit and polkit, started through systemd's D-Bus API, configured by
+  a small `orbit-services-helper` that takes only typed, validated commands.
+- [x] One ISO, no profiles; *station* stays the network-booted thin client.
+- [x] Plain nftables on every install (`orbit-firewall`, pulled by
+  `orbit-desktop`, on by default), chosen over firewalld and ufw. Only the
+  `inet orbit` table is deleted and reloaded, never Debian's default
+  `flush ruleset`. OpenSnitch optional, off the page.
+- [x] dnsmasq (`orbit-dnsmasq`) in two modes: *Proxy* (the default: the
+  router keeps DHCP; PXE's proxy DHCP and TFTP, no DNS) and *Network* (by
+  choice: this machine's DHCP, names from the leases and reservations,
+  answering only for `home.lan` on `127.0.0.1:5300`). IPv4 only for now;
+  `bind-dynamic`, LAN and tunnel interfaces only.
+- [x] Unbound (`orbit-unbound`) is the network's resolver on port 53 of the
+  LAN and the tunnel: its own recursion by default (DNS-over-TLS an
+  option), DNSSEC; `home.lan` forwarded to dnsmasq; RPZ blocklists
+  optional. Without these services, names come from mDNS (Avahi).
+- [x] Fail2Ban (`orbit-fail2ban`): `sshd`, and `orbit-remote` for wrong
+  pairing codes when the remote server is on; banning in the Orbit table.
+  CrowdSec off the page, documented as an option.
+- [x] Navidrome (`orbit-navidrome`, music over the Subsonic API: Feishin,
+  Symfonium, Tempo, Ultrasonic, Amperfy) and Jellyfin (`orbit-jellyfin`,
+  videos, TV apps, GPU transcoding, DLNA by plugin); Snapcast and
+  standalone DLNA dropped. Navidrome's .deb through `github.list`,
+  Jellyfin's repository through `vendors.list`.
+- [ ] WireGuard (`orbit-wireguard`) kept as planned, to be looked at again:
+  CGNAT (no public IP, no way in; the VPS as the hub would solve it) and
+  Tailscale, which the user already runs.
 - [ ] Alexa, later: a Subsonic skill needs a public HTTPS endpoint; "My
   Media for Alexa" is a third party's; Bluetooth from the phone exposes
   nothing but takes no voice.
+- [ ] To decide: the public repository carries only Orbit's packages, so
+  outside the author's network `navidrome` and `jellyfin` would not be
+  found. Both are free software: carry them in the public repository
+  (recommended), or have the page add Jellyfin's repository and fetch
+  Navidrome's .deb.
 
-Work, in this order (PLANO-DISTRO §12.6):
+Work, in this order (PLANO-DISTRO §12.7):
 
-- [ ] `orbit-firewall`: the `inet orbit` table, input only, policy drop;
-  each Orbit service's opening, LAN and tunnel only, in a file of its own
-  package (§12.3). Changes made from Orbit-Settings go back after 30 s
-  without confirmation.
+- [ ] `orbit-firewall`: the `inet orbit` table, input only, policy drop; each
+  service's opening, LAN and tunnel only, in a file of its own package.
+- [ ] The "Services" page: PackageKit (`packagekit` pulled by
+  `orbit-desktop`), systemd over D-Bus, `orbit-services-helper` with its
+  polkit action; the dependencies between services; changes that could
+  lock the machine out (firewall, WireGuard, dnsmasq's mode) undone after
+  30 s without confirmation; bans, failed services and new pairings as
+  notifications. First rows: the remote server and `orbit-ltsp` (the
+  `distro/ltsp/` scripts packaged).
 - [ ] `orbit-remote-server`: a fixed UDP port range for WebRTC, so the
-  firewall need not open every UDP port.
-- [ ] WireGuard in `orbit-server`, the tunnel's config handed out at pairing.
-- [ ] Unbound + dnsmasq in both modes, LTSP's dnsmasq folded in; the
-  reservations and the RPZ lists in Orbit-Settings.
-- [ ] Fail2Ban: `backend = systemd`, `nftables-allports` in the Orbit table;
-  the `orbit-remote` filter for the line the remote server already logs at
-  each wrong pairing code (`remote: <peer> gave a wrong code (n of 5)`);
-  short bans (10 min). The remote server also logs to the journal (today
-  only `~/.local/state/orbit/remote.log`), for the jail to read.
-- [ ] `orbit-navidrome` and `orbit-jellyfin`: Navidrome (`github.list`) and
-  Jellyfin (`vendors.list`, its dependencies named) mirrored; both on the
-  LAN and the tunnel only; the media folders (`/srv/media` by default, the
-  home by choice); Jellyfin in the `render` group. Orbit-Settings' "Media
-  server" page over PackageKit (`packagekit` pulled by `orbit-desktop`).
-- [ ] Orbit-Settings, "Network and security" (firewall, WireGuard peers,
-  the addresses Fail2Ban banned, with unbanning; a ban as a notification); the panel's `network` module
-  showing the firewall and the tunnel.
-- [ ] Done when: each profile installs from the ISO in a VM; nmap from the
-  LAN sees only the planned ports, from outside only the server's UDP
-  51820; a station on another network reaches the server through the
-  tunnel; Feishin and a Subsonic app on a phone (through the tunnel,
-  away from home) play Navidrome's music, a Jellyfin app plays a video.
+  firewall need not open every UDP port; logging to the journal too (today
+  only `~/.local/state/orbit/remote.log`), for Fail2Ban.
+- [ ] `orbit-wireguard`, the tunnel's config handed out at pairing (QR for
+  phones).
+- [ ] `orbit-unbound` and `orbit-dnsmasq`, LTSP's dnsmasq folded in; the
+  reservations and the RPZ lists on their pages.
+- [ ] `orbit-fail2ban`: `backend = systemd`, `nftables-allports`, the
+  `orbit-remote` filter for `remote: <peer> gave a wrong code (n of 5)`,
+  short bans (10 min).
+- [ ] `orbit-navidrome` and `orbit-jellyfin`: mirrored; the media folders
+  (`/srv/media` by default, the home by choice); Jellyfin in the `render`
+  group; the first user created with a password of its own.
+- [ ] The panel's `network` module: the firewall's and the tunnel's state,
+  a click opening the page.
+- [ ] Done when: on a VM installed from the ISO each service switches on,
+  configures, switches off and is removed from the page; nmap from the LAN
+  sees only the ports of the services on, from outside only UDP 51820; a
+  station on another network reaches the machine through the tunnel;
+  Feishin and a Subsonic app on a phone (through the tunnel, away from
+  home) play Navidrome's music, a Jellyfin app plays a video.
