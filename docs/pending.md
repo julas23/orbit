@@ -35,11 +35,12 @@ built, the local repository synced, the public one pushed, offered as an
 - [x] `60-desktop.nft` in it: mDNS, and the unicast answers to SSDP and
   WS-Discovery searches; `orbit-desktop` depends on `orbit-firewall`.
 - [x] `10-remote.nft` (TCP 7311) shipped by `orbit-remote-server` already.
-- [ ] Done when: after an `apt upgrade` on the hp, the think and the Julas
-  VM, nmap from the LAN sees only what each one serves; Docker, libvirt,
-  Tailscale, Syncthing, NFS, LTSP and the remote server still work; a
-  reload leaves the other tables alone. (Not yet: the other machines were
-  unreachable on 2026-11-15.)
+- [ ] Done when: after an `apt upgrade` on the hp and the think, nmap from
+  the other one sees only what each serves; Docker, libvirt, Tailscale,
+  Syncthing, NFS and the remote server still work; a reload leaves the
+  other tables alone. The think is done (installed 2026-11-15, its tables
+  and network checked); the hp was unreachable that day. (The Julas VM, in
+  this test before, no longer exists: the user, 2026-11-15.)
 
 ### Step 2 — the "Services" page and its base
 
@@ -89,10 +90,11 @@ built, the local repository synced, the public one pushed, offered as an
   range to the local network. Its warnings and errors also go to the
   journal as `orbit-remote-server` (`journal.rs`, the native protocol), for
   Fail2Ban; the session's log file stays.
-- [ ] Network-booted stations (`orbit-ltsp`: `distro/ltsp/` packaged,
-  `30-ltsp.nft`).
-- [ ] Done when: the remote server and the LTSP server switch on, off and
-  are removed from the page and from `orbitctl services` (the Julas VM).
+- [ ] Done when: the remote server switches on, off and is removed from the
+  page and from `orbitctl services` on the hp or the think, a browser on
+  the other one pairing with it over the new UDP range. Network-booted
+  stations (`orbit-ltsp`) moved to Later: their server, the Julas VM, no
+  longer exists (the user, 2026-11-15).
 
 ### Step 3 — WireGuard
 
@@ -102,8 +104,8 @@ built, the local repository synced, the public one pushed, offered as an
   config.
 - [ ] Before it, look again at CGNAT (no public IP: the VPS as the hub) and
   Tailscale, which the user already runs (§15).
-- [ ] Done when: the think, on another network, reaches the Julas VM through
-  the tunnel and shows its session.
+- [ ] Done when: a laptop on another network (the hp on a phone's hotspot)
+  reaches the think through the tunnel and shows its session.
 
 ### Step 4 — Unbound and dnsmasq
 
@@ -217,6 +219,11 @@ with Step 2; the phases then run alongside the steps above.
 ### Later
 
 - [ ] Alexa (§15).
+- [ ] Network-booted stations as a service (`orbit-ltsp`: `distro/ltsp/`
+  packaged, `30-ltsp.nft`, a row on the page), once there is a server for
+  them again: the Julas VM that served the PC and Raspberry Pi 4 images no
+  longer exists (2026-11-15). The station images' build scripts stay in
+  `distro/ltsp/`.
 
 ## 1. Done 2026-10-22
 
