@@ -451,6 +451,14 @@ Amarradas às fases do PLANO-CORE.
 - **Pronto quando:** a ISO instala no think do zero (disco inteiro, LUKS) e ele
   sobe no orbit-greet com tudo funcionando, sem nenhum passo manual.
 
+### Fase S — serviços e o novo instalador (planejada em 2026-11-15)
+
+- A página "Serviços" e os serviços da seção 12, e o `orbit-install` da 6.6,
+  em dez etapas: o plano de ação está no `docs/pending.md` §0.
+- **Pronta quando:** uma máquina instalada pela ISO, em cada caso da tabela
+  da 6.6, liga, configura e desliga cada serviço pela página; um nmap de
+  fora só vê a UDP 51820.
+
 ### Fase D — lançamento público
 
 - Site, documentação, nome/marca conferidos, canal de atualizações estável e de
@@ -762,20 +770,24 @@ página "Serviços".
 
 ### 12.7 Ordem
 
-1. `orbit-firewall`: em toda instalação, e o que mais protege.
-2. A página "Serviços" com o PackageKit e o `orbit-services-helper`, e os
-   serviços que já existem: o remote server e as estações (`orbit-ltsp`).
-   O `orbit-install` (6.6) vem depois dela, porque liga os serviços da
-   finalidade pelo mesmo auxiliar.
+Em dez etapas, cada uma com o seu "pronto quando", no plano de ação do
+`docs/pending.md` §0:
+
+1. `orbit-firewall`, em toda instalação: o que mais protege.
+2. A página "Serviços" e a base (`orbit-base`, PackageKit,
+   `orbit-services-helper`, `orbitctl services`), com o que já existe: o
+   firewall, o remote server e as estações (`orbit-ltsp`).
 3. `orbit-wireguard`, com a configuração entregue no pareamento.
 4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
-5. `orbit-fail2ban`, com a jail do Orbit.
-6. `orbit-containers`, e sobre ele o `orbit-navidrome`, o `orbit-jellyfin`,
-   o `orbit-immich` e o `orbit-nextcloud`.
-7. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`, `orbit-syncthing`.
-8. O `orbit-base`, o `orbit-ssh`, o `orbitctl services` e a gerência de
-   outra máquina pelo SSH: o servidor sem sessão gráfica.
-9. O painel.
+5. `orbit-fail2ban` e `orbit-ssh`.
+6. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`, `orbit-syncthing`.
+7. `orbit-containers` e `orbit-proxy`, e sobre eles o `orbit-navidrome`, o
+   `orbit-jellyfin`, o `orbit-immich` e o `orbit-nextcloud`.
+8. O servidor sem sessão gráfica, e o Orbit-Settings gerenciando outra
+   máquina pelo SSH.
+9. O `orbit-install` (6.6), depois da página, porque liga os serviços da
+   finalidade pelo mesmo auxiliar; e o papel de roteador.
+10. O painel.
 
 **Pronto quando:** numa VM instalada pela ISO, cada serviço liga, configura,
 desliga e sai pela página; um nmap da LAN só vê as portas dos serviços

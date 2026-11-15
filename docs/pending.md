@@ -1,7 +1,155 @@
 # Pending
 
-What is still open across Orbit, in the order we plan to work on it.
-Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10) and `docs/PLANO-PAINEL.md`.
+What is still open across Orbit, in the order we plan to work on it; the
+next steps are §0. Details live in `docs/PLANO-CORE.md` (§7.3, §8, §10),
+`docs/PLANO-PAINEL.md` and `docs/PLANO-DISTRO.md`.
+
+## 0. Next steps: the action plan (2026-11-15)
+
+The services and the new installer, as planned with the user on 2026-11-15:
+the decisions are in §15, the design in `docs/PLANO-DISTRO.md` §6.6 (the
+installer) and §12 (the services, with the page, the packages and the
+ports). Steps in order; each ends with something usable, tested on the
+author's machines, and shipped like every change (commit and push, the debs
+built, the local repository synced, the public one pushed, offered as an
+`apt upgrade`).
+
+### Step 1 — `orbit-firewall`, on every install
+
+- [ ] The package: `/etc/nftables.conf` including `/etc/nftables.d/*.nft`;
+  the `inet orbit` table, `input` chain only, policy drop; established
+  traffic, loopback and the ICMP/ICMPv6 that is needed accepted; the `@lan`
+  set (the interfaces' private subnets and `wg0`) and an empty set for
+  Fail2Ban's bans. A reload deletes and loads only `inet orbit`, never
+  Debian's `flush ruleset`.
+- [ ] `60-desktop.nft` (mDNS UDP 5353), pulled by `orbit-desktop`.
+- [ ] Done when: after an `apt upgrade` on the hp and the think, nmap from
+  the LAN sees only mDNS; Docker, libvirt and Tailscale still work; a
+  reload leaves their tables alone.
+
+### Step 2 — the "Services" page and its base
+
+- [ ] `orbit-base` (`orbit-firewall`, `packagekit`, `orbit-services-helper`,
+  `orbitctl`), pulled by `orbit-desktop`.
+- [ ] `orbit-services-helper`: run by `pkexec` under its own polkit action,
+  only typed and validated commands, never free text into a root-owned file.
+- [ ] Orbit-Settings, "Services": the groups and rows of PLANO-DISTRO §12.2;
+  install and remove through PackageKit, start and stop through systemd's
+  D-Bus API; the dependencies between services; firewall, WireGuard and
+  dnsmasq-mode changes undone after 30 s without confirmation; bans,
+  failed services and new pairings as notifications.
+- [ ] `orbitctl services` (list, on, off, configure, `--json`), the same page
+  in a terminal, working without orbit-core.
+- [ ] The first rows, for what exists already: the firewall (what each file
+  opens); Orbit Remote Server (`10-remote.nft`; a fixed UDP port range for
+  WebRTC; its log in the journal too, for Fail2Ban); network-booted
+  stations (`orbit-ltsp`: `distro/ltsp/` packaged, `30-ltsp.nft`).
+- [ ] Done when: the remote server and the LTSP server switch on, off and
+  are removed from the page and from `orbitctl services` (the Julas VM).
+
+### Step 3 — WireGuard
+
+- [ ] `orbit-wireguard`: `wg0` made when switched on, `20-wireguard.nft` (UDP
+  51820, the only public port), peers added and removed on its page with
+  a QR for phones; the remote server's pairing hands a station its tunnel
+  config.
+- [ ] Before it, look again at CGNAT (no public IP: the VPS as the hub) and
+  Tailscale, which the user already runs (§15).
+- [ ] Done when: the think, on another network, reaches the Julas VM through
+  the tunnel and shows its session.
+
+### Step 4 — Unbound and dnsmasq
+
+- [ ] `orbit-unbound` (`40-dns.nft`): recursive, DNSSEC, the LAN and the
+  tunnel only; DNS-over-TLS forwarding and RPZ lists as options on its page.
+- [ ] `orbit-dnsmasq` (`41-dhcp.nft`): Proxy mode (PXE's proxy DHCP and TFTP,
+  no DNS) and Network mode (DHCP, `home.lan` from the leases and the
+  reservations, on `127.0.0.1:5300`); IPv4 only; `bind-dynamic`. LTSP's
+  dnsmasq folded into it.
+- [ ] Done when: in Network mode on a test LAN, a machine gets an address and
+  answers as `<name>.home.lan`, also from a tunnel peer; Proxy mode still
+  boots the stations.
+
+### Step 5 — Fail2Ban and SSH
+
+- [ ] `orbit-fail2ban`: `backend = systemd`, `nftables-allports` into the
+  Orbit table, short bans (10 min); the `sshd` jail and `orbit-remote`
+  (`remote: <peer> gave a wrong code (n of 5)`); bans listed and lifted on
+  its page.
+- [ ] `orbit-ssh` (`15-ssh.nft`): keys only after the first one, the LAN and
+  the tunnel only.
+- [ ] Done when: five wrong pairing codes from a test machine ban it, the
+  page lifts the ban.
+
+### Step 6 — Storage
+
+- [ ] `orbit-samba` (TCP 445), `orbit-nfs` (NFSv4, TCP 2049), `orbit-smart`
+  (smartmontools, warnings through orbit-notify).
+- [ ] `orbit-syncthing` (`syncthing@USER`, TCP/UDP 22000, UDP 21027, its API
+  on `127.0.0.1:8384`; global discovery, relays and usage reports off): one
+  folder per Android device (Syncthing-Fork) in `/srv/shares/<user>/<device>`
+  with versioning on.
+- [ ] Done when: a phone's photos reach the server through the tunnel, away
+  from home; a share opens from Android's file manager and from Orbit-Files.
+
+### Step 7 — the containers
+
+- [ ] `orbit-containers`: Podman through Quadlet (`/etc/containers/systemd/`),
+  the `orbit` container network, images by exact version, updates only
+  when asked with the release notes shown and a snapshot first; data
+  outside the containers (`/srv/media` read-only, `/srv/photos`,
+  `/srv/cloud`, `/var/lib/orbit-<service>`); no published ports.
+- [ ] `orbit-proxy`: Caddy in front of them, `tls internal` (the local CA),
+  one `Caddyfile` block per service on; the root to the certificate store,
+  Firefox's `policies.json`, the other Orbit machines with the tunnel's
+  config, and phones as a file and a QR.
+- [ ] `orbit-navidrome` (4533), `orbit-jellyfin` (8920; `/dev/dri`; the host
+  network with its DLNA plugin), `orbit-immich` (2283; machine learning
+  switchable), `orbit-nextcloud` (8380; PostgreSQL, Valkey, its cron as a
+  timer, `/srv` folders as external storage).
+- [ ] Each Android app tried with the local CA (Android 7+ apps ignore user
+  CAs unless they opt in); Let's Encrypt through the DNS challenge if one
+  refuses.
+- [ ] Done when: Feishin and a Subsonic app on a phone (through the tunnel)
+  play Navidrome's music, a Jellyfin app plays a video, the Immich app
+  backs up a photo, the Nextcloud app opens a file — all over HTTPS.
+
+### Step 8 — servers without a graphical session
+
+- [ ] `orbit-base` alone on a machine: a console login, `orbit-ssh` on,
+  everything through `orbitctl services`.
+- [ ] Orbit-Settings managing another machine over SSH (running `orbitctl
+  services --json` there): no new daemon listening.
+- [ ] Done when: a headless VM is set up entirely from the think's
+  Orbit-Settings through the tunnel.
+
+### Step 9 — `orbit-install`
+
+- [ ] The ISO's menu: Orbit Live, Install Orbit (`orbit.install`: the Live
+  opening the installer full screen), advanced options with the
+  debian-installer.
+- [ ] Detection (disks, network cards and their addresses, a DHCP that
+  answered, the GPU), the proposal table, the one screen (Desktop / Server
+  preselected, the multimedia kit, "Without a graphical session", user,
+  password, name, "Change…").
+- [ ] The install steps taken out of the debian-installer (`early.sh`,
+  `late.sh`, `home.sh`, `finish-install.d/`) for both to share; the copy of
+  the Live; the purpose's services switched on through
+  `orbit-services-helper`; the desktop packages dropped for a headless
+  server.
+- [ ] The router role (two cards, one public): NAT and the `forward` chain
+  in `orbit-firewall`.
+- [ ] Done when: each case of the proposal table installs in a VM without a
+  manual step, and an existing `/home` survives every one.
+
+### Step 10 — the panel
+
+- [ ] The `network` module showing the firewall's and the tunnel's state, a
+  click opening the "Services" page.
+
+### Later
+
+- [ ] Alexa (§15).
 
 ## 1. Done 2026-10-22
 
@@ -442,70 +590,4 @@ Reviewed with the user, item by item (2026-11-15):
 - [x] Samba kept: besides Windows and macOS, it is what Android's file
   managers and many TVs speak.
 
-Work, in this order (PLANO-DISTRO §12.7):
-
-- [ ] `orbit-firewall`: the `inet orbit` table, input only, policy drop; each
-  service's opening, LAN and tunnel only, in a file of its own package.
-- [ ] The "Services" page: PackageKit (`packagekit` pulled by
-  `orbit-desktop`), systemd over D-Bus, `orbit-services-helper` with its
-  polkit action; the dependencies between services; changes that could
-  lock the machine out (firewall, WireGuard, dnsmasq's mode) undone after
-  30 s without confirmation; bans, failed services and new pairings as
-  notifications. First rows: the remote server and `orbit-ltsp` (the
-  `distro/ltsp/` scripts packaged).
-- [ ] `orbit-remote-server`: a fixed UDP port range for WebRTC, so the
-  firewall need not open every UDP port; logging to the journal too (today
-  only `~/.local/state/orbit/remote.log`), for Fail2Ban.
-- [ ] `orbit-wireguard`, the tunnel's config handed out at pairing (QR for
-  phones).
-- [ ] `orbit-unbound` and `orbit-dnsmasq`, LTSP's dnsmasq folded in; the
-  reservations and the RPZ lists on their pages.
-- [ ] `orbit-fail2ban`: `backend = systemd`, `nftables-allports`, the
-  `orbit-remote` filter for `remote: <peer> gave a wrong code (n of 5)`,
-  short bans (10 min).
-- [ ] `orbit-containers`: Podman, the `orbit` container network, the Quadlet
-  conventions, images by exact version, updates only when asked with the
-  release notes shown and a snapshot first; no published ports, only Caddy
-  listening; data outside the containers
-  (`/srv/media` read-only, `/srv/photos`, `/srv/cloud`,
-  `/var/lib/orbit-<service>`).
-- [ ] `orbit-navidrome` and `orbit-jellyfin` on it: the media folders;
-  Jellyfin with `/dev/dri`, and the host network when its DLNA plugin is
-  on; the first user created with a password of its own.
-- [ ] `orbit-nextcloud`: Nextcloud, PostgreSQL, Valkey, its cron as a
-  systemd timer, `trusted_domains` for the LAN and the tunnel, chosen
-  `/srv` folders as external storage; port 8380.
-- [ ] `orbit-proxy`: Caddy with one `Caddyfile` block per service on (ports
-  4533, 8920, 2283, 8380), `tls internal`, the certificate for the
-  machine's names and addresses; the root exported to
-  `/usr/local/share/ca-certificates/`, Firefox's `policies.json`, the other
-  Orbit machines with the tunnel's config, and the page (file and QR).
-  Test each Android app with a user CA (Android 7+ apps ignore user CAs
-  unless they opt in); Let's Encrypt through the DNS challenge if one
-  refuses.
-- [ ] Storage: `orbit-samba` (TCP 445), `orbit-nfs` (NFSv4, TCP 2049),
-  `orbit-smart`, `orbit-syncthing` (`syncthing@USER`, TCP/UDP 22000 and UDP
-  21027, configured through its API on `127.0.0.1:8384`).
-- [ ] `orbit-base` and `orbit-ssh`; the "Without a graphical session" box in
-  `orbit-install`, which drops the desktop packages from the copied Live;
-  Orbit-Settings managing another machine over SSH.
-- [ ] `orbitctl services`: the page in a terminal (list, on, off, configure),
-  for VPSs (a Debian cloud image plus the `orbit-<service>` packages) and
-  servers without a session.
-- [ ] `orbit-install`: the detection, the proposal and the screen; the
-  install steps taken out of the debian-installer (`early.sh`, `late.sh`,
-  `home.sh`, `finish-install.d/`) for both to share; the purpose's services
-  switched on through `orbit-services-helper`; the router role's NAT and
-  `forward` chain in `orbit-firewall`.
-- [ ] `orbit-immich` on it: the units from the pinned compose file (server,
-  machine learning, PostgreSQL with its vector extension, Valkey); machine
-  learning switchable (2–4 GB of RAM); VA-API by the detected GPU; port
-  2283.
-- [ ] The panel's `network` module: the firewall's and the tunnel's state,
-  a click opening the page.
-- [ ] Done when: on a VM installed from the ISO each service switches on,
-  configures, switches off and is removed from the page; nmap from the LAN
-  sees only the ports of the services on, from outside only UDP 51820; a
-  station on another network reaches the machine through the tunnel;
-  Feishin and a Subsonic app on a phone (through the tunnel, away from
-  home) play Navidrome's music, a Jellyfin app plays a video.
+The work is the action plan, §0.
