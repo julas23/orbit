@@ -49,7 +49,7 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            editor: "nm-connection-editor".into(),
+            editor: "orbit-settings network".into(),
         }
     }
 }

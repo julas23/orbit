@@ -37,6 +37,8 @@ pub struct Actions {
     pub click: Option<Callback>,
     /// Right click on the icon (Normal, Full and the line form).
     pub right_click: Option<Callback>,
+    /// Middle click on the module, in every form.
+    pub middle_click: Option<Callback>,
 }
 
 impl Control {
@@ -87,6 +89,8 @@ impl Control {
         };
         let left = gtk::GestureClick::builder().button(1).build();
         let right = gtk::GestureClick::builder().button(3).build();
+        let middle = gtk::GestureClick::builder().button(2).build();
+        middle.connect_released(run(|a| &a.middle_click));
         icon.add_controller(left.clone());
         icon.add_controller(right.clone());
 
@@ -132,6 +136,7 @@ impl Control {
             }
         };
         root.add_controller(wheel);
+        root.add_controller(middle);
 
         Self {
             root,

@@ -43,7 +43,7 @@ pub struct BluetoothConfig {
 impl Default for BluetoothConfig {
     fn default() -> Self {
         Self {
-            manager: "blueman-manager".into(),
+            manager: "orbit-settings bluetooth".into(),
         }
     }
 }

@@ -4,7 +4,8 @@
 //! Event-driven (see `pulse`): the card changes as soon as the volume changes
 //! anywhere — keys, pavucontrol, another app. Clicking the icon brings the
 //! mixer up, focusing the window if it is already open instead of opening a
-//! second one; right click toggles mute; the wheel steps the level.
+//! second one; right click opens Orbit-Settings' Sound page; middle click
+//! toggles mute; the wheel steps the level.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -92,7 +93,8 @@ pub fn new(config: &VolumeConfig, form: Form) -> gtk::Widget {
             set: Box::new(set),
             step: Box::new(step),
             click: Some(Box::new(click)),
-            right_click: Some(Box::new(mute)),
+            right_click: Some(Box::new(|| crate::status::settings("sound"))),
+            middle_click: Some(Box::new(mute)),
         },
     );
     let root = control.root.clone();

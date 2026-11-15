@@ -317,8 +317,16 @@ with Step 2; the phases then run alongside the steps above.
   Tested on the think: the page, a wrong current password refused by the
   real passwd (/etc/shadow untouched); not yet with AccountsService
   running nor the helper installed (after the upgrade). Left: fingerprint
-  and face (with orbit-safe and the greet, §3). Next: A7 the panel's
-  modules.
+  and face (with orbit-safe and the greet, §3). A7 done 2026-11-15: a
+  right click opens the module's Settings page: network → Network,
+  bluetooth → Bluetooth, battery → Power, volume → Sound (mute moved to
+  the middle click); the keyboard's layout list, the notifications' panel
+  and the monitors' editor (still the only place that arranges monitors)
+  got a line opening their pages. A module's `editor:`/`manager:` set in
+  its YAML still wins. Orbit-Settings is always started, not focused: an
+  open one turns to the page asked for. Phase A is complete; its "done
+  when" (nothing daily needs a hand-edited YAML) is for the user to judge
+  on the hp and the think.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
   Appearance, Keyboard, Mouse and touchpad, Date and time, Region and
   language, Users and groups, Panel, Dock, Windows and areas, Shortcuts,

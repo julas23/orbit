@@ -111,6 +111,7 @@ pub fn new(config: &BrightnessConfig, form: Form) -> gtk::Widget {
             step: Box::new(step),
             click: None,
             right_click: None,
+            middle_click: None,
         },
     );
     let root = control.root.clone();

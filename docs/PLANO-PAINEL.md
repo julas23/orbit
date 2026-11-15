@@ -115,8 +115,16 @@ ajusta o valor quando há um (volume, brilho). Já feito no Mini de volume e bri
 tamanhos menores, e nos módulos `bluetooth` e `monitors` (2026-10-21):
 
 - `bluetooth` (BlueZ pelo D-Bus do sistema, por evento): esquerdo abre o switch do
-  adaptador e um switch por dispositivo pareado (conectar/desconectar); direito, o
-  `blueman-manager` (`manager:` em `modules/bluetooth.yaml`).
+  adaptador e um switch por dispositivo pareado (conectar/desconectar); direito, a
+  página Bluetooth do Orbit-Settings (`manager:` em `modules/bluetooth.yaml`; era
+  o `blueman-manager` até 2026-11-15).
+
+Desde 2026-11-15 (PLANO-SETTINGS §1 regra 7) o clique direito abre a página do
+Orbit-Settings: `network` → Rede, `bluetooth` → Bluetooth, `battery` → Energia,
+`volume` → Som (o mudo passou para o clique do meio). Onde o direito já tinha um
+painel próprio, ele ganhou uma linha para a página: `keyboard` (a lista de
+layouts), `notifications` (não perturbe, limpar) e `monitors` (o editor, que é o
+único lugar que arruma os monitores).
 - `monitors` (IPC do compositor, evento `output`): esquerdo põe cada monitor acima,
   abaixo ou de um lado do principal (o do notebook), centrado; direito abre o editor,
   o layout em escala, onde o monitor arrastado encaixa no lado mais próximo de outro,

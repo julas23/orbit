@@ -2,4 +2,4 @@
 
 # Left click: networking and Wi-Fi switches, the Wi-Fi networks in reach
 # and the VPNs. Right click opens (or focuses) this.
-editor: nm-connection-editor
+editor: orbit-settings network   # nm-connection-editor: its "Advanced…"

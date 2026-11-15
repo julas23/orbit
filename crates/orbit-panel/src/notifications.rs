@@ -18,7 +18,7 @@ use orbit_app::i18n::{number, tr, tr_args};
 
 use crate::{
     board::Form,
-    status::{Row, clicks, popup, quick_button, quick_list, switch_row},
+    status::{Row, clicks, popup, quick_button, quick_list, settings, switch_row},
 };
 
 const NAME: &str = "io.github.julas23.Orbit.Notify";
@@ -181,6 +181,7 @@ impl Module {
                 m.call("Toggle", None);
             }
         });
+        quick_button(&tr("panel-settings-notifications"), &list, || settings("notifications"));
         popup(&list, &self.row.root);
     }
 

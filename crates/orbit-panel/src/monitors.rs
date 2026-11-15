@@ -244,8 +244,10 @@ impl Module {
             .label(tr("monitors-apply"))
             .css_classes(["apply"])
             .build();
+        let more = gtk::Button::builder().label(tr("panel-settings-monitors")).build();
         let bottom = gtk::Box::builder().spacing(10).build();
         bottom.append(&hint);
+        bottom.append(&more);
         bottom.append(&apply_button);
         let card = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
@@ -255,6 +257,15 @@ impl Module {
         card.append(&area);
         card.append(&bottom);
         let popover = gtk::Popover::builder().child(&card).build();
+        {
+            let popover = popover.downgrade();
+            more.connect_clicked(move |_| {
+                crate::status::settings("monitors");
+                if let Some(p) = popover.upgrade() {
+                    p.popdown();
+                }
+            });
+        }
         {
             let popover = popover.downgrade();
             apply_button.connect_clicked(move |_| {

@@ -195,11 +195,19 @@ pub(crate) fn hold<T: 'static>(widget: &gtk::Widget, keep: T) {
     });
 }
 
+/// Opens Orbit-Settings on `page` (docs/PLANO-SETTINGS.md §1 rule 7: a
+/// module's right click, or its "settings" line).
+pub(crate) fn settings(page: &str) {
+    open_or_focus(&format!("orbit-settings {page}"));
+}
+
 /// Focuses the program's window if it is open (sway), or starts it.
+/// Orbit-Settings is always started: an open one turns to the page asked
+/// for itself.
 pub(crate) fn open_or_focus(command: &str) {
     let program = command.split_whitespace().next().unwrap_or_default();
     let name = program.rsplit('/').next().unwrap_or(program);
-    if sway::available() && !name.is_empty() {
+    if sway::available() && !name.is_empty() && name != "orbit-settings" {
         let focus = format!("[app_id=\"(?i){name}\"] focus");
         let focused = sway::Connection::open()
             .and_then(|mut c| c.request(sway::RUN_COMMAND, &focus))
@@ -358,6 +366,7 @@ fn pick_layout(layouts: &Layouts, anchor: &gtk::Widget) {
             button.add_css_class("active");
         }
     }
+    quick_button(&tr("panel-settings-keyboard"), &list, || settings("keyboard"));
     popup(&list, anchor);
 }
 
@@ -412,11 +421,19 @@ const UPOWER: &str = "org.freedesktop.UPower";
 const DISPLAY: &str = "/org/freedesktop/UPower/devices/DisplayDevice";
 
 /// `modules/battery.yaml`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BatteryConfig {
     /// Opened (or focused) by a right click; nothing when empty.
     pub manager: String,
+}
+
+impl Default for BatteryConfig {
+    fn default() -> Self {
+        Self {
+            manager: "orbit-settings power".into(),
+        }
+    }
 }
 
 /// power-profiles-daemon, by its new name and its old one.
