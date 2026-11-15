@@ -24,6 +24,8 @@ use std::{
 
 use serde::Serialize;
 
+pub mod accounts;
+
 /// The helper, run as root by `pkexec`.
 pub const HELPER: &str = "/usr/libexec/orbit-services-helper";
 /// The firewall's service files: the packages', then this machine's own.

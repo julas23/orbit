@@ -12,11 +12,13 @@ authors.workspace = true
 maintainer = "Juliano <julianoas@gmail.com>"
 section = "admin"
 priority = "optional"
-extended-description = "orbit-services: the helper Orbit-Settings' Services page and `orbitctl services` turn this machine's services on and off with (install, remove, start, stop), run as root by pkexec after polkit asks for the password; it takes only the packages and units of Orbit's catalogue. Part of the Orbit desktop (https://github.com/julas23/orbit)."
-depends = "$auto, pkexec, polkitd, apt"
+extended-description = "orbit-services: the helper Orbit-Settings' Services page and `orbitctl services` turn this machine's services on and off with (install, remove, start, stop), run as root by pkexec after polkit asks for the password; it takes only the packages and units of Orbit's catalogue. Also orbit-accounts-helper, which adds and removes people and groups, sets passwords and the session opened at boot, for the Users and groups page. Part of the Orbit desktop (https://github.com/julas23/orbit)."
+depends = "$auto, pkexec, polkitd, apt, adduser, passwd"
 assets = [
     ["target/release/orbit-services-helper", "usr/libexec/", "755"],
     ["../../data/polkit/io.github.julas23.orbit.services.policy", "usr/share/polkit-1/actions/", "644"],
+    ["target/release/orbit-accounts-helper", "usr/libexec/", "755"],
+    ["../../data/polkit/io.github.julas23.orbit.accounts.policy", "usr/share/polkit-1/actions/", "644"],
 ]
 
 [lib]
@@ -25,6 +27,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "orbit-services-helper"
 path = "src/helper.rs"
+
+[[bin]]
+name = "orbit-accounts-helper"
+path = "src/accounts_helper.rs"
 
 [dependencies]
 serde.workspace = true

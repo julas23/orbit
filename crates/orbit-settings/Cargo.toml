@@ -13,7 +13,7 @@ maintainer = "Juliano <julianoas@gmail.com>"
 section = "x11"
 priority = "optional"
 extended-description = "Orbit-Settings: the wallpaper (a picture, how it meets the screen, or a colour) and the monitors (resolution, refresh rate, scale, rotation), written to core.yaml; and the menu a right click on the desktop opens. Part of the Orbit desktop (https://github.com/julas23/orbit)."
-depends = "$auto"
+depends = "$auto, accountsservice, passwd"
 recommends = "power-profiles-daemon, nm-connection-editor"
 assets = [
     ["target/release/orbit-settings", "usr/bin/", "755"],
@@ -36,3 +36,4 @@ gio-unix.workspace = true
 log.workspace = true
 env_logger.workspace = true
 anyhow.workspace = true
+libc.workspace = true

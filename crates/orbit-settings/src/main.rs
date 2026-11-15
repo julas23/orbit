@@ -12,8 +12,8 @@
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod about;
-mod apps_page;
 mod appearance;
+mod apps_page;
 mod bluetooth;
 mod core;
 mod datetime;
@@ -27,11 +27,13 @@ mod network;
 mod notify_page;
 mod pages;
 mod panel_page;
+mod passwd;
 mod power;
 mod region;
 mod services;
 mod shortcuts;
 mod sound;
+mod users;
 mod wallpaper;
 mod wifi;
 mod windows;
@@ -149,6 +151,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "dock" => dock_page::page(dir),
             "notifications" => notify_page::page(dir),
             "apps" => apps_page::page(dir),
+            "users" => users::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

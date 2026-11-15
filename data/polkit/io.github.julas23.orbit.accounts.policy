@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- This machine's people and groups (orbit-accounts-helper), from
+     Orbit-Settings' Users and groups page. An administrator's password,
+     kept for a few minutes. -->
+<policyconfig>
+  <vendor>Orbit</vendor>
+  <vendor_url>https://github.com/julas23/orbit</vendor_url>
+  <action id="io.github.julas23.orbit.accounts">
+    <description>Change this machine's users and groups</description>
+    <description xml:lang="pt_BR">Alterar os usuários e grupos desta máquina</description>
+    <message>Changing this machine's users and groups needs an administrator's password</message>
+    <message xml:lang="pt_BR">Alterar os usuários e grupos desta máquina pede a senha de um administrador</message>
+    <icon_name>system-users</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/orbit-accounts-helper</annotate>
+  </action>
+</policyconfig>

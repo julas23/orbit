@@ -301,7 +301,24 @@ with Step 2; the phases then run alongside the steps above.
   names from widening a page. Left from the plan's rows: do not disturb on
   a schedule and per-program notification options (orbit-notify work
   first), and XDG autostart (`~/.config/autostart`), which orbit-core does
-  not run yet. Next: A6 Users, A7 the panel's modules.
+  not run yet. A6 done 2026-11-15: Users and groups. One's own name and
+  picture through AccountsService (accountsservice now a dependency of
+  orbit-settings; the picture cut square, 256 px; the greet now looks at
+  AccountsService's picture before `~/.face`), one's own password through
+  `passwd` on a pseudo-terminal (PAM: pwquality's rules, the encrypted
+  /home's keyslot follows). The rest through a new root helper,
+  orbit-accounts-helper (package orbit-services, its own polkit action
+  io.github.julas23.orbit.accounts): people added (full name, login,
+  administrator, password) and removed (files kept or deleted), another's
+  password (chpasswd, so PAM too), administrators (the sudo group), groups
+  added, removed (only those made for people) and who is in them, the
+  session opened at boot (`user:` of /etc/orbit/login.yaml). The helper
+  refuses removing oneself, the boot user, or the last administrator.
+  Tested on the think: the page, a wrong current password refused by the
+  real passwd (/etc/shadow untouched); not yet with AccountsService
+  running nor the helper installed (after the upgrade). Left: fingerprint
+  and face (with orbit-safe and the greet, §3). Next: A7 the panel's
+  modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
   Appearance, Keyboard, Mouse and touchpad, Date and time, Region and
   language, Users and groups, Panel, Dock, Windows and areas, Shortcuts,

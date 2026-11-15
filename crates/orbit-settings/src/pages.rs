@@ -133,6 +133,14 @@ pub const PAGES: &[Page] = &[
         ],
     },
     Page {
+        id: "users",
+        group: Group::People,
+        title: "settings-users",
+        icon: "system-users-symbolic",
+        keywords: "settings-users-keywords",
+        options: &["settings-users-password", "settings-users-picture", "settings-users-add", "settings-users-admin", "settings-users-groups", "settings-users-boot"],
+    },
+    Page {
         id: "datetime",
         group: Group::People,
         title: "settings-time",

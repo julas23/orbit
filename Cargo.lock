@@ -5018,6 +5018,7 @@ dependencies = [
  "gio-unix",
  "gtk4",
  "gtk4-layer-shell",
+ "libc",
  "log",
  "orbit-app",
  "orbit-common",

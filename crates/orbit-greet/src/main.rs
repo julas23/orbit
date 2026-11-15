@@ -676,9 +676,11 @@ fn tick(time: &gtk::Label, date: &gtk::Label) {
 /// A user's picture in `image`: their `~/.face` (if this user may read
 /// it), or AccountsService's, or the theme's generic one.
 fn show_avatar(image: &gtk::Image, user: &str, home: &Path) {
+    // AccountsService's first: Orbit-Settings sets it (Users and groups),
+    // and another person's home may not be readable.
     match [
-        home.join(".face"),
         PathBuf::from("/var/lib/AccountsService/icons").join(user),
+        home.join(".face"),
     ]
     .into_iter()
     .find(|p| p.is_file() && std::fs::File::open(p).is_ok())
