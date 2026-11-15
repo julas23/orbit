@@ -146,9 +146,9 @@ num menu com duas escolhas.
     pode sair), Install em modo texto, teste de memória.
 - **A Live entra sem senha** por um arquivo que só existe na imagem da Live,
   lido pelo orbit-login e pelo orbit-greet; o sistema instalado nunca o tem.
-- **Depois:** o `orbit-install` (Rust + GTK4 com o `orbit-app`, seção 10)
-  vira um ícone "Instalar" dentro da Live, com a tela "vou formatar X / vou
-  manter Y"; a entrada Install do menu continua como alternativa.
+- **Depois:** o `orbit-install` (Rust + GTK4 com o `orbit-app`, seção 10),
+  que detecta o hardware e propõe a instalação, toma o lugar da entrada
+  Install, e o debian-installer passa às opções avançadas (6.6).
 
 ### 6.2 O que a instalação pergunta e faz
 
@@ -265,6 +265,98 @@ num menu com duas escolhas.
   teste confere que a sessão sobe e os apps abrem. A sessão em si se prova no
   think de verdade: se o orbit-core sobe no virtio-gpu de uma VM não está
   garantido.
+
+### 6.6 O orbit-install: detectar e propor (2026-11-15)
+
+Decidido com o usuário em 2026-11-15. Um instalador gráfico **extremamente
+simples**, no espírito do Calamares mas com uma tela só: ele detecta o
+hardware, monta a proposta de instalação a partir do que achou e pede só o
+que não dá para adivinhar. Em Rust e GTK4 com o `orbit-app`, rodando no
+orbit-core da Live, como o resto do Orbit; o Calamares (no Debian, em Qt,
+assistente de várias páginas) foi descartado por isso.
+
+**O menu do boot da ISO** passa a ter:
+
+- **Orbit Live** — o essencial rodando da mídia, como hoje (6.1).
+- **Instalar o Orbit** — a mesma Live, que abre o `orbit-install` em tela
+  cheia (`orbit.install` na linha de comando do kernel) em vez da sessão.
+- **Opções avançadas** — a Live na memória (`toram`), o debian-installer de
+  hoje (em modo gráfico e texto) enquanto o `orbit-install` não cobrir todos
+  os layouts da 6.4, teste de memória.
+
+**1. Detectar.**
+
+- **Discos:** tipo (NVMe, SSD, HD: `lsblk`, `rota`, `tran`), tamanho, o que
+  têm (`blkid`: sistemas de arquivos, LVM, LUKS) e se algum guarda um
+  `/home` (a lógica do `distro/iso/config/includes.installer/orbit/home.sh`).
+  Ficam de fora o pendrive da ISO e as mídias removíveis.
+- **Placas de rede:** só as físicas (`/sys/class/net/*/device`), quais têm
+  cabo ou Wi-Fi conectado, e o endereço IPv4 que cada uma recebeu na Live:
+  privado (RFC 1918), CGNAT (`100.64.0.0/10`, tratado como privado) ou
+  público. Um endereço recebido por DHCP **prova que a rede já tem um
+  servidor DHCP**: naquela interface o modo Rede nunca é sugerido.
+- **Vídeo:** a GPU e o nó de render (a conversão do Jellyfin, a codificação
+  do remote server).
+
+**2. Propor.**
+
+| Detectado | Proposta |
+|---|---|
+| Um disco | Sistema e `/home` nele, pelos layouts da 6.4; sem storage |
+| Dois ou mais discos | Sistema no mais rápido (NVMe, depois SSD, depois HD; no empate, o menor que tenha 40 GB); os outros, se vazios, como **storage** |
+| Discos de storage | Um: btrfs simples. Dois ou mais: btrfs em RAID1 (duas cópias de cada bloco, com quantos discos houver; RAID5/6 do btrfs evitados, por não serem estáveis). Montados em `/srv` (`@media`, `@shares`), onde ficam o `/srv/media` do Navidrome e do Jellyfin e as pastas compartilhadas |
+| Uma placa, IP privado | Desktop; ou servidor da rede de casa, com o dnsmasq em modo **Proxy** |
+| Uma placa, IP público | Servidor ligado direto na internet: **sem DHCP**, o Unbound só para o túnel, o WireGuard como ponto central (o caso que resolve o CGNAT das outras máquinas). A tela avisa que a máquina está exposta |
+| Duas placas, uma pública e uma privada | Servidor como **roteador da casa**: modo **Rede** só na interface privada, com NAT e encaminhamento (a cadeia `forward` do `orbit-firewall`, trabalho novo da seção 12), e só se a interface privada não tiver recebido endereço de outro DHCP |
+
+- **A finalidade não é decidida sozinha.** Uma pergunta só, "Para que é
+  esta máquina? **Desktop** / **Servidor**", já marcada pelo que foi
+  detectado (Servidor quando há duas placas de rede ligadas ou discos para
+  storage; Desktop no resto). Um PC de jogos com dois discos continua
+  podendo ser Desktop.
+- **Cada finalidade é um conjunto de serviços já ligados** na instalação
+  (seção 12), ajustáveis depois na página "Serviços":
+  - *Desktop:* o firewall. Discos extras vazios viram storage local, sem
+    compartilhar; uma caixa oferece compartilhá-los.
+  - *Servidor:* o firewall, o Fail2Ban, o Unbound, o dnsmasq no modo da
+    tabela, o WireGuard e o remote server; com storage, o Samba, o NFS e a
+    saúde dos discos (smartmontools, com aviso pelo orbit-notify). Uma
+    caixa **"Kit multimídia (Navidrome e Jellyfin)"**.
+- **Disco com dados nunca é formatado sem escolha explícita.** A regra do
+  `/home` da 6.4 continua acima de tudo: um disco com `/home` é mantido e
+  usado como `/home`. Para storage só entram direto os discos vazios; um
+  disco com dados aparece na tela, desmarcado, e só entra se o usuário
+  marcar, com o aviso de que será apagado.
+
+**3. Uma tela só.** No alto, o que foi detectado (a máquina, os discos, a
+rede) e a proposta em frases ("vou formatar X / vou manter Y", "o DHCP fica
+com o roteador"); no meio, a finalidade e, no servidor, o kit multimídia;
+embaixo, usuário, senha, nome da máquina e o botão **Instalar**. Idioma e
+teclado vêm da Live; o fuso, da rede. Um **"Alterar…"** abre os discos e a
+rede para quem quiser mudar a proposta. A criptografia do `/home` (6.4)
+aparece quando se aplica.
+
+**Como instala.** Copia o sistema da Live (o `filesystem.squashfs`, como o
+Calamares e o `--debian-installer live` fazem: offline, exatamente o que foi
+testado) e roda os passos que hoje vivem no debian-installer — a receita
+de partições (`early.sh`), os subvolumes, o systemd-boot e as UKIs, o LUKS e
+a chave de recuperação, o `/home` reaproveitado (`late.sh`, `home.sh`,
+`finish-install.d/`) —, separados do debian-installer para os dois usarem
+os mesmos scripts. Depois, liga os serviços da finalidade pelo
+`orbit-services-helper` (seção 12). A parte com root roda num processo à
+parte, por `pkexec`, com a interface conversando com ela por comandos
+tipados. Log em `/var/log/orbit-install.log`.
+
+**Fora da ISO.** Uma VPS não se instala por ISO: os provedores dão imagens
+de nuvem prontas. Ali o caminho é um Debian 13 da nuvem, o repositório do
+Orbit, os pacotes `orbit-<serviço>` pelo apt e o `orbitctl services` (a
+página "Serviços" no terminal: listar, ligar, desligar, configurar), que
+serve também a qualquer servidor sem sessão gráfica.
+
+**A decidir:** se um servidor instalado pela ISO pode ficar sem a sessão
+gráfica (um NAS no armário), gerenciado pelo `orbitctl services` ou pelo
+Orbit-Settings de um desktop, pelo túnel; e o que mais entra no storage
+(snapshots dos dados, backup com restic ou borg, Syncthing).
 
 ## 7. Infraestrutura
 
@@ -419,14 +511,18 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 
 Status: **em revisão** — proposto em 2026-11-15 e revisto com o usuário
 item a item antes de começar. Revistos: o modelo (os serviços como
-interruptores), a ISO e os nomes, firewall, DHCP e nomes locais, resolvedor,
-banimento, mídia. Ficam como estão, a analisar depois: o WireGuard (CGNAT,
-Tailscale) e a Alexa. Acompanhamento em `docs/pending.md` §15.
+interruptores), a finalidade escolhida na instalação, a ISO e os nomes,
+firewall, DHCP e nomes locais, resolvedor, banimento, mídia, e o storage em
+parte. Ficam como estão, a analisar depois: o WireGuard (CGNAT, Tailscale),
+a Alexa, o servidor sem sessão gráfica e o resto do storage.
+Acompanhamento em `docs/pending.md` §15.
 
-A ideia: os serviços de rede não vêm com a instalação nem com um perfil;
-cada um é um **interruptor na página "Serviços" do Orbit-Settings**, em
-qualquer instalação. Ligar instala, configura e inicia; desligar para;
-remover desinstala. Um servidor é só uma máquina Orbit com serviços ligados.
+A ideia: cada serviço de rede, de mídia e de storage é um **interruptor na
+página "Serviços" do Orbit-Settings**, em qualquer instalação. Ligar
+instala, configura e inicia; desligar para; remover desinstala. A
+**finalidade** que o `orbit-install` pergunta (Desktop ou Servidor, 6.6) só
+decide quais interruptores já vêm ligados; um servidor é uma máquina Orbit
+com serviços ligados.
 Tudo vem do Debian 13 ou do pacote oficial do upstream (seção 1: nunca um
 fork); o trabalho do Orbit são os pacotes de configuração de cada serviço e
 a página que os liga.
@@ -436,7 +532,9 @@ a página que os liga.
 | Item | Decisão |
 |---|---|
 | **Modelo** (revisto) | Cada serviço é um pacote `orbit-<serviço>` (depende do pacote do Debian ou do upstream e traz a configuração padrão do Orbit e o arquivo do firewall), instalado e configurado pela página "Serviços". Nenhum metapacote os puxa; não há `orbit-server` |
-| **ISO e nomes** (revisto) | Uma ISO só, sem perfis: o instalador não pergunta por serviços. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede); "servidor" deixa de ser um nome de edição |
+| **Finalidade** (revisto) | O `orbit-install` pergunta "Desktop / Servidor", já marcado pelo hardware detectado (6.6), e liga na instalação o conjunto de serviços da finalidade: o Desktop só o firewall; o Servidor o firewall, o Fail2Ban, o Unbound, o dnsmasq (no modo que a rede pede), o WireGuard, o remote server, o storage quando há discos para ele, e o kit multimídia se marcado. Depois disso tudo se ajusta na página |
+| **ISO e nomes** (revisto) | Uma ISO só; a finalidade é uma pergunta do instalador, não outra imagem. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
+| **Storage** (revisto, em parte) | Os discos além do do sistema, se vazios, viram storage na instalação: btrfs (RAID1 com dois ou mais) em `/srv` (6.6). Serviços: compartilhar pastas pelo Samba (Windows, macOS, Android) e pelo NFS (Linux), e a saúde dos discos (smartmontools, com aviso). ZFS fora (contrib, DKMS a cada kernel). A decidir: snapshots dos dados, backup (restic ou borg), Syncthing |
 | **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
 | **Nomes sem esses serviços** (revisto) | mDNS pelo Avahi (`think.local`), que funciona com qualquer roteador; a máquina usa o DNS que a rede entrega |
@@ -465,6 +563,9 @@ página do serviço:
 | Acesso remoto | Estações pela rede (LTSP) | `orbit-ltsp` (o `distro/ltsp/` empacotado) | as imagens (PC, Pi 4), o servidor que mostram |
 | Mídia | Música (Navidrome) | `orbit-navidrome` | a pasta, o endereço para os apps (LAN e túnel) |
 | Mídia | Vídeos (Jellyfin) | `orbit-jellyfin` | as bibliotecas, o endereço para os apps, o plugin DLNA |
+| Storage | Pastas compartilhadas (Samba) | `orbit-samba` | as pastas, quem acessa (os usuários do Orbit, com a senha deles no Samba) |
+| Storage | Pastas compartilhadas (NFS) | `orbit-nfs` | as pastas e as redes que as montam |
+| Storage | Saúde dos discos | `orbit-smart` | os discos, os testes agendados, o histórico |
 
 - **Instalar e remover:** pelo PackageKit (`packagekit`, puxado pelo
   `orbit-desktop`), com a senha pedida pelo polkit (o orbit-polkit) e o
@@ -503,6 +604,9 @@ página do serviço:
 | `orbit-ltsp` | a página | `ltsp`, o `distro/ltsp/`, `30-ltsp.nft` |
 | `orbit-navidrome` | a página | `navidrome`, a configuração, `50-navidrome.nft` |
 | `orbit-jellyfin` | a página | `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), a configuração, `51-jellyfin.nft` |
+| `orbit-samba` | a página | `samba`, a configuração, `52-samba.nft` |
+| `orbit-nfs` | a página | `nfs-kernel-server`, `/etc/exports.d/orbit.exports`, `53-nfs.nft` |
+| `orbit-smart` | a página | `smartmontools`, o aviso pelo orbit-notify |
 
 ### 12.4 Firewall
 
@@ -525,6 +629,8 @@ mais a `wg0`):
 | `41-dhcp.nft` | `orbit-dnsmasq` | UDP 67 (o proxy DHCP no modo Proxy, o DHCP no modo Rede) |
 | `50-navidrome.nft` | `orbit-navidrome` | TCP 4533 |
 | `51-jellyfin.nft` | `orbit-jellyfin` | TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
+| `52-samba.nft` | `orbit-samba` | TCP 445 |
+| `53-nfs.nft` | `orbit-nfs` | TCP 2049 (NFSv4 só) |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.5 Cada serviço
@@ -575,11 +681,15 @@ página "Serviços".
 1. `orbit-firewall`: em toda instalação, e o que mais protege.
 2. A página "Serviços" com o PackageKit e o `orbit-services-helper`, e os
    serviços que já existem: o remote server e as estações (`orbit-ltsp`).
+   O `orbit-install` (6.6) vem depois dela, porque liga os serviços da
+   finalidade pelo mesmo auxiliar.
 3. `orbit-wireguard`, com a configuração entregue no pareamento.
 4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
 5. `orbit-fail2ban`, com a jail do Orbit.
 6. `orbit-navidrome` e `orbit-jellyfin`.
-7. O painel.
+7. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`.
+8. O `orbitctl services`, a página no terminal.
+9. O painel.
 
 **Pronto quando:** numa VM instalada pela ISO, cada serviço liga, configura,
 desliga e sai pela página; um nmap da LAN só vê as portas dos serviços

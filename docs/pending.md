@@ -349,10 +349,12 @@ Apps other desktops have and Orbit does not:
 
 ## 15. Services in Orbit Linux (planned 2026-11-15)
 
-Every network and media service is a switch on Orbit-Settings' "Services"
-page, on any install: switching it on installs, configures and starts it;
-off stops it; remove uninstalls it, keeping its data. No profiles, no
-`orbit-server` metapackage, one ISO. The plan, with the page, the packages
+Every network, media and storage service is a switch on Orbit-Settings'
+"Services" page, on any install: switching it on installs, configures and
+starts it; off stops it; remove uninstalls it, keeping its data. The
+purpose `orbit-install` asks for (Desktop or Server, PLANO-DISTRO §6.6)
+only decides which switches start on. No `orbit-server` metapackage, one
+ISO. The plan, with the page, the packages
 and the ports, is `docs/PLANO-DISTRO.md` §12. From Debian 13 (checked
 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2, wireguard-tools,
 fail2ban 1.1.0, packagekit 1.3.1); not in Debian: Navidrome 0.64.2 from its
@@ -364,7 +366,28 @@ Reviewed with the user, item by item (2026-11-15):
   upstream package, Orbit's defaults, its firewall file), installed through
   PackageKit and polkit, started through systemd's D-Bus API, configured by
   a small `orbit-services-helper` that takes only typed, validated commands.
-- [x] One ISO, no profiles; *station* stays the network-booted thin client.
+- [x] One ISO. Its boot menu: *Orbit Live* (the essential, from the medium)
+  and *Install Orbit* (the Live opening `orbit-install` full screen); the
+  debian-installer moves to the advanced options until `orbit-install`
+  covers every layout. *Station* stays the network-booted thin client.
+- [x] `orbit-install` (PLANO-DISTRO §6.6): one screen, in Rust and GTK in the
+  Live's orbit-core, Calamares turned down. It detects the disks (type,
+  size, contents, an existing `/home`), the network cards (which are
+  connected, private, CGNAT or public address, and whether a DHCP server
+  answered) and the GPU, and proposes: the system on the fastest disk, the
+  other empty disks as storage (btrfs, RAID1 with two or more, in `/srv`);
+  one card with a private address: desktop, or a home server with dnsmasq
+  in Proxy mode; one with a public address: no DHCP, WireGuard as the hub;
+  two cards, one public: the home's router (Network mode on the private
+  one, NAT). One question, "Desktop / Server", preselected from what was
+  found; a "Multimedia kit (Navidrome and Jellyfin)" box for servers. A
+  disk with data is never formatted without an explicit choice.
+- [x] Storage, in part: Samba and NFS shares, disk health (smartmontools,
+  warnings through orbit-notify); ZFS left out.
+- [ ] To decide: a server installed from the ISO without the graphical
+  session, run through `orbitctl services` or a desktop's Orbit-Settings
+  over the tunnel; the rest of storage (snapshots of the data, restic or
+  borg backups, Syncthing).
 - [x] Plain nftables on every install (`orbit-firewall`, pulled by
   `orbit-desktop`, on by default), chosen over firewalld and ufw. Only the
   `inet orbit` table is deleted and reloaded, never Debian's default
@@ -422,6 +445,16 @@ Work, in this order (PLANO-DISTRO §12.7):
 - [ ] `orbit-navidrome` and `orbit-jellyfin`: mirrored; the media folders
   (`/srv/media` by default, the home by choice); Jellyfin in the `render`
   group; the first user created with a password of its own.
+- [ ] Storage: `orbit-samba` (TCP 445), `orbit-nfs` (NFSv4, TCP 2049),
+  `orbit-smart`.
+- [ ] `orbitctl services`: the page in a terminal (list, on, off, configure),
+  for VPSs (a Debian cloud image plus the `orbit-<service>` packages) and
+  servers without a session.
+- [ ] `orbit-install`: the detection, the proposal and the screen; the
+  install steps taken out of the debian-installer (`early.sh`, `late.sh`,
+  `home.sh`, `finish-install.d/`) for both to share; the purpose's services
+  switched on through `orbit-services-helper`; the router role's NAT and
+  `forward` chain in `orbit-firewall`.
 - [ ] The panel's `network` module: the firewall's and the tunnel's state,
   a click opening the page.
 - [ ] Done when: on a VM installed from the ISO each service switches on,
