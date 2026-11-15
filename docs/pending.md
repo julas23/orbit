@@ -56,8 +56,8 @@ built, the local repository synced, the public one pushed, offered as an
   failed step undoing the ones before, `--trial` undoing unless kept.
   apt-get rather than PackageKit: one daemon less, which Debian doesn't
   bring. `orbit-desktop` depends on it. Tried as root on the think (a trial
-  undone after 5 s, a kept one, apt's progress, a unit refused); pkexec
-  itself to try once published.
+  undone after 5 s, a kept one, apt's progress, a unit refused); through
+  pkexec, by the user on the think once published (addd6a8).
 - [x] Orbit-Settings' base (`docs/PLANO-SETTINGS.md` §4, 2026-11-15): the
   pages in a registry (`pages.rs`: group, title, icon, keywords, the option
   messages the search finds), the sidebar in groups with the search on top
@@ -71,7 +71,8 @@ built, the local repository synced, the public one pushed, offered as an
   progress on the row; turning off what lets things in, and removing, ask
   first; a trial shows a bar to keep it, counting down, Undo undoing at
   once (the helper takes `undo` too); the firewall's row lists what each
-  file opens. Seen on the think; pkexec to try once published.
+  file opens. Published (addd6a8) and tried by the user on the think,
+  pkexec's password included.
 - [ ] The rest of the page: the dependencies between services; firewall, WireGuard and
   dnsmasq-mode changes undone after 30 s without confirmation; bans,
   failed services and new pairings as notifications.
