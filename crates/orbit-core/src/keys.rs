@@ -189,6 +189,23 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(k.command(&ctrl, Keysym::q), None);
+        // The accessibility's, with Alt too.
+        let alt = ModifiersState {
+            logo: true,
+            alt: true,
+            ..Default::default()
+        };
+        assert_eq!(k.command(&alt, Keysym::_8), Some("zoom toggle"));
+        assert_eq!(k.command(&alt, Keysym::equal), Some("zoom in"));
+        assert_eq!(k.command(&alt, Keysym::minus), Some("zoom out"));
+        assert_eq!(
+            k.command(&alt, Keysym::s),
+            Some("exec orbit-settings screen-reader toggle")
+        );
+        // Every default parses.
+        for (combo, _) in DEFAULT {
+            assert!(parse(combo, config.modifier).is_ok(), "{combo}");
+        }
     }
 
     #[test]

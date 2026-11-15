@@ -27,7 +27,7 @@ use smithay::{
 };
 
 use crate::{
-    render::{background, output_elements},
+    render::{background, frame_elements},
     state::{Backend, Orbit},
 };
 
@@ -114,7 +114,7 @@ fn render(state: &mut Orbit) {
     // Right after the nested window is resized the surface has no age yet
     // (EGL logs BAD_SURFACE): the frame is then drawn whole.
     let age = winit.backend.buffer_age().unwrap_or(0);
-    let elements = output_elements(state, &output, winit.backend.renderer(), false);
+    let elements = frame_elements(state, &output, winit.backend.renderer(), false);
     let clear = background(state);
     let damage = match winit.backend.bind() {
         Ok((renderer, mut framebuffer)) => {

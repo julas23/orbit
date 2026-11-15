@@ -43,6 +43,8 @@
 //! shadow_color: "#00000066"
 //! shadow_size: 24
 //! animations: true       # new windows fade in (not on battery with effects: auto)
+//! accessibility: { sticky_keys: false, slow_keys: 0, bounce_keys: 0,
+//!                  mouse_keys: false, zoom: 1.0, visual_bell: false }   # see `a11y`
 //! rules:                 # what windows do when they open (the first rule that
 //!                        # matches; app_id and title are regular expressions)
 //!   - { app_id: "pavucontrol", floating: true, size: [800, 600] }
@@ -149,6 +151,9 @@ pub struct Config {
     /// Run on a right click on the bare wallpaper, with the click's place
     /// appended: `X Y OUTPUT`. Empty: nothing.
     pub desktop_menu: String,
+    /// Sticky, slow and bounce keys, mouse keys, the magnifier and the
+    /// visual bell (`a11y`).
+    pub accessibility: crate::a11y::Accessibility,
 }
 
 /// One value for every machine, or one per host name, with `default` for
@@ -343,6 +348,7 @@ impl Default for Config {
             rules: Vec::new(),
             wallpaper: crate::wallpaper::Wallpaper::default(),
             desktop_menu: "orbit-settings menu".into(),
+            accessibility: Default::default(),
         }
     }
 }

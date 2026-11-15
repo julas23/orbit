@@ -6,7 +6,9 @@
 //! The virtual pointer and keyboard (wlr-virtual-pointer,
 //! virtual-keyboard: orbit-remote-server's remote mouse and keys) come in
 //! as the real ones do; their keys are read with the seat's keymap. Only
-//! orbit-remote-server gets them (`remote_server`), and its keyboard does
+//! orbit-remote-server gets them (`remote_server`), and the virtual
+//! keyboard also the on-screen keyboards in /usr/bin (`on_screen_keyboard`,
+//! for the accessibility); a virtual keyboard does
 //! not reach Ctrl+Alt+Backspace or Ctrl+Alt+F1…F12: a remote user should
 //! not end the session, or switch the server's console under its owner.
 //!
@@ -112,63 +114,11 @@ impl Orbit {
                 let pos = event.position_transformed(geo.size) + geo.loc.to_f64();
                 self.pointer_to(pos, Event::time(&event));
             }
-            // Locked, clicks reach the greet alone (the pointer's focus
-            // is never another client's), and the wheel no one.
-            InputEvent::PointerButton { event, .. } if self.locked() => {
-                let Some(pointer) = self.seat.get_pointer() else { return };
-                let serial = SERIAL_COUNTER.next_serial();
-                pointer.button(
-                    self,
-                    &ButtonEvent {
-                        button: event.button_code(),
-                        state: event.state(),
-                        serial,
-                        time: Event::time(&event),
-                    },
-                );
-                pointer.frame(self);
-            }
-            InputEvent::PointerAxis { .. } if self.locked() => {}
             InputEvent::PointerButton { event, .. } => {
-                let Some(pointer) = self.seat.get_pointer() else { return };
-                let serial = SERIAL_COUNTER.next_serial();
-                // Mod + left button on a window moves it, Mod + right
-                // button resizes it; the click is not the window's.
-                if event.state() == ButtonState::Pressed
-                    && matches!(event.button_code(), crate::grab::BTN_LEFT | crate::resize::BTN_RIGHT)
-                    && !pointer.is_grabbed()
-                    && self.modifier_held()
-                    && let Some(window) = self.window_under(pointer.current_location())
-                {
-                    if event.button_code() == crate::grab::BTN_LEFT {
-                        self.start_move(window, serial, None);
-                    } else {
-                        self.start_resize(window, serial, None, None);
-                    }
-                    return;
-                }
-                // A right click on the bare wallpaper: the desktop's menu.
-                if event.state() == ButtonState::Pressed
-                    && event.button_code() == crate::resize::BTN_RIGHT
-                    && !pointer.is_grabbed()
-                    && self.desktop_menu(pointer.current_location())
-                {
-                    return;
-                }
-                if event.state() == ButtonState::Pressed && !pointer.is_grabbed() {
-                    self.focus_at(pointer.current_location());
-                }
-                pointer.button(
-                    self,
-                    &ButtonEvent {
-                        button: event.button_code(),
-                        state: event.state(),
-                        serial,
-                        time: Event::time(&event),
-                    },
-                );
-                pointer.frame(self);
+                self.button(event.button_code(), event.state(), Event::time(&event));
             }
+            // Locked, the wheel reaches no one.
+            InputEvent::PointerAxis { .. } if self.locked() => {}
             InputEvent::PointerAxis { event, .. } => self.wheel::<I>(event),
             _ if self.locked() => {}
             InputEvent::GestureSwipeBegin { event, .. } => {
@@ -370,6 +320,56 @@ impl Orbit {
         }
     }
 
+    /// A button of the mouse (or of mouse keys, `a11y`) went down or up.
+    /// Locked, clicks reach the greet alone (the pointer's focus is never
+    /// another client's).
+    pub(crate) fn button(&mut self, button: u32, state: ButtonState, time: smithay::backend::input::InputTime) {
+        let Some(pointer) = self.seat.get_pointer() else { return };
+        let serial = SERIAL_COUNTER.next_serial();
+        if !self.locked() {
+            // Mod + left button on a window moves it, Mod + right button
+            // resizes it; the click is not the window's.
+            if state == ButtonState::Pressed
+                && matches!(button, crate::grab::BTN_LEFT | crate::resize::BTN_RIGHT)
+                && !pointer.is_grabbed()
+                && self.modifier_held()
+                && let Some(window) = self.window_under(pointer.current_location())
+            {
+                if button == crate::grab::BTN_LEFT {
+                    self.start_move(window, serial, None);
+                } else {
+                    self.start_resize(window, serial, None, None);
+                }
+                return;
+            }
+            // A right click on the bare wallpaper: the desktop's menu.
+            if state == ButtonState::Pressed
+                && button == crate::resize::BTN_RIGHT
+                && !pointer.is_grabbed()
+                && self.desktop_menu(pointer.current_location())
+            {
+                return;
+            }
+            if state == ButtonState::Pressed && !pointer.is_grabbed() {
+                self.focus_at(pointer.current_location());
+            }
+        }
+        pointer.button(
+            self,
+            &ButtonEvent {
+                button,
+                state,
+                serial,
+                time,
+            },
+        );
+        pointer.frame(self);
+        // Sticky keys: a click (Shift+click) uses the latched modifiers.
+        if self.config.accessibility.sticky_keys {
+            self.sticky_used(state == ButtonState::Released);
+        }
+    }
+
     /// A three-finger swipe ended: it walks the areas of the grid, the way
     /// the fingers push (as on a phone: left brings the area on the right).
     fn swiped(&mut self, swipe: Swipe) {
@@ -468,21 +468,35 @@ impl Orbit {
         }
     }
 
-    /// A key; `remote` when it comes from a virtual keyboard.
+    /// A key; `remote` when it comes from a virtual keyboard. It goes
+    /// through the accessibility's filters first (`a11y`), locked too.
     fn key<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent, source: KeyboardSource, remote: bool) {
+        let pressed = event.state() == KeyState::Pressed;
+        self.a11y_key(event.key_code(), pressed, Event::time(&event), source, remote);
+    }
+
+    /// A key as it reaches the keyboard: the core's shortcuts, then the
+    /// focused client.
+    pub(crate) fn feed_key(
+        &mut self,
+        code: smithay::input::keyboard::Keycode,
+        key_state: KeyState,
+        time: smithay::backend::input::InputTime,
+        source: KeyboardSource,
+        remote: bool,
+    ) {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return;
         };
         let serial = SERIAL_COUNTER.next_serial();
-        let code = event.key_code();
-        let pressed = event.state() == KeyState::Pressed;
+        let pressed = key_state == KeyState::Pressed;
         let action = keyboard.input_from_source::<Option<Action>, _>(
             source,
             self,
             code,
-            event.state(),
+            key_state,
             serial,
-            Event::time(&event),
+            time,
             |state, mods, handle| {
                 // A key that wakes the screensaver is not the hidden
                 // window's (its release neither).
@@ -607,7 +621,7 @@ impl Orbit {
 
     /// `pos` kept on the screens: inside the output it is over, or the
     /// nearest one.
-    fn clamp(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
+    pub(crate) fn clamp(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
         let outputs: Vec<_> = self
             .space
             .outputs()
@@ -647,7 +661,7 @@ impl Orbit {
         windows.get(j).cloned()
     }
 
-    fn pointer_to(&mut self, pos: Point<f64, Logical>, time: smithay::backend::input::InputTime) {
+    pub(crate) fn pointer_to(&mut self, pos: Point<f64, Logical>, time: smithay::backend::input::InputTime) {
         let Some(pointer) = self.seat.get_pointer() else { return };
         let serial = SERIAL_COUNTER.next_serial();
         if self.locked()
@@ -693,8 +707,9 @@ impl Orbit {
             },
         );
         pointer.frame(self);
-        // On the screen the core draws the pointer: it moved, so a frame.
-        if matches!(self.backend, crate::state::Backend::Drm(_)) {
+        // On the screen the core draws the pointer, and the magnifier
+        // follows it: it moved, so a frame.
+        if matches!(self.backend, crate::state::Backend::Drm(_)) || self.a11y.zoom > 1.0 {
             self.request_render();
         }
     }
@@ -861,4 +876,38 @@ pub fn remote_server(
         );
     }
     allowed
+}
+
+/// On-screen keyboards installed on the system (the accessibility's), also
+/// given the virtual keyboard (not the pointer): wvkbd and squeekboard
+/// from /usr/bin, which only root writes to. Their keys are read with the
+/// seat's keymap, as orbit-remote-server's: a layout of theirs other than
+/// the seat's types the seat's letters.
+pub fn on_screen_keyboard(
+    dh: &smithay::reexports::wayland_server::DisplayHandle,
+    client: &smithay::reexports::wayland_server::Client,
+) -> bool {
+    let Ok(credentials) = client.get_credentials(dh) else {
+        return false;
+    };
+    std::fs::read_link(format!("/proc/{}/exe", credentials.pid))
+        .ok()
+        .is_some_and(|exe| on_screen_keyboard_path(&exe.to_string_lossy()))
+}
+
+fn on_screen_keyboard_path(exe: &str) -> bool {
+    let exe = exe.strip_suffix(" (deleted)").unwrap_or(exe);
+    exe.strip_prefix("/usr/bin/")
+        .is_some_and(|name| !name.contains('/') && (name.starts_with("wvkbd-") || name == "squeekboard"))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn on_screen_keyboards() {
+        assert!(super::on_screen_keyboard_path("/usr/bin/wvkbd-mobintl"));
+        assert!(super::on_screen_keyboard_path("/usr/bin/squeekboard (deleted)"));
+        assert!(!super::on_screen_keyboard_path("/home/me/bin/wvkbd-mobintl"));
+        assert!(!super::on_screen_keyboard_path("/usr/bin/../../tmp/squeekboard"));
+    }
 }

@@ -67,4 +67,9 @@ pub const DEFAULT: &[(&str, &str)] = &[
     ("Mod+Shift+8", "move container to workspace number 8"),
     ("Mod+Shift+9", "move container to workspace number 9"),
     ("Mod+Shift+0", "move container to workspace number 10"),
+    // Accessibility, as in GNOME: the magnifier and the screen reader.
+    ("Mod+Alt+8", "zoom toggle"),
+    ("Mod+Alt+equal", "zoom in"),
+    ("Mod+Alt+minus", "zoom out"),
+    ("Mod+Alt+S", "exec orbit-settings screen-reader toggle"),
 ];
