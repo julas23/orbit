@@ -401,7 +401,47 @@ with Step 2; the phases then run alongside the steps above.
   login, a network printer added and an update installed all go through
   Orbit-Settings.
 - [ ] Phase C: Accessibility (with the orbit-core work it needs), Devices,
-  the advanced YAML editor.
+  the advanced YAML editor. Done 2026-11-15, all three, to be tried:
+  - C1, the advanced editor (page `advanced`): every YAML of
+    `~/.config/orbit` and `modules/` as text, core.yaml first; saved only
+    once it reads (YAML; core.yaml by the new `orbit-core --check FILE`,
+    which a bad file would otherwise send to the defaults; panel and dock by
+    their types; keys.yaml as combination → command), the error's line
+    underlined and the cursor on it; written through a file beside it, the
+    core told to reload core.yaml and keys.yaml; Ctrl+S; changes asked about
+    before another file opens.
+  - C2, Accessibility (page `accessibility`). The core (`a11y.rs`, core.yaml
+    `accessibility:`), working at the lock too since the keys go through it
+    before the greet: sticky keys, slow keys and bounce keys (ms), mouse
+    keys (X's and GNOME's keypad with Num Lock off), the magnifier (`zoom`,
+    around the pointer; IPC `zoom in|out|off|toggle|F`, Mod+Alt+8, Mod+Alt+=,
+    Mod+Alt+-; screen copies not zoomed), the visual bell
+    (xdg-system-bell-v1, Wayland programs only), and the virtual keyboard
+    protocol opened to /usr/bin/wvkbd-* and squeekboard. GNOME's keys for
+    the applications: text size, high contrast, less motion (animations
+    off in the core too), the pointer's size. The on-screen keyboard
+    (wvkbd-mobintl, installed from the page, kept in `login:`) and the
+    screen reader (Orca, installed from the page; `orbit-settings
+    screen-reader on|off|toggle`, Mod+Alt+S, kept in `startup:` so it reads
+    the greet). An older orbit-core refuses a core.yaml with
+    `accessibility:` (unknown key): the two ship together.
+  - C3, Devices (page `devices`): Thunderbolt devices allowed (bolt's
+    EnrollDevice), the graphics cards (switcheroo-control), the screen
+    turned with the machine (`devices.yaml` `auto_rotate`; `orbit-settings
+    agent` claims iio-sensor-proxy's accelerometer and turns eDP/LVDS/DSI
+    with `output NAME transform`, as Mutter maps the orientations), the
+    firmware (fwupdmgr: devices, updates, `update -y --no-reboot-check`).
+    Each service missing is offered for installation (the helper's
+    EXTRA_PACKAGES).
+  Seen nested: the three pages drawn, the editor's file read, every `zoom`
+  command answered; unit tests for the key filters, mouse keys, zoom, the
+  editor's checks. Not tried: any of the key filters, mouse keys, the
+  magnifier's look or the bell with real input; wvkbd, Orca, bolt,
+  switcheroo, the accelerometer and fwupd (none installed on the think);
+  which way 90 and 270 turn a real panel. Left: colour profiles (colord;
+  the core applies none to a monitor yet), the on-screen keyboard over the
+  greet (only the greet is drawn while locked), X programs' bells, sticky
+  keys turned off by two modifiers pressed together.
 
 ### Later
 

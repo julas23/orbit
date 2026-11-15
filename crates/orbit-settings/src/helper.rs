@@ -65,3 +65,33 @@ pub fn run_with(
         }
     });
 }
+
+/// A button installing `package` (one of orbit_services' EXTRA_PACKAGES)
+/// through the helper; once `installed` says so, it hides and `done` runs.
+pub fn install_button(
+    package: &'static str,
+    installed: fn() -> bool,
+    message: &gtk::Label,
+    done: impl Fn() + 'static,
+) -> gtk::Button {
+    use gtk::prelude::*;
+    let button = gtk::Button::with_label(&tr("settings-a11y-install"));
+    button.set_halign(gtk::Align::End);
+    let message = message.clone();
+    let done = std::rc::Rc::new(done);
+    button.connect_clicked(move |b| {
+        b.set_sensitive(false);
+        crate::say(&message, &tr("settings-installing"));
+        let (b, message, done) = (b.clone(), message.clone(), done.clone());
+        run(vec![Privileged::Install(package.into())], |_| {}, move |error| {
+            let ok = installed();
+            b.set_visible(!ok);
+            b.set_sensitive(true);
+            crate::say(&message, &error.unwrap_or_default());
+            if ok {
+                done();
+            }
+        });
+    });
+    button
+}

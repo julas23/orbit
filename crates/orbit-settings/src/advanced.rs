@@ -34,7 +34,10 @@ fn files(dir: &ConfigDir) -> Vec<String> {
         names.sort();
         names
     };
+    // The core's first, then the others.
+    let first = ["core.yaml", "keys.yaml", "panel.yaml", "dock.yaml"];
     let mut all = list("");
+    all.sort_by_key(|n| first.iter().position(|f| f == n).unwrap_or(first.len()));
     all.extend(list("modules"));
     all
 }
@@ -273,8 +276,11 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
             glib::spawn_future_local(async move {
                 if ask.choose_future(window.as_ref()).await == Ok(1) {
                     page.open(&name);
-                } else if let Some(i) = page.shown.borrow().as_ref().and_then(|(n, _)| page.names.iter().position(|x| x == n)) {
-                    page.pick.set_selected(i as u32);
+                } else {
+                    let back = page.shown.borrow().as_ref().and_then(|(n, _)| page.names.iter().position(|x| x == n));
+                    if let Some(i) = back {
+                        page.pick.set_selected(i as u32);
+                    }
                 }
             });
         }
@@ -308,8 +314,9 @@ pub fn page(dir: &ConfigDir) -> gtk::Widget {
     body.connect_map({
         let page = page.clone();
         move |_| {
+            let shown = page.shown.borrow().clone();
             if !page.changed()
-                && let Some((name, _)) = page.shown.borrow().clone()
+                && let Some((name, _)) = shown
             {
                 page.open(&name);
             }

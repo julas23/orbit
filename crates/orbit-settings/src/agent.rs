@@ -13,6 +13,11 @@
 //!   at most as precise as its `max-accuracy-level`; the portal still asks
 //!   per app. geoclue lets only the agents its configuration lists in
 //!   (`/etc/geoclue/conf.d/90-orbit.conf`, from the package).
+//! - The screen turning with the machine (Devices): with `devices.yaml`
+//!   `auto_rotate`, iio-sensor-proxy's accelerometer is claimed and the
+//!   machine's own panel (eDP, LVDS, DSI) turned with it, through the
+//!   core's `output NAME transform`. The file is watched: turned off, the
+//!   accelerometer is let go.
 
 use std::{path::PathBuf, rc::Rc};
 
@@ -189,6 +194,74 @@ fn location(keep: &mut Vec<Box<dyn std::any::Any>>) -> anyhow::Result<()> {
     Ok(())
 }
 
+const SENSORS: &str = "net.hadess.SensorProxy";
+
+/// Turns the machine's own panels to `orientation`.
+fn turn(orientation: &str) {
+    let Some(transform) = crate::devices::transform_for(orientation) else { return };
+    let outputs = crate::core::outputs().unwrap_or_default();
+    for output in outputs.iter().filter(|o| crate::devices::internal(&o.name)) {
+        if let Err(e) = crate::core::command(&format!("output {} transform {transform}", output.name)) {
+            log::warn!("rotation of {}: {e:#}", output.name);
+        }
+    }
+}
+
+/// Follows the accelerometer while `devices.yaml` says so.
+fn rotation(dir: &Rc<ConfigDir>, keep: &mut Vec<Box<dyn std::any::Any>>) {
+    let proxy = match gio::DBusProxy::for_bus_sync(
+        gio::BusType::System,
+        gio::DBusProxyFlags::NONE,
+        None,
+        SENSORS,
+        "/net/hadess/SensorProxy",
+        SENSORS,
+        gio::Cancellable::NONE,
+    ) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let claimed = Rc::new(std::cell::Cell::new(false));
+    let apply: Rc<dyn Fn()> = Rc::new({
+        let (proxy, claimed, dir) = (proxy.clone(), claimed.clone(), dir.clone());
+        move || {
+            let want = crate::devices::auto_rotate(&dir)
+                && proxy.cached_property("HasAccelerometer").and_then(|v| v.get::<bool>()).unwrap_or(false);
+            if want == claimed.get() {
+                return;
+            }
+            let method = if want { "ClaimAccelerometer" } else { "ReleaseAccelerometer" };
+            match proxy.call_sync(method, None, gio::DBusCallFlags::NONE, 5000, gio::Cancellable::NONE) {
+                Ok(_) => {
+                    claimed.set(want);
+                    log::info!("rotation: {}", if want { "following the accelerometer" } else { "off" });
+                    if let Some(o) = proxy.cached_property("AccelerometerOrientation").and_then(|v| v.get::<String>()).filter(|_| want) {
+                        turn(&o);
+                    }
+                }
+                Err(e) => log::warn!("rotation: {e}"),
+            }
+        }
+    });
+    apply();
+    let claimed2 = claimed.clone();
+    let id = proxy.connect_local("g-properties-changed", false, move |args| {
+        let changed = args.get(1).and_then(|v| v.get::<glib::Variant>().ok())?;
+        let orientation = glib::VariantDict::new(Some(&changed)).lookup::<String>("AccelerometerOrientation").ok().flatten();
+        if let (true, Some(o)) = (claimed2.get(), orientation) {
+            turn(&o);
+        }
+        None
+    });
+    let file = gio::File::for_path(dir.path().join("devices.yaml"));
+    if let Ok(monitor) = file.monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE) {
+        let apply = apply.clone();
+        monitor.connect_changed(move |_, _, _, _| apply());
+        keep.push(Box::new(monitor));
+    }
+    keep.push(Box::new((proxy, id, apply)));
+}
+
 /// core.yaml's line that starts the agent.
 pub const AT_LOGIN: &str = "orbit-settings agent";
 
@@ -233,11 +306,13 @@ pub fn run(config: PathBuf) -> glib::ExitCode {
     let dir = ConfigDir::new(&config);
     let monitor = gio::VolumeMonitor::get();
     let dir = Rc::new(dir);
+    let dir2 = dir.clone();
     monitor.connect_volume_added(move |_, volume| volume_added(&dir, volume));
     let mut keep: Vec<Box<dyn std::any::Any>> = Vec::new();
     if let Err(e) = location(&mut keep) {
         log::warn!("location: {e}");
     }
+    rotation(&dir2, &mut keep);
     glib::MainLoop::new(None, false).run();
     drop(keep);
     glib::ExitCode::SUCCESS

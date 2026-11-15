@@ -75,9 +75,16 @@ struct LoginBlock {
 
 /// Where `login:` is written as a block list, one item per `- ` line;
 /// `None` when it is not there, is written inline, or is not that simple.
+#[cfg(test)]
 fn login_block(text: &str) -> Option<LoginBlock> {
+    list_block(text, "login")
+}
+
+/// As [`login_block`], for core.yaml's list `key` (`login`, `startup`).
+fn list_block(text: &str, key: &str) -> Option<LoginBlock> {
     let lines: Vec<&str> = text.lines().collect();
-    let head = lines.iter().position(|l| l.trim_end() == "login:" || l.starts_with("login: #"))?;
+    let (bare, commented) = (format!("{key}:"), format!("{key}: #"));
+    let head = lines.iter().position(|l| l.trim_end() == bare || l.starts_with(&commented))?;
     let mut items: Vec<(usize, usize)> = Vec::new();
     let mut indent: Option<String> = None;
     for (n, line) in lines.iter().enumerate().skip(head + 1) {
@@ -135,7 +142,12 @@ fn add_login(text: &str, block: &LoginBlock, command: &str) -> String {
 
 /// core.yaml's `login:` list.
 pub fn login_items(dir: &ConfigDir) -> Vec<String> {
-    match core::get(dir, "login") {
+    list_items(dir, "login")
+}
+
+/// core.yaml's list `key`.
+fn list_items(dir: &ConfigDir, key: &str) -> Vec<String> {
+    match core::get(dir, key) {
         Some(Value::Sequence(s)) => s.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect(),
         _ => Vec::new(),
     }
@@ -149,16 +161,25 @@ fn edit_login(
     line: impl FnOnce(&str, &LoginBlock) -> String,
     whole: impl FnOnce(&mut Vec<String>),
 ) -> anyhow::Result<()> {
+    edit_list(dir, "login", line, whole)
+}
+
+fn edit_list(
+    dir: &ConfigDir,
+    key: &str,
+    line: impl FnOnce(&str, &LoginBlock) -> String,
+    whole: impl FnOnce(&mut Vec<String>),
+) -> anyhow::Result<()> {
     let path = dir.path().join("core.yaml");
     let text = std::fs::read_to_string(&path).unwrap_or_default();
-    let now = login_items(dir);
+    let now = list_items(dir, key);
     let mut want = now.clone();
     whole(&mut want);
-    if let Some(b) = login_block(&text).filter(|b| b.items.len() == now.len() && !b.items.is_empty()) {
+    if let Some(b) = list_block(&text, key).filter(|b| b.items.len() == now.len() && !b.items.is_empty()) {
         let new = line(&text, &b);
         let read: Option<Vec<String>> = serde_yaml_ng::from_str::<Value>(&new)
             .ok()
-            .and_then(|v| v.get("login").cloned())
+            .and_then(|v| v.get(key).cloned())
             .and_then(|v| serde_yaml_ng::from_value(v).ok());
         if read.as_ref() == Some(&want) && !want.is_empty() {
             let temp = path.with_extension("yaml.new");
@@ -167,16 +188,21 @@ fn edit_login(
             return Ok(());
         }
     }
-    core::save(dir, "login", Value::Sequence(want.into_iter().map(Value::from).collect()))
+    core::save(dir, key, Value::Sequence(want.into_iter().map(Value::from).collect()))
 }
 
 /// `command` in the `login:` list or not, as `present` says (another
 /// page's own line: the network drives' mounting).
 pub fn ensure_login(dir: &ConfigDir, command: &str, present: bool) -> anyhow::Result<()> {
-    let items = login_items(dir);
+    ensure_in(dir, "login", command, present)
+}
+
+/// `command` in core.yaml's list `key` (`login`, `startup`) or not.
+pub fn ensure_in(dir: &ConfigDir, key: &str, command: &str, present: bool) -> anyhow::Result<()> {
+    let items = list_items(dir, key);
     match (items.iter().position(|c| c == command), present) {
-        (None, true) => edit_login(dir, |text, b| add_login(text, b, command), |l| l.push(command.to_owned())),
-        (Some(i), false) => edit_login(dir, |text, b| remove_login(text, b, i), |l| {
+        (None, true) => edit_list(dir, key, |text, b| add_login(text, b, command), |l| l.push(command.to_owned())),
+        (Some(i), false) => edit_list(dir, key, |text, b| remove_login(text, b, i), |l| {
             l.remove(i);
         }),
         _ => Ok(()),
@@ -433,5 +459,6 @@ mod tests {
     fn leaves_inline_lists_alone() {
         assert_eq!(login_block("login: [nm-applet]\n"), None);
         assert_eq!(login_block("startup: []\n"), None);
+        assert_eq!(list_block("startup:\n  - orbit-polkit\n  - orca\nlogin: []\n", "startup").unwrap().items.len(), 2);
     }
 }

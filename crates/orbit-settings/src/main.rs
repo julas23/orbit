@@ -6,6 +6,7 @@
 //!                                     `monitors`, `wallpaper`…)
 //!   orbit-settings agent              removable media and the location
 //!                                     service, in the background (`agent`)
+//!   orbit-settings screen-reader on|off|toggle   Orca (`a11y`)
 //!   orbit-settings menu X Y OUTPUT    the menu of a right click on the
 //!                                     desktop (orbit-core's
 //!                                     `desktop_menu`), at X Y of OUTPUT
@@ -13,6 +14,7 @@
 //! The window is single: started again, the running one comes forward on
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
+mod a11y;
 mod about;
 mod advanced;
 mod agent;
@@ -22,6 +24,7 @@ mod bluetooth;
 mod boot;
 mod core;
 mod datetime;
+mod devices;
 mod housekeeping;
 mod dbus;
 mod dock_page;
@@ -78,10 +81,11 @@ fn main() -> glib::ExitCode {
         }
         Some("housekeeping") => housekeeping::run(),
         Some("agent") => agent::run(config),
+        Some("screen-reader") => a11y::run_screen_reader(config, args.get(1).map(String::as_str)),
         Some("drives") if args.get(1).is_some_and(|a| a == "--mount") => drives::mount_at_login(config),
         Some("-h" | "--help") => {
             let ids: Vec<&str> = pages::PAGES.iter().map(|p| p.id).collect();
-            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping | drives --mount | agent", ids.join("|"));
+            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping | drives --mount | agent | screen-reader on|off|toggle", ids.join("|"));
             glib::ExitCode::SUCCESS
         }
         _ => window(config),
@@ -173,6 +177,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "updates" => updates_page::page(),
             "drives" => drives::page(dir),
             "storage" => storage::page(dir),
+            "devices" => devices::page(dir),
             "printers" => printers::page(),
             "boot" => boot::page(),
             "datetime" => datetime::page(),
@@ -180,6 +185,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "about" => about::page(),
             "services" => services::page(),
             "advanced" => advanced::page(dir),
+            "accessibility" => a11y::page(dir),
             _ => continue,
         };
         stack.add_titled(&widget, Some(page.id), &tr(page.title));
