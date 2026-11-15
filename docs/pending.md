@@ -255,8 +255,16 @@ with Step 2; the phases then run alongside the steps above.
   a passkey or for a PIN; the lists follow BlueZ's signals. Seen on the
   think (the search found devices, stopped on closing); pairing a real
   device left for the user to try.
-  Next: A3 Sound,
-  Power, A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
+- [x] Batch A3, Sound (2026-11-15): the output and the input (which one,
+  volume, mute; outputs' monitors left out), the applications playing (a
+  volume each) and the cards' profiles, over PipeWire's PulseAudio
+  protocol in pure Rust (no pactl), following the server's events: rows
+  built again only when a device or stream comes or goes, values set in
+  place otherwise, a slider the user just moved left alone. Seen on the
+  think with its real devices (volumes not touched). orbit-app's catalogs
+  test now also refuses a message written twice (the page's title first
+  took the wallpaper's `settings-sound`).
+  Next: A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
   Dock, Notifications, Default apps, A6 Users, A7 the panel's modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
   Appearance, Keyboard, Mouse and touchpad, Date and time, Region and

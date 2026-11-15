@@ -173,6 +173,25 @@ mod tests {
         format(&bundle(locale, source), id, Some(&a)).expect("message")
     }
 
+    /// A message written twice in a catalog: the second hides the first
+    /// (Settings' page title once took the wallpaper's "Follow the sound").
+    #[test]
+    fn no_catalog_has_a_message_twice() {
+        for (locale, source) in CATALOGS {
+            let res = FluentResource::try_new(source.to_string()).unwrap_or_else(|(_, e)| panic!("{locale}: {e:?}"));
+            let mut seen = std::collections::HashSet::new();
+            let twice: Vec<String> = res
+                .entries()
+                .filter_map(|e| match e {
+                    fluent_syntax::ast::Entry::Message(m) => Some(m.id.name.to_string()),
+                    _ => None,
+                })
+                .filter(|id| !seen.insert(id.clone()))
+                .collect();
+            assert!(twice.is_empty(), "{locale} has twice: {twice:?}");
+        }
+    }
+
     #[test]
     fn messages_in_both_languages() {
         assert_eq!(in_locale("en-US", "weather-code-3", &[]), "Overcast");

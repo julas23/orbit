@@ -70,6 +70,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-bt-visible", "settings-bt-mine", "settings-bt-nearby", "settings-bt-pair"],
     },
     Page {
+        id: "sound",
+        group: Group::System,
+        title: "settings-audio",
+        icon: "audio-speakers-symbolic",
+        keywords: "settings-audio-keywords",
+        options: &["settings-sound-output", "settings-sound-input", "settings-sound-apps", "settings-sound-cards"],
+    },
+    Page {
         id: "power",
         group: Group::System,
         title: "settings-power",

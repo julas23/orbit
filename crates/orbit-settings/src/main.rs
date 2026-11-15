@@ -23,6 +23,7 @@ mod pages;
 mod power;
 mod region;
 mod services;
+mod sound;
 mod wallpaper;
 mod wifi;
 
@@ -129,6 +130,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "network" => network::page(),
             "power" => power::page(dir),
             "bluetooth" => bluetooth::page(),
+            "sound" => sound::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),
