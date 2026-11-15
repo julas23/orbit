@@ -182,6 +182,14 @@ pub const PAGES: &[Page] = &[
         ],
     },
     Page {
+        id: "panel",
+        group: Group::Orbit,
+        title: "settings-panel",
+        icon: "view-dual-symbolic",
+        keywords: "settings-panel-keywords",
+        options: &["settings-panel-edge", "settings-panel-monitor", "settings-panel-reserve", "settings-panel-modules"],
+    },
+    Page {
         id: "windows",
         group: Group::Orbit,
         title: "settings-win",

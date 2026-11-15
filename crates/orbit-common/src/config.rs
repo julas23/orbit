@@ -209,6 +209,37 @@ pub enum Align {
     End,
 }
 
+/// Every module the panel knows, in the order the add menu lists them.
+pub const PANEL_MODULES: &[&str] = &[
+    "menu",
+    "windows",
+    "clock",
+    "calendar",
+    "weather",
+    "forecast",
+    "tray",
+    "volume",
+    "brightness",
+    "network",
+    "keyboard",
+    "battery",
+    "notifications",
+    "bluetooth",
+    "monitors",
+    "spectrum",
+    "aigent",
+    "cpu",
+    "ram",
+    "gpu",
+    "lan",
+    "disk",
+    "workspaces",
+    "session",
+];
+
+/// Modules that may be listed more than once, each showing something else.
+pub const PANEL_REPEATABLE: &[&str] = &["disk"];
+
 /// `panel.yaml`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]

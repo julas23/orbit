@@ -23,6 +23,7 @@ mod monitors;
 mod mouse;
 mod network;
 mod pages;
+mod panel_page;
 mod power;
 mod region;
 mod services;
@@ -141,6 +142,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "windows" => windows::page(dir),
             "shortcuts" => shortcuts::page(dir),
             "appearance" => appearance::page(dir),
+            "panel" => panel_page::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

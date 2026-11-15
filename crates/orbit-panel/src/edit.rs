@@ -22,36 +22,9 @@ use orbit_common::{
 
 use crate::board::{Board, Form, Part, Side};
 
-/// Every module the panel knows, in the order the add menu lists them.
-const MODULES: &[&str] = &[
-    "menu",
-    "windows",
-    "clock",
-    "calendar",
-    "weather",
-    "forecast",
-    "tray",
-    "volume",
-    "brightness",
-    "network",
-    "keyboard",
-    "battery",
-    "notifications",
-    "bluetooth",
-    "monitors",
-    "spectrum",
-    "aigent",
-    "cpu",
-    "ram",
-    "gpu",
-    "lan",
-    "disk",
-    "workspaces",
-    "session",
-];
-
-/// Modules that may be listed more than once, each showing something else.
-const REPEATABLE: &[&str] = &["disk"];
+// Every module the panel knows, and the ones listed more than once (in
+// orbit-common, where Orbit-Settings' Panel page reads them too).
+use orbit_common::config::{PANEL_MODULES as MODULES, PANEL_REPEATABLE as REPEATABLE};
 
 const PARTS: [Part; 3] = [Part::Start, Part::Center, Part::End];
 
