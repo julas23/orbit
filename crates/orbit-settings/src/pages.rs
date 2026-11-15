@@ -104,6 +104,21 @@ pub const PAGES: &[Page] = &[
         options: &["settings-kb-layouts", "settings-kb-switch", "settings-kb-compose", "settings-kb-delay", "settings-kb-rate"],
     },
     Page {
+        id: "mouse",
+        group: Group::System,
+        title: "settings-mouse-page",
+        icon: "input-mouse-symbolic",
+        keywords: "settings-mouse-keywords",
+        options: &[
+            "settings-mouse-speed",
+            "settings-mouse-natural",
+            "settings-mouse-left",
+            "settings-touchpad-tap",
+            "settings-touchpad-typing",
+            "settings-touchpad-gestures",
+        ],
+    },
+    Page {
         id: "monitors",
         group: Group::System,
         title: "settings-monitors",

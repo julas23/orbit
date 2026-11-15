@@ -19,6 +19,7 @@ mod dbus;
 mod keyboard;
 mod menu;
 mod monitors;
+mod mouse;
 mod network;
 mod pages;
 mod power;
@@ -133,6 +134,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "bluetooth" => bluetooth::page(),
             "sound" => sound::page(),
             "keyboard" => keyboard::page(dir),
+            "mouse" => mouse::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),
