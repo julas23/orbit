@@ -347,76 +347,50 @@ Apps other desktops have and Orbit does not:
 - [ ] Updates in a window (`apt upgrade`), as everything ships as debs.
 - [ ] Disks (Popsicle only writes images), printers, scanner.
 
-## 15. Security and media in Orbit Linux (proposed 2026-11-15)
+## 15. Security and media in Orbit Linux (planned 2026-11-15)
 
-The user's proposal: services chosen by what the machine is for.
+Services chosen by what the machine is for; the plan, with its tables of
+packages and ports, is `docs/PLANO-DISTRO.md` §12. Everything comes from
+Debian 13 (checked 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2,
+wireguard-tools, crowdsec 1.4.6 with crowdsec-firewall-bouncer 0.0.25,
+snapserver and snapclient 0.31, minidlna 1.3.3, rygel 0.44).
 
-- **The server** (a machine running `orbit-remote-server`, at home or in
-  the cloud, serving stations): nftables, dnsmasq, Unbound, WireGuard,
-  Fail2Ban and CrowdSec.
-- **The common ISO** (the desktop anyone installs): nftables and CrowdSec,
-  and media: DLNA and Snapcast.
+Decided with the user (2026-11-15), to be adjusted before starting:
 
-Everything is in Debian 13 (checked 2026-11-15): nftables 1.1.3, dnsmasq
-2.91, unbound 1.26.2, wireguard-tools, fail2ban 1.1.0, crowdsec 1.4.6 (old:
-upstream is at 1.6; the hub's collections may expect newer) with
-crowdsec-firewall-bouncer 0.0.25, snapserver and snapclient 0.31, minidlna
-1.3.3, rygel 0.44. Nothing to build or fork: Orbit's part is metapackages,
-their configuration, and the windows that show it.
+- [x] *Orbit Linux* is the common ISO; the *server* profile is the desktop
+  plus `orbit-server`; *station* stays the network-booted thin client.
+- [x] One ISO; `orbit-server` is a choice among the installer's metapackages.
+- [x] nftables on every install (`orbit-firewall`, pulled by `orbit-desktop`).
+- [x] CrowdSec alone (nftables bouncer), only in `orbit-server`; Fail2Ban
+  left out unless Debian's old CrowdSec falls short. Local only by default:
+  the central API off, sharing an explicit choice.
+- [x] dnsmasq for DHCP, TFTP (LTSP's proxy DHCP) and local names, forwarding
+  to Unbound (recursive, DNSSEC, `127.0.0.1#5335`); taking over the LAN's
+  DHCP only by choice.
+- [x] WireGuard as the way in from outside, in place of §9's step 5: only
+  UDP 51820 public, port 7311 never; the pairing hands out the tunnel's
+  config (QR for phones).
+- [x] Media: `snapserver` and the DLNA server on the server profile
+  (`orbit-share`, a provisional name: `orbit-media` is taken);
+  `snapclient` and Orbit-Play browsing DLNA on desktops and stations.
 
-Open decisions (the agent's recommendation after each):
+Work, in this order (PLANO-DISTRO §12.6):
 
-- [ ] Names. "Station" is already `orbit-local-station`, the thin client
-  booted over the network. → *Orbit Linux* (the common ISO), the
-  *server* profile, and *station* kept for the thin client.
-- [ ] One ISO or two. The remote server shares the desktop session, so a
-  server is the desktop plus more. → One ISO; the installer's metapackage
-  choice adds `orbit-server`; one image to build and test.
-- [ ] Fail2Ban and CrowdSec do the same job (read logs, ban addresses). →
-  CrowdSec alone, through its nftables bouncer; Fail2Ban only if Debian's
-  old CrowdSec falls short.
-- [ ] CrowdSec's central API: the community blocklist is earned by sending
-  it the attacks seen, which goes against "no telemetry". → Local only by
-  default (`online_client` off), sharing as an explicit choice.
-- [ ] CrowdSec on the desktop: behind a home router a desktop serves
-  nothing to the internet, so there is little to ban, for a resident
-  daemon. → nftables on every install; CrowdSec only in `orbit-server`
-  (or optional on the desktop).
-- [ ] dnsmasq and Unbound, one role each: dnsmasq for DHCP, TFTP (LTSP's
-  proxy DHCP today, §9) and local names, forwarding to Unbound
-  (recursive, DNSSEC-validating, on `127.0.0.1#5335`) for the rest.
-  Whether the server takes over the LAN's DHCP (today only a proxy, the
-  router's DHCP untouched): → opt-in, never by default.
-- [ ] WireGuard as the way in from outside, instead of §9's step 5 (TLS,
-  STUN/TURN, one public TCP port): only UDP 51820 open, the stations and
-  phones inside the tunnel, the remote server's port 7311 never public.
-  The pairing could hand the station its WireGuard config (QR for
-  phones). → Yes.
-- [ ] Media, which side runs what. Snapcast: `snapserver` where the music
-  is (fed by a PipeWire sink), `snapclient` on desktops and stations (the
-  Pi 4 as a room speaker). DLNA: minidlna on the server (light, inotify)
-  or Rygel (also a renderer, transcodes, heavier); on the desktop,
-  Orbit-Play browsing DLNA servers and Rygel as the renderer. → Servers
-  of media on the server profile, clients on the desktop.
-- [ ] `orbit-media` already names the music, video and games metapackage
-  (PLANO-DISTRO §4). → The new one gets another name (`orbit-share`?).
-
-Work, once decided:
-
-- [ ] `orbit-firewall`, pulled by `orbit-desktop`: `/etc/nftables.conf`
-  including `/etc/nftables.d/*.nft`; inbound dropped but for established
-  traffic, loopback and ICMP; each Orbit service's opening, LAN only, in a
-  file of the package that needs it (7311 remote server, UDP 51820
-  WireGuard, LTSP's 67/69/4011, DLNA's 1900/UDP and 8200, Snapcast's
-  1704/1705/1780). Docker's and libvirt's own nft tables left alone.
-- [ ] `orbit-server`: the metapackage and its defaults (dnsmasq and Unbound
-  set up together, a WireGuard interface with its first peer, CrowdSec
-  with the sshd, nginx and Orbit collections and the nftables bouncer).
-- [ ] Orbit-Settings, a "Network and security" page: the firewall on or
-  off and what it opens, WireGuard peers (add one, its QR), CrowdSec's
-  bans (list, lift); a ban as an orbit-notify notification.
-- [ ] The panel's `network` module: the firewall's and the tunnel's state.
-- [ ] The media package and Orbit-Play's DLNA browsing.
-- [ ] Tests: the ISO in a VM with each profile, nmap from the LAN and from
-  outside; a station reaching the server through WireGuard from another
-  network.
+- [ ] `orbit-firewall`: the `inet orbit` table, input only, policy drop;
+  each Orbit service's opening, LAN and tunnel only, in a file of its own
+  package (§12.3). Changes made from Orbit-Settings go back after 30 s
+  without confirmation.
+- [ ] `orbit-remote-server`: a fixed UDP port range for WebRTC, so the
+  firewall need not open every UDP port.
+- [ ] WireGuard in `orbit-server`, the tunnel's config handed out at pairing.
+- [ ] dnsmasq + Unbound, LTSP's dnsmasq folded in.
+- [ ] CrowdSec: sshd and nginx collections, and an Orbit one for wrong
+  pairing codes; its LAPI moved off port 8080.
+- [ ] `orbit-share` and `snapclient`; DLNA browsing in Orbit-Play.
+- [ ] Orbit-Settings, "Network and security" (firewall, WireGuard peers,
+  CrowdSec bans; a ban as a notification); the panel's `network` module
+  showing the firewall and the tunnel.
+- [ ] Done when: each profile installs from the ISO in a VM; nmap from the
+  LAN sees only the planned ports, from outside only the server's UDP
+  51820; a station on another network reaches the server through the
+  tunnel; a `snapclient` plays what the server plays.

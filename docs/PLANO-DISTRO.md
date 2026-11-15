@@ -80,8 +80,11 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-dev` | Desenvolvimento: VS Code/VSCodium, toolchain Rust, DBeaver, Git, contêineres |
 | `orbit-media` | Música, vídeo e jogos: Feishin, Steam/Proton, codecs |
 | `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
+| `orbit-server` | O perfil servidor (seção 12): orbit-remote-server, WireGuard, dnsmasq + Unbound, CrowdSec, `orbit-share` |
+| `orbit-share` | Mídia servida para a casa (seção 12): Snapcast e DLNA. Nome provisório |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
+O `orbit-desktop` passa a puxar o `orbit-firewall` (seção 12.3).
 
 ## 5. ArtCraft no Orbit
 
@@ -411,3 +414,109 @@ apagar um `/home` existente. Discutido e aceito com estas mudanças:
 | **Fontes** | Interface: Inter (Noto Sans de reserva). Monoespaçada: a CaskaydiaCove do `orbit-fonts` |
 | **Papel de parede** | Um padrão próprio no tema espacial, o mesmo no greet e na sessão |
 
+
+## 12. Segurança e mídia por finalidade (2026-11-15)
+
+Status: **planejado** — decidido com o usuário em 2026-11-15, a ajustar antes
+de começar. Acompanhamento em `docs/pending.md` §15.
+
+A ideia: os serviços de rede vêm conforme a finalidade da máquina. Um
+servidor exposto à rede precisa de mais do que um desktop atrás do roteador
+de casa. Tudo vem do Debian 13 (seção 1: nunca um fork); o trabalho do Orbit
+são os metapacotes, a configuração padrão de cada serviço e as telas para
+vê-los.
+
+### 12.1 Decisões
+
+| Item | Decisão |
+|---|---|
+| **Nomes** | *Orbit Linux* é a ISO comum (o desktop). *Perfil servidor* é o desktop com o `orbit-server`. *Estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
+| **ISO** | Uma só. O remote server compartilha a sessão do desktop, então um servidor é um desktop com mais coisa: o instalador oferece o `orbit-server` entre os metapacotes. Uma imagem para construir e testar |
+| **Firewall** | nftables em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`): entrada bloqueada por padrão |
+| **Banimento** | CrowdSec sozinho, pelo bouncer de nftables (`crowdsec-firewall-bouncer`). Fail2Ban fica de fora, porque faz o mesmo trabalho; volta só se o CrowdSec do Debian (1.4.6, o upstream está na 1.6) não der conta |
+| **Telemetria do CrowdSec** | Só local por padrão: a API central (`online_client`) desligada. Compartilhar os ataques vistos em troca da blocklist comunitária é uma escolha explícita do usuário |
+| **CrowdSec no desktop** | Só no `orbit-server`. Atrás do roteador um desktop não serve nada para a internet; o daemon não compensa. Pode ser instalado à parte |
+| **DNS e DHCP** | Um papel cada. dnsmasq: DHCP, TFTP (o proxy DHCP do LTSP, que já existe) e os nomes locais, encaminhando o resto ao Unbound. Unbound: resolvedor recursivo com DNSSEC em `127.0.0.1#5335`. Assumir o DHCP da rede no lugar do roteador só por escolha, nunca por padrão |
+| **Acesso de fora** | WireGuard. Substitui o passo 5 da latência no `pending.md` §9 (TLS, STUN/TURN, porta TCP pública): só a UDP 51820 fica aberta, as estações e os celulares entram pelo túnel, e a 7311 do remote server nunca fica pública. O pareamento entrega à estação a configuração do túnel (QR para celular) |
+| **Mídia** | Quem tem a biblioteca serve, quem está na sala toca. No servidor: `snapserver` (alimentado por um sink do PipeWire) e o servidor DLNA. No desktop e nas estações: `snapclient` (o Pi 4 vira caixa de som de um cômodo) e o Orbit-Play navegando nos servidores DLNA |
+| **Nome do pacote de mídia** | `orbit-media` já é o metapacote de música, vídeo e jogos (seção 4). O novo é `orbit-share` (nome provisório) |
+
+### 12.2 Pacotes
+
+| Pacote | Puxado por | Traz |
+|---|---|---|
+| `orbit-firewall` | `orbit-desktop` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
+| `orbit-server` | escolha no instalador | `orbit-remote-server`, `wireguard-tools`, `dnsmasq`, `unbound`, `crowdsec`, `crowdsec-firewall-bouncer`, e as configurações abaixo |
+| `orbit-share` | `orbit-server` | `snapserver`, o servidor DLNA (minidlna ou Rygel, a decidir na hora) |
+| `snapclient` | `orbit-desktop` (Recommends) e a imagem da estação | o lado que toca |
+
+### 12.3 Firewall
+
+A tabela `inet orbit` só tem a cadeia `input` (prioridade `filter`,
+política `drop`): aceita o tráfego estabelecido, o loopback e o ICMP/ICMPv6
+necessário (vizinhança, PMTU). A cadeia `forward` não é tocada, para não
+quebrar o Docker e o libvirt, que têm as próprias tabelas; o servidor só
+encaminha se o usuário pedir (rotear a LAN pelo túnel, mais adiante).
+
+Cada serviço do Orbit abre a própria porta num arquivo do pacote que precisa
+dela, **só para a LAN e para o túnel** (o conjunto `@lan`: as sub-redes
+privadas das interfaces, mais a `wg0`):
+
+| Arquivo | Pacote | Abre |
+|---|---|---|
+| `10-remote.nft` | `orbit-remote-server` | TCP 7311 e a faixa UDP do WebRTC (hoje aleatória: fixar uma faixa no `webrtcbin`) |
+| `20-wireguard.nft` | `orbit-server` | UDP 51820, de qualquer lugar (a única porta pública) |
+| `30-ltsp.nft` | o servidor de estações | UDP 67, 69 e 4011 (proxy DHCP, TFTP), NFS TCP 2049 |
+| `40-dns.nft` | `orbit-server` | UDP/TCP 53, e UDP 67 se o DHCP da rede for assumido |
+| `50-share.nft` | `orbit-share` | SSDP UDP 1900, DLNA TCP 8200, Snapcast TCP 1704, 1705 e 1780 |
+| `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
+
+### 12.4 Servidor
+
+- **WireGuard:** a interface `wg0` criada na instalação do `orbit-server`,
+  com a chave do servidor; cada estação ou celular é um peer. O pareamento
+  do remote server (o código de seis dígitos) passa a entregar também a
+  configuração do túnel; para celular, um QR.
+- **dnsmasq + Unbound:** o dnsmasq na `@lan` e na `wg0`, com `port=53`,
+  repassando ao Unbound (`server=127.0.0.1#5335`); os nomes das estações
+  resolvidos localmente. O proxy DHCP do LTSP (`distro/ltsp/`) entra no
+  mesmo dnsmasq em vez de um segundo.
+- **CrowdSec:** as coleções de sshd (pelo journald) e do nginx (se
+  instalado), e uma coleção do Orbit: o log do `orbit-remote-server` com os
+  códigos de pareamento errados, para banir quem tenta adivinhar. A LAPI
+  ouve em `127.0.0.1:8080`, porta que muita gente já usa: mudar para uma
+  livre.
+
+### 12.5 No desktop
+
+- **Orbit-Settings, página "Rede e segurança":** o firewall ligado ou
+  desligado e o que cada arquivo abre; os peers do WireGuard (adicionar,
+  mostrar o QR, remover); as decisões do CrowdSec (bans, com a opção de
+  suspender um). Um ban novo chega como notificação pelo orbit-notify.
+- **Painel:** o módulo `network` mostra o estado do firewall e do túnel.
+- **Orbit-Play:** navegar nos servidores DLNA da rede (GUPnP) como pastas.
+
+### 12.6 Ordem
+
+1. `orbit-firewall`: serve às duas edições e é o que mais protege.
+2. WireGuard no `orbit-server`, com a configuração entregue no pareamento.
+3. dnsmasq + Unbound, absorvendo o dnsmasq do LTSP.
+4. CrowdSec, com a coleção do Orbit.
+5. `orbit-share` e o `snapclient`; o DLNA no Orbit-Play.
+6. A página do Orbit-Settings e o painel.
+
+**Pronto quando:** a ISO, numa VM, instala cada perfil; um nmap da LAN só vê
+as portas das tabelas acima, e um de fora só vê a UDP 51820 do servidor; uma
+estação em outra rede chega ao servidor pelo túnel e mostra a sessão; um
+`snapclient` toca o que o servidor toca.
+
+### 12.7 Riscos
+
+- O CrowdSec do Debian é antigo; as coleções do hub podem pedir uma versão
+  mais nova. Se pedirem: o pacote do upstream no repositório do Orbit, ou o
+  Fail2Ban de volta.
+- O WebRTC usa portas UDP aleatórias: sem uma faixa fixa no remote server, o
+  firewall teria de abrir todo UDP da LAN.
+- Uma regra errada no `orbit-firewall` corta o acesso a uma máquina remota.
+  Ao aplicar uma mudança pelo Orbit-Settings, voltar à regra anterior depois
+  de 30 s sem confirmação, como os monitores fazem.
