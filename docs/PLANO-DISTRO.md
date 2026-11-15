@@ -495,7 +495,12 @@ privadas das interfaces, mais a `wg0`):
   A jail `sshd` vem do Debian; a `orbit-remote` é nossa: um filtro para a
   linha que o remote server já escreve a cada código de pareamento errado
   (`remote: <endereço> gave a wrong code (n of 5)`); depois de cinco erros
-  o servidor já troca o código. Os endereços da `@lan` de confiança
+  o servidor já troca o código. Essa linha vai hoje para
+  `~/.local/state/orbit/remote.log`, fora do journald: o servidor passa a
+  escrever também no journald (com o identificador `orbit-remote-server`),
+  para a jail ler como as outras. O contador de erros é um só para todos os
+  endereços, então quem erra de propósito força trocas do código para
+  todos; o ban do Fail2Ban é o que impede isso. Os endereços da `@lan` de confiança
   ficam em `ignoreip` só se o usuário pedir.
 
 ### 12.5 No desktop

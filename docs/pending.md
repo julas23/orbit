@@ -407,7 +407,8 @@ Work, in this order (PLANO-DISTRO §12.6):
 - [ ] Fail2Ban: `backend = systemd`, `nftables-allports` in the Orbit table;
   the `orbit-remote` filter for the line the remote server already logs at
   each wrong pairing code (`remote: <peer> gave a wrong code (n of 5)`);
-  short bans (10 min).
+  short bans (10 min). The remote server also logs to the journal (today
+  only `~/.local/state/orbit/remote.log`), for the jail to read.
 - [ ] `orbit-share` and `snapclient`; DLNA browsing in Orbit-Play.
 - [ ] Orbit-Settings, "Network and security" (firewall, WireGuard peers,
   the addresses Fail2Ban banned, with unbanning; a ban as a notification); the panel's `network` module
