@@ -149,6 +149,22 @@ pub const PAGES: &[Page] = &[
         options: &["settings-region-language", "settings-region-formats"],
     },
     Page {
+        id: "appearance",
+        group: Group::Orbit,
+        title: "settings-look",
+        icon: "preferences-desktop-appearance-symbolic",
+        keywords: "settings-look-keywords",
+        options: &[
+            "settings-look-scheme",
+            "settings-look-accent",
+            "settings-look-theme",
+            "settings-look-icons",
+            "settings-look-cursor",
+            "settings-look-fonts",
+            "settings-look-text-scale",
+        ],
+    },
+    Page {
         id: "wallpaper",
         group: Group::Orbit,
         title: "settings-wallpaper",

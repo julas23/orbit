@@ -12,6 +12,7 @@
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod about;
+mod appearance;
 mod bluetooth;
 mod core;
 mod datetime;
@@ -139,6 +140,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "mouse" => mouse::page(dir),
             "windows" => windows::page(dir),
             "shortcuts" => shortcuts::page(dir),
+            "appearance" => appearance::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

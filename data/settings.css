@@ -106,3 +106,12 @@ window.orbit-settings .service .name {
 window.orbit-settings button.shortcut {
   min-width: 160px;
 }
+window.orbit-settings togglebutton.swatch {
+  padding: 3px;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 50%;
+}
+window.orbit-settings togglebutton.swatch:checked {
+  box-shadow: 0 0 0 2px @orbit_fg;
+}
