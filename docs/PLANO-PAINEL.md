@@ -96,8 +96,9 @@ Cada módulo vem em até três tamanhos (`Mini`, `Normal`, `Full`), escolhidos n
 | `weather` | **4×4**: tudo + previsão dos próximos dias | 4×2: figura, temperaturas, descrição | 3×1: figura + temperatura |
 | `volume`, `brightness` | 4×1: ícone + slider horizontal | **2×1**: ícone + slider vertical | 1×1: ícone |
 | `network`, `keyboard`, `battery`, `notifications`, `bluetooth`, `monitors` | 4×2: ícone + até 4 linhas | **4×1**: ícone + 2 linhas | 1×1: ícone |
+| `workspaces` | **4×2**: grade de `columns` por linha (2×2) | 4×1: as 4 áreas numa linha | — |
 
-Em negrito, o padrão (o tamanho de hoje). `windows`, `workspaces` (4×2), `tray`,
+Em negrito, o padrão (o tamanho de hoje). `windows`, `tray`,
 `session` e `menu` têm um tamanho só; `windows` e `tray` crescem com o conteúdo.
 `forecast` continua existindo sozinho, mas o `weather` Full já inclui a previsão.
 

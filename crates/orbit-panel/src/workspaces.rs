@@ -11,7 +11,8 @@
 //! and bold; an occupied one is semi-bold. Clicking an area takes every
 //! monitor there and gives the focus back to the monitor it came from.
 //!
-//! Block form: a grid, `columns` per row. Line form: one row.
+//! Full (4×2): a grid, `columns` per row. Normal (4×1): the four areas in a
+//! row, the board's columns. Line form (horizontal panel): one row.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -19,7 +20,7 @@ use gtk::prelude::*;
 use orbit_app::i18n::{number, tr_args};
 use serde::Deserialize;
 
-use crate::sway;
+use crate::{board::Form, sway};
 
 /// `modules/workspaces.yaml`.
 #[derive(Debug, Clone, Deserialize)]
@@ -27,7 +28,7 @@ use crate::sway;
 pub struct WorkspacesConfig {
     /// How many areas to show, at least.
     pub count: i32,
-    /// Areas per row in the block form.
+    /// Areas per row in the Full form.
     pub columns: i32,
     /// Workspace-number distance between the same area on two monitors.
     pub stride: i32,
@@ -43,7 +44,14 @@ impl Default for WorkspacesConfig {
     }
 }
 
-pub fn new(config: &WorkspacesConfig, vertical: bool) -> gtk::Widget {
+pub fn new(config: &WorkspacesConfig, form: Form) -> gtk::Widget {
+    let vertical = form.vertical();
+    let columns = match form {
+        Form::Line => i32::MAX,
+        Form::Full => config.columns.max(1),
+        // One row of cells: an area per grid column, past four a second row.
+        Form::Normal | Form::Mini => crate::board::COLUMNS,
+    };
     let grid = gtk::Grid::builder()
         .css_classes(["areas"])
         .column_homogeneous(true)
@@ -66,7 +74,7 @@ pub fn new(config: &WorkspacesConfig, vertical: bool) -> gtk::Widget {
 
     let module = Rc::new(Module {
         config: config.clone(),
-        vertical,
+        columns,
         grid,
         buttons: RefCell::new(Vec::new()),
         conn: RefCell::new(None),
@@ -95,7 +103,8 @@ enum State {
 
 struct Module {
     config: WorkspacesConfig,
-    vertical: bool,
+    /// Areas per row.
+    columns: i32,
     grid: gtk::Grid,
     buttons: RefCell<Vec<gtk::Button>>,
     /// Kept open between queries; reopened if sway restarts.
@@ -163,11 +172,7 @@ impl Module {
                 self.grid.remove(&button);
             }
         }
-        let columns = if self.vertical {
-            self.config.columns.max(1)
-        } else {
-            i32::MAX
-        };
+        let columns = self.columns;
         while (buttons.len() as i32) < count {
             let area = buttons.len() as i32 + 1;
             let button = gtk::Button::builder()

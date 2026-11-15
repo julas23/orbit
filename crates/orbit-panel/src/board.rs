@@ -10,7 +10,7 @@
 //! that content needs. Modules flow left to right, top to bottom, each in the
 //! first free block after the one before; the start part from the top row
 //! down, the end part so that its last row is the bottom one, the centre part
-//! in the middle.
+//! in the middle — but never over the others (`part_tops`).
 
 use std::cell::{Cell, RefCell};
 
@@ -166,36 +166,32 @@ mod imp {
                 return (width, width, -1, -1);
             }
             let items = self.items.borrow();
-            let height: i32 = [Part::Start, Part::Center, Part::End]
+            let talls: Vec<i32> = [Part::Start, Part::Center, Part::End]
                 .into_iter()
                 .map(|part| {
                     let (blocks, used) = place(&items, part);
                     tops(&blocks, used).1
                 })
-                .sum::<i32>()
-                + 2 * PAD;
+                .filter(|&tall| tall > 0)
+                .collect();
+            // The parts, and `part_tops`' gap between two of them.
+            let gaps = (talls.len() as i32 - 1).max(0) * STACK_GAP;
+            let height = talls.iter().sum::<i32>() + gaps + 2 * PAD;
             (height, height, -1, -1)
         }
 
         fn size_allocate(&self, _width: i32, height: i32, _baseline: i32) {
             let items = self.items.borrow();
-            let total = rows_in(height);
-            for part in [Part::Start, Part::Center, Part::End] {
+            let parts = [Part::Start, Part::Center, Part::End].map(|part| {
                 let (blocks, used) = place(&items, part);
-                let first = match part {
-                    Part::Start => 0,
-                    Part::Center => (total - used) / 2,
-                    Part::End => total - used,
-                }
-                .max(0);
                 let (tops, tall) = tops(&blocks, used);
-                // Pixels, not rows: tightening leaves the parts off the grid.
-                let y = match part {
-                    Part::Start => PAD,
-                    Part::Center => (height - tall) / 2 / STACK_GAP * STACK_GAP,
-                    Part::End => height - PAD - tall,
-                }
-                .max(PAD);
+                (blocks, tops, tall)
+            });
+            let ys = part_tops(height, [parts[0].2, parts[1].2, parts[2].2]);
+            for ((blocks, tops, _), y) in parts.into_iter().zip(ys) {
+                // The row the part starts on, for the log; tightening leaves
+                // the parts off the grid, so the nearest one.
+                let first = (y - PAD + PITCH / 2) / PITCH;
                 for (i, (col, row, rows)) in blocks {
                     let item = &items[i];
                     let (x, width) = if item.cols == 1 {
@@ -416,6 +412,32 @@ fn tops(blocks: &[Block], used: i32) -> (Vec<i32>, i32) {
     (tops, tall)
 }
 
+/// Where each part starts, in pixels, given the parts' heights (`talls`,
+/// start, centre, end) on a board `height` tall. The start part sits at the
+/// top and the end part at the bottom; the centre part in the middle, but
+/// never over the others: it is pushed below the start part or above the end
+/// part, and when the three do not fit they are stacked from the top, the
+/// end part running off the bottom, rather than drawn over one another.
+fn part_tops(height: i32, talls: [i32; 3]) -> [i32; 3] {
+    let [start, center, end] = talls;
+    // Below the start part, or at the top when it is empty.
+    let below_start = if start > 0 { PAD + start + STACK_GAP } else { PAD };
+    let mut end_y = height - PAD - end;
+    let center_y = if center > 0 {
+        let above_end = if end > 0 { end_y - STACK_GAP } else { height - PAD };
+        ((height - center) / 2 / STACK_GAP * STACK_GAP)
+            .min(above_end - center)
+            .max(below_start)
+    } else {
+        below_start
+    };
+    let below_center = if center > 0 { center_y + center + STACK_GAP } else { below_start };
+    if end > 0 {
+        end_y = end_y.max(below_center);
+    }
+    [PAD, center_y, end_y.max(PAD)]
+}
+
 /// The rows `item`'s content needs at its width.
 fn content_rows(item: &Item) -> i32 {
     let (min, natural, _, _) = item.widget.measure(gtk::Orientation::Vertical, span(item.cols));
@@ -467,5 +489,21 @@ mod tests {
         // A 2-row module beside two stacked minis keeps the grid's gap.
         let blocks = [(0, (0, 0, 2)), (1, (2, 0, 1)), (2, (2, 1, 1))];
         assert_eq!(tops(&blocks, 2), (vec![0, 40], 70));
+    }
+
+    #[test]
+    fn parts_never_overlap() {
+        // Room for all: start on top, centre in the middle, end at the bottom.
+        assert_eq!(part_tops(1080, [100, 70, 200]), [5, 505, 875]);
+        // A tall end part pushes the centre part up, above it.
+        assert_eq!(part_tops(1080, [100, 70, 800]), [5, 200, 275]);
+        // ... and below the start part when there is no room between them:
+        // then the end part runs off the bottom instead of covering it.
+        assert_eq!(part_tops(1080, [100, 70, 950]), [5, 110, 185]);
+        // Too much for the screen: stacked from the top, never overlapping.
+        assert_eq!(part_tops(1080, [400, 0, 800]), [5, 410, 410]);
+        // Empty parts take no room.
+        assert_eq!(part_tops(1080, [0, 0, 200]), [5, 5, 875]);
+        assert_eq!(part_tops(1080, [0, 70, 0]), [5, 505, 1075]);
     }
 }

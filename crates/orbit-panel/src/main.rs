@@ -120,7 +120,7 @@ fn shapes(name: &str) -> &'static [(Form, i32, i32)] {
         "network" | "keyboard" | "battery" | "notifications" | "bluetooth" | "monitors" => {
             &[(Normal, 4, 1), (Full, 4, 2), (Mini, 1, 1)]
         }
-        "workspaces" => &[(Normal, 4, 2)],
+        "workspaces" => &[(Full, 4, 2), (Normal, 4, 1)],
         "spectrum" => &[(Normal, 4, 2), (Full, 4, 2), (Mini, 2, 1)],
         "aigent" => &[(Full, 4, 3), (Mini, 2, 1)],
         "cpu" | "ram" | "lan" | "gpu" | "disk" => &[(Normal, 4, 1), (Full, 4, 2), (Mini, 2, 1)],
@@ -190,7 +190,7 @@ fn module(entry: &ModuleEntry, dir: &ConfigDir, edge: Edge, form: Form) -> Optio
             .module("forecast")
             .and_then(|f| dir.module("weather").map(|w| forecast::new(&f, &w, vertical))),
         "windows" => dir.module("windows").map(|c| windows::new(&c, vertical)),
-        "workspaces" => dir.module("workspaces").map(|c| workspaces::new(&c, vertical)),
+        "workspaces" => dir.module("workspaces").map(|c| workspaces::new(&c, form)),
         other => {
             log::error!("panel: unknown module {other:?}, leaving it out");
             return None;
