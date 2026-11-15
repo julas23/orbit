@@ -96,6 +96,14 @@ pub const PAGES: &[Page] = &[
         ],
     },
     Page {
+        id: "keyboard",
+        group: Group::System,
+        title: "settings-kb",
+        icon: "input-keyboard-symbolic",
+        keywords: "settings-kb-keywords",
+        options: &["settings-kb-layouts", "settings-kb-switch", "settings-kb-compose", "settings-kb-delay", "settings-kb-rate"],
+    },
+    Page {
         id: "monitors",
         group: Group::System,
         title: "settings-monitors",

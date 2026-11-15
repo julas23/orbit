@@ -143,6 +143,19 @@ pub fn save_per_host(dir: &ConfigDir, key: &str, value: u64, default: u64) -> an
     dir.save_app_keys("core", &[key], &serde_yaml_ng::to_string(&block)?)
 }
 
+/// A key of core.yaml, as written there (`None`: not there).
+pub fn get(dir: &ConfigDir, key: &str) -> Option<Value> {
+    read(dir).get(key).cloned()
+}
+
+/// Writes `key: value` into core.yaml (the rest of the file, comments
+/// included, kept).
+pub fn save(dir: &ConfigDir, key: &str, value: Value) -> anyhow::Result<()> {
+    let mut block = Mapping::new();
+    block.insert(key.into(), value);
+    dir.save_app_keys("core", &[key], &serde_yaml_ng::to_string(&block)?)
+}
+
 /// `effects:` — `on`, `off` or `auto` (off on battery).
 pub fn effects(dir: &ConfigDir) -> String {
     text(&read(dir), "effects").unwrap_or_else(|| "auto".into())

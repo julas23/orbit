@@ -16,6 +16,7 @@ mod bluetooth;
 mod core;
 mod datetime;
 mod dbus;
+mod keyboard;
 mod menu;
 mod monitors;
 mod network;
@@ -131,6 +132,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "power" => power::page(dir),
             "bluetooth" => bluetooth::page(),
             "sound" => sound::page(),
+            "keyboard" => keyboard::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),
@@ -175,6 +177,17 @@ pub fn row(label: &str, widget: &impl IsA<gtk::Widget>) -> gtk::Box {
     row.append(&gtk::Label::builder().label(label).xalign(0.0).hexpand(true).build());
     row.append(widget);
     row
+}
+
+/// A card with its title: the pages' usual block.
+pub fn power_card(title: &str) -> gtk::Box {
+    let card = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(10)
+        .css_classes(["card"])
+        .build();
+    card.append(&gtk::Label::builder().label(title).xalign(0.0).css_classes(["heading"]).build());
+    card
 }
 
 /// A line under a page's controls that says what went wrong, or empty.
