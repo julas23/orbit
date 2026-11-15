@@ -68,7 +68,9 @@ stop() {
 }
 
 status() {
-    if loaded; then
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Whether it is loaded: only root can tell (sudo orbit-firewall status)."
+    elif loaded; then
         echo "Loaded: incoming connections are dropped, but for what these files open."
     else
         echo "Not loaded: nothing is filtered by Orbit."
