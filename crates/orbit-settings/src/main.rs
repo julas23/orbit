@@ -11,11 +11,15 @@
 //! The window is single: started again, the running one comes forward on
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
+mod about;
 mod core;
+mod datetime;
+mod dbus;
 mod menu;
 mod monitors;
 mod network;
 mod pages;
+mod region;
 mod services;
 mod wallpaper;
 
@@ -120,6 +124,9 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "wallpaper" => wallpaper::page(dir),
             "monitors" => monitors::page(dir),
             "network" => network::page(),
+            "datetime" => datetime::page(),
+            "region" => region::page(),
+            "about" => about::page(),
             "services" => services::page(),
             _ => continue,
         };

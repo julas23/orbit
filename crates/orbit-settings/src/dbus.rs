@@ -1,0 +1,61 @@
+//! The system services' D-Bus, for the pages that talk to them
+//! (docs/PLANO-SETTINGS.md §1 rule 3): hostnamed, timedated, localed… A
+//! call may ask for a password: polkit's agent (orbit-polkit) does, as the
+//! call allows interactive authorisation.
+
+use gtk::{gio, glib, prelude::*};
+
+/// The proxy of `name`'s `/org/freedesktop/<last>` object, interface `name`
+/// (`org.freedesktop.timedate1` → `/org/freedesktop/timedate1`).
+pub fn system(name: &str) -> Option<gio::DBusProxy> {
+    let path = format!("/{}", name.replace('.', "/"));
+    gio::DBusProxy::for_bus_sync(
+        gio::BusType::System,
+        gio::DBusProxyFlags::NONE,
+        None,
+        name,
+        &path,
+        name,
+        gio::Cancellable::NONE,
+    )
+    .map_err(|e| log::warn!("{name}: {e}"))
+    .ok()
+}
+
+/// A string property, or empty.
+pub fn string(proxy: &gio::DBusProxy, property: &str) -> String {
+    proxy
+        .cached_property(property)
+        .and_then(|v| v.get::<String>())
+        .unwrap_or_default()
+}
+
+pub fn boolean(proxy: &gio::DBusProxy, property: &str) -> bool {
+    proxy
+        .cached_property(property)
+        .and_then(|v| v.get::<bool>())
+        .unwrap_or_default()
+}
+
+pub fn strings(proxy: &gio::DBusProxy, property: &str) -> Vec<String> {
+    proxy
+        .cached_property(property)
+        .and_then(|v| v.get::<Vec<String>>())
+        .unwrap_or_default()
+}
+
+/// Calls `method`; polkit may ask for a password. The error as the user
+/// should read it (a refused password says so).
+pub async fn call(proxy: &gio::DBusProxy, method: &str, args: glib::Variant) -> Result<glib::Variant, String> {
+    proxy
+        .call_future(method, Some(&args), gio::DBusCallFlags::ALLOW_INTERACTIVE_AUTHORIZATION, -1)
+        .await
+        .map_err(|e| {
+            let text = e.to_string();
+            // GDBus prefixes the remote error's name: what follows is enough.
+            match text.split_once(": ") {
+                Some((prefix, rest)) if prefix.starts_with("GDBus.Error") => rest.to_owned(),
+                _ => text,
+            }
+        })
+}

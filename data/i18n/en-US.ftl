@@ -1082,6 +1082,35 @@ settings-net-remove-detail = Its configuration and keys are deleted from this ma
 settings-net-conf-files = WireGuard configurations
 settings-net-bad-name = The name: 1 to 15 letters, digits, - _ or . (it is the tunnel's interface).
 settings-net-not-wireguard = This is not a WireGuard configuration: it needs an [Interface] and a [Peer].
+settings-time = Date and time
+settings-time-keywords = clock, time zone, timezone, hour, ntp, network time
+settings-time-zone = Time zone
+settings-time-ntp = Set the time from the network
+settings-time-ntp-tip = The clock is kept right by a time server (NTP)
+settings-time-unavailable = The time service (timedated) does not answer.
+settings-region = Region and language
+settings-region-keywords = language, locale, formats, date format, numbers, currency, idiom
+settings-region-language = Language
+settings-region-formats = Formats
+settings-region-formats-tip = Dates, numbers, money, measures and paper size
+settings-region-same = The language's
+settings-region-no-language = no language
+settings-region-next-login = Takes effect at the next login. Only the languages this machine has are listed.
+settings-region-unavailable = The language service (localed) does not answer.
+settings-about = About
+settings-about-keywords = system, hardware, version, computer name, hostname, report, specifications
+settings-about-name = Computer name
+settings-about-rename = Rename
+settings-about-bad-name = The name needs letters or digits.
+settings-about-system = System
+settings-about-kernel = Kernel
+settings-about-model = Model
+settings-about-cpu = Processor
+settings-about-memory = Memory
+settings-about-gpu = Graphics
+settings-about-disk = Disk
+settings-about-copy = Copy the report
+settings-about-copied = Copied
 
 ## Panel modules set up from their own clicks (settings.rs, weather.rs,
 ## calendar.rs, agenda.rs, clock.rs, spectrum.rs, media.rs).

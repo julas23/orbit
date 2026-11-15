@@ -68,6 +68,22 @@ pub const PAGES: &[Page] = &[
         ],
     },
     Page {
+        id: "datetime",
+        group: Group::People,
+        title: "settings-time",
+        icon: "preferences-system-time-symbolic",
+        keywords: "settings-time-keywords",
+        options: &["settings-time-zone", "settings-time-ntp"],
+    },
+    Page {
+        id: "region",
+        group: Group::People,
+        title: "settings-region",
+        icon: "preferences-desktop-locale-symbolic",
+        keywords: "settings-region-keywords",
+        options: &["settings-region-language", "settings-region-formats"],
+    },
+    Page {
         id: "wallpaper",
         group: Group::Orbit,
         title: "settings-wallpaper",
@@ -91,6 +107,22 @@ pub const PAGES: &[Page] = &[
         icon: "network-server-symbolic",
         keywords: "settings-services-keywords",
         options: &["settings-svc-firewall", "settings-svc-remote", "settings-svc-open-files"],
+    },
+    Page {
+        id: "about",
+        group: Group::Orbit,
+        title: "settings-about",
+        icon: "help-about-symbolic",
+        keywords: "settings-about-keywords",
+        options: &[
+            "settings-about-name",
+            "settings-about-cpu",
+            "settings-about-memory",
+            "settings-about-gpu",
+            "settings-about-disk",
+            "settings-about-kernel",
+            "settings-about-copy",
+        ],
     },
 ];
 

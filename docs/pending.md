@@ -220,6 +220,14 @@ Plasma 6, XFCE and Unity offer, minus what is exclusive to one of them (no
 KDE Connect, no online accounts): `docs/PLANO-SETTINGS.md`. Its base comes
 with Step 2; the phases then run alongside the steps above.
 
+- [x] Phase A, batch A1 (2026-11-15): About (the computer's name through
+  hostnamed, hardware from /proc, /sys and pci.ids, the versions, a report
+  to copy), Date and time (timedated: the zone, searched in its list, and
+  NTP), Region and language (localed: the language and the formats; only
+  the languages generated here: adding one, through the helper, later).
+  Seen on the think. Next: A2 Network (Wi-Fi, wired), A3 Bluetooth, Sound,
+  Power, A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
+  Dock, Notifications, Default apps, A6 Users, A7 the panel's modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
   Appearance, Keyboard, Mouse and touchpad, Date and time, Region and
   language, Users and groups, Panel, Dock, Windows and areas, Shortcuts,
