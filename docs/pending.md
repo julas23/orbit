@@ -357,8 +357,8 @@ only decides which switches start on. No `orbit-server` metapackage, one
 ISO. The plan, with the page, the packages
 and the ports, is `docs/PLANO-DISTRO.md` §12. From Debian 13 (checked
 2026-11-15: nftables 1.1.3, dnsmasq 2.91, unbound 1.26.2, wireguard-tools,
-fail2ban 1.1.0, packagekit 1.3.1); not in Debian: Navidrome 0.64.2 from its
-GitHub releases, Jellyfin from its own apt repository for trixie.
+fail2ban 1.1.0, packagekit 1.3.1, podman 5.4.2); the four applications run
+in containers from their projects' official images.
 
 Reviewed with the user, item by item (2026-11-15):
 
@@ -380,7 +380,7 @@ Reviewed with the user, item by item (2026-11-15):
   in Proxy mode; one with a public address: no DHCP, WireGuard as the hub;
   two cards, one public: the home's router (Network mode on the private
   one, NAT). One question, "Desktop / Server", preselected from what was
-  found; a "Multimedia kit (Navidrome and Jellyfin)" box for servers. A
+  found; a "Multimedia kit" box for servers (the four containers below). A
   disk with data is never formatted without an explicit choice.
 - [x] Storage: Samba and NFS shares, disk health (smartmontools, warnings
   through orbit-notify) and Syncthing (1.29.5 in Debian, which the user
@@ -392,12 +392,9 @@ Reviewed with the user, item by item (2026-11-15):
   on the server with Syncthing's versioning on. No specific work for iOS or
   Windows (the user, 2026-11-15): Möbius Sync and iPhone backups through
   libimobiledevice left out.
-- [x] Immich (`orbit-immich`), optional like Navidrome and Jellyfin: photo
-  backups from the Android app in the background, through the tunnel. The
-  one exception to "Debian or an upstream .deb": it ships only container
-  images, so it runs on Debian's Podman (5.4.2) through Quadlet units made
-  from a pinned release's `docker-compose.yml` (v3.4.1 on 2026-11-15), not
-  on Docker, whose daemon and NAT would sit outside `orbit-firewall`.
+- [x] Immich (`orbit-immich`): photo backups from the Android app in the
+  background, through the tunnel; its units made from a pinned release's
+  `docker-compose.yml` (v3.4.1 on 2026-11-15).
 - [x] A server may have no graphical session: `orbit-base` (the firewall,
   PackageKit, the helper, `orbitctl`) instead of `orbit-desktop`, a console
   login, SSH by key on the LAN and the tunnel only (`orbit-ssh`), run
@@ -422,19 +419,24 @@ Reviewed with the user, item by item (2026-11-15):
 - [x] Navidrome (`orbit-navidrome`, music over the Subsonic API: Feishin,
   Symfonium, Tempo, Ultrasonic, Amperfy) and Jellyfin (`orbit-jellyfin`,
   videos, TV apps, GPU transcoding, DLNA by plugin); Snapcast and
-  standalone DLNA dropped. Navidrome's .deb through `github.list`,
-  Jellyfin's repository through `vendors.list`.
+  standalone DLNA dropped.
+- [x] Nextcloud (`orbit-nextcloud`): files, calendar and contacts; the
+  official `nextcloud` image (Apache) with PostgreSQL and Valkey; Nextcloud
+  AIO left out (it drives Docker through the daemon's socket).
+- [x] The four applications (Navidrome, Jellyfin, Immich, Nextcloud) run in
+  containers, the one exception to "from Debian": their official images,
+  on Debian's Podman through Quadlet (systemd units, no daemon), over a
+  common `orbit-containers`. This settles the public repository question:
+  none of them needs a third party's package there.
 - [ ] WireGuard (`orbit-wireguard`) kept as planned, to be looked at again:
   CGNAT (no public IP, no way in; the VPS as the hub would solve it) and
   Tailscale, which the user already runs.
 - [ ] Alexa, later: a Subsonic skill needs a public HTTPS endpoint; "My
   Media for Alexa" is a third party's; Bluetooth from the phone exposes
   nothing but takes no voice.
-- [ ] To decide: the public repository carries only Orbit's packages, so
-  outside the author's network `navidrome` and `jellyfin` would not be
-  found. Both are free software: carry them in the public repository
-  (recommended), or have the page add Jellyfin's repository and fetch
-  Navidrome's .deb.
+- [ ] To decide: HTTPS for the four (plain HTTP on the LAN, the tunnel
+  already encrypts): a reverse proxy with a local CA, or Let's Encrypt
+  through the DNS challenge.
 
 Work, in this order (PLANO-DISTRO §12.7):
 
@@ -457,9 +459,19 @@ Work, in this order (PLANO-DISTRO §12.7):
 - [ ] `orbit-fail2ban`: `backend = systemd`, `nftables-allports`, the
   `orbit-remote` filter for `remote: <peer> gave a wrong code (n of 5)`,
   short bans (10 min).
-- [ ] `orbit-navidrome` and `orbit-jellyfin`: mirrored; the media folders
-  (`/srv/media` by default, the home by choice); Jellyfin in the `render`
-  group; the first user created with a password of its own.
+- [ ] `orbit-containers`: Podman, the `orbit` container network, the Quadlet
+  conventions, images by exact version, updates only when asked with the
+  release notes shown and a snapshot first; ports published only on the
+  LAN and tunnel addresses (a published container port goes through
+  Podman's NAT, not the `input` chain); data outside the containers
+  (`/srv/media` read-only, `/srv/photos`, `/srv/cloud`,
+  `/var/lib/orbit-<service>`).
+- [ ] `orbit-navidrome` and `orbit-jellyfin` on it: the media folders;
+  Jellyfin with `/dev/dri`, and the host network when its DLNA plugin is
+  on; the first user created with a password of its own.
+- [ ] `orbit-nextcloud`: Nextcloud, PostgreSQL, Valkey, its cron as a
+  systemd timer, `trusted_domains` for the LAN and the tunnel, chosen
+  `/srv` folders as external storage; port 8380.
 - [ ] Storage: `orbit-samba` (TCP 445), `orbit-nfs` (NFSv4, TCP 2049),
   `orbit-smart`, `orbit-syncthing` (`syncthing@USER`, TCP/UDP 22000 and UDP
   21027, configured through its API on `127.0.0.1:8384`).
@@ -474,13 +486,10 @@ Work, in this order (PLANO-DISTRO §12.7):
   `home.sh`, `finish-install.d/`) for both to share; the purpose's services
   switched on through `orbit-services-helper`; the router role's NAT and
   `forward` chain in `orbit-firewall`.
-- [ ] `orbit-immich`: the Quadlet units from the pinned compose file (server,
-  machine learning, PostgreSQL with its vector extension, Valkey), images
-  by exact version; photos in `/srv/@photos`; machine learning switchable
-  (2–4 GB of RAM); VA-API by the detected GPU; updates only when asked, with
-  the release notes shown and a snapshot of the database first; port 2283
-  published only on the LAN and tunnel addresses (a published container
-  port goes through Podman's NAT, not the `input` chain).
+- [ ] `orbit-immich` on it: the units from the pinned compose file (server,
+  machine learning, PostgreSQL with its vector extension, Valkey); machine
+  learning switchable (2–4 GB of RAM); VA-API by the detected GPU; port
+  2283.
 - [ ] The panel's `network` module: the firewall's and the tunnel's state,
   a click opening the page.
 - [ ] Done when: on a VM installed from the ISO each service switches on,

@@ -304,7 +304,7 @@ assistente de várias páginas) foi descartado por isso.
 |---|---|
 | Um disco | Sistema e `/home` nele, pelos layouts da 6.4; sem storage |
 | Dois ou mais discos | Sistema no mais rápido (NVMe, depois SSD, depois HD; no empate, o menor que tenha 40 GB); os outros, se vazios, como **storage** |
-| Discos de storage | Um: btrfs simples. Dois ou mais: btrfs em RAID1 (duas cópias de cada bloco, com quantos discos houver; RAID5/6 do btrfs evitados, por não serem estáveis). Montados em `/srv` (`@media`, `@shares`), onde ficam o `/srv/media` do Navidrome e do Jellyfin e as pastas compartilhadas |
+| Discos de storage | Um: btrfs simples. Dois ou mais: btrfs em RAID1 (duas cópias de cada bloco, com quantos discos houver; RAID5/6 do btrfs evitados, por não serem estáveis). Montados em `/srv`, com um subvolume para cada uso (`media`, `shares`, `photos`, `cloud`), onde ficam o `/srv/media` do Navidrome e do Jellyfin e as pastas compartilhadas |
 | Uma placa, IP privado | Desktop; ou servidor da rede de casa, com o dnsmasq em modo **Proxy** |
 | Uma placa, IP público | Servidor ligado direto na internet: **sem DHCP**, o Unbound só para o túnel, o WireGuard como ponto central (o caso que resolve o CGNAT das outras máquinas). A tela avisa que a máquina está exposta |
 | Duas placas, uma pública e uma privada | Servidor como **roteador da casa**: modo **Rede** só na interface privada, com NAT e encaminhamento (a cadeia `forward` do `orbit-firewall`, trabalho novo da seção 12), e só se a interface privada não tiver recebido endereço de outro DHCP |
@@ -321,7 +321,9 @@ assistente de várias páginas) foi descartado por isso.
   - *Servidor:* o firewall, o Fail2Ban, o Unbound, o dnsmasq no modo da
     tabela, o WireGuard e o remote server; com storage, o Samba, o NFS e a
     saúde dos discos (smartmontools, com aviso pelo orbit-notify) e o
-    Syncthing. Uma caixa **"Kit multimídia (Navidrome e Jellyfin)"** e outra
+    Syncthing. Uma caixa **"Kit multimídia (Navidrome, Jellyfin, Immich e
+    Nextcloud)"**, que liga os quatro de uma vez (cada um se ajusta depois
+    na página), e outra
     **"Sem sessão gráfica"** (desmarcada).
 - **Servidor sem sessão gráfica** (um NAS no armário, uma máquina sem
   monitor): instala o `orbit-base` (seção 12.3) em vez do `orbit-desktop` —
@@ -541,7 +543,9 @@ a página que os liga.
 | **ISO e nomes** (revisto) | Uma ISO só; a finalidade é uma pergunta do instalador, não outra imagem. *Orbit Linux* é a distribuição; *estação* continua sendo só o thin client (`orbit-local-station`, boot pela rede) |
 | **Storage** (revisto) | Os discos além do do sistema, se vazios, viram storage na instalação: btrfs (RAID1 com dois ou mais) em `/srv` (6.6). Serviços: compartilhar pastas pelo Samba (Windows, macOS, Android) e pelo NFS (Linux), a saúde dos discos (smartmontools, com aviso) e a sincronização pelo **Syncthing** (1.29.5 no Debian 13), que o usuário já usa entre as máquinas. ZFS fora (contrib, DKMS a cada kernel). Snapshots dos dados e backup (restic, borg) fora por enquanto |
 | **Sistemas fechados** (revisto) | Nenhum trabalho específico para iOS nem para Windows: o que funcionar com os padrões abertos que o Orbit já usa funciona, sem app, serviço ou teste próprio para eles. Fora do plano: o Möbius Sync (Syncthing pago de terceiros no iOS) e o backup do iPhone pelo `libimobiledevice` |
-| **Fotos** (revisto) | **Immich** (`orbit-immich`), opcional como o Navidrome e o Jellyfin: o "Google Fotos" próprio, com o app de Android (APK nas releases dele e no F-Droid) fazendo backup das fotos em segundo plano, pelo túnel fora de casa. A única **exceção à regra da seção 1**: o Immich não tem `.deb` nem repositório apt, só imagens de contêiner com um `docker-compose.yml` por release (v3.4.1 em 2026-11-15). Roda pelo **Podman** do Debian 13 (5.4.2) com Quadlet — cada contêiner vira uma unidade do systemd, sem daemon —, e não pelo Docker, cujo daemon e regras próprias de NAT ficariam fora do controle do `orbit-firewall` |
+| **Aplicações em contêiner** (revisto) | Quatro serviços opcionais rodam em contêineres, com a mesma base: **Navidrome** (música), **Jellyfin** (vídeos), **Immich** (fotos) e **Nextcloud** (arquivos, agenda, contatos). São a **exceção à regra da seção 1**: as imagens oficiais de cada projeto, do registro dele, não pacotes do Debian. Rodam pelo **Podman** do Debian 13 (5.4.2) com Quadlet — cada contêiner vira uma unidade do systemd, sem daemon —, e não pelo Docker, cujo daemon e regras próprias de NAT ficariam fora do controle do `orbit-firewall`. A base comum é o `orbit-containers` (12.3). Isso também resolve o repositório público: nenhum dos quatro precisa de pacote de terceiros nele |
+| **Fotos** (revisto) | **Immich** (`orbit-immich`): o "Google Fotos" próprio, com o app de Android (APK nas releases dele e no F-Droid) fazendo backup das fotos em segundo plano, pelo túnel fora de casa. Só publica imagens de contêiner com um `docker-compose.yml` por release (v3.4.1 em 2026-11-15) |
+| **Nextcloud** (revisto) | `orbit-nextcloud`: arquivos pelo navegador e pelos apps, agenda e contatos (CalDAV, CardDAV), compartilhar por link. A imagem oficial `nextcloud` (a versão com Apache), com PostgreSQL e Valkey em contêineres ao lado. O Nextcloud AIO fica de fora: ele comanda o Docker pelo socket do daemon, o que o Podman sem daemon não oferece. Sobrepõe-se em parte ao Syncthing (sincronizar pastas) e ao Immich (fotos): a página diz o que cada um faz melhor, e o usuário liga os que quiser |
 | **Servidor sem sessão gráfica** (revisto) | Permitido: `orbit-base` em vez do `orbit-desktop`, login no console, SSH por chave só para a LAN e o túnel, gerência pelo `orbitctl services` ou pelo Orbit-Settings de um desktop por SSH (6.6, 12.2) |
 | **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
@@ -550,8 +554,7 @@ a página que os liga.
 | **Banimento** (revisto) | Fail2Ban (`orbit-fail2ban`): atual no Debian 13 (1.1.0), leve, só local, lendo do journald e banindo direto no nftables (`nftables-allports`, na tabela `inet orbit`). Jails: `sshd`, e `orbit-remote` quando o remote server está ligado (os códigos de pareamento errados). Com o WireGuard como única porta pública quase não sobra o que banir — ele descarta em silêncio o que não vem de uma chave conhecida —, então o que conta é o SSH aberto por alguém no roteador, um serviço web exposto e quem tenta adivinhar o pareamento pela LAN |
 | **CrowdSec** (revisto) | Fora da página; documentado como opção para quem expõe serviços e quer as listas da comunidade. Só se paga com elas (que exigem enviar à API central os ataques vistos, contra o "sem telemetria") e com várias máquinas; sem elas é um Fail2Ban mais pesado (agente, API e bouncer, uns 100 MB), numa versão velha no Debian (1.4.6; o upstream está na 1.6 ou depois, e as coleções do hub podem não servir) ou vindo do repositório deles. A máquina mais exposta, a VPS do repositório (nginx e SSH públicos), é onde ele faria mais sentido, mas ela roda Ubuntu, fora do Orbit Linux |
 | **Acesso de fora** | WireGuard (`orbit-wireguard`), como está; a analisar depois: o CGNAT (sem IP público, não há porta de entrada; a VPS como ponto central resolveria) e o Tailscale, que o usuário já usa. Substitui o passo 5 da latência no `pending.md` §9 (TLS, STUN/TURN, porta TCP pública): só a UDP 51820 fica aberta, as estações e os celulares entram pelo túnel, e a 7311 do remote server nunca fica pública. O pareamento entrega à estação a configuração do túnel (QR para celular) |
-| **Mídia** (revisto) | O usuário consome a música e os vídeos dele, de qualquer lugar, nos apps que já usa; sem som sincronizado entre cômodos (Snapcast e o DLNA avulso saíram). **Navidrome** (`orbit-navidrome`) para a música: um binário em Go, SQLite, uns 50 MB, API Subsonic/OpenSubsonic e interface web; clientes Feishin (no `orbit-media`), Symfonium, Tempo e Ultrasonic no Android, Amperfy no iPhone. **Jellyfin** (`orbit-jellyfin`) para os vídeos (e música, para quem preferir): apps para TV e celular, conversão de formato na GPU (`jellyfin-ffmpeg`, VA-API), DLNA por plugin para as TVs que só falam isso; mais pesado (uns 300 MB ou mais). O Feishin fala com os dois |
-| **Origem dos pacotes de mídia** | Nenhum dos dois está no Debian. Navidrome: o `.deb` oficial das releases do GitHub (amd64 e arm64), uma linha no `distro/repo/github.list`, como o Feishin. Jellyfin: o repositório apt oficial (`repo.jellyfin.org/debian`, suíte `trixie`, amd64 e arm64), uma linha no `distro/repo/vendors.list`, como o Firefox e o VS Code. Nada compilado nem modificado |
+| **Mídia** (revisto) | O usuário consome a música e os vídeos dele, de qualquer lugar, nos apps que já usa; sem som sincronizado entre cômodos (Snapcast e o DLNA avulso saíram). **Navidrome** (`orbit-navidrome`, imagem oficial `deluan/navidrome`) para a música: Go, SQLite, uns 50 MB, API Subsonic/OpenSubsonic e interface web; clientes Feishin (no `orbit-media`), Symfonium, Tempo e Ultrasonic no Android, Amperfy no iPhone. **Jellyfin** (`orbit-jellyfin`, imagem oficial `jellyfin/jellyfin`) para os vídeos (e música, para quem preferir): apps para TV e celular, conversão de formato na GPU (VA-API, com o `/dev/dri` passado ao contêiner), DLNA por plugin para as TVs que só falam isso; mais pesado (uns 300 MB ou mais). O Feishin fala com os dois |
 | **Alexa** | A decidir depois. A Alexa só toca o que um *skill* entrega, e quem fala com o skill é a nuvem da Amazon: um skill próprio para Subsonic exige conta de desenvolvedor e um endereço HTTPS público (fura o "só o WireGuard é público"); o "My Media for Alexa" é de terceiros, proprietário e com servidor deles; a Echo como caixa Bluetooth do celular não expõe nada, mas não atende a voz |
 
 ### 12.2 A página "Serviços"
@@ -573,6 +576,7 @@ página do serviço:
 | Mídia | Música (Navidrome) | `orbit-navidrome` | a pasta, o endereço para os apps (LAN e túnel) |
 | Mídia | Vídeos (Jellyfin) | `orbit-jellyfin` | as bibliotecas, o endereço para os apps, o plugin DLNA |
 | Mídia | Fotos (Immich) | `orbit-immich` | a pasta das fotos, o reconhecimento (ligado ou não), a versão e a atualização, o endereço para o app |
+| Mídia | Arquivos, agenda e contatos (Nextcloud) | `orbit-nextcloud` | as pastas de `/srv` que ele mostra, os usuários, a versão e a atualização, o endereço para os apps |
 | Storage | Pastas compartilhadas (Samba) | `orbit-samba` | as pastas, quem acessa (os usuários do Orbit, com a senha deles no Samba) |
 | Storage | Pastas compartilhadas (NFS) | `orbit-nfs` | as pastas e as redes que as montam |
 | Storage | Saúde dos discos | `orbit-smart` | os discos, os testes agendados, o histórico |
@@ -621,9 +625,11 @@ página do serviço:
 | `orbit-dnsmasq` | a página | `dnsmasq`, os dois modos, `41-dhcp.nft` |
 | `orbit-remote-server` | a página | (o pacote que já existe) e `10-remote.nft` |
 | `orbit-ltsp` | a página | `ltsp`, o `distro/ltsp/`, `30-ltsp.nft` |
-| `orbit-navidrome` | a página | `navidrome`, a configuração, `50-navidrome.nft` |
-| `orbit-jellyfin` | a página | `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), a configuração, `51-jellyfin.nft` |
-| `orbit-immich` | a página | `podman`, as unidades Quadlet geradas do `docker-compose.yml` da release fixada (servidor, reconhecimento, PostgreSQL com a extensão de vetores, Valkey), `55-immich.nft` |
+| `orbit-containers` | os quatro abaixo | `podman`, a rede `orbit` dos contêineres, as convenções do Quadlet (`/etc/containers/systemd/orbit-*`), a atualização por pedido |
+| `orbit-navidrome` | a página | a unidade Quadlet da imagem fixada, `50-navidrome.nft` |
+| `orbit-jellyfin` | a página | a unidade Quadlet da imagem fixada, `51-jellyfin.nft` |
+| `orbit-immich` | a página | as unidades Quadlet geradas do `docker-compose.yml` da release fixada (servidor, reconhecimento, PostgreSQL com a extensão de vetores, Valkey), `55-immich.nft` |
+| `orbit-nextcloud` | a página | as unidades Quadlet (Nextcloud com Apache, PostgreSQL, Valkey, e o cron dele como um timer do systemd), `56-nextcloud.nft` |
 | `orbit-samba` | a página | `samba`, a configuração, `52-samba.nft` |
 | `orbit-nfs` | a página | `nfs-kernel-server`, `/etc/exports.d/orbit.exports`, `53-nfs.nft` |
 | `orbit-smart` | a página | `smartmontools`, o aviso pelo orbit-notify |
@@ -655,6 +661,7 @@ mais a `wg0`):
 | `53-nfs.nft` | `orbit-nfs` | TCP 2049 (NFSv4 só) |
 | `54-syncthing.nft` | `orbit-syncthing` | TCP/UDP 22000 (sincronização), UDP 21027 (descoberta na rede) |
 | `55-immich.nft` | `orbit-immich` | TCP 2283 |
+| `56-nextcloud.nft` | `orbit-nextcloud` | TCP 8380 |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.5 Cada serviço
@@ -684,41 +691,51 @@ mais a `wg0`):
   trocas do código para todos; o ban do Fail2Ban é o que impede isso. Os
   endereços da `@lan` de confiança ficam em `ignoreip` só se o usuário
   pedir.
-- **Navidrome e Jellyfin:** cada um como serviço do sistema, com o usuário
-  dele, ouvindo só na `@lan` e na `wg0`; fora de casa, o celular entra pelo
-  WireGuard e o app conecta como em casa. As pastas escritas na
-  configuração dos dois (`MusicFolder` do Navidrome; as bibliotecas do
-  Jellyfin pela API dele). Os serviços precisam ler as pastas: o padrão é
-  `/srv/media` (`music/`, `videos/`), com um grupo de leitura; pastas no
-  `/home` do usuário (que em algumas máquinas é NFS) só por escolha, com
-  ACL. O Jellyfin no grupo `render`, para a conversão na GPU. O primeiro
-  usuário de cada um é o do Orbit, criado ao ligar, com uma senha própria
-  do serviço (os apps Subsonic não falam PAM).
+- **Os contêineres (`orbit-containers`):** cada serviço é uma unidade
+  Quadlet em `/etc/containers/systemd/`, com a imagem pela versão exata
+  (nunca `latest`), iniciada e parada pelo systemd como os outros serviços.
+  Ligar baixa as imagens (de dezenas de MB no Navidrome a alguns GB no
+  Immich): a única parte da página que precisa de internet além do
+  repositório do Orbit. **Atualizar** é trocar a versão fixada: a página
+  mostra a nova, com o link das notas, e só atualiza quando o usuário pede,
+  com um snapshot dos dados antes (o Immich e o Nextcloud mudam o banco
+  entre versões). Os dados ficam fora dos contêineres: as pastas de mídia
+  montadas só para leitura (`/srv/media/music`, `/srv/media/videos`), as
+  fotos do Immich em `/srv/photos`, os arquivos do Nextcloud em
+  `/srv/cloud`, e os bancos e configurações em `/var/lib/orbit-<serviço>`.
+  As portas são publicadas só nos endereços da `@lan` e da `wg0`: uma porta
+  de contêiner publicada passa pelo NAT do Podman e não pela cadeia
+  `input`, então o firewall sozinho não a seguraria. Fora de casa, o
+  celular entra pelo WireGuard e o app conecta como em casa.
+- **Navidrome e Jellyfin:** a pasta de música e as bibliotecas de vídeo
+  escritas na configuração de cada um (`ND_MUSICFOLDER`; as bibliotecas do
+  Jellyfin pela API dele). O Jellyfin recebe o `/dev/dri` para a conversão
+  na GPU; o plugin DLNA precisa da rede do host (a descoberta SSDP é
+  multicast), então ligá-lo muda o contêiner para ela. O primeiro usuário
+  de cada um é o do Orbit, criado ao ligar, com uma senha própria do
+  serviço (os apps Subsonic não falam PAM).
 - **Syncthing:** um serviço por usuário do Orbit (`syncthing@USUÁRIO`), com
   a interface e a API em `127.0.0.1:8384`, que a página usa; no servidor, as
-  pastas em `/srv` (`@shares`). Os aparelhos se acham na LAN e pelo túnel;
+  pastas em `/srv/shares`. Os aparelhos se acham na LAN e pelo túnel;
   a descoberta global e os relays (a infraestrutura pública do Syncthing)
   ficam desligados por padrão, como o relatório de uso: ligá-los é uma
   escolha, para quem sincroniza sem o túnel.
-- **Immich:** as unidades Quadlet (`/etc/containers/systemd/`) feitas a
-  partir do `docker-compose.yml` e do `example.env` de uma release fixada,
-  com as imagens pela versão exata (nunca `release`/`latest`). Ligar baixa
-  as imagens (alguns GB: a única instalação da página que precisa de
-  internet além do repositório do Orbit). As fotos em `/srv/@photos`, o
-  banco em `/var/lib/orbit-immich`. O reconhecimento de rostos e objetos é
+- **Immich:** as unidades feitas a partir do `docker-compose.yml` e do
+  `example.env` da release fixada. O reconhecimento de rostos e objetos é
   um contêiner à parte, o que mais pesa (2 a 4 GB de RAM com ele): a página
   liga e desliga. A aceleração (`hwaccel.transcoding.yml`, VA-API) segue a
-  GPU detectada. **Atualizar** é trocar a release fixada: a página mostra a
-  nova, com o link das notas, e só atualiza quando o usuário pede, porque o
-  Immich muda o banco entre versões. A porta do servidor é publicada só nos
-  endereços da `@lan` e da `wg0`: uma porta de contêiner publicada passa
-  pelo NAT do Podman e não pela cadeia `input`, então o firewall sozinho
-  não a seguraria.
+  GPU detectada.
+- **Nextcloud:** o contêiner da imagem `nextcloud` (Apache), o PostgreSQL e
+  o Valkey ao lado, e o `cron.php` dele num timer do systemd. Os
+  `trusted_domains` com o nome e os endereços da máquina na LAN e no túnel.
+  As pastas de `/srv` que o usuário escolher entram como armazenamento
+  externo (só leitura ou não), para o Nextcloud mostrar o storage que já
+  existe em vez de uma cópia.
 - **Celulares:** Android pelo Syncthing-Fork (o fork da comunidade; o app
   oficial foi descontinuado no fim de 2024), sincronizando as pastas do
   usuário (fotos, downloads, documentos, a mídia dos mensageiros) com o
   servidor pelo túnel, também fora de casa. No servidor, uma pasta por
-  aparelho (`/srv/@shares/<usuário>/<aparelho>`), com o versionamento do
+  aparelho (`/srv/shares/<usuário>/<aparelho>`), com o versionamento do
   Syncthing ligado, para um arquivo apagado no celular não sumir do
   servidor. É cópia dos arquivos, não do aparelho: dados e configurações
   dos apps o Android não deixa ler sem root.
@@ -741,7 +758,8 @@ página "Serviços".
 3. `orbit-wireguard`, com a configuração entregue no pareamento.
 4. `orbit-unbound` e `orbit-dnsmasq`, absorvendo o dnsmasq do LTSP.
 5. `orbit-fail2ban`, com a jail do Orbit.
-6. `orbit-navidrome` e `orbit-jellyfin`; depois o `orbit-immich`.
+6. `orbit-containers`, e sobre ele o `orbit-navidrome`, o `orbit-jellyfin`,
+   o `orbit-immich` e o `orbit-nextcloud`.
 7. Storage: `orbit-samba`, `orbit-nfs`, `orbit-smart`, `orbit-syncthing`.
 8. O `orbit-base`, o `orbit-ssh`, o `orbitctl services` e a gerência de
    outra máquina pelo SSH: o servidor sem sessão gráfica.
@@ -759,17 +777,17 @@ app do Jellyfin toca um vídeo.
 - Um ban do Fail2Ban vindo da LAN pode trancar a própria casa (um código de
   pareamento digitado errado cinco vezes numa estação): o ban é curto e a
   página libera o endereço.
-- O repositório público só carrega pacotes do Orbit (`public.exclude`):
-  para quem instala de fora, o `orbit-navidrome` e o `orbit-jellyfin` não
-  achariam o `navidrome` e o `jellyfin`. Os dois são software livre
-  (GPL-3 e GPL-2) e podem ser redistribuídos: a decidir se o repositório
-  público passa a levá-los (a recomendação), ou se a página acrescenta o
-  repositório do próprio Jellyfin e baixa o `.deb` do Navidrome.
 - O WebRTC usa portas UDP aleatórias: sem uma faixa fixa no remote server, o
   firewall teria de abrir todo UDP da LAN.
-- O Immich vem de fora do Debian e de fora do repositório do Orbit (as
-  imagens do registro dele) e muda o banco entre versões: atualizar só por
-  pedido, com as notas à vista, e um snapshot do banco antes.
+- Os quatro contêineres vêm de fora do Debian e do repositório do Orbit
+  (as imagens do registro de cada projeto), sem a assinatura do Orbit e sem
+  as atualizações de segurança do Debian: a página avisa quando há versão
+  nova, e atualizar segue sendo um pedido do usuário, com as notas à vista
+  e um snapshot antes.
+- **HTTPS:** pela LAN os quatro falam HTTP, e pelo túnel o WireGuard já
+  cifra tudo. Alguns apps reclamam de HTTP (o do Nextcloud avisa); a
+  decidir se entra um proxy reverso com certificado (uma CA local, ou o
+  Let's Encrypt pelo desafio de DNS).
 - O auxiliar com root é a peça sensível da página: comandos tipados, cada
   valor validado, nada de caminho ou texto livre que chegue a um arquivo de
   root sem passar por um formato conhecido.
