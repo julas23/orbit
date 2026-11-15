@@ -22,6 +22,7 @@ use smithay::{
             solid::SolidColorRenderElement,
             surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
             texture::TextureRenderElement,
+            utils::RescaleRenderElement,
         },
         gles::{GlesRenderer, GlesTexture, element::PixelShaderElement},
     },
@@ -61,6 +62,47 @@ render_elements! {
     Solid=SolidColorRenderElement,
     Card=crate::cards::CardElement,
     Memory=smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<GlesRenderer>,
+}
+
+render_elements! {
+    pub FrameElement<=GlesRenderer>;
+    Plain=OutputElement,
+    Zoomed=RescaleRenderElement<OutputElement>,
+    Bell=SolidColorRenderElement,
+}
+
+/// What the screen shows of `output`: its elements (`output_elements`),
+/// grown around the pointer while the magnifier is on, under the visual
+/// bell's flash (`a11y`).
+pub fn frame_elements(
+    state: &mut Orbit,
+    output: &Output,
+    renderer: &mut GlesRenderer,
+    pointer: bool,
+) -> Vec<FrameElement> {
+    let elements = output_elements(state, output, renderer, pointer);
+    let Some(geo) = state.space.output_geometry(output) else {
+        return Vec::new();
+    };
+    let scale = Scale::from(output.current_scale().fractional_scale());
+    let mut frame = Vec::with_capacity(elements.len() + 1);
+    let size = geo.size.to_physical_precise_round(scale);
+    if let Some(flash) = state.bell_element(output, size) {
+        frame.push(FrameElement::Bell(flash));
+    }
+    let zoom = state.a11y.zoom;
+    if zoom > 1.0 {
+        let at = state.seat.get_pointer().map(|p| p.current_location());
+        let origin = crate::a11y::zoom_origin(at, geo).to_physical(scale).to_i32_round();
+        frame.extend(
+            elements
+                .into_iter()
+                .map(|e| FrameElement::Zoomed(RescaleRenderElement::from_element(e, origin, zoom))),
+        );
+    } else {
+        frame.extend(elements.into_iter().map(FrameElement::Plain));
+    }
+    frame
 }
 
 /// A window's shadow, kept with it as the border is.

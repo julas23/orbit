@@ -25,6 +25,7 @@
 //! Files that hold code from other projects say so at the top, with the
 //! project, file, commit and licence (PLANO-CORE §9).
 
+mod a11y;
 mod cards;
 mod command;
 mod compose;

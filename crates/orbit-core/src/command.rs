@@ -181,6 +181,8 @@ fn execute(state: &mut Orbit, command: &str, targets: Option<&[Window]>) -> Resu
             state.reload_config();
             Ok(())
         }
+        // The magnifier, for now (core.yaml's `accessibility: zoom` is kept).
+        ["zoom", how] => state.zoom_command(how),
         // sway's `output NAME position X Y`; the place is remembered.
         ["output", name, "pos" | "position", x, y] => {
             let at = (x.parse::<i32>(), y.parse::<i32>());

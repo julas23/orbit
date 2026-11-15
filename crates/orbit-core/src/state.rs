@@ -178,6 +178,8 @@ pub struct Orbit {
     left_ping: smithay::reexports::calloop::ping::Ping,
     /// The input devices (libinput), set up as the config says (`devices`).
     pub devices: Vec<smithay::reexports::input::Device>,
+    /// Sticky, slow and bounce keys, mouse keys, the magnifier (`a11y`).
+    pub a11y: crate::a11y::A11y,
 }
 
 impl Orbit {
@@ -216,8 +218,12 @@ impl Orbit {
         let handle = dh.clone();
         VirtualPointerManagerState::new::<Self, _>(&dh, move |client| crate::input::remote_server(&handle, client));
         let handle = dh.clone();
-        VirtualKeyboardManagerState::new::<Self, _>(&dh, move |client| crate::input::remote_server(&handle, client));
+        VirtualKeyboardManagerState::new::<Self, _>(&dh, move |client| {
+            crate::input::remote_server(&handle, client) || crate::input::on_screen_keyboard(&handle, client)
+        });
         let session_lock_state = crate::session_lock::init(&dh);
+        // A program's bell: the visual bell, when on (`a11y`).
+        smithay::wayland::xdg_system_bell::XdgSystemBellState::new::<Self>(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "seat0");
@@ -239,6 +245,7 @@ impl Orbit {
         let (socket_name, left_ping) = Self::listen(display, event_loop);
         let cursor = crate::cursor::Cursor::load(&config.cursor_theme, config.cursor_size);
         let keys = crate::keys::Keys::load(&config_path, &config);
+        let a11y = crate::a11y::A11y::new(&config.accessibility);
 
         Self {
             start_time: Instant::now(),
@@ -312,6 +319,7 @@ impl Orbit {
             gamma,
             left_ping,
             devices: Vec::new(),
+            a11y,
         }
     }
 
@@ -381,6 +389,7 @@ impl Orbit {
         self.output_event();
         self.arm_idle();
         self.configure_devices();
+        self.a11y_reload();
     }
 
     /// Notes the keyboard's layouts and which is active.

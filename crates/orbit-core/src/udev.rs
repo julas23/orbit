@@ -59,7 +59,7 @@ use smithay_drm_extras::{
 };
 
 use crate::{
-    render::{OutputElement, background, output_elements},
+    render::{FrameElement, background, frame_elements},
     state::{Backend, Orbit},
 };
 
@@ -106,7 +106,7 @@ const FORMATS: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 /// surfaces it showed (presentation-time).
 type Feedback = Option<smithay::desktop::utils::OutputPresentationFeedback>;
 type Manager = DrmOutputManager<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, Feedback, DrmDeviceFd>;
-type Element = OutputElement;
+type Element = FrameElement;
 
 pub struct DrmData {
     pub session: LibSeatSession,
@@ -627,7 +627,7 @@ fn render(state: &mut Orbit, crtc: crtc::Handle) {
         surface.scheduled = false;
         surface.dirty = false;
     }
-    let elements = output_elements(state, &output, &mut drm.renderer, true);
+    let elements = frame_elements(state, &output, &mut drm.renderer, true);
     let clear = background(state);
     if let Some(surface) = drm.surfaces.get_mut(&crtc) {
         let failed = match surface
