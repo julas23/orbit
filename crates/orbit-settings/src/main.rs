@@ -28,6 +28,7 @@ mod services;
 mod sound;
 mod wallpaper;
 mod wifi;
+mod windows;
 
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
@@ -135,6 +136,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "sound" => sound::page(),
             "keyboard" => keyboard::page(dir),
             "mouse" => mouse::page(dir),
+            "windows" => windows::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),
