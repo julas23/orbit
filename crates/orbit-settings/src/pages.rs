@@ -141,6 +141,22 @@ pub const PAGES: &[Page] = &[
         options: &["settings-users-password", "settings-users-picture", "settings-users-add", "settings-users-admin", "settings-users-groups", "settings-users-boot"],
     },
     Page {
+        id: "lock",
+        group: Group::People,
+        title: "settings-lock",
+        icon: "system-lock-screen-symbolic",
+        keywords: "settings-lock-keywords",
+        options: &["settings-power-lock-after", "settings-lock-screen-off", "settings-lock-people", "settings-lock-now"],
+    },
+    Page {
+        id: "privacy",
+        group: Group::People,
+        title: "settings-privacy",
+        icon: "preferences-system-privacy-symbolic",
+        keywords: "settings-privacy-keywords",
+        options: &["settings-privacy-remember", "settings-privacy-clear-recent", "settings-privacy-old-trash", "settings-privacy-empty-trash", "settings-privacy-apps"],
+    },
+    Page {
         id: "datetime",
         group: Group::People,
         title: "settings-time",

@@ -1449,6 +1449,48 @@ settings-users-save = Salvar
 settings-users-boot = No boot
 settings-users-boot-tip = A sessão de quem abre quando a máquina liga, travada até a senha ser digitada.
 settings-users-boot-user = Sessão aberta no boot
+settings-lock = Tela de bloqueio
+settings-lock-keywords = bloqueio, travar, tela de bloqueio, greet, tela de login, protetor de tela, ociosidade, senha, outros usuários, trocar de usuário
+settings-lock-when = Travamento
+settings-lock-screen-off = Desligar os monitores depois de
+settings-lock-sleep = A sessão sempre trava antes de a máquina suspender.
+settings-lock-now = Travar agora
+settings-lock-screen = A tela de bloqueio
+settings-lock-people = Mostrar as outras pessoas
+settings-lock-people-tip = Abaixo da senha, para trocar para a sessão delas (a partir do próximo login)
+settings-lock-boot = A sessão aberta no boot fica em Usuários e grupos.
+settings-privacy = Privacidade
+settings-privacy-keywords = privacidade, arquivos recentes, histórico, lixeira, arquivos temporários, limpar, permissões, câmera, microfone, localização, captura de tela, portal, flatpak
+settings-privacy-recent = Arquivos recentes
+settings-privacy-remember = Lembrar os arquivos abertos
+settings-privacy-keep-recent = Guardar por
+settings-privacy-forever = Sempre
+settings-privacy-days = { $days ->
+    [one] { $days } dia
+   *[other] { $days } dias
+}
+settings-privacy-clear-recent = Limpar o histórico
+settings-privacy-cleared = { $count ->
+    [one] { $count } item apagado.
+   *[other] { $count } itens apagados.
+}
+settings-privacy-old = Arquivos antigos
+settings-privacy-old-trash = Esvaziar da lixeira o que for antigo
+settings-privacy-old-temp = Apagar meus arquivos temporários antigos
+settings-privacy-older-than = Mais antigos que
+settings-privacy-empty-trash = Esvaziar a lixeira agora
+settings-privacy-emptied = A lixeira está vazia.
+settings-privacy-apps = O que os aplicativos podem usar
+settings-privacy-apps-tip = O que os aplicativos em sandbox (Flatpak) receberam pelos portais; remover faz o app perguntar de novo da próxima vez.
+settings-privacy-no-store = O armazém de permissões dos portais não está rodando.
+settings-privacy-no-grants = Nenhum aplicativo recebeu permissão ainda.
+settings-privacy-unsandboxed = Aplicativos fora de sandbox
+settings-privacy-revoke = Retirar
+settings-privacy-devices = Dispositivos
+settings-privacy-location = Localização
+settings-privacy-screenshot = Capturas de tela
+settings-privacy-notifications = Notificações
+settings-privacy-background = Rodar em segundo plano
 settings-time = Data e hora
 settings-time-keywords = relógio, fuso horário, fuso, hora, ntp, hora da rede
 settings-time-zone = Fuso horário

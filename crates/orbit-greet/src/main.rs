@@ -274,7 +274,7 @@ fn build(app: &gtk::Application, display: &gdk::Display, power: power::Config) {
     };
     // A session of no one who can log in is the greeter's.
     let greeter = !people.is_empty() && !people.iter().any(|p| p.name == user);
-    let people = if greeter || (people.len() > 1 && people.iter().any(|p| p.name == user)) {
+    let people = if greeter || (power.people && people.len() > 1 && people.iter().any(|p| p.name == user)) {
         people
     } else {
         Vec::new()

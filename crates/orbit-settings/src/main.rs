@@ -17,9 +17,11 @@ mod apps_page;
 mod bluetooth;
 mod core;
 mod datetime;
+mod housekeeping;
 mod dbus;
 mod dock_page;
 mod keyboard;
+mod lock_page;
 mod menu;
 mod monitors;
 mod mouse;
@@ -29,6 +31,7 @@ mod pages;
 mod panel_page;
 mod passwd;
 mod power;
+mod privacy;
 mod region;
 mod services;
 mod shortcuts;
@@ -63,9 +66,10 @@ fn main() -> glib::ExitCode {
             let output = args.get(3).cloned().unwrap_or_default();
             menu::run(config, (x, y), output)
         }
+        Some("housekeeping") => housekeeping::run(),
         Some("-h" | "--help") => {
             let ids: Vec<&str> = pages::PAGES.iter().map(|p| p.id).collect();
-            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT", ids.join("|"));
+            println!("Usage: orbit-settings [-c DIR] [{}] | menu X Y OUTPUT | housekeeping", ids.join("|"));
             glib::ExitCode::SUCCESS
         }
         _ => window(config),
@@ -152,6 +156,8 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "notifications" => notify_page::page(dir),
             "apps" => apps_page::page(dir),
             "users" => users::page(),
+            "lock" => lock_page::page(dir),
+            "privacy" => privacy::page(),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

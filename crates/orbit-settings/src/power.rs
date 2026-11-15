@@ -157,18 +157,29 @@ fn idle_card(dir: &ConfigDir, battery: bool, message: &gtk::Label) -> gtk::Box {
         rows
     };
     for (key, label, default) in rows {
-        let dropdown = minutes_dropdown(core::per_host(dir, key, default));
-        let dir = dir.clone();
-        let message = message.clone();
-        dropdown.connect_selected_notify(move |d| {
-            let minutes = MINUTES.get(d.selected() as usize).copied().unwrap_or(0);
-            let told = core::save_per_host(&dir, key, minutes * 60, default).and_then(|()| core::command("reload"));
-            crate::say(&message, &told.err().map(|e| e.to_string()).unwrap_or_default());
-        });
-        card.append(&crate::row(&tr(label), &dropdown));
+        card.append(&idle_row(dir, key, label, default, message));
     }
     card.append(&dim(&tr("settings-power-idle-tip")));
+    card.append(&effects_row(dir, message));
+    card
+}
 
+/// A row choosing this machine's `key` of core.yaml in minutes (`idle_lock`,
+/// `idle_off`, `idle_suspend`…), the core reloaded.
+pub fn idle_row(dir: &ConfigDir, key: &'static str, label: &str, default: u64, message: &gtk::Label) -> gtk::Box {
+    let dropdown = minutes_dropdown(core::per_host(dir, key, default));
+    let dir = dir.clone();
+    let message = message.clone();
+    dropdown.connect_selected_notify(move |d| {
+        let minutes = MINUTES.get(d.selected() as usize).copied().unwrap_or(0);
+        let told = core::save_per_host(&dir, key, minutes * 60, default).and_then(|()| core::command("reload"));
+        crate::say(&message, &told.err().map(|e| e.to_string()).unwrap_or_default());
+    });
+    crate::row(&tr(label), &dropdown)
+}
+
+/// The effects (the lock's eyes, the blur): on, off on battery, off.
+pub fn effects_row(dir: &ConfigDir, message: &gtk::Label) -> gtk::Box {
     let effects = ["on", "auto", "off"];
     let labels = [tr("settings-power-effects-on"), tr("settings-power-effects-auto"), tr("settings-power-effects-off")];
     let dropdown = gtk::DropDown::from_strings(&labels.iter().map(String::as_str).collect::<Vec<_>>());
@@ -183,8 +194,7 @@ fn idle_card(dir: &ConfigDir, battery: bool, message: &gtk::Label) -> gtk::Box {
     });
     let row = crate::row(&tr("settings-power-effects"), &dropdown);
     row.set_tooltip_text(Some(&tr("settings-power-effects-tip")));
-    card.append(&row);
-    card
+    row
 }
 
 // --- The battery -------------------------------------------------------------

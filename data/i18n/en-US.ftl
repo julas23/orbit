@@ -1457,6 +1457,48 @@ settings-users-save = Save
 settings-users-boot = At boot
 settings-users-boot-tip = Whose session opens when the machine starts, locked until their password is typed.
 settings-users-boot-user = Session opened at boot
+settings-lock = Lock screen
+settings-lock-keywords = lock, lock screen, greet, login screen, screen saver, blank, idle, password, other users, switch user
+settings-lock-when = Locking
+settings-lock-screen-off = Switch the monitors off after
+settings-lock-sleep = The session always locks before the machine sleeps.
+settings-lock-now = Lock now
+settings-lock-screen = The lock screen
+settings-lock-people = Show the other people
+settings-lock-people-tip = Below the password, to switch to their session (from the next login)
+settings-lock-boot = Whose session opens at boot is in Users and groups.
+settings-privacy = Privacy
+settings-privacy-keywords = privacy, recent files, history, trash, temporary files, clean, permissions, camera, microphone, location, screenshot, portal, flatpak
+settings-privacy-recent = Recent files
+settings-privacy-remember = Remember the files opened
+settings-privacy-keep-recent = Keep them for
+settings-privacy-forever = Forever
+settings-privacy-days = { $days ->
+    [one] { $days } day
+   *[other] { $days } days
+}
+settings-privacy-clear-recent = Clear the history
+settings-privacy-cleared = { $count ->
+    [one] { $count } item cleared.
+   *[other] { $count } items cleared.
+}
+settings-privacy-old = Old files
+settings-privacy-old-trash = Empty old things from the trash
+settings-privacy-old-temp = Remove my old temporary files
+settings-privacy-older-than = Older than
+settings-privacy-empty-trash = Empty the trash now
+settings-privacy-emptied = The trash is empty.
+settings-privacy-apps = What applications may use
+settings-privacy-apps-tip = What sandboxed applications (Flatpak) were allowed through the portals; removing one asks again next time.
+settings-privacy-no-store = The portals' permission store is not running.
+settings-privacy-no-grants = No application has been allowed anything yet.
+settings-privacy-unsandboxed = Applications outside a sandbox
+settings-privacy-revoke = Take it back
+settings-privacy-devices = Devices
+settings-privacy-location = Location
+settings-privacy-screenshot = Screenshots
+settings-privacy-notifications = Notifications
+settings-privacy-background = Running in the background
 settings-time = Date and time
 settings-time-keywords = clock, time zone, timezone, hour, ntp, network time
 settings-time-zone = Time zone

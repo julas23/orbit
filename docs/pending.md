@@ -333,6 +333,17 @@ with Step 2; the phases then run alongside the steps above.
   Notifications, Default apps and startup, About; the panel's modules
   opening their pages on a right click. Done when nothing daily on the hp
   and the think needs a hand-edited YAML or an outside tool.
+- [ ] Phase B, in batches. B1 done 2026-11-15: Lock screen (lock and
+  monitors-off after, from core.yaml as the Power and Monitors pages
+  write them; the effects; greet.yaml's new `people` hiding the others
+  below the card; lock now) and Privacy (recent files kept or not and for
+  how long, cleared; the trash and the user's temporary files emptied of
+  old ones by `orbit-settings housekeeping`, run by the user unit
+  orbit-housekeeping.timer the page enables, going by each trash item's
+  deletion date; GNOME's org.gnome.desktop.privacy keys hold the choices;
+  the portals' permission store listed and revoked). Left: a lock-screen
+  picture of its own (core work: the greet shows the wallpaper), the
+  location service (geoclue not installed).
 - [ ] Phase B: Network drives, Printers and scanners, Storage, Privacy,
   Updates, Lock screen and login, Boot. Done when an SMB folder mounted at
   login, a network printer added and an update installed all go through

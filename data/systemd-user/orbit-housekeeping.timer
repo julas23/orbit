@@ -1,0 +1,10 @@
+# Turned on and off by Orbit-Settings' Privacy page.
+[Unit]
+Description=Empty old files from the trash and the temporary folders, hourly
+
+[Timer]
+OnStartupSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

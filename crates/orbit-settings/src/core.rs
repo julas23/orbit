@@ -93,7 +93,7 @@ pub fn wallpaper(dir: &ConfigDir) -> Wallpaper {
 }
 
 /// The core's `idle_off` when the file does not say (`config.rs`).
-const IDLE_OFF_DEFAULT: u64 = 900;
+pub const IDLE_OFF_DEFAULT: u64 = 900;
 
 /// Seconds idle before the monitors switch off on this machine; 0: never.
 /// `idle_off` is one number for every machine, or `{ default: …, HOST: … }`,

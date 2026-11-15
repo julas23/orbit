@@ -18,6 +18,8 @@ recommends = "power-profiles-daemon, nm-connection-editor"
 assets = [
     ["target/release/orbit-settings", "usr/bin/", "755"],
     ["../../data/io.github.julas23.Orbit.Settings.desktop", "usr/share/applications/", "644"],
+    ["../../data/systemd-user/orbit-housekeeping.service", "usr/lib/systemd/user/", "644"],
+    ["../../data/systemd-user/orbit-housekeeping.timer", "usr/lib/systemd/user/", "644"],
 ]
 
 [dependencies]

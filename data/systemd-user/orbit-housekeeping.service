@@ -1,0 +1,10 @@
+# Orbit-Settings' Privacy page: the trash and the temporary files emptied
+# of what is older than org.gnome.desktop.privacy's old-files-age.
+[Unit]
+Description=Empty old files from the trash and the temporary folders
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/orbit-settings housekeeping
+Nice=10
+IOSchedulingClass=idle

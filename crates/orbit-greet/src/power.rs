@@ -7,6 +7,7 @@
 //!   poweroff: systemctl poweroff
 //!   reboot: systemctl reboot
 //!   suspend: systemctl suspend
+//!   people: true     # the others below the card, to switch to
 
 use gtk::{glib, prelude::*};
 use orbit_app::i18n::tr;
@@ -19,6 +20,9 @@ pub struct Config {
     pub poweroff: String,
     pub reboot: String,
     pub suspend: String,
+    /// The other people of the machine below the card, to switch to
+    /// (Orbit-Settings' Lock screen page). The greeter shows them anyway.
+    pub people: bool,
 }
 
 impl Default for Config {
@@ -27,6 +31,7 @@ impl Default for Config {
             poweroff: "systemctl poweroff".into(),
             reboot: "systemctl reboot".into(),
             suspend: "systemctl suspend".into(),
+            people: true,
         }
     }
 }
