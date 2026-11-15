@@ -12,6 +12,7 @@
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod about;
+mod apps_page;
 mod appearance;
 mod bluetooth;
 mod core;
@@ -147,6 +148,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "panel" => panel_page::page(dir),
             "dock" => dock_page::page(dir),
             "notifications" => notify_page::page(dir),
+            "apps" => apps_page::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),
@@ -191,6 +193,43 @@ pub fn row(label: &str, widget: &impl IsA<gtk::Widget>) -> gtk::Box {
     row.append(&gtk::Label::builder().label(label).xalign(0.0).hexpand(true).build());
     row.append(widget);
     row
+}
+
+/// A dropdown of `labels` whose button cuts a long one short (the list
+/// shows them whole), so a long name does not widen the page.
+pub fn short_dropdown(labels: &[String]) -> gtk::DropDown {
+    let drop = gtk::DropDown::from_strings(&labels.iter().map(String::as_str).collect::<Vec<_>>());
+    let factory = gtk::SignalListItemFactory::new();
+    factory.connect_setup(|_, item| {
+        let label = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(24).build();
+        if let Some(i) = item.downcast_ref::<gtk::ListItem>() {
+            i.set_child(Some(&label));
+        }
+    });
+    factory.connect_bind(|_, item| {
+        let Some(item) = item.downcast_ref::<gtk::ListItem>() else { return };
+        let text = item.item().and_downcast::<gtk::StringObject>().map(|s| s.string());
+        if let (Some(label), Some(text)) = (item.child().and_downcast::<gtk::Label>(), text) {
+            label.set_label(&text);
+            label.set_tooltip_text(Some(&text));
+        }
+    });
+    drop.set_factory(Some(&factory));
+    let list = gtk::SignalListItemFactory::new();
+    list.connect_setup(|_, item| {
+        if let Some(i) = item.downcast_ref::<gtk::ListItem>() {
+            i.set_child(Some(&gtk::Label::builder().xalign(0.0).build()));
+        }
+    });
+    list.connect_bind(|_, item| {
+        let Some(item) = item.downcast_ref::<gtk::ListItem>() else { return };
+        let text = item.item().and_downcast::<gtk::StringObject>().map(|s| s.string());
+        if let (Some(label), Some(text)) = (item.child().and_downcast::<gtk::Label>(), text) {
+            label.set_label(&text);
+        }
+    });
+    drop.set_list_factory(Some(&list));
+    drop
 }
 
 /// A card with its title: the pages' usual block.

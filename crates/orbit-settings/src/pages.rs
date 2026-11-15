@@ -198,6 +198,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-dock-launchers", "settings-dock-add", "settings-dock-icon-size", "settings-dock-align"],
     },
     Page {
+        id: "apps",
+        group: Group::Orbit,
+        title: "settings-apps",
+        icon: "preferences-desktop-default-applications-symbolic",
+        keywords: "settings-apps-keywords",
+        options: &["settings-apps-browser", "settings-apps-mail", "settings-apps-files", "settings-apps-other", "settings-apps-terminal", "settings-apps-login"],
+    },
+    Page {
         id: "notifications",
         group: Group::Orbit,
         title: "settings-notify",
