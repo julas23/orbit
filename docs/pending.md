@@ -434,9 +434,13 @@ Reviewed with the user, item by item (2026-11-15):
 - [ ] Alexa, later: a Subsonic skill needs a public HTTPS endpoint; "My
   Media for Alexa" is a third party's; Bluetooth from the phone exposes
   nothing but takes no voice.
-- [ ] To decide: HTTPS for the four (plain HTTP on the LAN, the tunnel
-  already encrypts): a reverse proxy with a local CA, or Let's Encrypt
-  through the DNS challenge.
+- [x] HTTPS through a local CA: Debian's Caddy (2.6.2, `orbit-proxy`) in
+  front of the four containers, as the reverse proxy and the CA itself
+  (`tls internal`); each service on its usual port, now HTTPS; the
+  containers publish no ports. The root goes to every Orbit machine's
+  certificate store and Firefox's policy, and to phones as a file and a QR.
+- [x] Samba kept: besides Windows and macOS, it is what Android's file
+  managers and many TVs speak.
 
 Work, in this order (PLANO-DISTRO §12.7):
 
@@ -461,9 +465,8 @@ Work, in this order (PLANO-DISTRO §12.7):
   short bans (10 min).
 - [ ] `orbit-containers`: Podman, the `orbit` container network, the Quadlet
   conventions, images by exact version, updates only when asked with the
-  release notes shown and a snapshot first; ports published only on the
-  LAN and tunnel addresses (a published container port goes through
-  Podman's NAT, not the `input` chain); data outside the containers
+  release notes shown and a snapshot first; no published ports, only Caddy
+  listening; data outside the containers
   (`/srv/media` read-only, `/srv/photos`, `/srv/cloud`,
   `/var/lib/orbit-<service>`).
 - [ ] `orbit-navidrome` and `orbit-jellyfin` on it: the media folders;
@@ -472,6 +475,14 @@ Work, in this order (PLANO-DISTRO §12.7):
 - [ ] `orbit-nextcloud`: Nextcloud, PostgreSQL, Valkey, its cron as a
   systemd timer, `trusted_domains` for the LAN and the tunnel, chosen
   `/srv` folders as external storage; port 8380.
+- [ ] `orbit-proxy`: Caddy with one `Caddyfile` block per service on (ports
+  4533, 8920, 2283, 8380), `tls internal`, the certificate for the
+  machine's names and addresses; the root exported to
+  `/usr/local/share/ca-certificates/`, Firefox's `policies.json`, the other
+  Orbit machines with the tunnel's config, and the page (file and QR).
+  Test each Android app with a user CA (Android 7+ apps ignore user CAs
+  unless they opt in); Let's Encrypt through the DNS challenge if one
+  refuses.
 - [ ] Storage: `orbit-samba` (TCP 445), `orbit-nfs` (NFSv4, TCP 2049),
   `orbit-smart`, `orbit-syncthing` (`syncthing@USER`, TCP/UDP 22000 and UDP
   21027, configured through its API on `127.0.0.1:8384`).

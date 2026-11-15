@@ -546,6 +546,8 @@ a página que os liga.
 | **Aplicações em contêiner** (revisto) | Quatro serviços opcionais rodam em contêineres, com a mesma base: **Navidrome** (música), **Jellyfin** (vídeos), **Immich** (fotos) e **Nextcloud** (arquivos, agenda, contatos). São a **exceção à regra da seção 1**: as imagens oficiais de cada projeto, do registro dele, não pacotes do Debian. Rodam pelo **Podman** do Debian 13 (5.4.2) com Quadlet — cada contêiner vira uma unidade do systemd, sem daemon —, e não pelo Docker, cujo daemon e regras próprias de NAT ficariam fora do controle do `orbit-firewall`. A base comum é o `orbit-containers` (12.3). Isso também resolve o repositório público: nenhum dos quatro precisa de pacote de terceiros nele |
 | **Fotos** (revisto) | **Immich** (`orbit-immich`): o "Google Fotos" próprio, com o app de Android (APK nas releases dele e no F-Droid) fazendo backup das fotos em segundo plano, pelo túnel fora de casa. Só publica imagens de contêiner com um `docker-compose.yml` por release (v3.4.1 em 2026-11-15) |
 | **Nextcloud** (revisto) | `orbit-nextcloud`: arquivos pelo navegador e pelos apps, agenda e contatos (CalDAV, CardDAV), compartilhar por link. A imagem oficial `nextcloud` (a versão com Apache), com PostgreSQL e Valkey em contêineres ao lado. O Nextcloud AIO fica de fora: ele comanda o Docker pelo socket do daemon, o que o Podman sem daemon não oferece. Sobrepõe-se em parte ao Syncthing (sincronizar pastas) e ao Immich (fotos): a página diz o que cada um faz melhor, e o usuário liga os que quiser |
+| **HTTPS** (revisto) | Por uma **CA local**, com o **Caddy** do Debian 13 (2.6.2) na frente dos quatro contêineres (`orbit-proxy`, puxado pelo `orbit-containers`): ele é o proxy reverso e a própria CA (`tls internal`), emitindo e renovando sozinho o certificado da máquina, para os nomes dela (`<nome>.home.lan`, `<nome>.local`) e os endereços da LAN e do túnel. Cada serviço fica no seu número de porta de sempre, agora em HTTPS pelo Caddy; os contêineres não publicam porta nenhuma, só falam com o Caddy pela rede `orbit` (o que também acaba com o NAT do Podman passando por fora da cadeia `input`). A raiz da CA vai para o repositório de certificados de cada máquina Orbit e para o Firefox por política, e a página a mostra como arquivo e QR para os celulares |
+| **Samba** (revisto) | Mantido: além do Windows e do macOS, é o que os gerenciadores de arquivos do Android e muitas TVs falam (SMB, não NFS) |
 | **Servidor sem sessão gráfica** (revisto) | Permitido: `orbit-base` em vez do `orbit-desktop`, login no console, SSH por chave só para a LAN e o túnel, gerência pelo `orbitctl services` ou pelo Orbit-Settings de um desktop por SSH (6.6, 12.2) |
 | **Firewall** (revisto) | nftables puro em toda instalação (`orbit-firewall`, puxado pelo `orbit-desktop`, ligado por padrão; desligá-lo pela página pede confirmação). Entrada bloqueada por padrão. Escolhido sobre o firewalld (zonas por conexão do NetworkManager, API D-Bus, regras com prazo, mas um daemon em Python de uns 40 MB) e o ufw (sem zonas nem API, contornado pelo Docker): nenhum daemon, e a camada em volta (a página, o polkit, desfazer em 30 s) é nossa. O `nftables.conf` não usa o `flush ruleset` do padrão do Debian, que apagaria as tabelas do Docker, do libvirt e de outros: só a tabela `inet orbit` é apagada e recarregada. O OpenSnitch (firewall de saída por aplicativo) fica como opcional, fora da página |
 | **DHCP e nomes locais** (revisto) | dnsmasq (`orbit-dnsmasq`), em dois modos. **Proxy** (padrão): o DHCP continua no roteador; o dnsmasq faz só o proxy DHCP e o TFTP do boot pela rede, e não conhece os nomes. **Rede** (por escolha): a máquina assume o DHCP no lugar do roteador, e os nomes saem dos leases, mais as reservas fixas (MAC → IP e nome). Domínio `home.lan`, configurável. Só IPv4 por enquanto (sem RA nem DHCPv6). `bind-dynamic`, só nas interfaces da LAN e do túnel: nunca na pública, e sem brigar pela porta 53 com o dnsmasq do libvirt (`virbr0`) e do hotspot do NetworkManager. Escolhido sobre o Kea (sem proxy DHCP nem TFTP, nomes só por DDNS, grande demais para uma casa) e o DHCP do systemd-networkd (sem nomes nem PXE) |
@@ -625,7 +627,8 @@ página do serviço:
 | `orbit-dnsmasq` | a página | `dnsmasq`, os dois modos, `41-dhcp.nft` |
 | `orbit-remote-server` | a página | (o pacote que já existe) e `10-remote.nft` |
 | `orbit-ltsp` | a página | `ltsp`, o `distro/ltsp/`, `30-ltsp.nft` |
-| `orbit-containers` | os quatro abaixo | `podman`, a rede `orbit` dos contêineres, as convenções do Quadlet (`/etc/containers/systemd/orbit-*`), a atualização por pedido |
+| `orbit-containers` | os quatro abaixo | `podman`, `orbit-proxy`, a rede `orbit` dos contêineres, as convenções do Quadlet (`/etc/containers/systemd/orbit-*`), a atualização por pedido |
+| `orbit-proxy` | `orbit-containers` | `caddy`, o `Caddyfile` montado com um bloco por serviço ligado, a CA local, a raiz exportada |
 | `orbit-navidrome` | a página | a unidade Quadlet da imagem fixada, `50-navidrome.nft` |
 | `orbit-jellyfin` | a página | a unidade Quadlet da imagem fixada, `51-jellyfin.nft` |
 | `orbit-immich` | a página | as unidades Quadlet geradas do `docker-compose.yml` da release fixada (servidor, reconhecimento, PostgreSQL com a extensão de vetores, Valkey), `55-immich.nft` |
@@ -655,13 +658,13 @@ mais a `wg0`):
 | `30-ltsp.nft` | `orbit-ltsp` | UDP 69 e 4011 (TFTP, proxy DHCP), NFS TCP 2049 |
 | `40-dns.nft` | `orbit-unbound` | UDP/TCP 53 |
 | `41-dhcp.nft` | `orbit-dnsmasq` | UDP 67 (o proxy DHCP no modo Proxy, o DHCP no modo Rede) |
-| `50-navidrome.nft` | `orbit-navidrome` | TCP 4533 |
-| `51-jellyfin.nft` | `orbit-jellyfin` | TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
+| `50-navidrome.nft` | `orbit-navidrome` | TCP 4533 (HTTPS pelo Caddy) |
+| `51-jellyfin.nft` | `orbit-jellyfin` | TCP 8920 (o HTTPS do Jellyfin, pelo Caddy) e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
 | `52-samba.nft` | `orbit-samba` | TCP 445 |
 | `53-nfs.nft` | `orbit-nfs` | TCP 2049 (NFSv4 só) |
 | `54-syncthing.nft` | `orbit-syncthing` | TCP/UDP 22000 (sincronização), UDP 21027 (descoberta na rede) |
-| `55-immich.nft` | `orbit-immich` | TCP 2283 |
-| `56-nextcloud.nft` | `orbit-nextcloud` | TCP 8380 |
+| `55-immich.nft` | `orbit-immich` | TCP 2283 (HTTPS pelo Caddy) |
+| `56-nextcloud.nft` | `orbit-nextcloud` | TCP 8380 (HTTPS pelo Caddy) |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.5 Cada serviço
@@ -703,10 +706,19 @@ mais a `wg0`):
   montadas só para leitura (`/srv/media/music`, `/srv/media/videos`), as
   fotos do Immich em `/srv/photos`, os arquivos do Nextcloud em
   `/srv/cloud`, e os bancos e configurações em `/var/lib/orbit-<serviço>`.
-  As portas são publicadas só nos endereços da `@lan` e da `wg0`: uma porta
-  de contêiner publicada passa pelo NAT do Podman e não pela cadeia
-  `input`, então o firewall sozinho não a seguraria. Fora de casa, o
-  celular entra pelo WireGuard e o app conecta como em casa.
+  Os contêineres não publicam portas: só o Caddy (`orbit-proxy`) ouve na
+  máquina, nas portas da tabela 12.4, e encaminha a cada contêiner pela
+  rede `orbit`. Fora de casa, o celular entra pelo WireGuard e o app
+  conecta como em casa.
+- **O Caddy e a CA local:** um bloco do `Caddyfile` por serviço ligado
+  (`https://:4533 { tls internal; reverse_proxy orbit-navidrome:4533 }`),
+  com o certificado para os nomes e endereços da máquina e o `on_demand`
+  desligado. A raiz da CA (a do Caddy, em `/var/lib/caddy`) é copiada para
+  `/usr/local/share/ca-certificates/` com o `update-ca-certificates`, entra
+  no Firefox pelo `policies.json` (`Certificates.Install`) e, nas outras
+  máquinas Orbit, chega junto com a configuração do túnel. Nos celulares,
+  a página mostra a raiz como arquivo e QR, com o passo a passo de
+  instalação; ela muda só se a CA for refeita.
 - **Navidrome e Jellyfin:** a pasta de música e as bibliotecas de vídeo
   escritas na configuração de cada um (`ND_MUSICFOLDER`; as bibliotecas do
   Jellyfin pela API dele). O Jellyfin recebe o `/dev/dri` para a conversão
@@ -784,10 +796,15 @@ app do Jellyfin toca um vídeo.
   as atualizações de segurança do Debian: a página avisa quando há versão
   nova, e atualizar segue sendo um pedido do usuário, com as notas à vista
   e um snapshot antes.
-- **HTTPS:** pela LAN os quatro falam HTTP, e pelo túnel o WireGuard já
-  cifra tudo. Alguns apps reclamam de HTTP (o do Nextcloud avisa); a
-  decidir se entra um proxy reverso com certificado (uma CA local, ou o
-  Let's Encrypt pelo desafio de DNS).
+- **A CA local no Android:** desde o Android 7, uma CA instalada pelo
+  usuário só vale para os apps que aceitam CAs do usuário (os navegadores
+  aceitam; muitos apps não). O app do Nextcloud deixa aceitar o certificado
+  do servidor; os outros apps (Subsonic, Jellyfin, Immich) precisam ser
+  testados um por um. Se algum recusar, a saída é o Let's Encrypt pelo
+  desafio de DNS, para um domínio de verdade.
+- **A chave da CA** fica na máquina (`/var/lib/caddy`): quem a tiver emite
+  certificados aceitos por todos os aparelhos que confiam nela. Só o
+  usuário `caddy` a lê, e ela entra no snapshot dos dados.
 - O auxiliar com root é a peça sensível da página: comandos tipados, cada
   valor validado, nada de caminho ou texto livre que chegue a um arquivo de
   root sem passar por um formato conhecido.
