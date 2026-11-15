@@ -8,15 +8,18 @@ everyday applications around them — designed to look and behave as one.
 It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 
 > **Status:** alpha, in daily use. **orbit-core** is the only session on the
-> author's laptop — it takes the screen at boot (DRM/KMS), with several
-> monitors and XWayland for X programs — behind its own login and lock
-> screen (orbit-greet), with switching between users. It hosts the panel,
-> the dock and every application below, all working as alphas. Orbit is
+> author's laptop and two other machines, taking the screen at boot
+> (DRM/KMS), with several monitors and XWayland for X programs, behind its
+> own login and lock screen (orbit-greet), with switching between users. It
+> hosts the panel, the dock and every application below, all working as
+> alphas, and orbit-aigent, the voice layer for coding agents. Orbit is
 > packaged as `.deb` and served from its own apt repository, the first step
-> of **Orbit Linux**, the Debian-based distribution built around it. Still to
-> come: orbit-aigent, the installer, and a remote edition
-> (**orbit-remote-server** with **orbit-local-station**). Configuration and
-> APIs may still change.
+> of **Orbit Linux**, the Debian-based distribution built around it, whose
+> live ISO already installs it. The remote edition (**orbit-remote-server**
+> with **orbit-local-station**) streams a session to stations booted from
+> the network, PCs and a Raspberry Pi 4. Still to come: Orbit's own
+> installer (orbit-install) and the remote edition's second phase.
+> Configuration and APIs may still change.
 
 ## The rack
 
@@ -37,15 +40,17 @@ It is part of the [JUX](https://github.com/julas23/jux) desktop suite.
 | **orbit-play** | Video and audio player for practically every format, and Flash movies through Ruffle | **working** |
 | **orbit-pathfinder** | Private web browser on WebKitGTK: a sidebar of services in groups (Wavebox's layout), each in storage of its own, unread counts (Ferdium recipes) and notifications, EasyList/EasyPrivacy blocking, idle services hibernated, tracking parameters stripped, no telemetry | **working** |
 | **orbitctl** | Commands and queries to orbit-core (and sway), as `swaymsg`: `orbitctl workspace number 2`, `orbitctl -t get_tree` | **working** |
-| orbit-aigent | Voice layer for coding agents (Claude Code, Codex CLI, Gemini CLI, OpenCode, Kimi Code): Whisper (speech-to-text) and Piper (text-to-speech) | planned |
+| **orbit-settings** | The wallpaper (a picture, a colour, an animated effect or a video) and the monitors (resolution, refresh rate, scale, rotation) in one window, and the desktop's right-click menu | **working** |
+| **orbit-wallpaper** | A video or an animated GIF as the wallpaper of every monitor, decoded on the GPU, paused when it cannot be seen | **working** |
+| **orbit-aigent** | Voice layer for coding agents (Claude Code; Codex CLI, Gemini CLI, OpenCode and Kimi Code to come): a wake word, Whisper (speech-to-text), Piper (text-to-speech), a local voice (Gemma 3 in llama.cpp) for conversation, spoken confirmation of changes; the panel's sphere | **working** |
 | **orbit-clip** | Clipboard history for Wayland and XWayland: text and images, search | **working** |
 | **orbit-blink** | Screen capture: the whole screen, the current window or a selected area | **working** |
 | **orbit-calc** | Calculator: standard, scientific, financial (HP-12C) and IPv4 subnet profiles | **working** |
 | **orbit-edit** | Text and code editor: several cursors, column selection, indent guides and folding, folder sidebar, session | **working** |
 | **orbit-term** | Terminal with the prompt fixed on top (date, exit code, git status, directory) and Tab completion; each output fills a box that never wraps, the last 50 that worked kept in a list; interactive programs run in a real terminal (VTE) | **working** |
 | **orbit-safe** | The keyring's passwords (Secret Service, in place of Seahorse) and one-time codes (TOTP), opened with what `/etc/pam.d/orbit-safe` asks: the password, a fingerprint, the face, a code | **working** |
-| orbit-install | The Orbit Linux installer | planned |
-| orbit-remote-server, orbit-local-station | The remote edition (see [below](#orbit-remote-server-and-orbit-local-station)) | planned |
+| **orbit-remote-server**, **orbit-local-station** | The remote edition: the session streamed over WebRTC to a browser or a station booted from the network (see [below](#orbit-remote-server-and-orbit-local-station)) | **working** |
+| orbit-install | Orbit Linux's own installer (the live ISO installs through debian-installer today) | planned |
 
 Orbit is its own code. Existing desktops and compositors are studied as
 references; where orbit-core takes code from one (cosmic-comp, niri, anvil,
@@ -94,8 +99,12 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | **orbit-panel** | The panel | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-dock** | The dock | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-notify** | Notification server | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-settings** | Wallpaper and monitors, desktop menu | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-wallpaper** | Video wallpaper | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-common** | Configuration, CSS, backends | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-app** | Shared startup, icons, theme, i18n | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-audio** | Sound as bars (panel, aigent) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-markdown** | Markdown in a GTK text view | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-backend-wayland** | layer-shell backend | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-backend-x11** | X11 backend (EWMH, struts) | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
@@ -106,7 +115,7 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | `menu` | Application menu | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `windows` | Open windows | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `clock` | Date, time, world clocks | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| `calendar` | Month grid | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `calendar` | Month grid, the agenda (iCalendar) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `weather` | Current conditions | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `forecast` | Next days | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `tray` | System tray | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
@@ -120,7 +129,8 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | `notifications` | The bell | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `bluetooth` | Devices | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `monitors` | Monitor layout | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| `spectrum` | Audio spectrum | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `spectrum` | Audio spectrum, media buttons | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| `aigent` | Orbit-Aigent's sphere | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `cpu, ram, gpu, lan` | Graphs | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | `disk` | Usage pie | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![95%](https://img.shields.io/badge/95%25-1a9850) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
@@ -138,7 +148,7 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | **orbit-files** | File manager | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-term** | Terminal | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-pathfinder** | Web browser | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| **orbit-aigent** | Voice layer for coding agents | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **orbit-aigent** | Voice layer for coding agents | ![75%](https://img.shields.io/badge/75%25-a6d96a) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-safe** | Passwords and TOTP codes | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
 ### Orbit Linux
@@ -146,18 +156,18 @@ version number with its stage: ![Pending](https://img.shields.io/badge/P%20Pendi
 | Component | What it is | Progress | Functional | Version |
 | --- | --- | :-: | :-: | :-: |
 | **Packages (.deb)** | `distro/build-debs.sh`, metapackages, defaults, fonts, Ruffle | ![85%](https://img.shields.io/badge/85%25-66bd63) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| **apt repository** | aptly on the LXC, nightly sync | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **apt repository** | aptly on the web server, nightly sync | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![90%](https://img.shields.io/badge/90%25-66bd63) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **CI** | Builds the debs on Debian 13 (publishing stays at home) | ![60%](https://img.shields.io/badge/60%25-ffffbf) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-studio** | ArtCraft metapackage | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 | **orbit-install** | The installer | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
-| **ISO** | Offline live ISO, EFISTUB, Plymouth | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0%](https://img.shields.io/badge/0%25-d73027) | ![0.0.0 P](https://img.shields.io/badge/0.0.0%20P-ffffff) |
+| **ISO** | Live ISO that installs (debian-installer), systemd-boot + UKIs, btrfs, encrypted /home, Plymouth | ![70%](https://img.shields.io/badge/70%25-d9ef8b) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
 ### Remote edition
 
 | Component | What it is | Progress | Functional | Version |
 | --- | --- | :-: | :-: | :-: |
 | **orbit-remote-server** | orbit-core's sharing layer: the session streamed (Rust + Slint) | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
-| **orbit-local-station** | Slint client pulling the server's greeter and session | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
+| **orbit-local-station** | The station: the server's session on a console, booted over the network (LTSP), x86 and Raspberry Pi 4 | ![50%](https://img.shields.io/badge/50%25-fee08b) | ![80%](https://img.shields.io/badge/80%25-a6d96a) | ![0.1.0 A](https://img.shields.io/badge/0.1.0%20A-007ec6) |
 
 ## Principles
 
@@ -205,6 +215,30 @@ Each monitor can be placed, turned and scaled (fractions too) in
 like (wlr-output-management). Screens are shared through the portal
 (xdg-desktop-portal-wlr, `orbit-portals.conf`).
 
+Under the windows, the core draws the wallpaper itself, as light as feh: a
+picture or a colour, per monitor or for all (`wallpaper:` in `core.yaml`);
+or colours in motion, drawn as GPU shaders (`wallpaper.effect`: aurora,
+ink, facets, fire, water); or a video, played by Orbit-Wallpaper. Effects
+and videos stop while they cannot be seen: locked, under a fullscreen
+window, on battery with `effects: auto`. A right click on the bare
+wallpaper opens the desktop menu (`desktop_menu`, Orbit-Settings' by
+default).
+
+It speaks what the common compositors speak, so their tools work on it:
+foreign-toplevel (Waybar's taskbar, nwg-dock), wlr-gamma-control (night
+light: gammastep, wlsunset), ext-idle-notify (swayidle), xdg-activation,
+pointer-constraints and relative-pointer (games, Blender),
+keyboard-shortcuts-inhibit (VMs, remote desktops), text-input-v3 and
+input-method-v2 (fcitx5, ibus) — with no input method running, the core
+composes dead keys itself (the locale's table and `~/.XCompose`) for
+programs that type through text-input, as GTK 4.20 no longer does —
+xdg-foreign, presentation-time and
+security-context (a sandbox sees none of the privileged globals). Window
+rules (`rules:`, as sway's `for_window`) float a window, send it to a
+workspace, size and place it; touchpads and mice (tap, natural scrolling,
+speed, disable while typing…) are set in `core.yaml` and applied when
+plugged in.
+
 ## Orbit-Panel
 
 A column (or row) of independent modules, anchored to a screen edge.
@@ -214,7 +248,7 @@ A column (or row) of independent modules, anchored to a screen edge.
 | `menu` | Application menu button | — |
 | `windows` | Open windows: app name and icon, area colour, focus, minimized; menu to minimize, maximize, send to an area, close. Ordered by area, then monitor and window position, top to bottom and left to right | sway IPC |
 | `clock` | Date, local time with zone, a minute "hourglass" that empties, up to four world clocks | internal timer |
-| `calendar` | Month as a 7 × 6 grid, weekends and today highlighted | internal timer |
+| `calendar` | Month as a 7 × 6 grid, weekends and today highlighted; a click opens the agenda, the whole month with the events of the calendars listed in `modules/calendar.yaml` (iCalendar links) | internal timer, iCalendar |
 | `weather` | Current conditions, min/max, sun and moon, humidity and wind | wttr.in + Open-Meteo |
 | `forecast` | The next days | same as `weather` |
 | `tray` | System tray (StatusNotifierItem), with application menus | D-Bus |
@@ -228,7 +262,8 @@ A column (or row) of independent modules, anchored to a screen edge.
 | `notifications` | The bell: unread count; click: the notification centre; right click: do not disturb, clear all | orbit-notify |
 | `bluetooth` | Adapter and connected devices; connect and pair | BlueZ |
 | `monitors` | How many monitors and where; arrange them by dragging, remembered by orbit-core | compositor IPC |
-| `spectrum` | Audio spectrum, as CAVA draws it: a line, 12 bars, or thin gradient bars on a grid | PulseAudio protocol (PipeWire) |
+| `spectrum` | Audio spectrum, as CAVA draws it: a line, 12 bars, or thin gradient bars on a grid; below them, previous / play-pause / next for the player in use (`media:`) | PulseAudio protocol (PipeWire), MPRIS |
+| `aigent` | Orbit-Aigent's sphere: its edge and its middle move with the sound, white waiting, red listening, yellow speaking; the agents' menu, yes / no while it asks | orbit-aigent |
 | `cpu`, `ram`, `gpu`, `lan` | The last minute as a graph on a grid, with clock, temperature, swap, VRAM, rates | /proc, /sys (amdgpu) or nvidia-smi |
 | `disk` | A pie of used (red) and free (blue) with total, used and free; listed once per filesystem | GIO |
 
@@ -241,7 +276,9 @@ module's own application or list), and the wheel steps through a value
 10 px apart (154 px in all). Each module comes in up to three sizes —
 **Mini**, **Normal** and **Full** — and takes a block of cells for it;
 modules flow into the grid in order, the start part from the top, the end
-part from the bottom. A horizontal panel is one line, each module in a *line*
+part from the bottom, the centre part kept between them; the parts are
+never drawn over one another, and stack from the top when they do not
+fit. A horizontal panel is one line, each module in a *line*
 form with the details in tooltips and popovers. The panel is edited in
 place: a right click on an empty spot turns editing on, and modules are then
 dragged, resized, moved between parts, added and removed, the result saved to
@@ -259,6 +296,72 @@ panel: drag to reorder, drop off to remove, add launchers and separators.
 An AppImage — picked with "Add AppImage…" while editing the dock, or dropped
 on it — needs nothing else: its icon is taken out of it and kept next to it,
 and a desktop file that runs it is written to `~/.local/share/applications`.
+
+## Orbit-Greet and Orbit-Login
+
+Login and screen lock are one thing: the face of orbit-core's locked
+state. The core launches **orbit-greet** as its only privileged client and
+shows it, full screen on the monitor with the pointer, only while locked;
+the password is checked by PAM (unlocking the keyring too), and the screen
+"opens its eyes" over the wallpaper as it unlocks. Around the card: the
+keyboard layout, the network and the battery in a corner, power off,
+reboot and suspend below (their commands in `greet.yaml`). Wrong passwords
+wait longer each time.
+
+**orbit-login** is a small root service in the place of a display manager,
+as greetd is. At boot it opens the default user's session on its console,
+locked (`orbit-core --locked`), and opens it again when it ends. With more
+than one person on the machine, the others are listed below the card:
+choosing one opens their session behind this one, and their password shows
+it. With orbit-local-station installed, the card also chooses where the
+session runs — **Local** or **Remote** — as a display manager chooses a
+desktop. With an encrypted `/home` (`home:` in `/etc/orbit/login.yaml`),
+the session at boot is the greeter's, and the user's password opens the
+volume, mounts `/home` and shows that user's session.
+
+**orbit-polkit** (the polkit agent) and **orbit-prompter** (the keyring's
+password prompts, in place of gcr-prompter) ask in the same card.
+
+## Orbit-Run
+
+A line over the screen (Mod+R) where a command is typed and run: Enter runs
+it through `sh -c`, detached, and closes; a program that does not exist is
+said and the line stays. Tab completes the program from `$PATH`, then
+files; ↑ ↓ walk the history. Esc, a click beside the card or Mod+R again
+close it.
+
+## Orbit-Notify
+
+The notification server (`org.freedesktop.Notifications`), in place of
+dunst: bubbles in the screen's corner, and a centre on the right edge that
+keeps them, grouped by application. Launching it again, or clicking the
+panel's bell, shows or hides the centre; `orbit-notify toggle|dnd|clear`
+tells the running server. How long a bubble stays by urgency, how many at
+once, which programs are never kept: `~/.config/orbit/notify.yaml` (see
+[`examples/orbit/notify.yaml`](examples/orbit/notify.yaml)); the history in
+`~/.local/state/orbit/notify/`.
+
+## Orbit-Settings and Orbit-Wallpaper
+
+**Orbit-Settings** is one window with two pages, written to `core.yaml` and
+told to the core at once:
+
+- **Wallpaper**: a picture, a colour, an animated effect (aurora, ink,
+  facets, fire, water; two to five colours, the speed) or a video.
+- **Monitors**: resolution, refresh rate, scale and rotation, set at once
+  and kept only when confirmed — back by themselves after 15 s otherwise.
+  Where each monitor sits is the panel's `monitors` module's.
+
+`orbit-settings [wallpaper|monitors]` opens it on that page; a right click
+on the bare wallpaper runs `orbit-settings menu`, a small menu there.
+
+**Orbit-Wallpaper** plays a video or an animated GIF as the wallpaper of
+every monitor, for `wallpaper.video` in `core.yaml`: silent, looping
+without a gap, decoded on the GPU where it can (VA-API, kept on the GPU
+through GTK's GL path), fitted by `mode` (fill, fit, center, stretch). The
+core starts it, pauses it while it cannot be seen and ends it; under it,
+the core's own picture or colour shows around a video that does not fill
+the monitor, and in its place if the file cannot be played.
 
 ## Orbit-Calc
 
@@ -441,7 +544,11 @@ and the best of Thunar, Caja, Nautilus, Konqueror and Nemo.
   find, F4 edit (text in Orbit-Edit), F5 copy, F6 move, F7 new folder, F8 to
   the trash, F9 view (in Orbit-View, Orbit-Read or Orbit-Play), F10 two
   panes, F11 full screen, F12 a terminal here.
-- **Places**: home and the user's folders, GTK bookmarks, the trash, disks
+- **Places**: the computer and home, the user's folders, the trash, the
+  bookmarks (GTK's, shared with every file dialog: + on their heading for
+  the folder open, Ctrl+D or "Add to bookmarks" for the selected ones, or
+  folders dropped there; dragged to reorder; a right click moves one up,
+  down or removes it), disks
   (mount, eject) and *Connect to server* — SMB, SFTP, FTP, WebDAV through
   GVfs, with the password asked for. Under "Devices", volumes only:
   folders a server mounts into home (NFS, bind mounts) are left out unless
@@ -477,7 +584,7 @@ and the best of Thunar, Caja, Nautilus, Konqueror and Nemo.
 | F7 | new folder | F8, Shift+F8 | to the trash, delete for good |
 | F9 | view | F10 | two panes |
 | F11 | full screen | F12 | a terminal here |
-| Ctrl+R | read the folder again | | |
+| Ctrl+R | read the folder again | Ctrl+D | bookmark the folder |
 
 ## Orbit-Term
 
@@ -495,6 +602,62 @@ Ctrl+Enter — run in a real terminal (VTE) that takes the output's place and
 the keyboard until they end. ↑ ↓ walk the commands run before, Ctrl+C
 interrupts (twice: kills), Ctrl+L clears the output; `font:` in `term.yaml`
 sets the font.
+
+## Orbit-Pathfinder
+
+A web browser without telemetry, on WebKitGTK 6.0, built around a sidebar
+of services — mail, chat, work — in groups, as Wavebox lays them out. Each
+service keeps its storage to itself (or shares it with the others naming
+the same `profile`, for one Google login), shows its unread count
+([Ferdium](https://github.com/ferdium/ferdium-recipes)'s recipes) and its
+notifications, and is unloaded after `hibernate_after` minutes unused
+unless `always_active`. Ads and trackers are blocked by EasyList and
+EasyPrivacy (downloaded, any Adblock list in `blocklists:`), and tracking
+parameters are stripped from links. The services are in
+`~/.config/orbit/pathfinder.yaml`, which the sidebar's "+" and "Edit…"
+write too (see [`examples/orbit/pathfinder.yaml`](examples/orbit/pathfinder.yaml)).
+
+## Orbit-Safe
+
+The keyring's passwords and one-time codes, opened only after
+authenticating — Orbit's place of Seahorse. The keyring is reached over the
+Secret Service API (gnome-keyring today), so the safe shows what the
+applications keep there: search, copy (marked as a secret, wiped after
+30 s), edit, new, delete, and a password generator. One-time codes (TOTP,
+as Google Authenticator makes them) come from a base32 key or an
+`otpauth://` link and are kept in the keyring too. Opening asks what
+`/etc/pam.d/orbit-safe` asks — the password by default; a fingerprint, the
+face or a code from the phone when their PAM modules are added there — and
+it closes after 5 minutes unused, with the session's lock and with Esc.
+Options in `~/.config/orbit/safe.yaml`.
+
+## Orbit-Aigent
+
+Talk to a coding agent by voice. The daemon, started with the session,
+keeps the microphone open and waits for a wake word ("Orbit" or "Jarvis",
+`wake:` in `aigent.yaml`), hears
+the request until a pause (Whisper, through whisper.cpp, on the GPU with
+the `vulkan` feature), hands it to the agent and speaks the answer (Piper),
+in Portuguese or English as it was asked. Mod+A starts listening or
+cancels.
+
+- **Agents:** Claude Code today (`claude -p`, the session resumed between
+  requests); Codex CLI, Gemini CLI, OpenCode and Kimi Code to come.
+  `orbit-aigent agent <name>` switches.
+- **Confirmation:** anything that changes something is asked aloud ("Posso
+  abrir o kitty?") through the agent's permission prompt (`orbit-aigent
+  approve`, an MCP tool) and answered by a spoken yes or no, or a click.
+- **A local voice** (`voice:` in `aigent.yaml`): Gemma 3 4B in llama.cpp's
+  `llama-server` sorts each request first — a task goes to the agent,
+  announced at once; conversation is answered by the voice itself, sentence
+  by sentence as it is written.
+- **Interrupting:** "Jarvis, para" silences it; anything else after the
+  name is a new request. Its own voice through the speakers is taken out by
+  PipeWire's echo canceller (`data/pipewire/`). It is deaf while the
+  session is locked, and turned off and on from the sphere's menu or
+  `orbit-aigent off|on`.
+- **The panel's `aigent` module** shows it as a sphere: white waiting, red
+  listening, yellow speaking, its edge moving with the sound.
 
 ## Building and running
 
@@ -519,8 +682,9 @@ so `sudo apt upgrade` keeps them in step. The rest comes from Debian's own
 repositories. The public repository carries only Orbit's packages: the
 metapackages that need third-party ones (`orbit-apps`, `orbit-media`,
 `orbit-studio`, `orbit-dev`) are only in the full repository of
-[Orbit Linux](#orbit-linux). The key is still a pre-release one ("Orbit Linux
-Archive (pre-release)") and may be replaced before 1.0.
+[Orbit Linux](#orbit-linux). The key ("Orbit Linux Archive", `33CD 1DA3 80C2
+3E38 A916 3BE0 F1FB B3C7 B040 716C`) replaced the pre-release one on
+2026-11-12: a system set up before then needs the new key file above.
 
 **From source.** Requirements: Rust 1.92+, GTK 4.12+ and `gtk4-layer-shell` development files;
 for Orbit-View also the `libseccomp` development files, glycin's loaders and
@@ -584,24 +748,32 @@ Debian's. The plan (in Portuguese) is in
   dependency and the security updates; Orbit's own packages; ArtCraft's and
   other projects' official `.deb` releases; the newest VS Code and Firefox.
   Signed, synced every night, and self-sufficient: a system debootstraps and
-  installs every metapackage from it alone. Running on the author's network
-  for now; its Orbit part (`orbit-public`: Orbit's packages without the
-  metapackages in [`public.exclude`](distro/repo/public.exclude)) is copied
-  by `distro/repo/push-public.sh` to the public repository,
-  https://rationalazimuth.com/orbit (how to use it: [Building and
-  running](#building-and-running)).
-- **Installation.** A live ISO with one screen and an **INSTALL** button
-  (orbit-install, in Rust and GTK like the rest), offline: disk, hostname,
-  user and password, and which metapackages. Boot is EFISTUB with a unified
-  kernel image — no boot loader — with a Plymouth splash, into orbit-greet
-  and orbit-core. **An existing `/home` is never erased:** a partition that
-  clearly holds `/home` (plain, LVM, LUKS or a btrfs subvolume) is kept as it
-  is; on a single partition with `/` and `/home` together, everything but
-  `/home` is deleted and Orbit installs there. Wiping everything and starting
-  from scratch is always offered too. The new user gets the old home's
-  owner's id.
-- **Status.** Packages, repository and orbit-greet done; the installer and
-  the ISO are next.
+  installs every metapackage from it alone. aptly runs on the web server
+  itself, and only its Orbit part (`orbit-public`: Orbit's packages without
+  the metapackages in [`public.exclude`](distro/repo/public.exclude)) is
+  served, at https://rationalazimuth.com/orbit (how to use it: [Building
+  and running](#building-and-running)). `distro/build-debs.sh --arm64`
+  cross-compiles the station for the Raspberry Pi.
+- **The live ISO** ([`distro/iso/`](distro/iso), live-build): Debian 13
+  with orbit-desktop, running Orbit in the Live, with Orbit's boot menu and
+  Plymouth theme (the moon travelling the outer orbit). **Install Orbit
+  Linux** runs debian-installer offline, copying the Live: it asks the
+  user, password, hostname and disk, and the rest is Orbit's — btrfs with
+  subvolumes and snapper on `/`, systemd-boot with one unified kernel image
+  per kernel (GRUB on BIOS machines), zram, a separate `/home` above
+  120 GB, optionally encrypted (LUKS2, opened by the user's password at
+  login, with a recovery key). The keyboard is US first, Brazilian second.
+- **An existing `/home` is never erased:** one found before partitioning (a
+  filesystem, an LVM or LUKS volume, or a btrfs home subvolume) is kept as
+  it is, the system going to another disk or beside it; the new user takes
+  back the folder of the same name with its owner's ids. Disks under 40 GB
+  are refused.
+- **orbit-install**, Orbit's own installer in Rust and GTK, is still to
+  come: one screen and an **INSTALL** button, a single partition holding
+  `/` and `/home` cleared of all but `/home`, and "wipe everything" always
+  offered.
+- **Status.** Packages, repository, the greet and the ISO done (it installs
+  alone on a UEFI VM and boots into the locked greet); orbit-install next.
 
 ## orbit-remote-server and orbit-local-station
 
@@ -636,7 +808,23 @@ that works only together:
   could even live on that disk and travel with them.
 - **Why:** it would replace the Sunshine/Moonlight streaming used today to
   reach a remote machine.
-- **Testing:** the think and a VM are its first test machines.
+- **Network boot:** stations need nothing installed. LTSP
+  ([`distro/ltsp/`](distro/ltsp)) serves a small image that boots straight
+  into orbit-local-station — a Debian 13 one for PCs, a Raspberry Pi OS one
+  for the Pi 4 (its V4L2 H.264 decoder) — from an iPXE menu, dnsmasq as a
+  proxy DHCP leaving the network's own DHCP alone. `decoder:` in
+  `station.yaml` picks VA-API, V4L2 or software (`auto` tries them in that
+  order).
+- **Input:** keys and the mouse over WebRTC data channels (ordered for
+  keys and buttons, unordered for motion); gamepads and joysticks
+  recreated on the server as uinput devices with the same USB ids (SDL and
+  Steam know them).
+- **Started with the session** when `~/.config/orbit/remote.yaml` (else
+  `/etc/orbit/remote.yaml`) says `start: true`; `virtual: true` for
+  `serve --virtual`.
+- **Testing:** a PC and a Raspberry Pi 4 boot from the network and show a
+  VM's session; next, latency under 20 ms measured glass to glass, the
+  microphone, and several monitors.
 
 ## Configuration
 
@@ -645,14 +833,32 @@ Everything lives in `~/.config/orbit/` (or the directory given with
 
 ```text
 ~/.config/orbit/
+├── core.yaml         the compositor: monitors, wallpaper, layouts, devices, window rules, startup
+├── keys.yaml         the compositor's shortcuts: a combination to an IPC command
 ├── panel.yaml        edge, size, monitor, maintenance, and the module lists
 ├── dock.yaml         the dock and its launchers
 ├── style.css         user stylesheet, on top of the built-in theme
-└── modules/
-    ├── clock.yaml    one optional file per panel module
-    ├── weather.yaml
-    └── …
+├── modules/
+│   ├── clock.yaml    one optional file per panel module
+│   ├── weather.yaml
+│   └── …
+├── greet.yaml        the login card's power commands
+├── notify.yaml       bubbles, the centre, the history
+├── files.yaml        Orbit-Files (files-actions.yaml: its own actions)
+├── edit.yaml         Orbit-Edit
+├── term.yaml         Orbit-Term: the font, interactive programs
+├── view.yaml         Orbit-View
+├── clip.yaml         Orbit-Clip
+├── pathfinder.yaml   Orbit-Pathfinder's services and block lists
+├── safe.yaml         Orbit-Safe
+├── aigent.yaml       Orbit-Aigent: wake words, agents, the local voice
+├── remote.yaml       orbit-remote-server started with the session
+└── station.yaml      orbit-local-station: the server, the monitor, the decoder
 ```
+
+System-wide files are in `/etc/orbit/`: `login.yaml` (Orbit-Login: the
+default user, the encrypted `/home`), and `remote.yaml` and `station.yaml`
+for every user.
 
 Every file and every key is optional. A module is turned on by listing it in
 `panel.yaml` under `start`, `center` or `end`, in display order. A module that
@@ -720,14 +926,24 @@ follow the locale.
 | `orbit-protocols` | Orbit's private Wayland protocols (`orbit_greet_v1`) |
 | `orbit-ipc` | The i3/sway IPC protocol: served by orbit-core, spoken by the panel, the applications and orbitctl |
 | `orbitctl` | Commands to the compositor |
-| `distro/` | Packaging: `build-debs.sh`, the metapackages, the apt repository's lists and sync |
+| `orbit-settings` | The wallpaper and monitors window, and the desktop menu |
+| `orbit-wallpaper` | The video wallpaper |
+| `orbit-safe` | The passwords and one-time codes |
+| `orbit-aigent` | The voice layer for coding agents |
+| `orbit-audio` | Sound as bars, shared by the panel's spectrum and Orbit-Aigent |
+| `orbit-markdown` | Markdown laid out in a GTK text view, for Orbit-Read |
+| `orbit-remote-server` | The session shared over the network |
+| `orbit-local-station` | The station that shows it |
+| `distro/` | Packaging: `build-debs.sh`, the metapackages, the apt repository's lists and sync, the live ISO (`iso/`), the network-booted stations (`ltsp/`), the release and boot look (`release/`) |
 
 The plans (in Portuguese) are in [`docs/`](docs): the panel
 ([`PLANO-PAINEL.md`](docs/PLANO-PAINEL.md)), the compositor
 ([`PLANO-CORE.md`](docs/PLANO-CORE.md)), notifications
 ([`PLANO-NOTIFY.md`](docs/PLANO-NOTIFY.md)), the browser
 ([`PLANO-PATHFINDER.md`](docs/PLANO-PATHFINDER.md)) and the distribution
-([`PLANO-DISTRO.md`](docs/PLANO-DISTRO.md)).
+([`PLANO-DISTRO.md`](docs/PLANO-DISTRO.md)). What is done and what is
+pending, component by component, is in [`docs/pending.md`](docs/pending.md),
+and the day by day in [`docs/WORKLOG.md`](docs/WORKLOG.md).
 
 ## Contributing
 
