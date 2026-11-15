@@ -51,7 +51,15 @@ pub const PAGES: &[Page] = &[
         title: "settings-network",
         icon: "network-workgroup-symbolic",
         keywords: "settings-network-keywords",
-        options: &["settings-net-vpn", "settings-net-import", "settings-net-paste"],
+        options: &[
+            "settings-net-wifi",
+            "settings-net-wired",
+            "settings-net-hidden",
+            "settings-net-advanced",
+            "settings-net-vpn",
+            "settings-net-import",
+            "settings-net-paste",
+        ],
     },
     Page {
         id: "monitors",

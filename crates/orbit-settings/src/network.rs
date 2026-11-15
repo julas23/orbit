@@ -1,4 +1,5 @@
-//! The Network page (docs/PLANO-SETTINGS.md §3.1). For now its VPN part:
+//! The Network page (docs/PLANO-SETTINGS.md §3.1): Wi-Fi and wired
+//! (`wifi.rs`), and the VPN part, here:
 //! this machine as a client of a WireGuard server that already exists (a
 //! router's, a home server's), through NetworkManager, which speaks
 //! WireGuard itself. Serving the tunnel is the server's job, not the
@@ -27,7 +28,7 @@ struct Tunnel {
 }
 
 /// `nmcli -t` splits fields by `:`, escaping one inside a field as `\:`.
-fn fields(line: &str) -> Vec<String> {
+pub fn fields(line: &str) -> Vec<String> {
     let mut out = vec![String::new()];
     let mut chars = line.chars();
     while let Some(c) = chars.next() {
@@ -44,7 +45,7 @@ fn fields(line: &str) -> Vec<String> {
     out
 }
 
-fn nmcli(args: &[&str]) -> Result<String, String> {
+pub fn nmcli(args: &[&str]) -> Result<String, String> {
     let out = Command::new("nmcli")
         .args(args)
         .output()
@@ -188,6 +189,9 @@ pub fn page() -> gtk::Widget {
         .spacing(20)
         .css_classes(["page"])
         .build();
+    let (wired, wifi) = crate::wifi::cards();
+    body.append(&wifi);
+    body.append(&wired);
     body.append(&card);
     gtk::ScrolledWindow::builder()
         .child(&body)

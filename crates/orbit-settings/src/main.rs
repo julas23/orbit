@@ -22,6 +22,7 @@ mod pages;
 mod region;
 mod services;
 mod wallpaper;
+mod wifi;
 
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 

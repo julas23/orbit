@@ -225,7 +225,17 @@ with Step 2; the phases then run alongside the steps above.
   to copy), Date and time (timedated: the zone, searched in its list, and
   NTP), Region and language (localed: the language and the formats; only
   the languages generated here: adding one, through the helper, later).
-  Seen on the think. Next: A2 Network (Wi-Fi, wired), A3 Bluetooth, Sound,
+  Seen on the think.
+- [x] Batch A2 (2026-11-15): the Network page's Wi-Fi (the radio on or off,
+  the networks in reach, strongest first, the list NetworkManager has shown
+  at once and a scan asked for after, since one takes seconds; connect,
+  disconnect, forget; a hidden network) and wired (each cable, connect and
+  disconnect), "Advanced…" opening nm-connection-editor. A new network is
+  joined through NetworkManager's D-Bus (AddAndActivateConnection) as this
+  user's connection: no administrator's password, and the key never on a
+  command line where `ps` would show it. Seen on the think; joining a new
+  network and disconnecting the one in use left for the user to try.
+  Next: A3 Bluetooth, Sound,
   Power, A4 Keyboard, Mouse, Windows, Shortcuts, A5 Appearance, Panel,
   Dock, Notifications, Default apps, A6 Users, A7 the panel's modules.
 - [ ] Phase A, daily use: Network and Wi-Fi, Bluetooth, Sound, Power,
