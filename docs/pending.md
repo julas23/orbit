@@ -395,10 +395,18 @@ Tailscale; Alexa decided later):
   apps they already use; no synchronised multi-room sound (Snapcast and
   standalone DLNA dropped). Navidrome for music (Subsonic API: Feishin,
   Symfonium, Tempo, Ultrasonic, Amperfy), Jellyfin for videos (TV and
-  phone apps, GPU transcoding, DLNA by plugin), in `orbit-media-server`
-  (a provisional name: `orbit-media` is the desktop's). Navidrome's
-  official .deb through `github.list`, Jellyfin's apt repository through
-  `vendors.list`.
+  phone apps, GPU transcoding, DLNA by plugin). Navidrome's official .deb
+  through `github.list`, Jellyfin's apt repository through `vendors.list`.
+- [x] Reviewed: both optional, on any install. No metapackage pulls them;
+  each is a switch on Orbit-Settings' "Media server" page that installs
+  (through PackageKit, the password asked by polkit), configures and
+  starts it, or stops and removes it, keeping the media. Packages
+  `orbit-navidrome` and `orbit-jellyfin`: the upstream package, Orbit's
+  defaults and the firewall file.
+- [ ] To decide: the public repository carries only Orbit's packages, so
+  outside the author's network `navidrome` and `jellyfin` would not be
+  found. Both are free software: carry them in the public repository, or
+  have Orbit-Settings add Jellyfin's repository and fetch Navidrome's .deb.
 - [ ] Alexa, later: a Subsonic skill needs a public HTTPS endpoint; "My
   Media for Alexa" is a third party's; Bluetooth from the phone exposes
   nothing but takes no voice.
@@ -419,10 +427,11 @@ Work, in this order (PLANO-DISTRO §12.6):
   each wrong pairing code (`remote: <peer> gave a wrong code (n of 5)`);
   short bans (10 min). The remote server also logs to the journal (today
   only `~/.local/state/orbit/remote.log`), for the jail to read.
-- [ ] `orbit-media-server`: Navidrome (`github.list`) and Jellyfin
-  (`vendors.list`, its dependencies named) mirrored; both on the LAN and
-  the tunnel only; the media folders (`/srv/media` by default, the home
-  by choice) from Orbit-Settings; Jellyfin in the `render` group.
+- [ ] `orbit-navidrome` and `orbit-jellyfin`: Navidrome (`github.list`) and
+  Jellyfin (`vendors.list`, its dependencies named) mirrored; both on the
+  LAN and the tunnel only; the media folders (`/srv/media` by default, the
+  home by choice); Jellyfin in the `render` group. Orbit-Settings' "Media
+  server" page over PackageKit (`packagekit` pulled by `orbit-desktop`).
 - [ ] Orbit-Settings, "Network and security" (firewall, WireGuard peers,
   the addresses Fail2Ban banned, with unbanning; a ban as a notification); the panel's `network` module
   showing the firewall and the tunnel.

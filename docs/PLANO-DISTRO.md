@@ -80,8 +80,8 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-dev` | Desenvolvimento: VS Code/VSCodium, toolchain Rust, DBeaver, Git, contêineres |
 | `orbit-media` | Música, vídeo e jogos: Feishin, Steam/Proton, codecs |
 | `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
-| `orbit-server` | O perfil servidor (seção 12): orbit-remote-server, WireGuard, dnsmasq + Unbound, Fail2Ban, `orbit-media-server` |
-| `orbit-media-server` | A música e os vídeos do usuário servidos para os apps dele (seção 12): Navidrome e Jellyfin. Nome provisório |
+| `orbit-server` | O perfil servidor (seção 12): orbit-remote-server, WireGuard, dnsmasq + Unbound, Fail2Ban |
+| `orbit-navidrome`, `orbit-jellyfin` | A música e os vídeos do usuário servidos para os apps dele (seção 12). Opcionais: nenhum metapacote os puxa; instalados e configurados pelo Orbit-Settings |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
 O `orbit-desktop` passa a puxar o `orbit-firewall` (seção 12.3).
@@ -446,7 +446,8 @@ vê-los.
 | **Mídia** (revisto) | O usuário consome a música e os vídeos dele, de qualquer lugar, nos apps que já usa; sem som sincronizado entre cômodos (Snapcast e o DLNA avulso saíram). **Navidrome** para a música: um binário em Go, SQLite, uns 50 MB, API Subsonic/OpenSubsonic e interface web; clientes Feishin (no `orbit-media`), Symfonium, Tempo e Ultrasonic no Android, Amperfy no iPhone. **Jellyfin** para os vídeos (e música, para quem preferir): apps para TV e celular, conversão de formato na GPU (`jellyfin-ffmpeg`, VA-API), DLNA por plugin para as TVs que só falam isso; mais pesado (uns 300 MB ou mais). O Feishin fala com os dois |
 | **Origem dos pacotes** | Nenhum dos dois está no Debian. Navidrome: o `.deb` oficial das releases do GitHub (amd64 e arm64), uma linha no `distro/repo/github.list`, como o Feishin. Jellyfin: o repositório apt oficial (`repo.jellyfin.org/debian`, suíte `trixie`, amd64 e arm64), uma linha no `distro/repo/vendors.list`, como o Firefox e o VS Code. Nada compilado nem modificado (seção 1) |
 | **Alexa** | A decidir depois. A Alexa só toca o que um *skill* entrega, e quem fala com o skill é a nuvem da Amazon: um skill próprio para Subsonic exige conta de desenvolvedor e um endereço HTTPS público (fura o "só o WireGuard é público"); o "My Media for Alexa" é de terceiros, proprietário e com servidor deles; a Echo como caixa Bluetooth do celular não expõe nada, mas não atende a voz |
-| **Nome do pacote de mídia** | `orbit-media` já é o metapacote de música, vídeo e jogos do desktop (seção 4). O do servidor é `orbit-media-server` (nome provisório) |
+| **Opcional** (revisto) | Nenhum metapacote instala o Navidrome ou o Jellyfin, nem o `orbit-server`. Cada um é um interruptor no Orbit-Settings, página "Servidor de mídia": ligar instala (pelo PackageKit, com a senha pedida pelo polkit), configura (pastas, primeiro usuário, porta no firewall) e inicia; desligar para o serviço, e remover desinstala, mantendo as músicas e os vídeos. Funciona em qualquer instalação, não só no perfil servidor |
+| **Pacotes** | `orbit-navidrome` e `orbit-jellyfin`, um para cada: dependem do pacote do upstream e trazem a configuração padrão do Orbit e o arquivo do firewall. `orbit-media` continua sendo o metapacote de música, vídeo e jogos do desktop (seção 4) |
 
 ### 12.2 Pacotes
 
@@ -454,7 +455,9 @@ vê-los.
 |---|---|---|
 | `orbit-firewall` | `orbit-desktop` | `nftables`; `/etc/nftables.conf` incluindo `/etc/nftables.d/*.nft`; a regra base |
 | `orbit-server` | escolha no instalador | `orbit-remote-server`, `wireguard-tools`, `dnsmasq`, `unbound`, `fail2ban`, e as configurações abaixo |
-| `orbit-media-server` | `orbit-server` | `navidrome`, `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), as pastas de mídia e as configurações abaixo |
+| `orbit-navidrome` | o Orbit-Settings, por escolha | `navidrome`, a configuração padrão, `50-navidrome.nft` |
+| `orbit-jellyfin` | o Orbit-Settings, por escolha | `jellyfin` (com `jellyfin-server`, `jellyfin-web` e o `jellyfin-ffmpeg`), a configuração padrão, `51-jellyfin.nft` |
+| `packagekit` | `orbit-desktop` | o que o Orbit-Settings usa para instalar e remover |
 
 ### 12.3 Firewall
 
@@ -474,7 +477,8 @@ privadas das interfaces, mais a `wg0`):
 | `20-wireguard.nft` | `orbit-server` | UDP 51820, de qualquer lugar (a única porta pública) |
 | `30-ltsp.nft` | o servidor de estações | UDP 67, 69 e 4011 (proxy DHCP, TFTP), NFS TCP 2049 |
 | `40-dns.nft` | `orbit-server` | UDP/TCP 53 (Unbound), e UDP 67 no modo Rede do dnsmasq |
-| `50-media.nft` | `orbit-media-server` | Navidrome TCP 4533; Jellyfin TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
+| `50-navidrome.nft` | `orbit-navidrome` | TCP 4533 |
+| `51-jellyfin.nft` | `orbit-jellyfin` | TCP 8096 e a descoberta UDP 7359; SSDP UDP 1900 se o plugin DLNA for ligado |
 | `60-desktop.nft` | `orbit-desktop` | mDNS UDP 5353 e o que o desktop precisar (KDE Connect e afins, se entrarem) |
 
 ### 12.4 Servidor
@@ -502,7 +506,8 @@ privadas das interfaces, mais a `wg0`):
   para a jail ler como as outras. O contador de erros é um só para todos os
   endereços, então quem erra de propósito força trocas do código para
   todos; o ban do Fail2Ban é o que impede isso.
-- **Navidrome e Jellyfin:** cada um como serviço do sistema, com o usuário
+- **Navidrome e Jellyfin** (quando ligados no Orbit-Settings, em qualquer
+  instalação): cada um como serviço do sistema, com o usuário
   dele, ouvindo só na `@lan` e na `wg0`; fora de casa, o celular entra pelo
   WireGuard e o app conecta como em casa. As pastas de mídia escolhidas no
   Orbit-Settings e escritas na configuração dos dois (`MusicFolder` do
@@ -520,6 +525,11 @@ privadas das interfaces, mais a `wg0`):
   desligado e o que cada arquivo abre; os peers do WireGuard (adicionar,
   mostrar o QR, remover); os endereços banidos pelo Fail2Ban (com a opção
   de liberar um). Um ban novo chega como notificação pelo orbit-notify.
+- **Orbit-Settings, página "Servidor de mídia":** um interruptor para o
+  Navidrome e outro para o Jellyfin (instalar e iniciar, parar, remover),
+  as pastas de cada um, o endereço para pôr nos apps (o da LAN e o do
+  túnel) e o estado do serviço. O progresso da instalação vem do
+  PackageKit.
 - **Painel:** o módulo `network` mostra o estado do firewall e do túnel.
 
 ### 12.6 Ordem
@@ -528,7 +538,8 @@ privadas das interfaces, mais a `wg0`):
 2. WireGuard no `orbit-server`, com a configuração entregue no pareamento.
 3. dnsmasq + Unbound, absorvendo o dnsmasq do LTSP.
 4. Fail2Ban, com a jail do Orbit.
-5. `orbit-media-server`: Navidrome e Jellyfin, as pastas de mídia.
+5. `orbit-navidrome` e `orbit-jellyfin`, e a página "Servidor de mídia"
+   do Orbit-Settings que os instala e configura.
 6. A página do Orbit-Settings e o painel.
 
 **Pronto quando:** a ISO, numa VM, instala cada perfil; um nmap da LAN só vê
@@ -542,6 +553,12 @@ casa, tocam a música do Navidrome, e um app do Jellyfin toca um vídeo.
 - Um ban do Fail2Ban vindo da LAN pode trancar a própria casa (um código de
   pareamento digitado errado cinco vezes numa estação): o ban é curto (10
   min) e o Orbit-Settings libera o endereço.
+- O repositório público só carrega pacotes do Orbit (`public.exclude`):
+  para quem instala de fora, o `orbit-navidrome` e o `orbit-jellyfin` não
+  achariam o `navidrome` e o `jellyfin`. Os dois são software livre
+  (GPL-3 e GPL-2) e podem ser redistribuídos: a decidir se o repositório
+  público passa a levá-los, ou se o Orbit-Settings acrescenta o
+  repositório do próprio Jellyfin e baixa o `.deb` do Navidrome.
 - O WebRTC usa portas UDP aleatórias: sem uma faixa fixa no remote server, o
   firewall teria de abrir todo UDP da LAN.
 - Uma regra errada no `orbit-firewall` corta o acesso a uma máquina remota.
