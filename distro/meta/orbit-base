@@ -1,0 +1,6 @@
+Description: Orbit's base: what every Orbit machine has, with a screen or without
+ The firewall (orbit-firewall), the services and their helper
+ (orbit-services) and orbitctl, whose `orbitctl services` turns them on
+ and off from a terminal. Alone, it makes a server without a graphical
+ session; orbit-desktop pulls it for the desktop.
+Depends: orbit-firewall, orbit-services, orbitctl

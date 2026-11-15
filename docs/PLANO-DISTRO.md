@@ -82,7 +82,8 @@ do glycin continuam vindo do Debian (`glycin-loaders`), como hoje.
 | `orbit-ai` | orbit-aigent (Whisper/Piper), integração com o gateway de IA |
 
 `orbit-desktop` é o único obrigatório; os outros são escolhidos no instalador.
-O `orbit-desktop` passa a puxar o `orbit-firewall` e o `orbit-services`. Os serviços
+O `orbit-desktop` passa a puxar o `orbit-base` (o `orbit-firewall`, o `orbit-services` e o
+`orbitctl`, o que toda máquina Orbit tem, com tela ou sem). Os serviços
 de rede e de mídia não são metapacotes: cada um é um interruptor na página
 "Serviços" do Orbit-Settings (seção 12).
 
@@ -633,8 +634,8 @@ página do serviço:
 | Pacote | Puxado por | Traz |
 |---|---|---|
 | `orbit-base` | `orbit-desktop`; sozinho no servidor sem sessão gráfica | `orbit-firewall`, `orbit-services`, `orbitctl` |
-| `orbit-firewall` | `orbit-base` (hoje o `orbit-desktop`) | `nftables`; o `orbit-firewall` (`start`, `stop`, `status`, `check`, `snapshot`) e o `orbit-firewall.service`; a regra base (`/usr/share/orbit/firewall/base.nft`); os arquivos dos serviços em `/usr/share/orbit/firewall.d/` (dos pacotes, recarregados por um trigger do dpkg) e `/etc/orbit/firewall.d/` (da máquina); `60-desktop.nft` |
-| `orbit-services` | `orbit-base` (hoje o `orbit-desktop`) | o `orbit-services-helper` e a ação polkit |
+| `orbit-firewall` | `orbit-base` | `nftables`; o `orbit-firewall` (`start`, `stop`, `status`, `check`, `snapshot`) e o `orbit-firewall.service`; a regra base (`/usr/share/orbit/firewall/base.nft`); os arquivos dos serviços em `/usr/share/orbit/firewall.d/` (dos pacotes, recarregados por um trigger do dpkg) e `/etc/orbit/firewall.d/` (da máquina); `60-desktop.nft` |
+| `orbit-services` | `orbit-base` | o `orbit-services-helper` e a ação polkit |
 | `orbit-ssh` | a página; ligado no servidor sem sessão gráfica | `openssh-server`, só chave por padrão, `15-ssh.nft` |
 | `orbit-fail2ban` | a página | `fail2ban`, as jails, o filtro `orbit-remote` |
 | `orbit-wireguard` | a página | `wireguard-tools`, a `wg0`, `20-wireguard.nft` |

@@ -44,8 +44,8 @@ built, the local repository synced, the public one pushed, offered as an
 
 ### Step 2 — the "Services" page and its base
 
-- [ ] `orbit-base` (`orbit-firewall`, `orbit-services`, `orbitctl`), pulled
-  by `orbit-desktop`.
+- [x] `orbit-base` (`orbit-firewall`, `orbit-services`, `orbitctl`), pulled
+  by `orbit-desktop` in their place (2026-11-15).
 - [x] `orbit-services` (2026-11-15): the catalogue (a package and a way of
   being on each: a systemd unit, or a program the session starts when its
   YAML says `start: true`), each service's state, its ports read from its
