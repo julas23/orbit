@@ -5015,6 +5015,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "env_logger",
+ "gio-unix",
  "gtk4",
  "gtk4-layer-shell",
  "log",

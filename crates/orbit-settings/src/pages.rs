@@ -190,6 +190,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-panel-edge", "settings-panel-monitor", "settings-panel-reserve", "settings-panel-modules"],
     },
     Page {
+        id: "dock",
+        group: Group::Orbit,
+        title: "settings-dock",
+        icon: "user-bookmarks-symbolic",
+        keywords: "settings-dock-keywords",
+        options: &["settings-dock-launchers", "settings-dock-add", "settings-dock-icon-size", "settings-dock-align"],
+    },
+    Page {
         id: "windows",
         group: Group::Orbit,
         title: "settings-win",

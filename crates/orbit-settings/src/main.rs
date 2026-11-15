@@ -17,6 +17,7 @@ mod bluetooth;
 mod core;
 mod datetime;
 mod dbus;
+mod dock_page;
 mod keyboard;
 mod menu;
 mod monitors;
@@ -143,6 +144,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "shortcuts" => shortcuts::page(dir),
             "appearance" => appearance::page(dir),
             "panel" => panel_page::page(dir),
+            "dock" => dock_page::page(dir),
             "datetime" => datetime::page(),
             "region" => region::page(),
             "about" => about::page(),

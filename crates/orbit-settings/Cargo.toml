@@ -32,6 +32,7 @@ serde_yaml_ng.workspace = true
 orbit-services.workspace = true
 async-channel.workspace = true
 pulseaudio.workspace = true
+gio-unix.workspace = true
 log.workspace = true
 env_logger.workspace = true
 anyhow.workspace = true
