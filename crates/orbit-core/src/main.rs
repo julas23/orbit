@@ -5,6 +5,7 @@
 //! uses, and runs X programs through its own XWayland (`xwayland`).
 //!
 //!   orbit-core [-c CONFIG] [--nested | --drm] [--locked] [--startup] [-- COMMAND…]
+//!   orbit-core --check [FILE]   the config read, its error said; exit 1
 //!
 //! Inside a Wayland or X session it runs nested, as a window; from a text
 //! console it takes the screen (DRM/KMS, libinput, libseat), and logs to
@@ -95,9 +96,22 @@ fn main() -> anyhow::Result<()> {
             "--drm" => drm = true,
             "--locked" => locked = true,
             "--startup" => startup = Some(true),
+            // The file read as the core would, the error said (with its
+            // line) and exit 1; nothing started. Orbit-Settings' editor
+            // asks before it saves core.yaml.
+            "--check" => {
+                let path: std::path::PathBuf = args.next().map(Into::into).unwrap_or_else(Config::path);
+                return match Config::check(&path) {
+                    Ok(()) => Ok(()),
+                    Err(err) => {
+                        println!("{err}");
+                        std::process::exit(1);
+                    }
+                };
+            }
             "-h" | "--help" => {
                 println!(
-                    "Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [--startup] [-- COMMAND…]  (default config: {})",
+                    "Usage: orbit-core [-c|--config FILE] [--nested|--drm] [--locked] [--startup] [-- COMMAND…] | --check [FILE]  (default config: {})",
                     Config::path().display()
                 );
                 return Ok(());

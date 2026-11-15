@@ -273,6 +273,14 @@ pub const PAGES: &[Page] = &[
         options: &["settings-svc-firewall", "settings-svc-remote", "settings-svc-open-files"],
     },
     Page {
+        id: "advanced",
+        group: Group::Orbit,
+        title: "settings-advanced",
+        icon: "accessories-text-editor-symbolic",
+        keywords: "settings-advanced-keywords",
+        options: &["settings-advanced-file", "settings-advanced-save"],
+    },
+    Page {
         id: "drives",
         group: Group::System,
         title: "settings-drives",

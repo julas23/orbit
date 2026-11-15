@@ -14,6 +14,7 @@
 //! the page asked for. Typing anywhere in it, or Ctrl+F, searches.
 
 mod about;
+mod advanced;
 mod agent;
 mod appearance;
 mod apps_page;
@@ -178,6 +179,7 @@ fn build(app: &gtk::Application, dir: &ConfigDir) -> gtk::Stack {
             "region" => region::page(),
             "about" => about::page(),
             "services" => services::page(),
+            "advanced" => advanced::page(dir),
             _ => continue,
         };
         stack.add_titled(&widget, Some(page.id), &tr(page.title));

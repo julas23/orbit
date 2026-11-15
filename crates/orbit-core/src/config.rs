@@ -431,6 +431,15 @@ impl Config {
         self
     }
 
+    /// Whether `path` reads: its error (with the line) when it does not.
+    pub fn check(path: &std::path::Path) -> Result<(), String> {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if text.trim().is_empty() {
+            return Ok(());
+        }
+        serde_yaml_ng::from_str::<Self>(&text).map(|_| ()).map_err(|e| e.to_string())
+    }
+
     fn read(path: &std::path::Path) -> Self {
         match std::fs::read_to_string(path) {
             Ok(text) if text.trim().is_empty() => Self::default(),
