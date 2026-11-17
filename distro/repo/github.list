@@ -24,3 +24,9 @@ bitwarden/clients              ^Bitwarden-.*-amd64\.deb$
 jeffvli/feishin                ^Feishin-linux-amd64\.deb$
 localsend/localsend            -linux-x86-64\.deb$
 raspberrypi/rpi-imager         ^rpi-imager_.*_amd64\.deb$
+# More of what Juliano uses (think, 2026-11-17, and linux/packages)
+VSCodium/vscodium                          ^codium_.*_amd64\.deb$
+upscayl/upscayl                            -linux\.deb$
+hakandundar34coding/system-monitoring-center _all\.deb$
+balena-io/etcher                           ^balena-etcher_.*_amd64\.deb$
+4gray/iptvnator                            -linux-amd64\.deb$

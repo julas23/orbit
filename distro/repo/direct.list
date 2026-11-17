@@ -1,0 +1,4 @@
+# Packages with no apt repository nor GitHub release: package name, then a
+# URL that always gives the newest .deb (sync.sh takes it again only when
+# the file it leads to changes).
+discord https://discord.com/api/download?platform=linux&format=deb

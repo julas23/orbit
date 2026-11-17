@@ -3,3 +3,14 @@
 # (comma-separated).
 https://packages.microsoft.com/repos/code stable  main https://packages.microsoft.com/keys/microsoft.asc       code
 https://packages.mozilla.org/apt          mozilla main https://packages.mozilla.org/apt/repo-signing-key.gpg firefox,firefox-l10n-pt-br
+# What Juliano uses besides (think's sources, 2026-11-17, and linux/packages)
+https://download.docker.com/linux/debian  trixie   stable https://download.docker.com/linux/debian/gpg           docker-ce,docker-ce-cli,containerd.io,docker-buildx-plugin,docker-compose-plugin
+https://dl.google.com/linux/chrome/deb    stable   main   https://dl.google.com/linux/linux_signing_key.pub       google-chrome-stable
+https://apt.releases.hashicorp.com        trixie   main   https://apt.releases.hashicorp.com/gpg                  terraform
+https://deb.nodesource.com/node_24.x      nodistro main   https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key nodejs
+https://pkgs.tailscale.com/stable/debian  trixie   main   https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg tailscale
+https://repo.steampowered.com/steam       stable   steam  https://repo.steampowered.com/steam/archive/stable/steam.gpg steam-launcher,steam-libs-amd64,steam-libs-i386:i386
+# flat repositories (suite ending in "/")
+https://pkgs.k8s.io/core:/stable:/v1.32/deb /       -      https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key kubectl
+https://download.opensuse.org/repositories/home:/strycore:/lutris/Debian_13 ./ - https://download.opensuse.org/repositories/home:/strycore:/lutris/Debian_13/Release.key lutris
+https://download.sublimetext.com          apt/stable/ -   https://download.sublimetext.com/sublimehq-pub.gpg      sublime-text

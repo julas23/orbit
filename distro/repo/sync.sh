@@ -12,11 +12,13 @@
 #       debian.list, every package of priority required, important and
 #       standard, and what the packages below depend on — with all their
 #       dependencies, merged with trixie-updates and trixie-security
+#       (amd64; and i386.list for Steam and Proton, in i386)
 #   http://SERVER/orbit  trixie main   Orbit's own packages (dropped in
 #       /srv/orbit-incoming/orbit by the build), the GitHub releases in
-#       github.list (ArtCraft, third parties) and the newest packages of the
-#       vendors' repositories in vendors.list (VS Code, Firefox) — only the
-#       newest: those repositories keep every version ever made
+#       github.list (ArtCraft, third parties), the newest packages of the
+#       vendors' repositories in vendors.list (VS Code, Firefox, Docker,
+#       Chrome, Steam...) — only the newest: those repositories keep every
+#       version ever made — and the .deb of direct.list (Discord)
 #   http://SERVER/orbit-public trixie main   Orbit's own packages only, but
 #       those in public.exclude (metapackages that need the third parties):
 #       what may go to the internet — served as
@@ -102,31 +104,45 @@ done < "$DIR/github.list"
 log "Vendors' repositories (the newest of each package only)"
 # vendors.list: repository URL, suite, component, key URL, packages. The
 # InRelease is checked against the vendor's key before anything is taken.
+# A suite ending in "/" is a flat repository (no dists/, one Packages
+# index, component "-"). A package is amd64 (or all) unless it says
+# otherwise: steam-libs-i386:i386.
 mkdir -p "$INCOMING/vendors"
 while read -r url suite component keyurl pkgs; do
     [[ -z "$url" || "$url" == \#* ]] && continue
     tmp=$(mktemp -d)
     curl -fsSL "$keyurl" | gpg --dearmor > "$tmp/key.gpg" 2>/dev/null || curl -fsSL -o "$tmp/key.gpg" "$keyurl"
-    curl -fsSL -o "$tmp/InRelease" "$url/dists/$suite/InRelease"
+    if [[ "$suite" == */ ]]; then
+        base=${suite#./}; base=${base%/}; base=${base#/}; base="$url${base:+/$base}"
+        indexes="Packages"
+    else
+        base="$url/dists/$suite"
+        indexes="$component/binary-amd64/Packages $component/binary-all/Packages"
+        [[ "$pkgs" == *:i386* ]] && indexes+=" $component/binary-i386/Packages"
+    fi
+    curl -fsSL -o "$tmp/InRelease" "$base/InRelease" \
+        || { echo "!! $url: no InRelease, skipped"; rm -rf "$tmp"; continue; }
     gpgv --keyring "$tmp/key.gpg" --output "$tmp/Release" "$tmp/InRelease" 2>/dev/null \
         || { echo "!! $url: bad signature, skipped"; rm -rf "$tmp"; continue; }
     # The amd64 index and the one of packages for every architecture.
     : > "$tmp/Packages"
-    for arch in amd64 all; do
-        index="$component/binary-$arch/Packages"
+    for index in $indexes; do
         sum=$(awk -v f="$index" '/^SHA256:/{s=1;next} /^[A-Za-z]/{s=0} s && $3==f {print $1}' "$tmp/Release")
         [[ -n "$sum" ]] || continue
-        curl -fsSL -o "$tmp/part" "$url/dists/$suite/$index"
+        curl -fsSL -o "$tmp/part" "$base/$index"
         [[ "$(sha256sum < "$tmp/part" | cut -d' ' -f1)" == "$sum" ]] || { echo "!! $url: $index checksum"; continue; }
         { cat "$tmp/part"; echo; } >> "$tmp/Packages"
     done
-    for pkg in ${pkgs//,/ }; do
-        best=$(python3 - "$tmp/Packages" "$pkg" <<'PY'
+    for spec in ${pkgs//,/ }; do
+        pkg=${spec%%:*}
+        best=$(python3 - "$tmp/Packages" "$spec" <<'PY'
 import sys, subprocess
 best = None
+name, _, arch = sys.argv[2].partition(":")
+archs = (arch,) if arch else ("amd64", "all")
 for block in open(sys.argv[1], encoding="utf-8").read().split("\n\n"):
     f = dict(l.split(": ", 1) for l in block.splitlines() if ": " in l and not l.startswith(" "))
-    if f.get("Package") != sys.argv[2] or f.get("Architecture") not in ("amd64", "all"):
+    if f.get("Package") != name or f.get("Architecture") not in archs:
         continue
     if best is None or subprocess.run(["dpkg", "--compare-versions", f["Version"], "gt", best["Version"]]).returncode == 0:
         best = f
@@ -150,14 +166,31 @@ PY
     rm -rf "$tmp"
 done < "$DIR/vendors.list"
 
+log "Direct downloads"
+# direct.list: package name, URL of its newest .deb (one that redirects to
+# the versioned file). Taken again only when that file changes; HTTPS is
+# all the checking there is.
+mkdir -p "$INCOMING/direct"
+while read -r pkg url; do
+    [[ -z "$pkg" || "$pkg" == \#* ]] && continue
+    real=$(curl -fsIL -o /dev/null -w '%{url_effective}' "$url") || { echo "!! $pkg: unavailable, keeping what is here"; continue; }
+    [[ -s "$INCOMING/direct/$pkg.deb" && "$(cat "$INCOMING/direct/$pkg.url" 2>/dev/null)" == "$real" ]] && continue
+    echo "-> $pkg: $real"
+    curl -fsSL -o "$INCOMING/direct/$pkg.part" "$real" || { echo "!! $pkg: download failed"; continue; }
+    [[ "$(dpkg-deb -f "$INCOMING/direct/$pkg.part" Package 2>/dev/null)" == "$pkg" ]] \
+        || { echo "!! $pkg: not a .deb of $pkg"; rm -f "$INCOMING/direct/$pkg.part"; continue; }
+    mv "$INCOMING/direct/$pkg.part" "$INCOMING/direct/$pkg.deb"
+    echo "$real" > "$INCOMING/direct/$pkg.url"
+done < "$DIR/direct.list"
+
 log "Orbit's own and the GitHub packages"
 aptly repo show orbit-local >/dev/null 2>&1 || aptly repo create -distribution="$DIST" -component=main orbit-local
-for d in orbit github vendors; do
+for d in orbit github vendors direct; do
     compgen -G "$INCOMING/$d/*.deb" >/dev/null && aptly repo add -force-replace orbit-local "$INCOMING/$d" >/dev/null
 done
 # What left the incoming folders leaves the repository.
 ours=$(mktemp)
-for deb in "$INCOMING"/{orbit,github,vendors}/*.deb; do
+for deb in "$INCOMING"/{orbit,github,vendors,direct}/*.deb; do
     [[ -f "$deb" ]] && dpkg-deb -f "$deb" Package
 done | sort -u > "$ours"
 aptly repo search orbit-local 2>/dev/null | while read -r ref; do
@@ -181,24 +214,33 @@ aptly repo search -format='{{.Package}} {{.Architecture}}' orbit-local 2>/dev/nu
 done
 
 log "What the packages need from Debian"
-wanted=$(mktemp)
-names "$DIR/debian.list" > "$wanted"
-{
-    for deb in "$INCOMING"/{orbit,github,vendors}/*.deb; do
+# Per architecture: amd64 takes debian.list and what the amd64 and all
+# packages above need; i386 (Steam and Proton) takes i386.list and what the
+# i386 packages above need (steam-libs-i386).
+wants() { # arch
+    if [[ $1 == amd64 ]]; then names "$DIR/debian.list"; else names "$DIR/i386.list" 2>/dev/null || true; fi
+    for deb in "$INCOMING"/{orbit,github,vendors,direct}/*.deb; do
         [[ -f "$deb" ]] || continue
+        a=$(dpkg-deb -f "$deb" Architecture)
+        if [[ $1 == amd64 ]]; then [[ $a != i386 ]] || continue; else [[ $a == i386 ]] || continue; fi
         for field in Depends Pre-Depends Recommends; do
             dpkg-deb -f "$deb" "$field" 2>/dev/null
+        done | tr ',|' '\n\n'
+    done | sed -E 's/\(.*\)//; s/:(any|i386|amd64)//; s/^ +| +$//g' | sed '/^$/d'
+}
+declare -A FILTER
+for arch in amd64 i386; do
+    wanted=$(mktemp)
+    wants $arch > "$wanted"
+    if [[ $arch == i386 && ! -s "$wanted" ]]; then rm -f "$wanted"; continue; fi
+    # Names other packages only provide are resolved to one that does.
+    index=$(mktemp)
+    for suite in "$DIST" "$DIST-updates"; do
+        for c in $COMPONENTS; do
+            curl -fsSL "$DEBIAN/dists/$suite/$c/binary-$arch/Packages.xz" 2>/dev/null | xz -dc
         done
-    done
-} | tr ',|' '\n\n' | sed -E 's/\(.*\)//; s/:any//; s/^ +| +$//g' | sed '/^$/d' >> "$wanted"
-# Names other packages only provide are resolved to one that does.
-index=$(mktemp)
-for suite in "$DIST" "$DIST-updates"; do
-    for c in $COMPONENTS; do
-        curl -fsSL "$DEBIAN/dists/$suite/$c/binary-amd64/Packages.xz" 2>/dev/null | xz -dc
-    done
-done > "$index"
-python3 - "$index" "$wanted" "$ours" > "$wanted.real" <<'PY'
+    done > "$index"
+    python3 - "$index" "$wanted" "$ours" > "$wanted.real" <<'PY'
 import sys
 real, provides = set(), {}
 ours = {l.strip() for l in open(sys.argv[3]) if l.strip()}
@@ -227,35 +269,50 @@ for name in sorted(out):
 if missing:
     print("not in Debian (left out): " + " ".join(sorted(missing)), file=sys.stderr)
 PY
-filter="Priority (required) | Priority (important) | Priority (standard)"
-while read -r name; do filter+=" | Name (= $name)"; done < "$wanted.real"
-echo "$(wc -l < "$wanted.real") packages asked for, besides the base priorities"
-rm -f "$wanted" "$wanted.real" "$index" "$ours"
+    if [[ $arch == amd64 ]]; then
+        filter="Priority (required) | Priority (important) | Priority (standard)"
+    else
+        filter="Name (= __none__)"
+    fi
+    while read -r name; do filter+=" | Name (= $name)"; done < "$wanted.real"
+    FILTER[$arch]=$filter
+    echo "$arch: $(wc -l < "$wanted.real") packages asked for"
+    rm -f "$wanted" "$wanted.real" "$index"
+done
+rm -f "$ours"
 
 log "Debian mirrors (filtered, with dependencies)"
-for spec in "debian $DEBIAN $DIST" "debian-updates $DEBIAN $DIST-updates" "debian-security $SECURITY $DIST-security"; do
-    read -r name url suite <<< "$spec"
-    if [[ "$name" != debian ]]; then
-        # Updates take every package the base has, so the binaries of one
-        # source never mix versions (libpng-dev must match libpng16).
-        filter="Name (= __none__)"
-        while read -r have; do filter+=" | Name (= $have)"; done < <(aptly mirror search debian 'Name (% *)' | cut -d_ -f1 | sort -u)
-    fi
-    if mirror_exists "$name"; then
-        aptly mirror edit -filter="$filter" -filter-with-deps "$name"
-    else
-        # The security archive lists its components its own way.
-        aptly mirror create -architectures=amd64 -filter="$filter" -filter-with-deps -force-components \
-            "$name" "$url" "$suite" $COMPONENTS
-    fi
-    aptly mirror update -max-tries=3 "$name" | grep -E "^(Download|ERROR|WARNING)" | grep -vE "^Downloading: .*\.deb$" || true
+SNAPS=()
+for arch in "${!FILTER[@]}"; do
+    sfx=""; [[ $arch == amd64 ]] || sfx="-$arch"
+    for spec in "debian $DEBIAN $DIST" "debian-updates $DEBIAN $DIST-updates" "debian-security $SECURITY $DIST-security"; do
+        read -r name url suite <<< "$spec"
+        name+=$sfx
+        filter=${FILTER[$arch]}
+        if [[ "$name" != "debian$sfx" ]]; then
+            # Updates take every package the base has, so the binaries of one
+            # source never mix versions (libpng-dev must match libpng16).
+            filter="Name (= __none__)"
+            while read -r have; do filter+=" | Name (= $have)"; done < <(aptly mirror search "debian$sfx" 'Name (% *)' | cut -d_ -f1 | sort -u)
+        fi
+        if mirror_exists "$name"; then
+            aptly mirror edit -filter="$filter" -filter-with-deps "$name"
+        else
+            # The security archive lists its components its own way.
+            aptly mirror create -architectures=$arch -filter="$filter" -filter-with-deps -force-components \
+                "$name" "$url" "$suite" $COMPONENTS
+        fi
+        aptly mirror update -max-tries=3 "$name" | grep -E "^(Download|ERROR|WARNING)" | grep -vE "^Downloading: .*\.deb$" || true
+        SNAPS+=("$name-$STAMP")
+    done
 done
 
 log "Snapshots and publication"
-aptly snapshot create "debian-$STAMP" from mirror debian
-aptly snapshot create "debian-updates-$STAMP" from mirror debian-updates
-aptly snapshot create "debian-security-$STAMP" from mirror debian-security
-aptly snapshot merge -latest "debian-all-$STAMP" "debian-$STAMP" "debian-updates-$STAMP" "debian-security-$STAMP"
+for snap in "${SNAPS[@]}"; do
+    aptly snapshot create "$snap" from mirror "${snap%-$STAMP}"
+done
+aptly snapshot merge -latest "debian-all-$STAMP" "${SNAPS[@]}"
+DEBIAN_ARCHS=amd64,all; [[ -n "${FILTER[i386]:-}" ]] && DEBIAN_ARCHS=amd64,i386,all
 aptly snapshot create "orbit-local-$STAMP" from repo orbit-local
 public="Name (= __none__)"
 for deb in "$INCOMING"/orbit/*.deb; do
@@ -264,10 +321,11 @@ for deb in "$INCOMING"/orbit/*.deb; do
     names "$DIR/public.exclude" | grep -qx "$name" || public+=" | Name (= $name)"
 done
 aptly snapshot filter "orbit-local-$STAMP" "orbit-public-$STAMP" "$public"
-publish debian "debian-all-$STAMP"
+publish debian "debian-all-$STAMP" "$DEBIAN_ARCHS"
 # Orbit's own packages for the Raspberry Pi stations too (the Debian
-# subset stays amd64: a Pi takes Debian from its own sources).
-publish orbit "orbit-local-$STAMP" amd64,arm64,all
+# subset stays amd64, and i386 for Steam: a Pi takes Debian from its own
+# sources).
+publish orbit "orbit-local-$STAMP" amd64,arm64,i386,all
 publish orbit-public "orbit-public-$STAMP" amd64,arm64,all
 gpg --export "$KEY" > /srv/aptly/public/orbit-archive-keyring.gpg
 
@@ -275,7 +333,7 @@ log "Old snapshots"
 # The last 7 of each kind stay (to switch back to); packages none of them
 # holds leave the pool. The merged ones first: aptly refuses to drop a
 # snapshot another one was made from. A refusal is said, not fatal.
-for kind in debian-all orbit-public orbit-local debian debian-updates debian-security; do
+for kind in debian-all orbit-public orbit-local debian debian-updates debian-security debian-i386 debian-updates-i386 debian-security-i386; do
     aptly snapshot list -raw -sort=time | grep -E "^$kind-[0-9]{8}-[0-9]{6}$" | head -n -7 | while read -r old; do
         if aptly snapshot drop "$old" >/dev/null 2>&1; then echo "dropped $old"; else echo "kept $old (still used)"; fi
     done

@@ -1,0 +1,7 @@
+# Debian 13 packages the Orbit repository also carries for i386, with what
+# they depend on: the 32-bit libraries Steam and Proton need (what think has
+# installed by hand for i386). sync.sh adds what the i386 packages of
+# vendors.list (steam-libs-i386) depend on.
+
+libc6 libcrypt1 libegl1 libgbm1 libgcc-s1 libgl1 libgl1-mesa-dri libglx-mesa0 libgpg-error0 libnm0
+libstdc++6 libudev1 libva-x11-2 libva2 libxcb-dri3-0 libxcb1 libxinerama1 mesa-vulkan-drivers

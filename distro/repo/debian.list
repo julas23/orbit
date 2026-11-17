@@ -61,3 +61,69 @@ kitty alacritty cava gparted
 # --- the classics beside ArtCraft (orbit-studio) and other daily ones
 scribus libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-l10n-pt-br
 audacity hydrogen rosegarden openscad mousepad rhythmbox
+
+# --- the packages Juliano uses and installs: what think has installed by hand
+# (apt-mark showmanual, 2026-11-17) and linux/packages/debian.json, that
+# Debian has and the sections above do not name
+adb adduser adwaita-qt adwaita-qt6 alsa-topology-conf alsa-ucm-conf android-file-transfer
+android-sdk-platform-tools-common android-udev-rules ansible apache2 apparmor apparmor-utils apt
+apt-utils arc-theme at-spi2-core atmel-firmware atop autofs avahi-utils azote base-files base-passwd
+bash bat bc bibata-cursor-theme bind9-dnsutils bind9-host blackbird-gtk-theme bluebird-gtk-theme
+bluez-firmware bpytop breeze-cursor-theme bsdutils btop calc chromium clementine cmake conky-all
+coreutils cpio cron cron-daemon-common cups cups-browsed cups-filters dahdi-firmware-nonfree dash
+debconf debconf-i18n debian-archive-keyring debianutils dhcpcd-base diffutils dmz-cursor-theme
+dnsmasq-base dolphin dpkg eject elementary-xfce-icon-theme enchant-2 ethtool evince evtest eza
+faenza-icon-theme fail2ban fastboot fastfetch fd-find feh ffmpeg ffmpegthumbnailer findutils
+firmware-ast firmware-ath9k-htc firmware-b43-installer firmware-b43legacy-installer firmware-bnx2
+firmware-bnx2x firmware-carl9170 firmware-cavium firmware-cirrus firmware-intel-graphics
+firmware-intel-misc firmware-ipw2x00 firmware-ivtv firmware-linux-free firmware-marvell-prestera
+firmware-myricom firmware-netronome firmware-netxen firmware-nvidia-graphics
+firmware-nvidia-tesla-535-gsp firmware-qlogic firmware-siano firmware-zd1211 flameshot flatpak
+fonts-cantarell fonts-firacode fonts-freefont-ttf fonts-hack fonts-inter fonts-ipafont-gothic
+fonts-jetbrains-mono fonts-liberation fonts-montserrat fonts-open-sans fonts-roboto
+fonts-tlwg-loma-otf fonts-ubuntu fonts-unifont fonts-wqy-zenhei fuse fuse2fs fuzzel fzf gcc
+gcc-14-base gdb gddrescue gdebi gdebi-core gettext-base gh git-filter-repo glslc gnome-disk-utility
+gnome-keyring-pkcs11 gnome-system-tools golang-go grep greybird-gtk-theme gstreamer1.0-gl
+gstreamer1.0-gtk3 gstreamer1.0-nice gstreamer1.0-tools gzip heimdall-flash helvum hostname hwinfo
+ifuse imagemagick indi-dsi inetutils-telnet init init-system-helpers inxi iotop iproute2
+iputils-ping jmtpfs joystick jq jstest-gtk jupyter kdenlive keepassxc kid3 kmod kubectl libacl1
+libapparmor1 libapt-pkg7.0 libatk1.0-dev libattr1 libaudit-common libaudit1
+libayatana-appindicator3-dev libblkid1 libbpf1 libbsd0 libbz2-1.0 libc-bin libc6 libcairo2-dev
+libcap-ng0 libcap2 libcap2-bin libchromaprint-tools libcom-err2 libcrypt1 libdb5.3t64 libdbus-1-dev
+libdbusmenu-glib-dev libdbusmenu-gtk3-dev libdebconfclient0 libedit2 libegl1 libelf1t64
+libext2fs2t64 libfdisk1 libfishcamp1t64 libfuse2t64 libgbm1 libgcc-s1 libgdk-pixbuf-xlib-2.0-dev
+libgdk-pixbuf2.0-bin libgirepository-2.0-dev libgirepository1.0-dev libgl1 libglib2.0-dev libgmp10
+libgssapi-krb5-2 libgtk-3-dev libgtk-4-media-gstreamer libgtk-layer-shell-dev libheif-plugin-aomenc
+libheif-plugin-x265 libhogweed6t64 libidn2-0 libimobiledevice-utils libjansson4
+libjavascriptcoregtk-4.1-dev libk5crypto3 libkeyutils1 libkmod2 libkrb5-3 libkrb5support0
+liblastlog2-2 liblocale-gettext-perl liblz4-1 liblzma5 libmd0 libmnl0 libmount1 libncursesw6
+libnettle8t64 libnewt0.52 libnftables1 libnftnl11 libnotify-bin libnss-systemd libpam-gnome-keyring
+libpam-modules libpam-modules-bin libpam-runtime libpam0g libpango1.0-dev libpcre2-8-0 libpopt0
+libproc2-0 libqt5svg5 libreadline8t64 libreoffice librsvg2-common librsvg2-dev libsbig4t64
+libseccomp2 libselinux1 libsemanage-common libsemanage2 libsepol2 libslang2 libsmartcols1
+libspa-0.2-bluetooth libsqlite3-0 libss2 libssl3t64 libstdc++6 libsystemd-shared libsystemd0
+libtext-charwidth-perl libtext-iconv-perl libtext-wrapi18n-perl libtinfo6 libtirpc-common
+libtirpc3t64 libudev1 libunistring5 libuuid1 libwebkit2gtk-4.1-dev libxdo-dev libxtables12
+libxxhash0 libzstd1 linux-sysctl-defaults login login.defs logrotate logsave loupe lsb-release lsd
+lsyncd lutris make manpages mawk mc mesa-opencl-icd mesa-utils moka-icon-theme mount mpv mtp-tools
+mtr muse musescore3 ncdu ncurses-base ncurses-bin net-tools netbase netcat-openbsd
+network-manager-gnome nfs-common nftables nicotine nmap nodejs notepadqq npm numix-gtk-theme
+numix-icon-theme numix-icon-theme-circle nvme-cli nwg-look openjdk-21-jdk openssl-provider-legacy
+orchis-gtk-theme pamixer pandoc paper-icon-theme papirus-icon-theme passwd patchelf pdfarranger
+perl-base picard pipx playerctl plocate poppler-data procps psmisc puddletag python3 python3-argon2
+python3-dev python3-evdev python3-fastapi python3-hid python3-matplotlib python3-multipart
+python3-numpy python3-pandas python3-pip python3-pydantic python3-requests python3-scipy
+python3-sympy python3-toml python3-uvicorn python3-venv python3-xdg qmmp qt6-svg-plugins qt6-wayland
+qtwayland5 radeontop ranger rar readline-common remmina ripgrep rustup sed sensible-utils shotcut
+slurp snapper snmp socat sqlite3 sqv sshpass strace strawberry sweethome3d-furniture
+sweethome3d-furniture-nonfree synaptic syncthing sysstat system-config-printer systemd-boot
+systemd-boot-tools systemd-cryptsetup systemd-zram-generator sysvinit-utils tar tcpdump tealdeer
+terminator testdisk thunar thunar-media-tags-plugin tmux traceroute transmission-gtk tree udev unrar
+usbmuxd user-setup util-linux util-linux-extra uuid-runtime va-driver-all vainfo valgrind vim-common
+vlc vulkan-tools whiptail whois wireguard wireguard-tools wireshark wlr-randr wmctrl wvkbd xclip
+xcursor-themes xdotool xfce4-clipman-plugin yaru-theme-gtk yaru-theme-icon yq zathura zlib1g zsh
+
+# --- dependencies aptly's filter does not follow on its own (versioned
+# virtual packages, alternatives), found installing all of the above from
+# scratch against this repository (apt-get -s with an empty dpkg status)
+gnome-icon-theme notification-daemon pinentry-curses python3-cffi-backend
