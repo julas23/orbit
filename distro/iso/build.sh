@@ -30,6 +30,7 @@ TEST_STEP=":"
 if [ -n "${ORBIT_ISO_TEST:-}" ]; then
 	TEST_STEP="sudo tee -a config/includes.installer/preseed.cfg >/dev/null <<'PRESEED'
 # --- test image: nothing asked ---
+d-i keyboard-configuration/xkb-keymap select br
 d-i netcfg/get_hostname string orbit-teste
 d-i netcfg/get_hostname seen true
 d-i passwd/user-fullname string Teste
