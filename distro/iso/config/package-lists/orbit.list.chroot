@@ -47,6 +47,8 @@ systemd-boot-tools
 systemd-ukify
 efibootmgr
 btrfs-progs
+# orbit-install partitions with sfdisk
+fdisk
 snapper
 cryptsetup
 

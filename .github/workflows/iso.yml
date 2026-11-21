@@ -12,6 +12,10 @@ on:
         type: choice
         options: ["", "1", "luks", "keep"]
         default: ""
+      ssh_key:
+        description: "Debugging image: this public key gets SSH into the live user (never for an image handed to anyone)"
+        type: string
+        default: ""
 
 jobs:
   iso:
@@ -32,9 +36,14 @@ jobs:
       - name: Build
         env:
           ORBIT_ISO_TEST: ${{ inputs.test }}
+          SSH_KEY: ${{ inputs.ssh_key }}
         run: |
+          if [ -n "$SSH_KEY" ]; then
+            printf '%s\n' "$SSH_KEY" > debug-key.pub
+            export ORBIT_ISO_SSH_KEY=/src/debug-key.pub
+          fi
           docker run --rm --privileged \
-            -v "$GITHUB_WORKSPACE:/src" -e ORBIT_ISO_TEST \
+            -v "$GITHUB_WORKSPACE:/src" -e ORBIT_ISO_TEST -e ORBIT_ISO_SSH_KEY \
             debian:trixie sh -euc '
               apt-get update -qq
               apt-get install -y -qq live-build git rsync ca-certificates >/dev/null

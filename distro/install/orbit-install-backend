@@ -1,0 +1,250 @@
+#!/bin/bash
+# orbit-install-backend — installs Orbit Linux from the Live it runs in
+# (docs/PLANO-DISTRO.md §6.6): the part of orbit-install that runs as root.
+#
+#   orbit-install-backend PLAN < password
+#
+# PLAN is a file of KEY=value lines, each checked here (nothing in it is
+# run); the user's password comes on stdin, one line, and never touches a
+# command line or the log.
+#   DISK=/dev/nvme0n1     the whole disk, erased
+#   LAYOUT=auto           single | separate | auto (by the disk's size, §6.4)
+#   ENCRYPT_HOME=0        1: /home (a partition of its own) in LUKS2,
+#                         opened by the user's password
+#   USERNAME=ana  FULLNAME=Ana Souza  HOSTNAME=orbit
+#   LOCALE=pt_BR.UTF-8  TIMEZONE=America/Sao_Paulo
+#   XKB_MODEL=pc105  XKB_LAYOUT=br  XKB_VARIANT=  XKB_OPTIONS=
+#
+# What the installer shows comes on stdout, a line each:
+#   step N TOTAL NAME     a step begins
+#   recovery-key KEY      the encrypted /home's recovery key, shown once
+#   error MESSAGE         it stopped (the exit status is not 0)
+#   done                  installed
+# The details go to /var/log/orbit-install.log, copied to the new system.
+#
+# Covered so far: UEFI, the whole disk, one btrfs or /home of its own (with
+# LUKS). An existing /home kept and BIOS machines stay with the
+# debian-installer of the ISO's advanced options until this covers them.
+set -e
+umask 022
+HERE=$(dirname "$(readlink -f "$0")")
+exec 3>&1
+LOG=/var/log/orbit-install.log
+exec >>"$LOG" 2>&1
+echo "orbit-install-backend $(date)"
+
+say() { echo "$*" >&3; }
+fail() { echo "ERROR: $*"; say "error $*"; exit 1; }
+trap 'rc=$?; [ $rc -eq 0 ] || say "error step failed (exit $rc), see $LOG"' EXIT
+
+[ "$(id -u)" = 0 ] || fail "must run as root"
+[ -e /etc/orbit/live ] || fail "not the Live image"
+[ $# -eq 1 ] && [ -f "$1" ] || fail "usage: orbit-install-backend PLAN < password"
+
+# --- the plan, every value checked -------------------------------------------
+DISK="" LAYOUT=auto ENCRYPT_HOME=0 USERNAME="" FULLNAME="" HOSTNAME=orbit
+LOCALE=pt_BR.UTF-8 TIMEZONE=America/Sao_Paulo
+XKB_MODEL=pc105 XKB_LAYOUT=us XKB_VARIANT="" XKB_OPTIONS=""
+check() {   # check KEY VALUE REGEX
+	[[ $2 =~ $3 ]] || fail "bad $1 in the plan"
+	printf -v "$1" '%s' "$2"
+}
+while IFS= read -r line || [ -n "$line" ]; do
+	[[ -z $line || $line == \#* ]] && continue
+	key=${line%%=*} value=${line#*=}
+	case "$key" in
+		DISK)         check DISK "$value" '^/dev/[a-z0-9]+$' ;;
+		LAYOUT)       check LAYOUT "$value" '^(auto|single|separate)$' ;;
+		ENCRYPT_HOME) check ENCRYPT_HOME "$value" '^[01]$' ;;
+		USERNAME)     check USERNAME "$value" '^[a-z_][a-z0-9_-]{0,31}$' ;;
+		FULLNAME)     check FULLNAME "$value" '^[^:,=]{0,64}$' ;;
+		HOSTNAME)     check HOSTNAME "$value" '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$' ;;
+		LOCALE)       check LOCALE "$value" '^[A-Za-z]{2,3}(_[A-Z]{2})?\.UTF-8$' ;;
+		TIMEZONE)     check TIMEZONE "$value" '^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$' ;;
+		XKB_MODEL)    check XKB_MODEL "$value" '^[A-Za-z0-9_-]*$' ;;
+		XKB_LAYOUT)   check XKB_LAYOUT "$value" '^[a-z0-9_-]+$' ;;
+		XKB_VARIANT)  check XKB_VARIANT "$value" '^[A-Za-z0-9_-]*$' ;;
+		XKB_OPTIONS)  check XKB_OPTIONS "$value" '^[A-Za-z0-9_:,-]*$' ;;
+		*) fail "unknown key $key in the plan" ;;
+	esac
+done < "$1"
+[ -n "$DISK" ] || fail "no DISK in the plan"
+[ -n "$USERNAME" ] || fail "no USERNAME in the plan"
+[ -e "/usr/share/zoneinfo/$TIMEZONE" ] || fail "unknown time zone $TIMEZONE"
+IFS= read -r PASSWORD || true
+[ -n "$PASSWORD" ] || fail "no password on stdin"
+
+# --- the machine and the disk --------------------------------------------------
+[ -d /sys/firmware/efi ] || fail "BIOS machine: use the installer in the boot menu's advanced options"
+UEFI=1
+[ "$(lsblk -dno TYPE "$DISK" 2>/dev/null)" = disk ] || fail "$DISK is not a disk"
+MEDIUM=$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)
+if [ -n "$MEDIUM" ]; then
+	[ "/dev/$(lsblk -no PKNAME "$MEDIUM" 2>/dev/null | head -1)" = "$DISK" ] && fail "$DISK holds the Live"
+	[ "$MEDIUM" = "$DISK" ] && fail "$DISK holds the Live"
+fi
+DISK_MB=$(( $(cat /sys/block/${DISK#/dev/}/size) / 2048 ))
+RAM_MB=$(( $(sed -n 's/^MemTotal: *\([0-9]*\) kB/\1/p' /proc/meminfo) / 1024 ))
+[ "$DISK_MB" -ge 38146 ] || fail "the disk has $((DISK_MB / 1024)) GB: 40 GB is the least"
+if [ "$LAYOUT" = auto ]; then
+	LAYOUT=single; [ "$DISK_MB" -gt 114441 ] && LAYOUT=separate   # 120 GB
+fi
+[ "$LAYOUT" = separate ] || ENCRYPT_HOME=0
+SQUASH=/run/live/rootfs/filesystem.squashfs
+[ -d "$SQUASH/etc" ] || fail "the Live's system is not at $SQUASH"
+echo "disk $DISK $DISK_MB MB, RAM $RAM_MB MB, layout $LAYOUT, encrypted /home $ENCRYPT_HOME"
+
+T=/target
+TOP=/run/orbit-install/top
+RUN=/run/orbit-install
+mkdir -p $RUN $T
+chmod 700 $RUN
+HOME_PW=$RUN/home-pw
+RECOVERY_KEY=$RUN/recovery-key
+KEYRING=$HERE/orbit-archive-keyring.gpg
+OPTS=compress=zstd:1,noatime
+target() { chroot $T "$@"; }
+. "$HERE/steps.sh"
+TOTAL=9
+set -x
+
+# --- 1. partitions ---------------------------------------------------------------
+say "step 1 $TOTAL partition"
+for p in $(lsblk -lnpo NAME "$DISK" | tail -n +2); do
+	grep -q "^$p " /proc/mounts && fail "$p is mounted"
+	swapoff "$p" 2>/dev/null || true
+done
+wipefs -a "$DISK"
+# The system: 25% of the disk, 60 to 100 GiB, /home the rest (§6.4).
+ROOT_MB=$(( DISK_MB / 4 )); [ $ROOT_MB -lt 61440 ] && ROOT_MB=61440; [ $ROOT_MB -gt 102400 ] && ROOT_MB=102400
+{
+	echo "label: gpt"
+	echo "size=1GiB, type=U, name=ESP"
+	if [ "$LAYOUT" = separate ]; then
+		echo "size=${ROOT_MB}MiB, type=L, name=orbit"
+		echo "type=L, name=home"
+	else
+		echo "type=L, name=orbit"
+	fi
+} | sfdisk --wipe always --wipe-partitions always "$DISK"
+udevadm settle
+part() { lsblk -lnpo NAME,TYPE "$DISK" | awk -v n="$1" '$2=="part" {i++; if (i==n) print $1}'; }
+ESPDEV=$(part 1) ROOTDEV=$(part 2) HOMEDEV=""
+[ "$LAYOUT" = separate ] && HOMEDEV=$(part 3)
+[ -b "$ESPDEV" ] && [ -b "$ROOTDEV" ] || fail "the new partitions did not appear"
+
+# --- 2. filesystems ----------------------------------------------------------------
+say "step 2 $TOTAL format"
+mkfs.vfat -F 32 -n ESP "$ESPDEV"
+mkfs.btrfs -f -L orbit "$ROOTDEV"
+[ -n "$HOMEDEV" ] && mkfs.btrfs -f -L home "$HOMEDEV"
+udevadm settle
+UUID=$(blkid -o value -s UUID "$ROOTDEV")
+mkdir -p $TOP
+mount -t btrfs -o subvolid=5 "$ROOTDEV" $TOP
+btrfs subvolume create $TOP/@
+umount $TOP
+mount -t btrfs -o subvol=@,$OPTS "$ROOTDEV" $T
+mkdir -p $T/home
+[ -n "$HOMEDEV" ] && mount -t btrfs -o "$OPTS" "$HOMEDEV" $T/home
+
+# --- 3. the Live's system, copied --------------------------------------------------
+say "step 3 $TOTAL copy"
+rsync -aHAX --numeric-ids "$SQUASH/" $T/
+# The ESP after the copy: FAT keeps no owners nor modes.
+mkdir -p $T/boot/efi
+mount "$ESPDEV" $T/boot/efi
+{
+	echo "# /etc/fstab: made by orbit-install"
+	echo "UUID=$UUID / btrfs defaults 0 0"
+	echo "UUID=$(blkid -o value -s UUID "$ESPDEV") /boot/efi vfat umask=0077 0 1"
+	[ -n "$HOMEDEV" ] && echo "UUID=$(blkid -o value -s UUID "$HOMEDEV") /home btrfs defaults 0 0"
+} > $T/etc/fstab
+orbit_bind_system
+mount -t tmpfs tmpfs $T/run
+MOUNTED="$T/run $MOUNTED"
+
+# --- 4. what only the Live needs goes ------------------------------------------------
+say "step 4 $TOTAL live"
+REMOVE=$(cat /run/live/medium/live/filesystem.packages-remove 2>/dev/null || true)
+[ -n "$REMOVE" ] || REMOVE="live-boot live-boot-initramfs-tools live-config live-config-systemd live-tools"
+installed=""
+for p in $REMOVE; do
+	target dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "ok installed" && installed="$installed $p"
+done
+[ -n "$installed" ] && DEBIAN_FRONTEND=noninteractive target apt-get purge -y $installed
+# Its Wi-Fi and wired connections, so the new system is online at once.
+cp -a /etc/NetworkManager/system-connections/. $T/etc/NetworkManager/system-connections/ 2>/dev/null || true
+
+# --- 5. the machine and its user -------------------------------------------------------
+say "step 5 $TOTAL user"
+echo "$HOSTNAME" > $T/etc/hostname
+cat > $T/etc/hosts <<HOSTS
+127.0.0.1	localhost
+127.0.1.1	$HOSTNAME
+::1	localhost ip6-localhost ip6-loopback
+ff02::1	ip6-allnodes
+ff02::2	ip6-allrouters
+HOSTS
+ln -sf "/usr/share/zoneinfo/$TIMEZONE" $T/etc/localtime
+echo "$TIMEZONE" > $T/etc/timezone
+cat > $T/etc/default/keyboard <<KEYBOARD
+# KEYBOARD CONFIGURATION FILE (orbit-install)
+XKBMODEL="$XKB_MODEL"
+XKBLAYOUT="$XKB_LAYOUT"
+XKBVARIANT="$XKB_VARIANT"
+XKBOPTIONS="$XKB_OPTIONS"
+BACKSPACE="guess"
+KEYBOARD
+awk -F: -v u="$USERNAME" '$1==u {f=1} END {exit !f}' $T/etc/passwd && fail "the name $USERNAME is taken by the system"
+# The groups debian-installer gives the first user, and sudo: no root
+# password, the user has sudo.
+groups=""
+for g in sudo audio cdrom dip floppy video plugdev netdev scanner bluetooth lpadmin; do
+	grep -q "^$g:" $T/etc/group && groups="$groups,$g"
+done
+target useradd -m -s /bin/bash -c "$FULLNAME" -G "${groups#,}" "$USERNAME"
+set +x
+printf '%s:%s\n' "$USERNAME" "$PASSWORD" | target chpasswd
+if [ "$ENCRYPT_HOME" = 1 ]; then
+	printf '%s' "$PASSWORD" > $HOME_PW
+	chmod 600 $HOME_PW
+fi
+PASSWORD=""
+set -x
+target passwd -l root
+
+# --- 6. btrfs subvolumes, the encrypted /home -------------------------------------------
+say "step 6 $TOTAL disk"
+orbit_subvolumes
+orbit_encrypt_home
+rm -f $HOME_PW
+
+# --- 7. boot --------------------------------------------------------------------------
+say "step 7 $TOTAL boot"
+orbit_boot
+
+# --- 8. the system as it stays ------------------------------------------------------------
+say "step 8 $TOTAL system"
+orbit_system
+orbit_snapper_swap
+orbit_apt
+orbit_locale_conf
+orbit_keyboard
+orbit_final_ukis
+
+# --- 9. the end ----------------------------------------------------------------------------
+say "step 9 $TOTAL finish"
+if [ -s "$RECOVERY_KEY" ]; then
+	set +x
+	say "recovery-key $(cat "$RECOVERY_KEY")"
+	rm -f "$RECOVERY_KEY"
+	set -x
+fi
+orbit_unmount
+umount $T/boot/efi
+grep -q " $T/home " /proc/mounts && umount $T/home
+umount $T
+sync
+trap - EXIT
+say "done"

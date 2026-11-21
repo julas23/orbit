@@ -25,6 +25,16 @@ mkdir -p "$WORK"
 rsync -a --delete --exclude /cache --exclude /chroot --exclude /binary \
 	--exclude /.build --exclude build.log "$HERE/" "$WORK/"
 cd "$WORK"
+# Orbit's install steps (distro/install/), one copy for each installer:
+# debian-installer's (/orbit) and the Live's orbit-install, with the
+# archive keyring both give the new system.
+INSTALL="$HERE/../install"
+cp "$INSTALL/steps.sh" config/includes.installer/orbit/steps.sh
+LIB=config/includes.chroot_after_packages/usr/lib/orbit-install
+mkdir -p "$LIB"
+install -m 644 "$INSTALL/steps.sh" config/archives/orbit.key.chroot "$LIB/"
+mv "$LIB/orbit.key.chroot" "$LIB/orbit-archive-keyring.gpg"
+install -m 755 "$INSTALL/orbit-install-backend" "$LIB/"
 
 if [ -n "${ORBIT_ISO_SSH_KEY:-}" ]; then
 	mkdir -p config/includes.chroot_after_packages/etc/skel/.ssh

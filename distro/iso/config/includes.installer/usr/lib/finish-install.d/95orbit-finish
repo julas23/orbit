@@ -1,48 +1,21 @@
 #!/bin/sh
 # Orbit Linux, among the installer's last steps, after the Live's packages
-# are gone (docs/PLANO-DISTRO.md §6.2):
-#   - the language chosen in the installer, in /etc/locale.conf (Debian 13's
-#     file; /etc/default/locale is a link to it, made again at boot if it is
-#     not): the installer leaves the Live image's C.UTF-8 there;
+# are gone (docs/PLANO-DISTRO.md §6.2), with Orbit's install steps
+# (/orbit/steps.sh):
+#   - the language chosen in the installer, in /etc/locale.conf: the
+#     installer leaves the Live image's C.UTF-8 there;
+#   - the keyboard chosen kept first, a second layout added;
 #   - the UKI made again from the final initramfs (without live-boot), and
-#     any other UKI removed: removing the Live's packages makes one named
-#     after the Live.
+#     any other UKI removed.
 set -e
 T=/target
 LOCALE=$(debconf-get debian-installer/locale 2>/dev/null || true)
 [ -n "$LOCALE" ] || LOCALE=pt_BR.UTF-8
-echo "LANG=$LOCALE" > $T/etc/locale.conf
-ln -sf ../locale.conf $T/etc/default/locale
+target() { in-target "$@"; }
+. /orbit/steps.sh
+
+orbit_locale_conf
 logger -t orbit "LANG=$LOCALE"
-
-# The keyboard chosen in the installer stays the first layout (the one the
-# password was typed with, which the login screen starts with) and gets a
-# second one, as the Live has it: Brazilian after US, US after any other.
-# The panel's keyboard module switches between them.
-KB=$T/etc/default/keyboard
-layout=$(sed -n 's/^XKBLAYOUT="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' $KB 2>/dev/null)
-variant=$(sed -n 's/^XKBVARIANT="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' $KB 2>/dev/null)
-case "$layout" in
-	""|*,*) ;;
-	*)
-		[ "$layout" = us ] && second=br || second=us
-		sed -i -e "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$layout,$second\"/" \
-			-e "s/^XKBVARIANT=.*/XKBVARIANT=\"$variant,\"/" $KB
-		grep -q '^XKBVARIANT=' $KB || echo "XKBVARIANT=\"$variant,\"" >> $KB
-		;;
-esac
+orbit_keyboard
 logger -t orbit "keyboard: $(grep ^XKBLAYOUT $T/etc/default/keyboard)"
-
-ESP=$T/boot/efi/EFI/Linux
-if [ -d "$ESP" ] && [ -f $T/etc/kernel/install.conf ]; then
-	for v in $(ls $T/lib/modules); do
-		in-target kernel-install add "$v" "/boot/vmlinuz-$v" || logger -t orbit "kernel-install $v failed"
-	done
-	for f in "$ESP"/*.efi; do
-		case "${f##*/}" in
-			orbit-*) ;;
-			*) rm -f "$f"; logger -t orbit "removed ${f##*/}" ;;
-		esac
-	done
-	logger -t orbit "UKIs: $(ls "$ESP" | tr '\n' ' ')"
-fi
+orbit_final_ukis 2>&1 | logger -t orbit
