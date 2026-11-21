@@ -174,12 +174,17 @@ mkdir -p "$INCOMING/direct"
 while read -r pkg url; do
     [[ -z "$pkg" || "$pkg" == \#* ]] && continue
     real=$(curl -fsIL -o /dev/null -w '%{url_effective}' "$url") || { echo "!! $pkg: unavailable, keeping what is here"; continue; }
-    [[ -s "$INCOMING/direct/$pkg.deb" && "$(cat "$INCOMING/direct/$pkg.url" 2>/dev/null)" == "$real" ]] && continue
+    compgen -G "$INCOMING/direct/${pkg}_*.deb" >/dev/null \
+        && [[ "$(cat "$INCOMING/direct/$pkg.url" 2>/dev/null)" == "$real" ]] && continue
     echo "-> $pkg: $real"
-    curl -fsSL -o "$INCOMING/direct/$pkg.part" "$real" || { echo "!! $pkg: download failed"; continue; }
-    [[ "$(dpkg-deb -f "$INCOMING/direct/$pkg.part" Package 2>/dev/null)" == "$pkg" ]] \
-        || { echo "!! $pkg: not a .deb of $pkg"; rm -f "$INCOMING/direct/$pkg.part"; continue; }
-    mv "$INCOMING/direct/$pkg.part" "$INCOMING/direct/$pkg.deb"
+    part="$INCOMING/direct/$pkg.part"
+    curl -fsSL -o "$part" "$real" || { echo "!! $pkg: download failed"; continue; }
+    [[ "$(dpkg-deb -f "$part" Package 2>/dev/null)" == "$pkg" ]] \
+        || { echo "!! $pkg: not a .deb of $pkg"; rm -f "$part"; continue; }
+    # Named by version, as aptly's pool keeps the file name: a new release
+    # saved under the old name is "already exists and is different".
+    rm -f "$INCOMING/direct/$pkg.deb" "$INCOMING/direct/${pkg}"_*.deb
+    mv "$part" "$INCOMING/direct/${pkg}_$(dpkg-deb -f "$part" Version)_$(dpkg-deb -f "$part" Architecture).deb"
     echo "$real" > "$INCOMING/direct/$pkg.url"
 done < "$DIR/direct.list"
 
