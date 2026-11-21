@@ -222,6 +222,19 @@ orbit_boot_uefi() {
 	# of each kernel (install.conf above); bootctl install again is harmless.
 	target sh -c 'dpkg -i /usr/share/orbit/debs/systemd-boot_*.deb'
 	target bootctl install --esp-path=/boot/efi
+	# bootctl leaves the EFI variables alone in a chroot (systemd 257): the
+	# firmware's entry is made here, first in the boot order. Without it,
+	# only firmware that tries EFI/BOOT/BOOTX64.EFI by itself starts Orbit.
+	if ! chroot $T efibootmgr | grep -q 'Linux Boot Manager'; then
+		ESPDEV=$(awk -v m="$T/boot/efi" '$2==m {print $1; exit}' /proc/mounts)
+		ESPPART=$(basename "$ESPDEV")
+		chroot $T efibootmgr -q -c \
+			-d "/dev/$(basename "$(readlink -f /sys/class/block/$ESPPART/..)")" \
+			-p "$(cat /sys/class/block/$ESPPART/partition)" \
+			-L "Linux Boot Manager" -l '\EFI\systemd\systemd-bootx64.efi' \
+			|| echo "no firmware boot entry: EFI/BOOT/BOOTX64.EFI is left"
+	fi
+	chroot $T efibootmgr || true
 	cat > $T/boot/efi/loader/loader.conf <<LOADER
 # The menu stays hidden: hold Space while starting to see it
 # (docs/PLANO-DISTRO.md §6.3).
