@@ -15,11 +15,22 @@ echo "LANG=$LOCALE" > $T/etc/locale.conf
 ln -sf ../locale.conf $T/etc/default/locale
 logger -t orbit "LANG=$LOCALE"
 
-# The keyboard the installer leaves (US) gets Brazilian as a second layout,
-# as the Live has it: the panel's keyboard module switches between them.
-if grep -q '^XKBLAYOUT="\?us"\?$' $T/etc/default/keyboard 2>/dev/null; then
-	sed -i -e 's/^XKBLAYOUT=.*/XKBLAYOUT="us,br"/' -e 's/^XKBVARIANT=.*/XKBVARIANT=","/' $T/etc/default/keyboard
-fi
+# The keyboard chosen in the installer stays the first layout (the one the
+# password was typed with, which the login screen starts with) and gets a
+# second one, as the Live has it: Brazilian after US, US after any other.
+# The panel's keyboard module switches between them.
+KB=$T/etc/default/keyboard
+layout=$(sed -n 's/^XKBLAYOUT="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' $KB 2>/dev/null)
+variant=$(sed -n 's/^XKBVARIANT="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' $KB 2>/dev/null)
+case "$layout" in
+	""|*,*) ;;
+	*)
+		[ "$layout" = us ] && second=br || second=us
+		sed -i -e "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$layout,$second\"/" \
+			-e "s/^XKBVARIANT=.*/XKBVARIANT=\"$variant,\"/" $KB
+		grep -q '^XKBVARIANT=' $KB || echo "XKBVARIANT=\"$variant,\"" >> $KB
+		;;
+esac
 logger -t orbit "keyboard: $(grep ^XKBLAYOUT $T/etc/default/keyboard)"
 
 ESP=$T/boot/efi/EFI/Linux

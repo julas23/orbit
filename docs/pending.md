@@ -191,9 +191,16 @@ project's). Tailscale left out (the user uses it only in specific cases).
 
 ### Step 9 — `orbit-install`
 
-- [ ] The ISO's menu: Orbit Live, Install Orbit (`orbit.install`: the Live
-  opening the installer full screen), advanced options with the
-  debian-installer.
+- [ ] Started from inside the Live (2026-11-21, the user): no *Install
+  Orbit* boot entry; the Live session has `orbit-install` in the menu, the
+  dock and on the desktop, like Calamares. The boot menu keeps Orbit Live
+  and the advanced options, the debian-installer there only until
+  `orbit-install` covers every layout of PLANO-DISTRO §6.4.
+- [ ] The keyboard on the installer's screen: the Live's layout preselected,
+  a field to try it, and the password typed with it; written first in
+  `/etc/default/keyboard` (testers of the ISO could not log in after
+  installing: the debian-installer forced US without asking; asked since
+  2026-11-21 as a stopgap).
 - [ ] Detection (disks, network cards and their addresses, a DHCP that
   answered, the GPU), the proposal table, the one screen (Desktop / Server
   preselected, the multimedia kit, "Without a graphical session", user,

@@ -276,14 +276,21 @@ que não dá para adivinhar. Em Rust e GTK4 com o `orbit-app`, rodando no
 orbit-core da Live, como o resto do Orbit; o Calamares (no Debian, em Qt,
 assistente de várias páginas) foi descartado por isso.
 
-**O menu do boot da ISO** passa a ter:
+**O menu do boot da ISO** passa a ter (revisto em 2026-11-21: o instalador
+mora dentro da Live, como o Calamares, sem entrada própria no boot):
 
-- **Orbit Live** — o essencial rodando da mídia, como hoje (6.1).
-- **Instalar o Orbit** — a mesma Live, que abre o `orbit-install` em tela
-  cheia (`orbit.install` na linha de comando do kernel) em vez da sessão.
+- **Orbit Live** — o essencial rodando da mídia, como hoje (6.1), com o
+  `orbit-install` no menu, no dock e na área de trabalho.
 - **Opções avançadas** — a Live na memória (`toram`), o debian-installer de
   hoje (em modo gráfico e texto) enquanto o `orbit-install` não cobrir todos
   os layouts da 6.4, teste de memória.
+
+**Teclado (2026-11-21).** Quem testou a ISO não conseguia entrar depois de
+instalar: o debian-installer forçava o teclado US sem perguntar e a senha
+era digitada com ele. Na tela do `orbit-install`, o layout da Live vem
+marcado, com um campo para testar, a senha é digitada com ele, e ele vai
+primeiro no `/etc/default/keyboard`. No debian-installer, o teclado passou a
+ser perguntado.
 
 **1. Detectar.**
 
