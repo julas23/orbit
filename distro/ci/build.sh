@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# build.sh — builds Orbit's packages on a bare Debian 13: what the CI runs
-# (.github/workflows/debs.yml), and what can be tried the same way at home:
+# build.sh — builds Orbit's packages on a bare Debian 13, in a container:
 #
 #   docker run --rm -v "$PWD:/src:ro" -v /tmp/orbit-debs:/out debian:trixie /src/distro/ci/build.sh
 #

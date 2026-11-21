@@ -2,8 +2,8 @@
 # live-build configuration of the Orbit Linux ISO (docs/PLANO-DISTRO.md §6).
 # Debian from deb.debian.org; Orbit's own packages from the public
 # repository, https://rationalazimuth.com/orbit (config/archives), which is
-# why ca-certificates goes into the bootstrap. Runs as root in the `iso`
-# workflow's container, never on a workstation: see distro/iso/build.sh.
+# why ca-certificates goes into the bootstrap. Runs as root in a container,
+# never straight on a workstation: see distro/iso/build.sh.
 set -e
 
 lb config noauto \

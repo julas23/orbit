@@ -415,7 +415,7 @@ consultas por hora; esgotadas, o que já foi baixado fica.
 | Peça | Onde |
 |---|---|
 | Código | Este repositório (`distro/` para ISO e metapacotes) |
-| CI dos pacotes e da ISO | GitHub Actions no começo; runner próprio no Proxmox quando o build pesar |
+| CI dos pacotes e da ISO | Fora do GitHub (2026-11-21: lá fica só o código); `distro/ci/build.sh` e `distro/iso/build.sh` num contêiner Debian 13 em máquina própria |
 | Repositório apt | aptly na LXC `10.0.0.111` (rede de casa, HTTP); a VPS da Oracle com HTTPS para o público, na Fase D |
 | Chave de assinatura | Gerada offline; subchave de assinatura só no CI (segredo do Actions); chave mestre fora de qualquer máquina ligada à rede |
 | Build da ISO | VM 910 `orbit-build` no Proxmox (Debian 13, 8 núcleos, 16 GB, 120 GB, criada em 2026-11-01), com o apt apontando para a LXC 10.0.0.111 |
@@ -433,7 +433,7 @@ Amarradas às fases do PLANO-CORE.
   (`orbit-desktop`, `orbit-studio`, `orbit-apps`, `orbit-media`, `orbit-dev`),
   e o repositório da seção 7. Falta: CI, e o hp/think usando os pacotes.
 - `orbit-defaults`, `orbit-fonts`, `orbit-ruffle` (feitos 2026-10-23); `orbit-common-data` desnecessário.
-- CI (feito 2026-10-23): `.github/workflows/debs.yml` → `distro/ci/build.sh` num contêiner Debian 13; os .deb ficam como artefato. Publicar continua em casa.
+- CI (2026-10-23 a 2026-11-21 no GitHub Actions, removido: o GitHub guarda só o código): `distro/ci/build.sh` num contêiner Debian 13. Publicar continua em casa.
 - Repositório apt na VPS + `orbit-archive-keyring`; CI publicando a cada tag.
 - **Pronto quando:** o hp troca o `install.sh` pelos pacotes sem diferença no
   uso; o **think** instala tudo com `apt install orbit-desktop` (fecha a

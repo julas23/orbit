@@ -583,7 +583,7 @@ own installer (Rust + GTK4, running in orbit-core), EFISTUB as UKI with the
 `BOOTX64.EFI` fallback, offline ISO, Plymouth handing over to orbit-greet.
 **An existing `/home` is never formatted.**
 
-- [x] Phase A: CI building the debs: `.github/workflows/debs.yml` runs `distro/ci/build.sh` in a Debian 13 container at each push to main, the .debs kept as the run's artifact; the same script tried at home in `docker run debian:trixie` (28 packages, 2026-10-23). Publishing stays at home (the repository server is on the LAN).
+- [x] Phase A: `distro/ci/build.sh` builds the debs in a Debian 13 container (`docker run debian:trixie`, 28 packages, 2026-10-23). It ran in GitHub Actions until 2026-11-21; GitHub now keeps only the code. Publishing stays at home.
 - [x] Phase A: the hp on the packages instead of `install.sh` (the think is, since 2026-10-23): orbit-desktop, orbit-remote-server, orbit-local-station, orbit-aigent and ArtCraft's 14 from the local repository, LibreOffice purged, `/usr/local/bin/orbit-*` and `~/.local/bin/orbit-*` removed (2026-10-24). To verify after a reboot.
 - [x] The keyring prompter's D-Bus service in `orbit-prompter` (`/usr/share/dbus-1/services/`), gcr's file of the same name set aside by `dpkg-divert`; no copy by hand in the home any more (2026-10-24).
 - [x] Packaging: `orbit-notify` says `Provides: notification-daemon` and `orbit-polkit` `Provides: polkit-1-auth-agent`, so dunst and the other polkit agents can go without taking blueman and network-manager-applet along (2026-10-23).
