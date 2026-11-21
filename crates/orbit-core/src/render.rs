@@ -62,6 +62,7 @@ render_elements! {
     Solid=SolidColorRenderElement,
     Card=crate::cards::CardElement,
     Memory=smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<GlesRenderer>,
+    Earth=crate::earth::EarthElement,
 }
 
 render_elements! {

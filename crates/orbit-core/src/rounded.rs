@@ -170,6 +170,8 @@ pub struct Shaders {
     pub card: GlesTexProgram,
     /// The wallpaper's effects; each may be missing (`effects`).
     pub effects: crate::effects::Programs,
+    /// The `earth` effect's map; none when it failed to compile.
+    pub earth: Option<GlesTexProgram>,
 }
 
 impl Shaders {
@@ -207,6 +209,9 @@ impl Shaders {
         let (down, up) = crate::eyes::compile(renderer)?;
         let card = crate::cards::compile(renderer)?;
         let effects = crate::effects::Programs::compile(renderer);
+        let earth = crate::earth::compile(renderer)
+            .inspect_err(|err| tracing::error!("wallpaper effect earth: {err:?}"))
+            .ok();
         Ok(Self {
             clip,
             border,
@@ -215,6 +220,7 @@ impl Shaders {
             up,
             card,
             effects,
+            earth,
         })
     }
 }

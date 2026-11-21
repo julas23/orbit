@@ -27,12 +27,14 @@
 //! project, file, commit and licence (PLANO-CORE §9).
 
 mod a11y;
+mod astro;
 mod cards;
 mod command;
 mod compose;
 mod config;
 mod cursor;
 mod devices;
+mod earth;
 mod direction;
 mod effects;
 mod eyes;
@@ -56,6 +58,7 @@ mod render;
 mod resize;
 mod rounded;
 mod rules;
+mod scenes;
 mod screencopy;
 mod screensaver;
 mod session_lock;
@@ -71,6 +74,7 @@ mod wallpaper;
 mod watchdog;
 mod winit;
 mod workspace;
+mod world;
 mod xwayland;
 
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};

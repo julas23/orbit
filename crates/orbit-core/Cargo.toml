@@ -18,6 +18,9 @@ recommends = "xwayland, orbit-panel, orbit-dock, orbit-notify, orbitctl"
 assets = [
     ["target/release/orbit-core", "usr/bin/", "755"],
     ["../../data/orbit.desktop", "usr/share/wayland-sessions/", "644"],
+    # The `earth` wallpaper's maps (NASA Blue Marble and Black Marble 2016,
+    # public domain).
+    ["../../data/wallpaper/earth-*.jpg", "usr/share/orbit/wallpaper/", "644"],
 ]
 
 [dependencies]
@@ -38,5 +41,7 @@ serde_yaml_ng.workspace = true
 anyhow.workspace = true
 zbus.workspace = true
 pangocairo.workspace = true
+# The `earth` wallpaper's clouds, fetched every 15 minutes.
+ureq.workspace = true
 # The wallpaper: decoding only, the common formats.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp"] }

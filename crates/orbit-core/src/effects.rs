@@ -28,6 +28,15 @@
 //!   louder, the more the lines smoke and blur (sharp in silence), and the
 //!   spectra just gone echo outwards, fainter and softer. It listens even
 //!   without `wallpaper.sound`.
+//! - `blackhole`: a black hole after Interstellar's Gargantua, its disk of
+//!   hot gas bent over and under it, the stars bent round it (`scenes`).
+//! - `beach`: a beach at night: the moon on the sea, a waterfall down the
+//!   cliff, palms, fireflies (`scenes`).
+//! - `sky`: the sky outside now: the Sun or the Moon where they are, day,
+//!   dusk or night, the clouds, rain, snow, fog or a storm as the weather
+//!   is (`scenes`, `world`).
+//! - `earth`: the world map, day and night as they are now, the clouds as
+//!   the satellites last saw them (`earth`; a texture shader, not here).
 //!
 //! With `wallpaper.sound` the effects follow what the speakers play
 //! (`sound.rs`): the bass swells them, the treble makes them glint.
@@ -63,6 +72,11 @@ pub enum Effect {
     Galaxy,
     Logo,
     Scope,
+    #[serde(rename = "blackhole")]
+    BlackHole,
+    Beach,
+    Sky,
+    Earth,
 }
 
 impl Effect {
@@ -73,7 +87,7 @@ impl Effect {
     }
 
     /// Every effect, `None` aside.
-    pub const ALL: [Effect; 12] = [
+    pub const ALL: [Effect; 16] = [
         Effect::Aurora,
         Effect::Ink,
         Effect::Facets,
@@ -86,6 +100,10 @@ impl Effect {
         Effect::Galaxy,
         Effect::Logo,
         Effect::Scope,
+        Effect::BlackHole,
+        Effect::Beach,
+        Effect::Sky,
+        Effect::Earth,
     ];
 }
 
@@ -179,6 +197,25 @@ impl Effect {
                 [0xfa, 0xcc, 0x15],
                 [0xf4, 0x3f, 0x5e],
             ],
+            // Space, the Milky Way, then the disk from its coolest (out)
+            // to its hottest (in).
+            Effect::BlackHole => &[
+                [0x01, 0x01, 0x03],
+                [0x3b, 0x2a, 0x55],
+                [0xc2, 0x4e, 0x10],
+                [0xff, 0xb3, 0x5c],
+                [0xff, 0xf4, 0xe2],
+            ],
+            // The sky high and low, the moonlight, the fireflies, the sand.
+            Effect::Beach => &[
+                [0x03, 0x06, 0x16],
+                [0x10, 0x23, 0x45],
+                [0xc8, 0xd6, 0xf0],
+                [0xd9, 0xf9, 0x6b],
+                [0xe8, 0xd5, 0xb0],
+            ],
+            // Their colours are the sky's and the map's own.
+            Effect::Sky | Effect::Earth => &[[0x0b, 0x10, 0x26], [0x1d, 0x4e, 0x89]],
         }
     }
 }
@@ -227,6 +264,10 @@ uniform vec4 e8;
 uniform vec4 e9;
 uniform vec4 e10;
 uniform vec4 e11;
+// The `sky` effect's (scenes::SKY).
+uniform vec4 sky0;
+uniform vec4 sky1;
+uniform vec4 sky2;
 
 float pick(vec4 v, float i) {
     if (i < 0.5) return v.x;
@@ -864,7 +905,7 @@ pub struct Programs(std::collections::HashMap<Effect, GlesPixelProgram>);
 impl Programs {
     pub fn compile(renderer: &mut GlesRenderer) -> Self {
         let mut programs = std::collections::HashMap::new();
-        for effect in Effect::ALL {
+        for effect in Effect::ALL.into_iter().filter(|e| !e.source().is_empty()) {
             match compile(renderer, effect.source()) {
                 Ok(program) => {
                     programs.insert(effect, program);
@@ -897,6 +938,11 @@ impl Effect {
             Effect::Galaxy => GALAXY,
             Effect::Logo => LOGO,
             Effect::Scope => SCOPE,
+            Effect::BlackHole => crate::scenes::BLACKHOLE,
+            Effect::Beach => crate::scenes::BEACH,
+            Effect::Sky => crate::scenes::SKY,
+            // A texture shader of its own (`earth`).
+            Effect::Earth => "",
         }
     }
 }
@@ -912,7 +958,7 @@ fn compile(renderer: &mut GlesRenderer, body: &str) -> Result<GlesPixelProgram, 
     for name in ["c0", "c1", "c2", "c3", "c4"] {
         uniforms.push(UniformName::new(name, UniformType::_3f));
     }
-    for name in SPECTRUM.iter().chain(&ECHOES) {
+    for name in SPECTRUM.iter().chain(&ECHOES).chain(&SKY) {
         uniforms.push(UniformName::new(*name, UniformType::_4f));
     }
     renderer.compile_custom_pixel_shader(format!("{HEADER}{body}"), &uniforms)
@@ -920,10 +966,22 @@ fn compile(renderer: &mut GlesRenderer, body: &str) -> Result<GlesPixelProgram, 
 
 const SPECTRUM: [&str; 4] = ["s0", "s1", "s2", "s3"];
 const ECHOES: [&str; 12] = ["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10", "e11"];
+/// The `sky` effect's: where the Sun and the Moon are, and the weather
+/// (`scenes::SKY`).
+const SKY: [&str; 3] = ["sky0", "sky1", "sky2"];
+
+/// What the `sky` effect is told, three vec4.
+pub type Sky = [[f32; 4]; 3];
 
 /// The uniforms of a frame: the time in seconds, how much it shows, the
 /// sound, and the colours (the last repeated up to `MOST`).
-pub fn uniforms(time: f32, fade: f32, sound: &crate::sound::Levels, colors: &[[u8; 3]]) -> Vec<Uniform<'static>> {
+pub fn uniforms(
+    time: f32,
+    fade: f32,
+    sound: &crate::sound::Levels,
+    colors: &[[u8; 3]],
+    sky: &Sky,
+) -> Vec<Uniform<'static>> {
     let quad = |v: &[f32]| UniformValue::_4f(v[0], v[1], v[2], v[3]);
     let mut list = vec![
         Uniform::new("time", time),
@@ -946,6 +1004,9 @@ pub fn uniforms(time: f32, fade: f32, sound: &crate::sound::Levels, colors: &[[u
     }
     let halves = sound.echoes.iter().flat_map(|e| e.chunks_exact(4));
     for (name, four) in ECHOES.into_iter().zip(halves) {
+        list.push(Uniform::new(name, quad(four)));
+    }
+    for (name, four) in SKY.into_iter().zip(sky) {
         list.push(Uniform::new(name, quad(four)));
     }
     list

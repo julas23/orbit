@@ -16,7 +16,8 @@
 //!   color: "#1b1f27"             # under the picture and around it
 //!   effect: aurora               # in place of the picture: aurora, ink,
 //!                                # facets, fire, water, borealis, stars,
-//!                                # rain, nebula, galaxy, logo, scope
+//!                                # rain, nebula, galaxy, logo, scope,
+//!                                # blackhole, beach, sky, earth
 //!                                # (`effects`); none
 //!   colors: ["#0b1026", "#1d4e89", "#14b8a6"]   # the effect's, 2 to 5
 //!   speed: 1                     # how fast it moves (0: still)
@@ -42,19 +43,29 @@
 //! input fades it out at once; a click or a key that wakes it is not
 //! passed on (`input`), so nothing hidden is clicked or typed into.
 
-use std::{cell::RefCell, collections::HashMap, path::PathBuf};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
 
 use serde::Deserialize;
 use smithay::{
     backend::{
         allocator::Fourcc,
         renderer::{
+            ImportMem,
             element::{
                 Id, Kind,
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 solid::SolidColorRenderElement,
             },
-            gles::{GlesPixelProgram, GlesRenderer, element::PixelShaderElement},
+            gles::{GlesPixelProgram, GlesRenderer, GlesTexture, element::PixelShaderElement},
             utils::CommitCounter,
         },
     },
@@ -176,6 +187,8 @@ pub struct Wallpapers {
     veils: HashMap<String, Id>,
     /// Where the threads send what they made (made the first time).
     sender: Option<Sender<Made>>,
+    /// And the `earth` effect's thread, its map.
+    earth_sender: Option<Sender<crate::earth::Atlas>>,
     /// The effect's element per monitor, and the uniforms it was last
     /// given (time, fade, colours): a frame with nothing new is no damage.
     effects: HashMap<String, (crate::effects::Effect, PixelShaderElement, Given)>,
@@ -200,6 +213,24 @@ pub struct Wallpapers {
     loud: f32,
     /// How much the screensaver shows, 0..1.
     saver: f32,
+    /// Where the user is and the weather there (`sky`, `earth`).
+    world: crate::world::World,
+    /// The `earth` effect's.
+    earth: Earth,
+}
+
+/// The `earth` effect: the thread that makes its texture (told to end by
+/// `alive`), the texture, and its element per monitor.
+#[derive(Default)]
+struct Earth {
+    alive: Option<Arc<AtomicBool>>,
+    /// Made by the thread, not yet on the GPU.
+    pending: Option<crate::earth::Atlas>,
+    texture: Option<GlesTexture>,
+    clouds: bool,
+    /// When the clouds last changed: the new ones fade in from then.
+    fresh: Option<Instant>,
+    elements: HashMap<String, (Id, CommitCounter, Option<crate::earth::Look>)>,
 }
 
 /// Seconds the screensaver takes to come, and to go.
@@ -219,8 +250,8 @@ struct Video {
 }
 
 /// The uniforms an effect's element was last given: time, fade, sound,
-/// colours.
-type Given = (f32, f32, crate::sound::Levels, Vec<[u8; 3]>);
+/// colours, the sky.
+type Given = (f32, f32, crate::sound::Levels, Vec<[u8; 3]>, crate::effects::Sky);
 
 /// The cache, behind the state's back: drawing reads the state only.
 pub type Cache = RefCell<Wallpapers>;
@@ -243,7 +274,12 @@ impl Orbit {
         let name = output.name();
         let size = geo.size.to_physical_precise_round(scale);
         let config = &self.config.wallpaper;
-        if let Some(program) = self.effect_program(output) {
+        if self.earth_shown(output) {
+            self.earth_upload(renderer);
+            if self.earth_element(output, "", size, alpha, elements) {
+                return;
+            }
+        } else if let Some(program) = self.effect_program(output) {
             self.effect_element(output, "", geo.size, program, alpha, elements);
             return;
         }
@@ -349,6 +385,7 @@ impl Orbit {
         let lock = self.config.wallpaper.lock.trim().to_owned();
         let has_picture = !lock.is_empty()
             || self.effect_program(output).is_some()
+            || self.earth_shown(output)
             || !self.config.wallpaper.image.trim().is_empty()
             || self
                 .config
@@ -401,9 +438,150 @@ impl Orbit {
         let Some(geo) = self.space.output_geometry(output) else {
             return;
         };
-        if let Some(program) = self.effect_program(output) {
+        if self.earth_shown(output) {
+            let scale = Scale::from(output.current_scale().fractional_scale());
+            self.earth_element(
+                output,
+                "/saver",
+                geo.size.to_physical_precise_round(scale),
+                alpha,
+                elements,
+            );
+        } else if let Some(program) = self.effect_program(output) {
             self.effect_element(output, "/saver", geo.size, program, alpha, elements);
         }
+    }
+
+    /// Whether `output` shows the `earth` effect: chosen, no video over it,
+    /// no picture of its own, and its shader compiled.
+    fn earth_shown(&self, output: &Output) -> bool {
+        self.config.wallpaper.effect == crate::effects::Effect::Earth
+            && self.wallpapers.borrow().video.is_none()
+            && !self.own_picture(output)
+            && self
+                .shaders
+                .as_ref()
+                .and_then(|s| s.as_ref())
+                .is_some_and(|s| s.earth.is_some())
+    }
+
+    /// The map the thread last made, onto the GPU.
+    fn earth_upload(&self, renderer: &mut GlesRenderer) {
+        let mut cache = self.wallpapers.borrow_mut();
+        let Some(atlas) = cache.earth.pending.take() else {
+            return;
+        };
+        let size = (crate::earth::ATLAS_W as i32, crate::earth::ATLAS_H as i32);
+        match renderer.import_memory(&atlas.pixels, Fourcc::Abgr8888, size.into(), false) {
+            Ok(texture) => {
+                let earth = &mut cache.earth;
+                earth.texture = Some(texture);
+                earth.clouds = atlas.clouds;
+                if atlas.fresh {
+                    earth.fresh = Some(Instant::now());
+                }
+                // A new texture: each monitor's element is drawn again.
+                for (_, commit, look) in earth.elements.values_mut() {
+                    commit.increment();
+                    *look = None;
+                }
+            }
+            Err(err) => tracing::error!("earth: the map onto the GPU: {err:?}"),
+        }
+    }
+
+    /// The map over `output` (`size` in pixels), at `alpha`; false while
+    /// there is no map yet.
+    fn earth_element(
+        &self,
+        output: &Output,
+        slot: &str,
+        size: Size<i32, Physical>,
+        alpha: f32,
+        elements: &mut Vec<OutputElement>,
+    ) -> bool {
+        let Some(program) = self
+            .shaders
+            .as_ref()
+            .and_then(|s| s.as_ref())
+            .and_then(|s| s.earth.clone())
+        else {
+            return false;
+        };
+        let mut cache = self.wallpapers.borrow_mut();
+        if !cache.ticking {
+            cache.ticking = true;
+            self.start_effect_timer();
+        }
+        let Some(texture) = cache.earth.texture.clone() else {
+            return false;
+        };
+        let (place, _) = cache.world.now();
+        let n = crate::astro::days(std::time::SystemTime::now());
+        let (sun_lat, sun_lon) = crate::astro::overhead(crate::astro::sun(n), n);
+        // The Sun's place a little rounded: the map is drawn again when it
+        // has moved, not every frame.
+        let round = |a: f64| ((a * 2000.0).round() / 2000.0) as f32;
+        let fade_in = cache
+            .earth
+            .fresh
+            .map_or(1.0, |t| (t.elapsed().as_secs_f32() / crate::earth::FADE).min(1.0));
+        let home = place.known.then_some((place.lat as f32, place.lon as f32));
+        let look = crate::earth::Look {
+            sun: (round(sun_lat), round(sun_lon)),
+            centre: place.lon as f32,
+            aspect: size.w as f32 / size.h.max(1) as f32,
+            fade_in,
+            clouds: cache.earth.clouds,
+            home,
+            // Only the dot that marks the place moves with the clock.
+            time: if home.is_some() { cache.time } else { 0.0 },
+        };
+        let (id, commit, last) = cache
+            .earth
+            .elements
+            .entry(format!("{}{slot}", output.name()))
+            .or_insert_with(|| (Id::new(), CommitCounter::default(), None));
+        if *last != Some(look) {
+            commit.increment();
+            *last = Some(look);
+        }
+        elements.push(OutputElement::Earth(crate::earth::EarthElement::new(
+            id.clone(),
+            *commit,
+            texture,
+            program,
+            Rectangle::from_size(size),
+            look,
+            alpha,
+        )));
+        true
+    }
+
+    /// The `sky` effect's uniforms: the Sun and the Moon seen from the
+    /// user's place, looking towards the equator, and the weather there.
+    fn sky_uniforms(world: &mut crate::world::World) -> crate::effects::Sky {
+        use crate::astro;
+        let (place, weather) = world.now();
+        let n = astro::days(std::time::SystemTime::now());
+        let (sun_alt, sun_az) = astro::horizontal(astro::sun(n), n, place.lat, place.lon);
+        let (moon_alt, moon_az) = astro::horizontal(astro::moon(n), n, place.lat, place.lon);
+        let view = if place.lat >= 0.0 { std::f64::consts::PI } else { 0.0 };
+        // Azimuth grows clockwise seen from above: rightwards, looking out.
+        let across = |az: f64| astro::wrap(az - view) as f32;
+        let (lit, _) = astro::moon_phase(n);
+        // The Moon's lit side faces the Sun.
+        let side = if astro::wrap(sun_az - moon_az) >= 0.0 {
+            1.0
+        } else {
+            -1.0
+        };
+        let wind = weather.wind * (weather.wind_to - view as f32).sin();
+        [
+            [sun_alt as f32, across(sun_az), moon_alt as f32, across(moon_az)],
+            [lit as f32, side, weather.cover, wind],
+            [weather.rain, weather.snow, weather.fog, weather.storm],
+        ]
     }
 
     /// The effect's program for `output`, when it shows one: there is an
@@ -452,7 +630,12 @@ impl Orbit {
         let time = cache.time;
         let area = Rectangle::from_size(size);
         let opaque = (alpha >= 1.0).then(|| vec![area]);
-        let wanted = (time, alpha, cache.sound.levels(), colors);
+        let sky = if config.effect == crate::effects::Effect::Sky {
+            Self::sky_uniforms(&mut cache.world)
+        } else {
+            [[0.0; 4]; 3]
+        };
+        let wanted = (time, alpha, cache.sound.levels(), colors, sky);
         let effect = config.effect;
         let entry = cache.effects.entry(format!("{}{slot}", output.name()));
         // Another effect: another program, so another element.
@@ -464,7 +647,7 @@ impl Orbit {
                     area,
                     opaque.clone(),
                     1.0,
-                    crate::effects::uniforms(wanted.0, wanted.1, &wanted.2, &wanted.3),
+                    crate::effects::uniforms(wanted.0, wanted.1, &wanted.2, &wanted.3, &wanted.4),
                     Kind::Unspecified,
                 );
                 entry.insert_entry((effect, element, wanted.clone())).into_mut()
@@ -472,7 +655,9 @@ impl Orbit {
         };
         element.resize(area, opaque);
         if *last != wanted {
-            element.update_uniforms(crate::effects::uniforms(wanted.0, wanted.1, &wanted.2, &wanted.3));
+            element.update_uniforms(crate::effects::uniforms(
+                wanted.0, wanted.1, &wanted.2, &wanted.3, &wanted.4,
+            ));
             *last = wanted;
         }
         elements.push(OutputElement::Border(element.clone()));
@@ -590,6 +775,25 @@ impl Orbit {
             }
             _ => {}
         }
+        // The `earth` effect's thread, while it is chosen.
+        let earth = config.effect == crate::effects::Effect::Earth && cache.video.is_none();
+        match (earth, cache.earth.alive.is_some()) {
+            (true, false) => {
+                let alive = Arc::new(AtomicBool::new(true));
+                let sender = cache.earth_sender.get_or_insert_with(|| self.earth_channel()).clone();
+                crate::earth::start(sender, alive.clone());
+                cache.earth.alive = Some(alive);
+            }
+            (false, true) => {
+                if let Some(alive) = cache.earth.alive.take() {
+                    alive.store(false, Ordering::Relaxed);
+                }
+                let sender = cache.earth_sender.take();
+                cache.earth = Earth::default();
+                cache.earth_sender = sender;
+            }
+            _ => {}
+        }
         let timer = (cache.video.is_some() || config.effect != crate::effects::Effect::None) && !cache.ticking;
         if timer {
             cache.ticking = true;
@@ -686,6 +890,25 @@ impl Orbit {
             return false;
         }
         self.idle.last_input.elapsed() >= std::time::Duration::from_secs(seconds)
+    }
+
+    /// The channel the `earth` effect's thread sends its map on.
+    fn earth_channel(&self) -> Sender<crate::earth::Atlas> {
+        let (sender, source) = channel::channel::<crate::earth::Atlas>();
+        let inserted = self.loop_handle.insert_source(source, |event, _, state| {
+            let channel::Event::Msg(atlas) = event else { return };
+            let mut cache = state.wallpapers.borrow_mut();
+            // Still wanted: the effect was not changed meanwhile.
+            if cache.earth.alive.is_some() {
+                cache.earth.pending = Some(atlas);
+                drop(cache);
+                state.request_render();
+            }
+        });
+        if let Err(err) = inserted {
+            tracing::error!("earth: {err}");
+        }
+        sender
     }
 
     /// The channel the threads answer on: what they made goes in its slot

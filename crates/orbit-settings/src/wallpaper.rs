@@ -41,6 +41,10 @@ const KINDS: &[&str] = &[
     "galaxy",
     "logo",
     "scope",
+    "blackhole",
+    "beach",
+    "sky",
+    "earth",
     "video",
 ];
 /// The screensaver's choices, in minutes; 0: never.
@@ -67,6 +71,10 @@ fn effect_colors(effect: &str) -> &'static [&'static str] {
         "galaxy" => &["#010208", "#0b2a6f", "#2563eb", "#7dd3fc", "#fff4d6"],
         "logo" => &["#05070d", "#4682b4", "#6ea8e0", "#d8dee9", "#ff9500"],
         "scope" => &["#020308", "#22d3ee", "#4ade80", "#facc15", "#f43f5e"],
+        "blackhole" => &["#010103", "#3b2a55", "#c24e10", "#ffb35c", "#fff4e2"],
+        "beach" => &["#030616", "#102345", "#c8d6f0", "#d9f96b", "#e8d5b0"],
+        // Their colours are the sky's and the map's own.
+        "sky" | "earth" => &["#0b1026", "#1d4e89"],
         _ => &[],
     }
 }

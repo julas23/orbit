@@ -96,6 +96,10 @@ impl WeatherConfig {
 pub struct Weather {
     pub place: String,
     pub latitude: f64,
+    /// Read by the core's `earth` and `sky` wallpapers too; missing in a
+    /// cache written before it was kept.
+    #[serde(default)]
+    pub longitude: Option<f64>,
     pub code: i32,
     pub temperature: f64,
     pub feels_like: f64,
@@ -351,6 +355,7 @@ precipitation_probability_max,uv_index_max",
     Ok(Weather {
         place,
         latitude: lat,
+        longitude: Some(lon),
         code: current["weather_code"].as_i64().unwrap_or_default() as i32,
         temperature: num(&current["temperature_2m"]),
         feels_like: num(&current["apparent_temperature"]),

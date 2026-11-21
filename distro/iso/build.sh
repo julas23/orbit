@@ -1,7 +1,9 @@
 #!/bin/sh
 # Builds the Orbit Linux ISO, as root, on a Debian 13 system with
 # live-build, in a privileged debian:trixie container:
-#   docker run --rm --privileged -v "$PWD:/src" debian:trixie sh -c \
+# (--ulimit: with Docker's default of a billion open files, apt in the
+# chroot spends hours closing them)
+#   docker run --rm --privileged --ulimit nofile=1024:524288 -v "$PWD:/src" debian:trixie sh -c \
 #     'apt-get update && apt-get install -y live-build git rsync ca-certificates &&
 #      /src/distro/iso/build.sh /src/out'
 # live-build needs root and a chroot, so never straight on a workstation.
