@@ -266,15 +266,17 @@ window.orbit-menu { background: transparent; }
 .orbit-menu .apps .name            { font-weight: bold; }
 .orbit-menu .apps .comment         { color: @orbit_muted; font-size: 11px; }
 .orbit-menu .apps .hint            { color: @orbit_muted; padding: 20px; }
-.orbit-menu .bottom {
+/* The card's own child: a ScrolledWindow's undershoot and overshoot nodes
+ * carry .bottom too, and drew this border across the list. */
+.orbit-menu .launcher > .bottom {
   padding-top: 10px;
   border-top: 1px solid @orbit_border;
 }
-.orbit-menu .bottom .power {
+.orbit-menu .launcher > .bottom .power {
   min-width: 35px;
   min-height: 35px;
 }
-.orbit-menu .bottom .power:hover   { background-color: alpha(@orbit_alert, 0.45); }
+.orbit-menu .launcher > .bottom .power:hover   { background-color: alpha(@orbit_alert, 0.45); }
 .confirm-box button:focus-visible { outline: 2px solid @orbit_focus; outline-offset: -2px; }
 
 /* Volume and brightness (control.rs). The slider knob is hidden: the
