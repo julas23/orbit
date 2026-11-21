@@ -1,9 +1,13 @@
 #!/bin/sh
-# Builds the Orbit Linux ISO on the build VM (Proxmox VM 910, orbit-build)
-# and leaves it in the VM's ~/iso-out. live-build needs root and a chroot,
+# Builds the Orbit Linux ISO, as root, on a Debian 13 system with
+# live-build: the GitHub `iso` workflow runs it in a privileged debian:trixie
+# container (.github/workflows/iso.yml). live-build needs root and a chroot,
 # so it never runs on a workstation.
-#   distro/iso/build.sh [orbit@10.0.0.56]
-# ORBIT_ISO_SSH_KEY=~/.ssh/id_rsa.pub makes a debugging image: openssh-server
+#   distro/iso/build.sh [OUTDIR]          OUTDIR: ./out by default
+# The work happens in a copy of distro/iso, in ORBIT_ISO_WORK
+# (/srv/orbit-iso by default), where live-build's cache of packages stays
+# between builds on the same machine.
+# ORBIT_ISO_SSH_KEY=path/to/key.pub makes a debugging image: openssh-server
 # and that key for the live user. Never for an image handed to anyone.
 # ORBIT_ISO_TEST=1 makes an image whose installer asks nothing: user teste,
 # password orbit-teste, the whole first disk. For a test VM only.
@@ -11,24 +15,25 @@
 # ORBIT_ISO_TEST=keep likewise, keeping an existing /home (LUKS: its password
 # in ORBIT_ISO_OLD_HOME_PASSWORD).
 set -e
-HOST="${1:-orbit@10.0.0.56}"
+[ "$(id -u)" = 0 ] || { echo "build.sh: run as root (live-build)" >&2; exit 1; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
-VERSION="$(git -C "$HERE" describe --always --dirty)"
+OUTDIR="$(mkdir -p "${1:-out}" && cd "${1:-out}" && pwd)"
+WORK="${ORBIT_ISO_WORK:-/srv/orbit-iso}"
+VERSION="$(git -C "$HERE" describe --always --dirty 2>/dev/null || echo unknown)"
 
-# The sources go to ~/iso-src as the user; live-build works as root in
-# /srv/orbit-iso, where its cache of packages stays between builds.
-rsync -a --delete --exclude build.log "$HERE/" "$HOST:iso-src/"
-DEBUG_STEP=":"
+mkdir -p "$WORK"
+rsync -a --delete --exclude /cache --exclude /chroot --exclude /binary \
+	--exclude /.build --exclude build.log "$HERE/" "$WORK/"
+cd "$WORK"
+
 if [ -n "${ORBIT_ISO_SSH_KEY:-}" ]; then
-	scp -q "$ORBIT_ISO_SSH_KEY" "$HOST:/tmp/iso-debug-$$.pub"
-	DEBUG_STEP="sudo mkdir -p config/includes.chroot_after_packages/etc/skel/.ssh
-	sudo install -m 600 /tmp/iso-debug-$$.pub config/includes.chroot_after_packages/etc/skel/.ssh/authorized_keys
-	echo openssh-server | sudo tee config/package-lists/debug.list.chroot >/dev/null"
+	mkdir -p config/includes.chroot_after_packages/etc/skel/.ssh
+	install -m 600 "$ORBIT_ISO_SSH_KEY" config/includes.chroot_after_packages/etc/skel/.ssh/authorized_keys
+	echo openssh-server > config/package-lists/debug.list.chroot
 	VERSION="$VERSION-debug"
 fi
-TEST_STEP=":"
 if [ -n "${ORBIT_ISO_TEST:-}" ]; then
-	TEST_STEP="sudo tee -a config/includes.installer/preseed.cfg >/dev/null <<'PRESEED'
+	cat >> config/includes.installer/preseed.cfg <<'PRESEED'
 # --- test image: nothing asked ---
 d-i keyboard-configuration/xkb-keymap select br
 d-i netcfg/get_hostname string orbit-teste
@@ -45,24 +50,21 @@ d-i partman/choose_partition select finish
 d-i partman/confirm boolean true
 d-i partman/confirm_nooverwrite boolean true
 PRESEED
-	printf '%s\\n' ENCRYPT_HOME=$([ "$ORBIT_ISO_TEST" = luks ] && echo true || echo false) \
-		$([ "$ORBIT_ISO_TEST" = keep ] && echo "KEEP_HOME=true OLD_HOME_PASSWORD='${ORBIT_ISO_OLD_HOME_PASSWORD:-}'") \
-		| sudo tee config/includes.installer/orbit/test.conf >/dev/null"
+	{
+		echo "ENCRYPT_HOME=$([ "$ORBIT_ISO_TEST" = luks ] && echo true || echo false)"
+		if [ "$ORBIT_ISO_TEST" = keep ]; then
+			echo "KEEP_HOME=true"
+			echo "OLD_HOME_PASSWORD='${ORBIT_ISO_OLD_HOME_PASSWORD:-}'"
+		fi
+	} > config/includes.installer/orbit/test.conf
 	VERSION="$VERSION-test"
 	[ "$ORBIT_ISO_TEST" != 1 ] && VERSION="$VERSION-$ORBIT_ISO_TEST"
 fi
-ssh "$HOST" "set -e
-	sudo mkdir -p /srv/orbit-iso
-	sudo rsync -a --delete --exclude /cache --exclude /chroot --exclude /binary --exclude /.build ~/iso-src/ /srv/orbit-iso/
-	cd /srv/orbit-iso
-	$DEBUG_STEP
-	$TEST_STEP
-	sudo lb clean >/dev/null 2>&1 || true
-	sudo lb config >/dev/null
-	sudo lb build
-	mkdir -p ~/iso-out
-	OUT=~/iso-out/orbit-linux-\$(date +%Y%m%d)-$VERSION-amd64.iso
-	sudo mv live-image-amd64.hybrid.iso \$OUT
-	sudo chown \$(id -u):\$(id -g) \$OUT
-	sha256sum \$OUT > \$OUT.sha256
-	ls -la \$OUT"
+
+lb clean >/dev/null 2>&1 || true
+lb config >/dev/null
+lb build
+OUT="$OUTDIR/orbit-linux-$(date +%Y%m%d)-$VERSION-amd64.iso"
+mv live-image-amd64.hybrid.iso "$OUT"
+(cd "$OUTDIR" && sha256sum "${OUT##*/}" > "${OUT##*/}.sha256")
+ls -la "$OUT"
