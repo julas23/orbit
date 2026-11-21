@@ -40,6 +40,10 @@ if [ -n "${ORBIT_ISO_SSH_KEY:-}" ]; then
 	mkdir -p config/includes.chroot_after_packages/etc/skel/.ssh
 	install -m 600 "$ORBIT_ISO_SSH_KEY" config/includes.chroot_after_packages/etc/skel/.ssh/authorized_keys
 	echo openssh-server > config/package-lists/debug.list.chroot
+	# orbit-firewall drops what no service file opens: SSH to the LAN.
+	mkdir -p config/includes.chroot_after_packages/etc/orbit/firewall.d
+	echo 'add rule inet orbit lan_in tcp dport 22 accept comment "SSH, debugging image"' \
+		> config/includes.chroot_after_packages/etc/orbit/firewall.d/90-debug-ssh.nft
 	VERSION="$VERSION-debug"
 fi
 if [ -n "${ORBIT_ISO_TEST:-}" ]; then

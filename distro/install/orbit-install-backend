@@ -27,6 +27,9 @@
 # debian-installer of the ISO's advanced options until this covers them.
 set -e
 umask 022
+# The new system has no locale but C until orbit_system makes one: its
+# programs (perl, locale) would warn about the Live's.
+export LC_ALL=C.UTF-8
 HERE=$(dirname "$(readlink -f "$0")")
 exec 3>&1
 LOG=/var/log/orbit-install.log
